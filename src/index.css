@@ -22,3 +22,9 @@ table td.active-cell {
   z-index: 2;
   transition: box-shadow 0.15s ease;
 }
+
+/* Highlight specific estimate options in dropdowns */
+option.estimate-highlight {
+  color: #08ad2d !important;
+  font-weight: 700;
+}

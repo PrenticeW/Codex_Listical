@@ -1,8 +1,25 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReactTable, getCoreRowModel } from '@tanstack/react-table';
+import { ListFilter } from 'lucide-react';
 
 const PROTECTED_STATUSES = new Set(['Done', 'Abandoned', 'Blocked', 'On Hold', 'Skipped', 'Special']);
 const TASK_ROW_TYPES = new Set(['projectTask', 'inboxItem']);
+const FILTERABLE_ROW_TYPES = new Set([
+  'projectTask',
+  'inboxItem',
+  'projectHeader',
+  'projectGeneral',
+  'projectUnscheduled',
+]);
+const STATUS_VALUES = ['Not Scheduled', 'Scheduled', 'Done', 'Blocked', 'On Hold', 'Abandoned'];
+const RECURRING_VALUES = ['Recurring', 'Not Recurring'];
+const ESTIMATE_VALUES = [
+  '-',
+  'Custom',
+  '1 Minute',
+  ...Array.from({ length: 11 }, (_, i) => `${(i + 1) * 5} Minutes`),
+  ...[1, 2, 3, 4, 5, 6, 7, 8].map((h) => `${h} Hour${h > 1 ? 's' : ''}`),
+];
 
 const isProtectedStatus = (status) => {
   if (!status || status === '-') return false;
@@ -18,6 +35,9 @@ const MIN_COLUMN_WIDTH = 40;
 const COLUMN_RESIZE_HANDLE_WIDTH = 10;
 const createEmptyDayEntries = (count) => Array.from({ length: count }, () => '');
 const isTaskColumnEmpty = (row) => !(row.taskName ?? '').trim();
+const ROW_LABEL_BASE_STYLE = { backgroundColor: '#d9f6e0', color: '#065f46' };
+const applyRowLabelStyle = (style = {}) => ({ ...style, ...ROW_LABEL_BASE_STYLE });
+const FILTER_BLOCKED_LETTERS = new Set(['A', 'D', 'G']);
 const coerceNumber = (value) => {
   if (value == null) return null;
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -94,6 +114,7 @@ export default function ProjectTimePlannerWireframe() {
     taskName: '',
     estimate: '-',
     timeValue: '0.00',
+    recurring: 'Not Recurring',
     hasUserInteraction: false,
   });
 
@@ -164,6 +185,38 @@ export default function ProjectTimePlannerWireframe() {
   const [copiedCellHighlight, setCopiedCellHighlight] = useState(null);
   const copiedCellHighlightTimeoutRef = useRef(null);
   const [activeFilterColumns, setActiveFilterColumns] = useState(() => new Set());
+  const [selectedProjectFilters, setSelectedProjectFilters] = useState(() => new Set());
+  const [projectFilterMenu, setProjectFilterMenu] = useState(() => ({
+    open: false,
+    left: 0,
+    top: 0,
+  }));
+  const projectFilterButtonRef = useRef(null);
+  const projectFilterMenuRef = useRef(null);
+  const [selectedStatusFilters, setSelectedStatusFilters] = useState(() => new Set());
+  const [statusFilterMenu, setStatusFilterMenu] = useState(() => ({
+    open: false,
+    left: 0,
+    top: 0,
+  }));
+  const statusFilterButtonRef = useRef(null);
+  const statusFilterMenuRef = useRef(null);
+  const [selectedRecurringFilters, setSelectedRecurringFilters] = useState(() => new Set());
+  const [recurringFilterMenu, setRecurringFilterMenu] = useState(() => ({
+    open: false,
+    left: 0,
+    top: 0,
+  }));
+  const recurringFilterButtonRef = useRef(null);
+  const recurringFilterMenuRef = useRef(null);
+  const [selectedEstimateFilters, setSelectedEstimateFilters] = useState(() => new Set());
+  const [estimateFilterMenu, setEstimateFilterMenu] = useState(() => ({
+    open: false,
+    left: 0,
+    top: 0,
+  }));
+  const estimateFilterButtonRef = useRef(null);
+  const estimateFilterMenuRef = useRef(null);
 
   const isCellActive = (rowId, cellId) =>
     activeCell && activeCell.rowId === rowId && activeCell.cellId === cellId;
@@ -257,8 +310,68 @@ export default function ProjectTimePlannerWireframe() {
     []
   );
 
+  const filteredRows = useMemo(() => {
+    const activeDayFilters = Array.from(activeFilterColumns).filter((key) => key.startsWith('day-'));
+    const matchesProjectFilter = (row) => {
+      if (!selectedProjectFilters.size) return true;
+      if (TASK_ROW_TYPES.has(row.type)) {
+        return selectedProjectFilters.has(row.projectSelection ?? '');
+      }
+      return false; // Hide non-task rows when filtering by project since they lack a project dropdown.
+    };
+
+    const matchesStatusFilter = (row) => {
+      if (!selectedStatusFilters.size) return true;
+      if (TASK_ROW_TYPES.has(row.type)) {
+        return selectedStatusFilters.has(row.status ?? '');
+      }
+      return false; // Hide non-task rows when filtering by status since they lack a status dropdown.
+    };
+
+    const matchesRecurringFilter = (row) => {
+      if (!selectedRecurringFilters.size) return true;
+      if (TASK_ROW_TYPES.has(row.type)) {
+        const value = row.recurring === 'Recurring' ? 'Recurring' : 'Not Recurring';
+        return selectedRecurringFilters.has(value);
+      }
+      return false; // Hide non-task rows when filtering by recurring since they lack that control.
+    };
+
+    const matchesEstimateFilter = (row) => {
+      if (!selectedEstimateFilters.size) return true;
+      if (TASK_ROW_TYPES.has(row.type)) {
+        return selectedEstimateFilters.has(row.estimate ?? '-');
+      }
+      return false; // Hide non-task rows when filtering by estimate since they lack that control.
+    };
+
+    if (
+      !activeDayFilters.length &&
+      !selectedProjectFilters.size &&
+      !selectedStatusFilters.size &&
+      !selectedRecurringFilters.size &&
+      !selectedEstimateFilters.size
+    ) {
+      return rows;
+    }
+    return rows.filter((row) => {
+      if (!matchesProjectFilter(row)) return false;
+      if (!matchesStatusFilter(row)) return false;
+      if (!matchesRecurringFilter(row)) return false;
+      if (!matchesEstimateFilter(row)) return false;
+      if (!FILTERABLE_ROW_TYPES.has(row.type)) return true;
+      const dayEntries = Array.isArray(row.dayEntries) ? row.dayEntries : [];
+      return activeDayFilters.every((key) => {
+        const idx = Number(key.slice(4));
+        if (!Number.isInteger(idx) || idx < 0) return true;
+        const value = dayEntries[idx];
+        return coerceNumber(value) !== null;
+      });
+    });
+  }, [rows, activeFilterColumns, selectedProjectFilters, selectedStatusFilters, selectedRecurringFilters, selectedEstimateFilters]);
+
   const table = useReactTable({
-    data: rows,
+    data: filteredRows,
     columns,
     getCoreRowModel: getCoreRowModel(),
   });
@@ -1102,6 +1215,14 @@ export default function ProjectTimePlannerWireframe() {
     [columnStructure]
   );
 
+  const columnLetterByKey = useMemo(() => {
+    const map = {};
+    columnStructure.forEach((col, idx) => {
+      map[col.key] = columnLetters[idx];
+    });
+    return map;
+  }, [columnStructure, columnLetters]);
+
   const toggleFilterColumn = useCallback(
     (columnKey) => {
       if (!columnKey) return;
@@ -1118,34 +1239,284 @@ export default function ProjectTimePlannerWireframe() {
     [setActiveFilterColumns]
   );
 
-  const FilterToggleIcon = ({ active }) => {
-    const baseProps = {
-      className: 'h-full w-full',
-      viewBox: '0 0 14 14',
-      fill: 'none',
-      stroke: 'currentColor',
-      strokeLinecap: 'round',
-      strokeLinejoin: 'round',
+  const closeProjectFilterMenu = useCallback(() => {
+    setProjectFilterMenu({ open: false, left: 0, top: 0 });
+  }, []);
+
+  const handleProjectFilterSelect = useCallback(
+    (projectName) => {
+      setSelectedProjectFilters((prev) => {
+        const next = new Set(prev);
+        if (next.has(projectName)) {
+          next.delete(projectName);
+        } else {
+          next.add(projectName);
+        }
+        if (next.size === 0) {
+          closeProjectFilterMenu();
+        }
+        return next;
+      });
+    },
+    [closeProjectFilterMenu]
+  );
+
+  const handleProjectFilterButtonClick = useCallback(
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!isBrowserEnvironment()) return;
+      const buttonRect = event.currentTarget.getBoundingClientRect();
+      const left = buttonRect.left + window.scrollX;
+      const top = buttonRect.bottom + window.scrollY;
+      const isAlreadyOpen = projectFilterMenu.open;
+
+      projectFilterButtonRef.current = event.currentTarget;
+      setProjectFilterMenu({
+        open: !isAlreadyOpen || projectFilterMenu.left !== left || projectFilterMenu.top !== top,
+        left,
+        top,
+      });
+    },
+    [projectFilterMenu.left, projectFilterMenu.open, projectFilterMenu.top]
+  );
+
+  const closeStatusFilterMenu = useCallback(() => {
+    setStatusFilterMenu({ open: false, left: 0, top: 0 });
+  }, []);
+
+  const handleStatusFilterSelect = useCallback(
+    (statusName) => {
+      setSelectedStatusFilters((prev) => {
+        const next = new Set(prev);
+        if (next.has(statusName)) {
+          next.delete(statusName);
+        } else {
+          next.add(statusName);
+        }
+        if (next.size === 0) {
+          closeStatusFilterMenu();
+        }
+        return next;
+      });
+    },
+    [closeStatusFilterMenu]
+  );
+
+  const handleStatusFilterButtonClick = useCallback(
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!isBrowserEnvironment()) return;
+      const buttonRect = event.currentTarget.getBoundingClientRect();
+      const left = buttonRect.left + window.scrollX;
+      const top = buttonRect.bottom + window.scrollY;
+      const isAlreadyOpen = statusFilterMenu.open;
+
+      statusFilterButtonRef.current = event.currentTarget;
+      setStatusFilterMenu({
+        open: !isAlreadyOpen || statusFilterMenu.left !== left || statusFilterMenu.top !== top,
+        left,
+        top,
+      });
+    },
+    [statusFilterMenu.left, statusFilterMenu.open, statusFilterMenu.top]
+  );
+
+  const closeRecurringFilterMenu = useCallback(() => {
+    setRecurringFilterMenu({ open: false, left: 0, top: 0 });
+  }, []);
+
+  const handleRecurringFilterSelect = useCallback(
+    (recurringValue) => {
+      setSelectedRecurringFilters((prev) => {
+        const next = new Set(prev);
+        if (next.has(recurringValue)) {
+          next.delete(recurringValue);
+        } else {
+          next.add(recurringValue);
+        }
+        if (next.size === 0) {
+          closeRecurringFilterMenu();
+        }
+        return next;
+      });
+    },
+    [closeRecurringFilterMenu]
+  );
+
+  const handleRecurringFilterButtonClick = useCallback(
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!isBrowserEnvironment()) return;
+      const buttonRect = event.currentTarget.getBoundingClientRect();
+      const left = buttonRect.left + window.scrollX;
+      const top = buttonRect.bottom + window.scrollY;
+      const isAlreadyOpen = recurringFilterMenu.open;
+
+      recurringFilterButtonRef.current = event.currentTarget;
+      setRecurringFilterMenu({
+        open: !isAlreadyOpen || recurringFilterMenu.left !== left || recurringFilterMenu.top !== top,
+        left,
+        top,
+      });
+    },
+    [recurringFilterMenu.left, recurringFilterMenu.open, recurringFilterMenu.top]
+  );
+
+  const closeEstimateFilterMenu = useCallback(() => {
+    setEstimateFilterMenu({ open: false, left: 0, top: 0 });
+  }, []);
+
+  const handleEstimateFilterSelect = useCallback(
+    (estimateValue) => {
+      setSelectedEstimateFilters((prev) => {
+        const next = new Set(prev);
+        if (next.has(estimateValue)) {
+          next.delete(estimateValue);
+        } else {
+          next.add(estimateValue);
+        }
+        if (next.size === 0) {
+          closeEstimateFilterMenu();
+        }
+        return next;
+      });
+    },
+    [closeEstimateFilterMenu]
+  );
+
+  const handleEstimateFilterButtonClick = useCallback(
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!isBrowserEnvironment()) return;
+      const buttonRect = event.currentTarget.getBoundingClientRect();
+      const left = buttonRect.left + window.scrollX;
+      const top = buttonRect.bottom + window.scrollY;
+      const isAlreadyOpen = estimateFilterMenu.open;
+
+      estimateFilterButtonRef.current = event.currentTarget;
+      setEstimateFilterMenu({
+        open: !isAlreadyOpen || estimateFilterMenu.left !== left || estimateFilterMenu.top !== top,
+        left,
+        top,
+      });
+    },
+    [estimateFilterMenu.left, estimateFilterMenu.open, estimateFilterMenu.top]
+  );
+
+  const projectNames = useMemo(() => {
+    const names = new Set();
+    rows.forEach((row) => {
+      if (row.projectName) names.add(row.projectName);
+      if (row.projectSelection && row.projectSelection !== '-') {
+        names.add(row.projectSelection);
+      }
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [rows]);
+
+  useEffect(() => {
+    if (!projectFilterMenu.open || !isBrowserEnvironment()) return undefined;
+    const handleClickOutside = (event) => {
+      const menuNode = projectFilterMenuRef.current;
+      const buttonNode = projectFilterButtonRef.current;
+      if (menuNode && menuNode.contains(event.target)) return;
+      if (buttonNode && buttonNode.contains(event.target)) return;
+      closeProjectFilterMenu();
     };
 
-    if (active) {
-      return (
-        <svg {...baseProps} strokeWidth="1.4">
-          <path d="M1.5 2h11l-4.5 5.2V12l-2.5 1V7.2z" />
-        </svg>
-      );
-    }
-    return (
-      <svg {...baseProps} strokeWidth="1.2">
-        <line x1="2" y1="4" x2="12" y2="4" />
-        <circle cx="5" cy="4" r="1.2" fill="currentColor" stroke="none" />
-        <line x1="2" y1="7" x2="12" y2="7" />
-        <circle cx="9" cy="7" r="1.2" fill="currentColor" stroke="none" />
-        <line x1="2" y1="10" x2="12" y2="10" />
-        <circle cx="6.5" cy="10" r="1.2" fill="currentColor" stroke="none" />
-      </svg>
-    );
-  };
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        closeProjectFilterMenu();
+      }
+    };
+
+    window.addEventListener('mousedown', handleClickOutside, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handleClickOutside, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [closeProjectFilterMenu, projectFilterMenu.open]);
+
+  const statusNames = useMemo(() => STATUS_VALUES, []);
+  const recurringNames = useMemo(() => RECURRING_VALUES, []);
+  const estimateNames = useMemo(() => ESTIMATE_VALUES, []);
+
+  useEffect(() => {
+    if (!statusFilterMenu.open || !isBrowserEnvironment()) return undefined;
+    const handleClickOutside = (event) => {
+      const menuNode = statusFilterMenuRef.current;
+      const buttonNode = statusFilterButtonRef.current;
+      if (menuNode && menuNode.contains(event.target)) return;
+      if (buttonNode && buttonNode.contains(event.target)) return;
+      closeStatusFilterMenu();
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        closeStatusFilterMenu();
+      }
+    };
+
+    window.addEventListener('mousedown', handleClickOutside, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handleClickOutside, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [closeStatusFilterMenu, statusFilterMenu.open]);
+
+  useEffect(() => {
+    if (!recurringFilterMenu.open || !isBrowserEnvironment()) return undefined;
+    const handleClickOutside = (event) => {
+      const menuNode = recurringFilterMenuRef.current;
+      const buttonNode = recurringFilterButtonRef.current;
+      if (menuNode && menuNode.contains(event.target)) return;
+      if (buttonNode && buttonNode.contains(event.target)) return;
+      closeRecurringFilterMenu();
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        closeRecurringFilterMenu();
+      }
+    };
+
+    window.addEventListener('mousedown', handleClickOutside, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handleClickOutside, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [closeRecurringFilterMenu, recurringFilterMenu.open]);
+
+  useEffect(() => {
+    if (!estimateFilterMenu.open || !isBrowserEnvironment()) return undefined;
+    const handleClickOutside = (event) => {
+      const menuNode = estimateFilterMenuRef.current;
+      const buttonNode = estimateFilterButtonRef.current;
+      if (menuNode && menuNode.contains(event.target)) return;
+      if (buttonNode && buttonNode.contains(event.target)) return;
+      closeEstimateFilterMenu();
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        closeEstimateFilterMenu();
+      }
+    };
+
+    window.addEventListener('mousedown', handleClickOutside, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handleClickOutside, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [closeEstimateFilterMenu, estimateFilterMenu.open]);
 
   const renderTimelineRow = (config) => {
     if (!config) return null;
@@ -1163,8 +1534,22 @@ export default function ProjectTimePlannerWireframe() {
     const isFilterRow = id === 'totals';
 
     const renderContentWithFilterButton = (content, columnKey = null) => {
-      if (!isFilterRow || !columnKey) return content;
-      const isActive = activeFilterColumns.has(columnKey);
+      if (!isFilterRow || !columnKey || columnKey === 'rowLabel') return content;
+      const columnLetter = columnLetterByKey[columnKey];
+      if (columnLetter && FILTER_BLOCKED_LETTERS.has(columnLetter)) return content;
+      const isProjectFilterButton = columnKey === 'project';
+      const isStatusFilterButton = columnKey === 'status';
+      const isRecurringFilterButton = columnKey === 'recurring';
+      const isEstimateFilterButton = columnKey === 'estimate';
+      const isActive = isProjectFilterButton
+        ? projectFilterMenu.open || selectedProjectFilters.size > 0
+        : isStatusFilterButton
+          ? statusFilterMenu.open || selectedStatusFilters.size > 0
+          : isRecurringFilterButton
+            ? recurringFilterMenu.open || selectedRecurringFilters.size > 0
+            : isEstimateFilterButton
+              ? estimateFilterMenu.open || selectedEstimateFilters.size > 0
+              : activeFilterColumns.has(columnKey);
       return (
         <div className="flex w-full items-center justify-end gap-1">
           <span className="leading-tight">{content}</span>
@@ -1173,17 +1558,38 @@ export default function ProjectTimePlannerWireframe() {
             aria-label={`Toggle filter for ${columnKey}`}
             aria-pressed={isActive}
             title={isActive ? 'Filter active' : 'Add filter'}
+            ref={
+              isProjectFilterButton
+                ? projectFilterButtonRef
+                : isStatusFilterButton
+                  ? statusFilterButtonRef
+                  : isRecurringFilterButton
+                    ? recurringFilterButtonRef
+                    : isEstimateFilterButton
+                      ? estimateFilterButtonRef
+                      : null
+            }
             onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              toggleFilterColumn(columnKey);
+              if (isProjectFilterButton) {
+                handleProjectFilterButtonClick(event);
+              } else if (isStatusFilterButton) {
+                handleStatusFilterButtonClick(event);
+              } else if (isRecurringFilterButton) {
+                handleRecurringFilterButtonClick(event);
+              } else if (isEstimateFilterButton) {
+                handleEstimateFilterButtonClick(event);
+              } else {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleFilterColumn(columnKey);
+              }
             }}
-            className={`inline-flex h-[18px] w-[18px] items-center justify-center bg-transparent p-0 transition-colors ${
+            className={`inline-flex h-[22px] w-[22px] items-center justify-center bg-transparent p-0 transition-colors ${
               isActive ? 'text-green-600' : 'text-green-400 hover:text-green-600'
             }`}
             style={{ border: 'none' }}
           >
-            <FilterToggleIcon active={isActive} />
+            <ListFilter className="h-full w-full" strokeWidth={isActive ? 2.2 : 2} />
           </button>
         </div>
       );
@@ -1193,7 +1599,7 @@ export default function ProjectTimePlannerWireframe() {
       <tr key={`row-${id}`} className={`h-[${ROW_H}px] ${rowClassName ?? ''}`}>
         <td
           className={rowLabelClassName}
-          style={getWidthStyle('rowLabel', rowLabelStyle || {})}
+          style={getWidthStyle('rowLabel', applyRowLabelStyle(rowLabelStyle || {}))}
         >
           {renderContentWithFilterButton(rowLabelContent, 'rowLabel')}
         </td>
@@ -1239,9 +1645,8 @@ export default function ProjectTimePlannerWireframe() {
   };
 
   const renderColumnHeaderRow = () => {
-    const fixedHeaderStyle = { backgroundColor: '#000000', color: '#ffffff' };
-    const dayHeaderStyle = { backgroundColor: '#ffffff', color: '#000000' };
-
+    const headerBackground = '#d9f6e0';
+    const headerText = '#065f46';
     return (
       <tr
         key="row-column-headers"
@@ -1249,7 +1654,11 @@ export default function ProjectTimePlannerWireframe() {
       >
         <td
           className="border border-[#ced3d0] text-center"
-          style={{ width: COL_W.rowLabel, ...fixedHeaderStyle }}
+          style={{
+            ...getWidthStyle('rowLabel'),
+            backgroundColor: headerBackground,
+            color: headerText,
+          }}
         >
           {' '}
         </td>
@@ -1257,7 +1666,11 @@ export default function ProjectTimePlannerWireframe() {
           <td
             key={`hdr-${key}`}
             className={`border border-[#ced3d0] ${className ?? ''}`}
-            style={{ width, ...fixedHeaderStyle, ...(key === 'timeValue' ? blackDividerStyle : {}) }}
+            style={{
+              width,
+              backgroundColor: headerBackground,
+              color: headerText,
+            }}
           >
             {label}
           </td>
@@ -1265,7 +1678,11 @@ export default function ProjectTimePlannerWireframe() {
         {Array.from({ length: totalDays }).map((_, i) => (
           <td
             key={`hdr-day-${i}`}
-            style={applyWeekBorderStyles(i, { width: COL_W.day, ...dayHeaderStyle })}
+            style={{
+              ...applyWeekBorderStyles(i, { width: COL_W.day }),
+              backgroundColor: headerBackground,
+              color: headerText,
+            }}
             className={getWeekBorderClass(i, 'border border-[#ced3d0]')}
           ></td>
         ))}
@@ -1277,9 +1694,14 @@ export default function ProjectTimePlannerWireframe() {
     <>
       <option>-</option>
       <option key="custom">Custom</option>
-      <option key="m-1">1 Minute</option>
-      {Array.from({ length: 12 }, (_, i) => (i + 1) * 5).map((m) => (
-        <option key={`m-${m}`}>{m} Minutes</option>
+      <option key="m-1" className="estimate-highlight">1 Minute</option>
+      {Array.from({ length: 11 }, (_, i) => (i + 1) * 5).map((m) => (
+        <option
+          key={`m-${m}`}
+          className={m === 5 ? 'estimate-highlight' : undefined}
+        >
+          {m} Minutes
+        </option>
       ))}
       {[1, 2, 3, 4, 5, 6, 7, 8].map((h) => (
         <option key={`h-${h}`}>{h} Hour{h > 1 ? 's' : ''}</option>
@@ -1290,14 +1712,9 @@ export default function ProjectTimePlannerWireframe() {
   const StatusOptions = () => (
     <>
       <option>-</option>
-      <option>Scheduled</option>
-      <option>Done</option>
-      <option>Not Scheduled</option>
-      <option>Abandoned</option>
-      <option>Blocked</option>
-      <option>On Hold</option>
-      <option>Skipped</option>
-      <option>Special</option>
+      {STATUS_VALUES.map((status) => (
+        <option key={status}>{status}</option>
+      ))}
     </>
   );
 
@@ -1372,10 +1789,10 @@ export default function ProjectTimePlannerWireframe() {
             <td
               {...cellMetadataProps('rowLabel')}
               className={withCellSelectionClass(
-                `bg-[#d5a6bd] text-center font-semibold border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`,
+                `text-center font-semibold border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`,
                 'rowLabel'
               )}
-              style={getWidthStyle('rowLabel', getCellHighlightStyle(row.id, 'rowLabel'))}
+              style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(row.id, 'rowLabel')))}
               tabIndex={0}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'rowLabel', { highlightRow: true })}
               onFocus={() =>
@@ -1389,19 +1806,25 @@ export default function ProjectTimePlannerWireframe() {
               {rowNumber}
             </td>
             <td
-              className={withCellSelectionClass('bg-[#d5a6bd]', 'check')}
-              style={getWidthStyle('check', getCellHighlightStyle(row.id, 'check'))}
+              className={withCellSelectionClass('bg-[#d5a6bd] font-extrabold px-2 text-[12px]', 'check')}
+              style={getWidthStyle('check', {
+                ...getCellHighlightStyle(row.id, 'check'),
+                overflow: 'visible',
+                whiteSpace: 'nowrap',
+                fontWeight: 800,
+                paddingLeft: 8,
+              })}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'check')}
               {...cellClickProps('check')}
-            ></td>
-            <td
-              className={withCellSelectionClass('bg-[#d5a6bd] font-extrabold px-2 text-[12px]', 'project')}
-              style={getWidthStyle('project', { fontWeight: 800, ...getCellHighlightStyle(row.id, 'project') })}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'project')}
-              {...cellClickProps('project')}
             >
               {row.projectName}
             </td>
+            <td
+              className={withCellSelectionClass('bg-[#d5a6bd]', 'project')}
+              style={getWidthStyle('project', getCellHighlightStyle(row.id, 'project'))}
+              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'project')}
+              {...cellClickProps('project')}
+            ></td>
             <td
               className={withCellSelectionClass('bg-[#d5a6bd]', 'status')}
               style={getWidthStyle('status', getCellHighlightStyle(row.id, 'status'))}
@@ -1430,7 +1853,12 @@ export default function ProjectTimePlannerWireframe() {
             ></td>
             <td
               className={withCellSelectionClass('bg-[#d5a6bd] border border-[#ced3d0]', 'timeValue')}
-              style={getWidthStyle('timeValue', { ...blackDividerStyle, ...getCellHighlightStyle(row.id, 'timeValue') })}
+              style={getWidthStyle('timeValue', {
+                ...blackDividerStyle,
+                ...getCellHighlightStyle(row.id, 'timeValue'),
+                textAlign: 'right',
+                paddingRight: 8,
+              })}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'timeValue')}
               {...cellClickProps('timeValue')}
             ></td>
@@ -1470,10 +1898,10 @@ export default function ProjectTimePlannerWireframe() {
             <td
               {...cellMetadataProps('rowLabel')}
               className={withCellSelectionClass(
-                `bg-[#f2e5eb] text-center border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`,
+                `text-center border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`,
                 'rowLabel'
               )}
-              style={getWidthStyle('rowLabel', getCellHighlightStyle(row.id, 'rowLabel'))}
+              style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(row.id, 'rowLabel')))}
               tabIndex={0}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'rowLabel', { highlightRow: true })}
               onFocus={() =>
@@ -1506,7 +1934,7 @@ export default function ProjectTimePlannerWireframe() {
             ></td>
             <td
               className={withCellSelectionClass('bg-[#f2e5eb] px-2 font-extrabold text-[12px]', 'task')}
-              style={getWidthStyle('task', { fontWeight: 800, ...getCellHighlightStyle(row.id, 'task') })}
+              style={getWidthStyle('task', { fontWeight: 800, paddingLeft: 8, ...getCellHighlightStyle(row.id, 'task') })}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'task')}
               {...cellClickProps('task')}
             >
@@ -1528,7 +1956,12 @@ export default function ProjectTimePlannerWireframe() {
             ></td>
             <td
               className={withCellSelectionClass('bg-[#f2e5eb] border border-[#ced3d0]', 'timeValue')}
-              style={getWidthStyle('timeValue', { ...blackDividerStyle, ...getCellHighlightStyle(row.id, 'timeValue') })}
+              style={getWidthStyle('timeValue', {
+                ...blackDividerStyle,
+                ...getCellHighlightStyle(row.id, 'timeValue'),
+                textAlign: 'right',
+                paddingRight: 8,
+              })}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'timeValue')}
               {...cellClickProps('timeValue')}
             ></td>
@@ -1607,10 +2040,10 @@ export default function ProjectTimePlannerWireframe() {
             <td
               {...cellMetadataProps('rowLabel')}
               className={withCellSelectionClass(
-                `text-center align-middle border border-[#ced3d0] bg-white${isRowSelected ? ' selected-cell' : ''}`,
+                `text-center align-middle border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`,
                 'rowLabel'
               )}
-              style={getWidthStyle('rowLabel', getCellHighlightStyle(row.id, 'rowLabel'))}
+              style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(row.id, 'rowLabel')))}
               tabIndex={0}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'rowLabel', { highlightRow: true })}
               onFocus={() =>
@@ -1704,9 +2137,13 @@ export default function ProjectTimePlannerWireframe() {
                   <input
                     type="checkbox"
                     className={checkboxInputClass}
+                    checked={row.recurring === 'Recurring'}
                     onMouseDown={(event) => handleCellMouseDown(event, row.id, 'recurring')}
                     onFocus={() => handleCellActivate(row.id, 'recurring')}
-                    onChange={ensureInteractionMarked}
+                    onChange={(event) => {
+                      const nextValue = event.target.checked ? 'Recurring' : 'Not Recurring';
+                      commitRowUpdate({ recurring: nextValue }, { markInteraction: true });
+                    }}
                   />
                 </div>
               </td>
@@ -1755,12 +2192,17 @@ export default function ProjectTimePlannerWireframe() {
             </td>
             <td
               className={withCellSelectionClass('border border-[#ced3d0] p-0', 'timeValue')}
-              style={getWidthStyle('timeValue', { ...blackDividerStyle, ...getCellHighlightStyle(row.id, 'timeValue') })}
+              style={getWidthStyle('timeValue', {
+                ...blackDividerStyle,
+                ...getCellHighlightStyle(row.id, 'timeValue'),
+                textAlign: 'right',
+                paddingRight: 8,
+              })}
               {...cellClickProps('timeValue')}
             >
               <input
                 type="text"
-                className={sharedInputStyle}
+                className={`${sharedInputStyle} text-right pr-2`}
                 value={row.timeValue ?? '0.00'}
                 onMouseDown={(event) => handleCellMouseDown(event, row.id, 'timeValue')}
                 onFocus={() => handleCellActivate(row.id, 'timeValue')}
@@ -1812,10 +2254,10 @@ export default function ProjectTimePlannerWireframe() {
             <td
               {...cellMetadataProps('rowLabel')}
               className={withCellSelectionClass(
-                `bg-[#f2e5eb] text-center border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`,
+                `text-center border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`,
                 'rowLabel'
               )}
-              style={getWidthStyle('rowLabel', getCellHighlightStyle(row.id, 'rowLabel'))}
+              style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(row.id, 'rowLabel')))}
               tabIndex={0}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'rowLabel', { highlightRow: true })}
               onFocus={() =>
@@ -1848,7 +2290,7 @@ export default function ProjectTimePlannerWireframe() {
             ></td>
             <td
               className={withCellSelectionClass('bg-[#f2e5eb] px-2 font-extrabold text-[12px]', 'task')}
-              style={getWidthStyle('task', { fontWeight: 800, ...getCellHighlightStyle(row.id, 'task') })}
+              style={getWidthStyle('task', { fontWeight: 800, paddingLeft: 8, ...getCellHighlightStyle(row.id, 'task') })}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'task')}
               {...cellClickProps('task')}
             >
@@ -1870,7 +2312,12 @@ export default function ProjectTimePlannerWireframe() {
             ></td>
             <td
               className={withCellSelectionClass('bg-[#f2e5eb] border border-[#ced3d0]', 'timeValue')}
-              style={getWidthStyle('timeValue', { ...blackDividerStyle, ...getCellHighlightStyle(row.id, 'timeValue') })}
+              style={getWidthStyle('timeValue', {
+                ...blackDividerStyle,
+                ...getCellHighlightStyle(row.id, 'timeValue'),
+                textAlign: 'right',
+                paddingRight: 8,
+              })}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'timeValue')}
               {...cellClickProps('timeValue')}
             ></td>
@@ -1914,10 +2361,10 @@ export default function ProjectTimePlannerWireframe() {
                 `font-bold text-center border-0${isRowSelected ? ' selected-cell' : ''}`,
                 'rowLabel'
               )}
-              style={getWidthStyle('rowLabel', {
+              style={getWidthStyle('rowLabel', applyRowLabelStyle({
                 ...inboxHeaderStyle,
                 ...getCellHighlightStyle(row.id, 'rowLabel'),
-              })}
+              }))}
               tabIndex={0}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'rowLabel', { highlightRow: true })}
               onFocus={() =>
@@ -1933,7 +2380,13 @@ export default function ProjectTimePlannerWireframe() {
             <td
               className={withCellSelectionClass('font-bold px-2 border-0', 'header-fixed')}
               colSpan={fixedCols - 1}
-              style={{ ...blackDividerStyle, ...inboxHeaderStyle, ...getCellHighlightStyle(row.id, 'header-fixed') }}
+              style={{
+                ...blackDividerStyle,
+                ...inboxHeaderStyle,
+                ...getCellHighlightStyle(row.id, 'header-fixed'),
+                paddingLeft: 8,
+                fontWeight: 800,
+              }}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'header-fixed')}
               {...cellClickProps('header-fixed')}
             >
@@ -1998,7 +2451,7 @@ export default function ProjectTimePlannerWireframe() {
                 `text-center align-middle border border-[#ced3d0]${topBorderClass} bg-white${isRowSelected ? ' selected-cell' : ''}`,
                 'rowLabel'
               )}
-              style={getWidthStyle('rowLabel', getCellHighlightStyle(row.id, 'rowLabel'))}
+              style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(row.id, 'rowLabel')))}
               tabIndex={0}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'rowLabel', { highlightRow: true })}
               onFocus={() =>
@@ -2092,9 +2545,13 @@ export default function ProjectTimePlannerWireframe() {
                   <input
                     type="checkbox"
                     className={checkboxInputClass}
+                    checked={row.recurring === 'Recurring'}
                     onMouseDown={(event) => handleCellMouseDown(event, row.id, 'recurring')}
                     onFocus={() => handleCellActivate(row.id, 'recurring')}
-                    onChange={ensureInteractionMarked}
+                    onChange={(event) => {
+                      const nextValue = event.target.checked ? 'Recurring' : 'Not Recurring';
+                      commitRowUpdate({ recurring: nextValue }, { markInteraction: true });
+                    }}
                   />
                 </div>
               </td>
@@ -2143,12 +2600,17 @@ export default function ProjectTimePlannerWireframe() {
             </td>
             <td
               className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'timeValue')}
-              style={getWidthStyle('timeValue', { ...blackDividerStyle, ...getCellHighlightStyle(row.id, 'timeValue') })}
+              style={getWidthStyle('timeValue', {
+                ...blackDividerStyle,
+                ...getCellHighlightStyle(row.id, 'timeValue'),
+                textAlign: 'right',
+                paddingRight: 8,
+              })}
               {...cellClickProps('timeValue')}
             >
               <input
                 type="text"
-                className={sharedInputStyle}
+                className={`${sharedInputStyle} text-right pr-2`}
                 value={row.timeValue ?? '0.00'}
                 onMouseDown={(event) => handleCellMouseDown(event, row.id, 'timeValue')}
                 onFocus={() => handleCellActivate(row.id, 'timeValue')}
@@ -2200,7 +2662,7 @@ export default function ProjectTimePlannerWireframe() {
   };
 
   return (
-    <div ref={tableContainerRef} className="overflow-x-auto p-4 text-[12px] bg-gray-100">
+    <div ref={tableContainerRef} className="relative overflow-x-auto p-4 text-[12px] bg-gray-100">
       <div className="mb-4 flex flex-wrap items-center gap-4">
         <label className="font-semibold inline-flex items-center gap-2">
           <input type="checkbox" checked={showRecurring} onChange={() => setShowRecurring(!showRecurring)} /> Show Recurring
@@ -2223,13 +2685,16 @@ export default function ProjectTimePlannerWireframe() {
         <thead>
           <tr className={`h-[${ROW_H}px] text-xs`}>
           {columnStructure.map((col, idx) => {
-            const isWithinFixedSpan = idx < fixedCols;
-            const backgroundColor = isWithinFixedSpan ? '#000000' : '#ffffff';
-            const color = isWithinFixedSpan ? '#ffffff' : '#000000';
+            const headerBackground = '#d9f6e0';
+            const headerText = '#065f46';
             return (
               <th
                 key={`col-letter-${col.key}`}
-                style={getWidthStyle(col.key, { backgroundColor, color, position: 'relative' })}
+                style={getWidthStyle(col.key, {
+                  backgroundColor: headerBackground,
+                  color: headerText,
+                  position: 'relative',
+                })}
                 className="border border-[#ced3d0]"
               >
                 {columnLetters[idx]}
@@ -2267,6 +2732,106 @@ export default function ProjectTimePlannerWireframe() {
           })}
         </tbody>
       </table>
+      {projectFilterMenu.open && (
+        <div
+          ref={projectFilterMenuRef}
+          className="fixed z-50 mt-1 min-w-[200px] overflow-hidden rounded border border-[#ced3d0] bg-white text-[12px] shadow-lg"
+          style={{ top: projectFilterMenu.top, left: projectFilterMenu.left }}
+        >
+          <div className="max-h-64 overflow-y-auto">
+            {projectNames.length === 0 ? (
+              <div className="px-3 py-2 text-slate-600">No projects available</div>
+            ) : (
+              projectNames.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  className={`flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-100 ${
+                    selectedProjectFilters.has(name) ? 'font-semibold text-slate-900' : 'text-slate-800'
+                  }`}
+                  onClick={() => handleProjectFilterSelect(name)}
+                >
+                  <span>{name}</span>
+                  {selectedProjectFilters.has(name) ? <span>✓</span> : null}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+      {statusFilterMenu.open && (
+        <div
+          ref={statusFilterMenuRef}
+          className="fixed z-50 mt-1 min-w-[200px] overflow-hidden rounded border border-[#ced3d0] bg-white text-[12px] shadow-lg"
+          style={{ top: statusFilterMenu.top, left: statusFilterMenu.left }}
+        >
+          <div className="max-h-64 overflow-y-auto">
+            {statusNames.length === 0 ? (
+              <div className="px-3 py-2 text-slate-600">No statuses available</div>
+            ) : (
+              statusNames.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  className={`flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-100 ${
+                    selectedStatusFilters.has(name) ? 'font-semibold text-slate-900' : 'text-slate-800'
+                  }`}
+                  onClick={() => handleStatusFilterSelect(name)}
+                >
+                  <span>{name}</span>
+                  {selectedStatusFilters.has(name) ? <span>✓</span> : null}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+      {recurringFilterMenu.open && (
+        <div
+          ref={recurringFilterMenuRef}
+          className="fixed z-50 mt-1 min-w-[200px] overflow-hidden rounded border border-[#ced3d0] bg-white text-[12px] shadow-lg"
+          style={{ top: recurringFilterMenu.top, left: recurringFilterMenu.left }}
+        >
+          <div className="max-h-64 overflow-y-auto">
+            {recurringNames.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className={`flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-100 ${
+                  selectedRecurringFilters.has(name) ? 'font-semibold text-slate-900' : 'text-slate-800'
+                }`}
+                onClick={() => handleRecurringFilterSelect(name)}
+              >
+                <span>{name}</span>
+                {selectedRecurringFilters.has(name) ? <span>✓</span> : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {estimateFilterMenu.open && (
+        <div
+          ref={estimateFilterMenuRef}
+          className="fixed z-50 mt-1 min-w-[200px] overflow-hidden rounded border border-[#ced3d0] bg-white text-[12px] shadow-lg"
+          style={{ top: estimateFilterMenu.top, left: estimateFilterMenu.left }}
+        >
+          <div className="max-h-64 overflow-y-auto">
+            {estimateNames.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className={`flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-100 ${
+                  selectedEstimateFilters.has(name) ? 'font-semibold text-slate-900' : 'text-slate-800'
+                }`}
+                onClick={() => handleEstimateFilterSelect(name)}
+              >
+                <span>{name}</span>
+                {selectedEstimateFilters.has(name) ? <span>✓</span> : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
