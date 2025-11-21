@@ -106,6 +106,8 @@ export default function ProjectTimePlannerWireframe() {
   const [showRecurring, setShowRecurring] = useState(true);
   const [startDate, setStartDate] = useState("");
   const [showMaxMinRows, setShowMaxMinRows] = useState(true);
+  const [isListicalMenuOpen, setIsListicalMenuOpen] = useState(false);
+  const [addTasksCount, setAddTasksCount] = useState('');
   const totalDays = 84;
 
   const createTaskRow = (base) => ({
@@ -184,6 +186,8 @@ export default function ProjectTimePlannerWireframe() {
   const [copiedCell, setCopiedCell] = useState(null);
   const [copiedCellHighlight, setCopiedCellHighlight] = useState(null);
   const copiedCellHighlightTimeoutRef = useRef(null);
+  const listicalButtonRef = useRef(null);
+  const listicalMenuRef = useRef(null);
   const [activeFilterColumns, setActiveFilterColumns] = useState(() => new Set());
   const [selectedProjectFilters, setSelectedProjectFilters] = useState(() => new Set());
   const [projectFilterMenu, setProjectFilterMenu] = useState(() => ({
@@ -1446,6 +1450,73 @@ export default function ProjectTimePlannerWireframe() {
   const recurringNames = useMemo(() => RECURRING_VALUES, []);
   const estimateNames = useMemo(() => ESTIMATE_VALUES, []);
 
+  const handleAddTasks = useCallback(() => {
+    setIsListicalMenuOpen(false);
+    const count = parseInt(addTasksCount, 10);
+    if (!Number.isFinite(count) || count <= 0) return;
+    const targetRowId =
+      highlightedRowId ??
+      (selectedRowIds.length ? selectedRowIds[0] : null) ??
+      activeRowId ??
+      null;
+    if (!targetRowId) return;
+
+    setRows((prev) => {
+      const targetIndex = prev.findIndex((row) => row.id === targetRowId);
+      if (targetIndex === -1) return prev;
+      const targetRow = prev[targetIndex];
+
+      const baseType =
+        targetRow.type === 'inboxItem' || targetRow.type === 'inboxHeader'
+          ? 'inboxItem'
+          : 'projectTask';
+      const baseProjectName = targetRow.projectName ?? null;
+      const baseProjectSelection = targetRow.projectSelection ?? null;
+
+      const newRows = [];
+      const timestamp = Date.now();
+      for (let i = 0; i < count; i += 1) {
+        const base = {
+          id: `${baseType}-${timestamp}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+          type: baseType,
+        };
+        if (baseProjectName) base.projectName = baseProjectName;
+        if (baseProjectSelection) base.projectSelection = baseProjectSelection;
+        newRows.push(createTaskRow(base));
+      }
+
+      const nextRows = [...prev];
+      nextRows.splice(targetIndex + 1, 0, ...newRows);
+      return nextRows;
+    });
+
+    setAddTasksCount('');
+  }, [addTasksCount, activeRowId, highlightedRowId, selectedRowIds, setRows]);
+
+  useEffect(() => {
+    if (!isListicalMenuOpen || !isBrowserEnvironment()) return undefined;
+    const handleClickOutside = (event) => {
+      const menuNode = listicalMenuRef.current;
+      const buttonNode = listicalButtonRef.current;
+      if (menuNode && menuNode.contains(event.target)) return;
+      if (buttonNode && buttonNode.contains(event.target)) return;
+      setIsListicalMenuOpen(false);
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsListicalMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('mousedown', handleClickOutside, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handleClickOutside, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isListicalMenuOpen]);
+
   useEffect(() => {
     if (!statusFilterMenu.open || !isBrowserEnvironment()) return undefined;
     const handleClickOutside = (event) => {
@@ -2664,21 +2735,71 @@ export default function ProjectTimePlannerWireframe() {
   return (
     <div ref={tableContainerRef} className="relative overflow-x-auto p-4 text-[12px] bg-gray-100">
       <div className="mb-4 flex flex-wrap items-center gap-4">
-        <label className="font-semibold inline-flex items-center gap-2">
-          <input type="checkbox" checked={showRecurring} onChange={() => setShowRecurring(!showRecurring)} /> Show Recurring
-        </label>
-        <label className="font-semibold inline-flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={showMaxMinRows}
-            onChange={() => setShowMaxMinRows(!showMaxMinRows)}
-          />{' '}
-          Toggle Max/Min Hours
-        </label>
-        <label className="font-semibold inline-flex items-center gap-2">
-          Start Date:
-          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="border px-2 py-1" />
-        </label>
+        <div className="relative">
+          <button
+            type="button"
+            ref={listicalButtonRef}
+            onClick={() => setIsListicalMenuOpen((prev) => !prev)}
+            aria-expanded={isListicalMenuOpen}
+            className="inline-flex items-center gap-2 rounded border border-[#ced3d0] bg-white px-3 py-2 font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6] hover:shadow-md"
+          >
+            <span>Listical</span>
+          </button>
+          {isListicalMenuOpen && (
+            <div
+              ref={listicalMenuRef}
+              className="absolute z-20 mt-2 w-[36rem] rounded border border-[#ced3d0] bg-[#f2fdf6] p-4 shadow-lg"
+            >
+              <div className="flex flex-col gap-3 text-[12px] text-slate-800">
+                <label className="flex items-center gap-2 font-semibold">
+                  <input
+                    type="checkbox"
+                    className={checkboxInputClass}
+                    checked={showRecurring}
+                    onChange={() => setShowRecurring(!showRecurring)}
+                  />
+                  Show Recurring
+                </label>
+                <label className="flex items-center gap-2 font-semibold">
+                  <input
+                    type="checkbox"
+                    className={checkboxInputClass}
+                    checked={showMaxMinRows}
+                    onChange={() => setShowMaxMinRows(!showMaxMinRows)}
+                  />
+                  Toggle Max/Min Hours
+                </label>
+                <div className="flex items-center gap-3 font-semibold text-slate-800">
+                  <span className="text-[11px] uppercase tracking-wide text-slate-600">Add Tasks</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={addTasksCount}
+                    onChange={(e) => setAddTasksCount(e.target.value)}
+                    className="w-24 rounded border border-[#ced3d0] px-2 py-1 text-[12px] font-normal uppercase tracking-normal text-slate-800"
+                    placeholder="0"
+                  />
+                  <button
+                    type="button"
+                    className="rounded border border-[#ced3d0] bg-white px-4 py-1 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
+                    onClick={handleAddTasks}
+                  >
+                    Ok
+                  </button>
+                </div>
+                <label className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                  <span>Start Date</span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="flex-1 rounded border border-[#ced3d0] px-2 py-1 text-[12px] font-normal uppercase tracking-normal text-slate-800"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <table className="table-fixed border-collapse w-full text-[12px] border border-[#ced3d0] shadow-sm bg-white">
