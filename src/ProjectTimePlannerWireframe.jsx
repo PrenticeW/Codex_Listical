@@ -1227,6 +1227,45 @@ export default function ProjectTimePlannerWireframe() {
     return map;
   }, [columnStructure, columnLetters]);
 
+  const columnFKey = useMemo(
+    () => Object.entries(columnLetterByKey).find(([, letter]) => letter === 'F')?.[0] ?? null,
+    [columnLetterByKey]
+  );
+  const columnGKey = useMemo(
+    () => Object.entries(columnLetterByKey).find(([, letter]) => letter === 'G')?.[0] ?? null,
+    [columnLetterByKey]
+  );
+
+  const projectHeaderTotals = useMemo(() => {
+    const totals = {};
+    let activeHeaderId = null;
+
+    rows.forEach((row) => {
+      if (row.type === 'projectHeader') {
+        activeHeaderId = row.id;
+        totals[activeHeaderId] = 0;
+        return;
+      }
+      if (row.type === 'inboxHeader') {
+        activeHeaderId = null;
+        return;
+      }
+      if (!activeHeaderId) return;
+      if (!TASK_ROW_TYPES.has(row.type)) return;
+      const status = row.status ?? '';
+      if (status !== 'Scheduled' && status !== 'Done') return;
+      const value = coerceNumber(row.timeValue);
+      if (value == null) return;
+      totals[activeHeaderId] += value;
+    });
+
+    const formattedTotals = {};
+    Object.entries(totals).forEach(([key, total]) => {
+      formattedTotals[key] = formatTotalValue(total ?? 0);
+    });
+    return formattedTotals;
+  }, [rows]);
+
   const toggleFilterColumn = useCallback(
     (columnKey) => {
       if (!columnKey) return;
@@ -1855,6 +1894,7 @@ export default function ProjectTimePlannerWireframe() {
 
     switch (row.type) {
       case 'projectHeader':
+        const projectRollupValue = projectHeaderTotals[rowId] ?? '0.00';
         return (
           <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
             <td
@@ -1917,22 +1957,34 @@ export default function ProjectTimePlannerWireframe() {
               ></td>
             )}
             <td
-              className={withCellSelectionClass('bg-[#d5a6bd]', 'estimate')}
-              style={getWidthStyle('estimate', getCellHighlightStyle(row.id, 'estimate'))}
+              className={withCellSelectionClass(
+                `bg-[#d5a6bd]${columnFKey === 'estimate' ? ' text-right pr-2' : ''}`,
+                'estimate'
+              )}
+              style={getWidthStyle('estimate', {
+                ...getCellHighlightStyle(row.id, 'estimate'),
+                ...(columnFKey === 'estimate' ? { textAlign: 'right', paddingRight: 8 } : {}),
+              })}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'estimate')}
               {...cellClickProps('estimate')}
-            ></td>
+            >
+              {columnFKey === 'estimate' ? projectRollupValue : ''}
+              {columnGKey === 'estimate' ? 'of 0.00' : ''}
+            </td>
             <td
               className={withCellSelectionClass('bg-[#d5a6bd] border border-[#ced3d0]', 'timeValue')}
               style={getWidthStyle('timeValue', {
                 ...blackDividerStyle,
                 ...getCellHighlightStyle(row.id, 'timeValue'),
-                textAlign: 'right',
-                paddingRight: 8,
+                textAlign: columnGKey === 'timeValue' ? 'left' : 'right',
+                paddingRight: columnGKey === 'timeValue' ? undefined : 8,
               })}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'timeValue')}
               {...cellClickProps('timeValue')}
-            ></td>
+            >
+              {columnFKey === 'timeValue' ? projectRollupValue : ''}
+              {columnGKey === 'timeValue' ? 'of 0.00' : ''}
+            </td>
             {Array.from({ length: totalDays }).map((_, i) => (
               <td
                 key={`${row.id}-hdr-${i}`}
@@ -1950,7 +2002,7 @@ export default function ProjectTimePlannerWireframe() {
                 <input
                   type="text"
                   className={sharedInputStyle}
-                  defaultValue=""
+                  defaultValue={columnGKey === `day-${i}` ? 'of 0.00' : ''}
                   onMouseDown={(event) => handleCellMouseDown(event, row.id, `day-${i}`)}
                   onFocus={() => handleCellActivate(row.id, `day-${i}`)}
                   onPaste={(event) =>
