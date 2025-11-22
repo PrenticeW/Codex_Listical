@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import ProjectTimePlannerWireframe from "./ProjectTimePlannerWireframe";
 import StagingPage from "./StagingPage";
+import TacticsPage from "./TacticsPage";
 
 const isBrowser = () => typeof window !== "undefined";
 
@@ -30,12 +31,29 @@ export default function App() {
   }, []);
 
   if (currentPath === "/staging") {
-    return <StagingPage onNavigateHome={() => navigate("/")} />;
+    return (
+      <StagingPage
+        currentPath={currentPath}
+        onNavigate={navigate}
+      />
+    );
+  }
+
+  if (currentPath === "/tactics") {
+    return (
+      <TacticsPage
+        currentPath={currentPath}
+        onNavigate={navigate}
+      />
+    );
   }
 
   return (
     <div className="p-4">
-      <ProjectTimePlannerWireframe onNavigateToStaging={() => navigate("/staging")} />
+      <ProjectTimePlannerWireframe
+        currentPath={currentPath}
+        onNavigate={navigate}
+      />
     </div>
   );
 }

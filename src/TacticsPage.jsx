@@ -1,7 +1,7 @@
 import React from 'react';
 import NavigationBar from './NavigationBar';
 
-export default function StagingPage({ currentPath = '/staging', onNavigate = () => {} }) {
+export default function TacticsPage({ currentPath = '/tactics', onNavigate = () => {} }) {
   return (
     <div className="min-h-screen bg-gray-100 text-slate-800 p-4">
       <NavigationBar
@@ -16,11 +16,6 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           </button>
         }
       />
-      <div className="mt-10 flex justify-center">
-        <div className="rounded border border-[#ced3d0] bg-white px-6 py-10 shadow-sm max-w-xl w-full text-center">
-          <h1 className="text-2xl font-bold text-slate-900">What would you like to get done?</h1>
-        </div>
-      </div>
     </div>
   );
 }

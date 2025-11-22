@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReactTable, getCoreRowModel } from '@tanstack/react-table';
 import { ListFilter } from 'lucide-react';
+import NavigationBar from './NavigationBar';
 
 const PROTECTED_STATUSES = new Set(['Done', 'Abandoned', 'Blocked', 'On Hold', 'Skipped', 'Special']);
 const TASK_ROW_TYPES = new Set(['projectTask', 'inboxItem']);
@@ -137,7 +138,7 @@ const ARCHIVE_ROW_STYLE = { backgroundColor: '#d9f6e0', color: '#000000' };
 const isBrowserEnvironment = () =>
   typeof window !== 'undefined' && typeof document !== 'undefined';
 
-export default function ProjectTimePlannerWireframe() {
+export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavigate = () => {} }) {
   const [showRecurring, setShowRecurring] = useState(true);
   const [startDate, setStartDate] = useState("");
   const [showMaxMinRows, setShowMaxMinRows] = useState(true);
@@ -942,15 +943,22 @@ export default function ProjectTimePlannerWireframe() {
   const weeksCount = totalDays / 7;
   const hasStartDate = Boolean(startDate);
 
+  const parseDateInput = useCallback((value) => {
+    if (!value) return null;
+    const [year, month, day] = value.split('-').map((part) => Number.parseInt(part, 10));
+    if (!year || !month || !day) return null;
+    return new Date(year, month - 1, day);
+  }, []);
+
   const dates = useMemo(() => {
-    const base = startDate ? new Date(startDate) : null;
+    const base = parseDateInput(startDate);
     return Array.from({ length: totalDays }, (_, i) => {
       if (!base) return null;
       const d = new Date(base);
       d.setDate(base.getDate() + i);
       return d;
     });
-  }, [startDate, totalDays]);
+  }, [parseDateInput, startDate, totalDays]);
 
   const foremostWeekRange = useMemo(() => {
     if (!dates.length) return '';
@@ -3115,107 +3123,111 @@ export default function ProjectTimePlannerWireframe() {
 
   return (
     <div ref={tableContainerRef} className="relative overflow-x-auto p-4 text-[12px] bg-gray-100">
-      <div className="mb-4 flex flex-wrap items-center gap-4">
-        <div className="relative">
-          <button
-            type="button"
-            ref={listicalButtonRef}
-            onClick={() => setIsListicalMenuOpen((prev) => !prev)}
-            aria-expanded={isListicalMenuOpen}
-            className="inline-flex items-center gap-2 rounded border border-[#ced3d0] bg-white px-3 py-2 font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6] hover:shadow-md"
-          >
-            <span>Listical</span>
-          </button>
-          {isListicalMenuOpen && (
-            <div
-              ref={listicalMenuRef}
-              className="absolute z-20 mt-2 w-[36rem] rounded border border-[#ced3d0] bg-[#f2fdf6] p-4 shadow-lg"
+      <NavigationBar
+        currentPath={currentPath}
+        onNavigate={onNavigate}
+        listicalButton={
+          <div>
+            <button
+              type="button"
+              ref={listicalButtonRef}
+              onClick={() => setIsListicalMenuOpen((prev) => !prev)}
+              aria-expanded={isListicalMenuOpen}
+              className="inline-flex items-center gap-2 rounded border border-[#ced3d0] bg-white px-3 py-2 font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6] hover:shadow-md"
             >
-              <div className="flex flex-col gap-3 text-[12px] text-slate-800">
-                <label className="flex items-center gap-2 font-semibold">
-                  <input
-                    type="checkbox"
-                    className={checkboxInputClass}
-                    checked={showRecurring}
-                    onChange={() => setShowRecurring(!showRecurring)}
-                  />
-                  Show Recurring
-                </label>
-                <label className="flex items-center gap-2 font-semibold">
-                  <input
-                    type="checkbox"
-                    className={checkboxInputClass}
-                    checked={showMaxMinRows}
-                    onChange={() => setShowMaxMinRows(!showMaxMinRows)}
-                  />
-                  Toggle Max/Min Hours
-                </label>
-                <div className="flex items-center gap-3 font-semibold text-slate-800">
-                  <span className="text-[11px] uppercase tracking-wide text-slate-600">Add Tasks</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={addTasksCount}
-                    onChange={(e) => setAddTasksCount(e.target.value)}
-                    className="w-24 rounded border border-[#ced3d0] px-2 py-1 text-[12px] font-normal uppercase tracking-normal text-slate-800"
-                    placeholder="0"
-                  />
-                  <button
-                    type="button"
-                    className="rounded border border-[#ced3d0] bg-white px-4 py-1 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-                    onClick={handleAddTasks}
-                  >
-                    Ok
-                  </button>
-                </div>
-                <label className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                  <span>Start Date</span>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                className="flex-1 rounded border border-[#ced3d0] px-2 py-1 text-[12px] font-normal uppercase tracking-normal text-slate-800"
-              />
-            </label>
-            <div className="flex flex-col gap-2 rounded border border-[#ced3d0] bg-white/60 p-3">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                Sort Inbox: Move statuses
-              </span>
-              <div className="flex flex-wrap gap-3">
-                {SORTABLE_STATUSES.map((status) => (
-                  <label key={status} className="flex items-center gap-2 text-[12px] font-semibold">
+              <span>Listical</span>
+            </button>
+            {isListicalMenuOpen && (
+              <div
+                ref={listicalMenuRef}
+                className="absolute z-20 mt-2 w-[36rem] rounded border border-[#ced3d0] bg-[#f2fdf6] p-4 shadow-lg"
+              >
+                <div className="flex flex-col gap-3 text-[12px] text-slate-800">
+                  <label className="flex items-center gap-2 font-semibold">
                     <input
                       type="checkbox"
                       className={checkboxInputClass}
-                      checked={selectedSortStatuses.has(status)}
-                      onChange={() => toggleSortStatus(status)}
+                      checked={showRecurring}
+                      onChange={() => setShowRecurring(!showRecurring)}
                     />
-                    <span>{status}</span>
+                    Show Recurring
                   </label>
-                ))}
+                  <label className="flex items-center gap-2 font-semibold">
+                    <input
+                      type="checkbox"
+                      className={checkboxInputClass}
+                      checked={showMaxMinRows}
+                      onChange={() => setShowMaxMinRows(!showMaxMinRows)}
+                    />
+                    Toggle Max/Min Hours
+                  </label>
+                  <div className="flex items-center gap-3 font-semibold text-slate-800">
+                    <span className="text-[11px] uppercase tracking-wide text-slate-600">Add Tasks</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={addTasksCount}
+                      onChange={(e) => setAddTasksCount(e.target.value)}
+                      className="w-24 rounded border border-[#ced3d0] px-2 py-1 text-[12px] font-normal uppercase tracking-normal text-slate-800"
+                      placeholder="0"
+                    />
+                    <button
+                      type="button"
+                      className="rounded border border-[#ced3d0] bg-white px-4 py-1 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
+                      onClick={handleAddTasks}
+                    >
+                      Ok
+                    </button>
+                  </div>
+                  <label className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    <span>Start Date</span>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                  className="flex-1 rounded border border-[#ced3d0] px-2 py-1 text-[12px] font-normal uppercase tracking-normal text-slate-800"
+                />
+              </label>
+              <div className="flex flex-col gap-2 rounded border border-[#ced3d0] bg-white/60 p-3">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                  Sort Inbox: Move statuses
+                </span>
+                <div className="flex flex-wrap gap-3">
+                  {SORTABLE_STATUSES.map((status) => (
+                    <label key={status} className="flex items-center gap-2 text-[12px] font-semibold">
+                      <input
+                        type="checkbox"
+                        className={checkboxInputClass}
+                        checked={selectedSortStatuses.has(status)}
+                        onChange={() => toggleSortStatus(status)}
+                      />
+                      <span>{status}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-                onClick={handleSortInbox}
-              >
-                Sort Inbox
-              </button>
-              <button
-                type="button"
-                className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-                onClick={handleArchiveWeek}
-              >
-                Archive Week
-              </button>
-            </div>
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
+                  onClick={handleSortInbox}
+                >
+                  Sort Inbox
+                </button>
+                <button
+                  type="button"
+                  className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
+                  onClick={handleArchiveWeek}
+                >
+                  Archive Week
+                </button>
               </div>
-            </div>
-          )}
-        </div>
-      </div>
+                </div>
+              </div>
+            )}
+          </div>
+        }
+      />
 
       <table className="table-fixed border-collapse w-full text-[12px] border border-[#ced3d0] shadow-sm bg-white">
         <thead>
