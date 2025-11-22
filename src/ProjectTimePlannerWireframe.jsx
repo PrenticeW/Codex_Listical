@@ -94,6 +94,29 @@ const formatMinutesToHHmm = (minutes) => {
   return `${hrs}.${mins.toString().padStart(2, '0')}`;
 };
 
+const STATUS_COLOR_MAP = {
+  'Not Scheduled': { bg: '#e5e5e5', text: '#000000' },
+  Scheduled: { bg: '#ffe5a0', text: '#473821' },
+  Done: { bg: '#c9e9c0', text: '#276436' },
+  Abandoned: { bg: '#e8d9f3', text: '#5a3b74' },
+  Blocked: { bg: '#f3c4c4', text: '#9c2f2f' },
+  'On Hold': { bg: '#505050', text: '#ffffff' },
+  Special: { bg: '#cce3ff', text: '#3a70b7' },
+};
+
+const getStatusColorStyle = (status) => {
+  const colors = STATUS_COLOR_MAP[status] || { bg: '#ffffff', text: '#000000' };
+  return { backgroundColor: colors.bg, color: colors.text };
+};
+
+const getProjectSelectStyle = (value) => {
+  const isDash = !value || value === '-';
+  return {
+    backgroundColor: isDash ? '#ffffff' : '#e5e5e5',
+    color: '#000000',
+  };
+};
+
 const getDefaultTimeValueForEstimate = (estimate) => {
   const minutes = parseEstimateLabelToMinutes(estimate);
   if (minutes != null) return formatMinutesToHHmm(minutes);
@@ -1489,6 +1512,10 @@ export default function ProjectTimePlannerWireframe() {
   const recurringNames = useMemo(() => RECURRING_VALUES, []);
   const estimateNames = useMemo(() => ESTIMATE_VALUES, []);
 
+  const handleSortInbox = useCallback(() => {
+    setIsListicalMenuOpen(false);
+  }, []);
+
   const handleAddTasks = useCallback(() => {
     setIsListicalMenuOpen(false);
     const count = parseInt(addTasksCount, 10);
@@ -1708,7 +1735,7 @@ export default function ProjectTimePlannerWireframe() {
     return (
       <tr key={`row-${id}`} className={`h-[${ROW_H}px] ${rowClassName ?? ''}`}>
         <td
-          className={rowLabelClassName}
+          className={`${rowLabelClassName} p-0`}
           style={getWidthStyle('rowLabel', applyRowLabelStyle(rowLabelStyle || {}))}
         >
           {renderContentWithFilterButton(rowLabelContent, 'rowLabel')}
@@ -1718,7 +1745,7 @@ export default function ProjectTimePlannerWireframe() {
               <td
                 key={cell.key}
                 colSpan={cell.colSpan ?? 1}
-                className={cell.className ?? fixedCellClassName}
+                className={`${cell.className ?? fixedCellClassName} p-0`}
                 style={{
                   ...(fixedCellStyle || {}),
                   ...(cell.columnKey
@@ -1732,7 +1759,7 @@ export default function ProjectTimePlannerWireframe() {
           : (
             <td
               colSpan={fixedCols - 1}
-              className={fixedCellClassName}
+              className={`${fixedCellClassName} p-0`}
               style={fixedCellStyle}
             ></td>
           )}
@@ -1740,7 +1767,7 @@ export default function ProjectTimePlannerWireframe() {
           <td
             key={cell.key}
             colSpan={cell.colSpan ?? 1}
-            className={cell.className}
+            className={[cell.className || '', 'p-0'].join(' ').trim()}
             style={
               cell.columnKey
                 ? getWidthStyle(cell.columnKey, cell.style || {})
@@ -1958,12 +1985,13 @@ export default function ProjectTimePlannerWireframe() {
             )}
             <td
               className={withCellSelectionClass(
-                `bg-[#d5a6bd]${columnFKey === 'estimate' ? ' text-right pr-2' : ''}`,
+                `bg-[#d5a6bd]${columnFKey === 'estimate' ? ' text-right pr-2 font-semibold' : ''}`,
                 'estimate'
               )}
               style={getWidthStyle('estimate', {
                 ...getCellHighlightStyle(row.id, 'estimate'),
                 ...(columnFKey === 'estimate' ? { textAlign: 'right', paddingRight: 8 } : {}),
+                ...(columnFKey === 'estimate' ? { fontWeight: 600 } : {}),
               })}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'estimate')}
               {...cellClickProps('estimate')}
@@ -1972,12 +2000,16 @@ export default function ProjectTimePlannerWireframe() {
               {columnGKey === 'estimate' ? 'of 0.00' : ''}
             </td>
             <td
-              className={withCellSelectionClass('bg-[#d5a6bd] border border-[#ced3d0]', 'timeValue')}
+              className={withCellSelectionClass(
+                `bg-[#d5a6bd] border border-[#ced3d0]${columnFKey === 'timeValue' ? ' font-semibold' : ''}`,
+                'timeValue'
+              )}
               style={getWidthStyle('timeValue', {
                 ...blackDividerStyle,
                 ...getCellHighlightStyle(row.id, 'timeValue'),
                 textAlign: columnGKey === 'timeValue' ? 'left' : 'right',
                 paddingRight: columnGKey === 'timeValue' ? undefined : 8,
+                ...(columnFKey === 'timeValue' ? { fontWeight: 600 } : {}),
               })}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'timeValue')}
               {...cellClickProps('timeValue')}
@@ -2180,7 +2212,7 @@ export default function ProjectTimePlannerWireframe() {
               {rowNumber}
             </td>
             <td
-              className={withCellSelectionClass('border border-[#ced3d0] p-0', 'check')}
+              className={withCellSelectionClass('border border-[#ced3d0] p-0 check-cell', 'check')}
               style={getWidthStyle('check', getCellHighlightStyle(row.id, 'check'))}
               {...cellClickProps('check')}
             >
@@ -2200,7 +2232,8 @@ export default function ProjectTimePlannerWireframe() {
               {...cellClickProps('project')}
             >
               <select
-                className={sharedInputStyle}
+                className={`${sharedInputStyle} uppercase project-pill-select`}
+                style={getProjectSelectStyle(row.projectSelection)}
                 value={row.projectSelection ?? '-'}
                 onChange={(event) => {
                   const nextValue = event.target.value;
@@ -2210,9 +2243,9 @@ export default function ProjectTimePlannerWireframe() {
                 onFocus={() => handleCellActivate(row.id, 'project')}
               >
                 <option>-</option>
-                <option>Project A</option>
-                <option>Project B</option>
-                <option>Project C</option>
+                <option>PROJECT A</option>
+                <option>PROJECT B</option>
+                <option>PROJECT C</option>
               </select>
             </td>
             <td
@@ -2220,18 +2253,21 @@ export default function ProjectTimePlannerWireframe() {
               className={withCellSelectionClass('border border-[#ced3d0] p-0', 'status')}
               {...cellClickProps('status')}
             >
-              <select
-                className={sharedInputStyle}
-                value={row.status ?? '-'}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  commitRowUpdate({ status: nextValue }, { markInteraction: true });
-                }}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, 'status')}
-                onFocus={() => handleCellActivate(row.id, 'status')}
-              >
-                <StatusOptions />
-              </select>
+              <div className="status-pill-container">
+                <select
+                  className="status-pill-select"
+                  style={getStatusColorStyle(row.status)}
+                  value={row.status ?? '-'}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    commitRowUpdate({ status: nextValue }, { markInteraction: true });
+                  }}
+                  onMouseDown={(event) => handleCellMouseDown(event, row.id, 'status')}
+                  onFocus={() => handleCellActivate(row.id, 'status')}
+                >
+                  <StatusOptions />
+                </select>
+              </div>
             </td>
             <td
               style={getWidthStyle('task', getCellHighlightStyle(row.id, 'task'))}
@@ -2588,7 +2624,7 @@ export default function ProjectTimePlannerWireframe() {
               {rowNumber}
             </td>
             <td
-              className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'check')}
+              className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0 check-cell`, 'check')}
               style={getWidthStyle('check', getCellHighlightStyle(row.id, 'check'))}
               {...cellClickProps('check')}
             >
@@ -2608,7 +2644,8 @@ export default function ProjectTimePlannerWireframe() {
               {...cellClickProps('project')}
             >
               <select
-                className={sharedInputStyle}
+                className={`${sharedInputStyle} uppercase project-pill-select`}
+                style={getProjectSelectStyle(row.projectSelection)}
                 value={row.projectSelection ?? '-'}
                 onChange={(event) => {
                   const nextValue = event.target.value;
@@ -2618,9 +2655,9 @@ export default function ProjectTimePlannerWireframe() {
                 onFocus={() => handleCellActivate(row.id, 'project')}
               >
                 <option>-</option>
-                <option>Project A</option>
-                <option>Project B</option>
-                <option>Project C</option>
+                <option>PROJECT A</option>
+                <option>PROJECT B</option>
+                <option>PROJECT C</option>
               </select>
             </td>
             <td
@@ -2628,18 +2665,21 @@ export default function ProjectTimePlannerWireframe() {
               className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'status')}
               {...cellClickProps('status')}
             >
-              <select
-                className={sharedInputStyle}
-                value={row.status ?? '-'}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  commitRowUpdate({ status: nextValue }, { markInteraction: true });
-                }}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, 'status')}
-                onFocus={() => handleCellActivate(row.id, 'status')}
-              >
-                <StatusOptions />
-              </select>
+              <div className="status-pill-container">
+                <select
+                  className="status-pill-select"
+                  style={getStatusColorStyle(row.status)}
+                  value={row.status ?? '-'}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    commitRowUpdate({ status: nextValue }, { markInteraction: true });
+                  }}
+                  onMouseDown={(event) => handleCellMouseDown(event, row.id, 'status')}
+                  onFocus={() => handleCellActivate(row.id, 'status')}
+                >
+                  <StatusOptions />
+                </select>
+              </div>
             </td>
             <td
               style={getWidthStyle('task', getCellHighlightStyle(row.id, 'task'))}
@@ -2848,6 +2888,13 @@ export default function ProjectTimePlannerWireframe() {
                     className="flex-1 rounded border border-[#ced3d0] px-2 py-1 text-[12px] font-normal uppercase tracking-normal text-slate-800"
                   />
                 </label>
+                <button
+                  type="button"
+                  className="self-start rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
+                  onClick={handleSortInbox}
+                >
+                  Sort Inbox
+                </button>
               </div>
             </div>
           )}

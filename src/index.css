@@ -28,3 +28,44 @@ option.estimate-highlight {
   color: #08ad2d !important;
   font-weight: 700;
 }
+
+.status-pill-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.status-pill-select {
+  width: auto;
+  min-width: 120px;
+  padding: 0 10px 0 5px;
+  border-radius: 9999px;
+  border: none;
+  background-color: #ffffff;
+  color: #000000;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.project-pill-select {
+  border-radius: 9999px;
+  padding: 0 10px 0 5px;
+  min-width: 120px;
+  border: none;
+}
+
+.check-cell:has(input:checked) {
+  background-color: #e4f5e9;
+}
+
+.check-cell input:checked {
+  accent-color: #1b7a3a;
+}
+
+.status-pill-select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
