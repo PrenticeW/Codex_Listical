@@ -128,19 +128,33 @@ const getProjectSelectStyle = (value) => {
   };
 };
 
-const getDefaultTimeValueForEstimate = (estimate) => {
-  const minutes = parseEstimateLabelToMinutes(estimate);
-  if (minutes != null) return formatMinutesToHHmm(minutes);
-  return '0.00';
-};
 const DARK_HEADER_STYLE = { backgroundColor: '#000000', color: '#ffffff' };
 const ARCHIVE_ROW_STYLE = { backgroundColor: '#d9f6e0', color: '#000000' };
 const isBrowserEnvironment = () =>
   typeof window !== 'undefined' && typeof document !== 'undefined';
+const SETTINGS_STORAGE_KEY = 'listical-settings';
+const readStoredSettings = () => {
+  if (!isBrowserEnvironment()) return null;
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      columnWidths: typeof parsed.columnWidths === 'object' && parsed.columnWidths ? parsed.columnWidths : {},
+      startDate: typeof parsed.startDate === 'string' ? parsed.startDate : '',
+      showRecurring: typeof parsed.showRecurring === 'boolean' ? parsed.showRecurring : true,
+    };
+  } catch (error) {
+    console.error('Failed to read Listical settings', error);
+    return null;
+  }
+};
 
 export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavigate = () => {} }) {
-  const [showRecurring, setShowRecurring] = useState(true);
-  const [startDate, setStartDate] = useState("");
+  const storedSettings = readStoredSettings();
+  const [showRecurring, setShowRecurring] = useState(storedSettings?.showRecurring ?? true);
+  const [startDate, setStartDate] = useState(storedSettings?.startDate ?? "");
   const [showMaxMinRows, setShowMaxMinRows] = useState(true);
   const [isListicalMenuOpen, setIsListicalMenuOpen] = useState(false);
   const [addTasksCount, setAddTasksCount] = useState('');
@@ -292,9 +306,36 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   const dragThresholdCrossedRef = useRef(false);
   const blockClickRef = useRef(false);
   const tableContainerRef = useRef(null);
-  const [columnWidths, setColumnWidths] = useState({});
+  const [columnWidths, setColumnWidths] = useState(storedSettings?.columnWidths ?? {});
   const columnResizeRef = useRef(null);
   const columnResizeListenersRef = useRef({ move: null, up: null });
+  const [settingsLoaded, setSettingsLoaded] = useState(Boolean(storedSettings));
+
+  useEffect(() => {
+    if (settingsLoaded) return;
+    const parsed = readStoredSettings();
+    if (parsed) {
+      setColumnWidths(parsed.columnWidths ?? {});
+      setStartDate(parsed.startDate ?? '');
+      setShowRecurring(parsed.showRecurring ?? true);
+    }
+    setSettingsLoaded(true);
+  }, [settingsLoaded]);
+
+  useEffect(() => {
+    if (!isBrowserEnvironment()) return;
+    if (!settingsLoaded) return;
+    try {
+      const payload = {
+        columnWidths,
+        startDate,
+        showRecurring,
+      };
+      window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+      console.error('Failed to save Listical settings', error);
+    }
+  }, [columnWidths, settingsLoaded, startDate, showRecurring]);
   const updatePointerModifierState = (event) => {
     pointerModifierRef.current = {
       meta: Boolean(event?.metaKey || event?.ctrlKey),
@@ -1289,15 +1330,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     return map;
   }, [columnStructure, columnLetters]);
 
-  const columnFKey = useMemo(
-    () => Object.entries(columnLetterByKey).find(([, letter]) => letter === 'F')?.[0] ?? null,
-    [columnLetterByKey]
-  );
-  const columnGKey = useMemo(
-    () => Object.entries(columnLetterByKey).find(([, letter]) => letter === 'G')?.[0] ?? null,
-    [columnLetterByKey]
-  );
-
   const projectHeaderTotals = useMemo(() => {
     const totals = {};
     let activeHeaderId = null;
@@ -1939,52 +1971,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     );
   };
 
-  const renderColumnHeaderRow = () => {
-    const headerBackground = '#d9f6e0';
-    const headerText = '#065f46';
-    return (
-      <tr
-        key="row-column-headers"
-        className={`h-[${ROW_H}px] font-bold`}
-      >
-        <td
-          className="border border-[#ced3d0] text-center"
-          style={{
-            ...getWidthStyle('rowLabel'),
-            backgroundColor: headerBackground,
-            color: headerText,
-          }}
-        >
-          {' '}
-        </td>
-        {fixedColumnConfig.map(({ key, label, width, className }) => (
-          <td
-            key={`hdr-${key}`}
-            className={`border border-[#ced3d0] ${className ?? ''}`}
-            style={{
-              width,
-              backgroundColor: headerBackground,
-              color: headerText,
-            }}
-          >
-            {label}
-          </td>
-        ))}
-        {Array.from({ length: totalDays }).map((_, i) => (
-          <td
-            key={`hdr-day-${i}`}
-            style={{
-              ...applyWeekBorderStyles(i, { width: COL_W.day }),
-              backgroundColor: headerBackground,
-              color: headerText,
-            }}
-            className={getWeekBorderClass(i, 'border border-[#ced3d0]')}
-          ></td>
-        ))}
-      </tr>
-    );
-  };
-
   const EstimateOptions = () => (
     <>
       <option>-</option>
@@ -2078,7 +2064,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     }
 
     switch (row.type) {
-      case 'projectHeader':
+      case 'projectHeader': {
         const projectRollupValue = projectHeaderTotals[rowId] ?? '0.00';
         return (
           <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
@@ -2142,38 +2128,31 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
               ></td>
             )}
             <td
-              className={withCellSelectionClass(
-                `bg-[#d5a6bd]${columnFKey === 'estimate' ? ' text-right pr-2 font-semibold' : ''}`,
-                'estimate'
-              )}
+              className={withCellSelectionClass('bg-[#d5a6bd] text-right pr-2 font-semibold', 'estimate')}
               style={getWidthStyle('estimate', {
                 ...getCellHighlightStyle(row.id, 'estimate'),
-                ...(columnFKey === 'estimate' ? { textAlign: 'right', paddingRight: 8 } : {}),
-                ...(columnFKey === 'estimate' ? { fontWeight: 600 } : {}),
+                textAlign: 'right',
+                paddingRight: 8,
+                fontWeight: 600,
               })}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'estimate')}
               {...cellClickProps('estimate')}
             >
-              {columnFKey === 'estimate' ? projectRollupValue : ''}
-              {columnGKey === 'estimate' ? 'of 0.00' : ''}
+              {projectRollupValue}
             </td>
             <td
-              className={withCellSelectionClass(
-                `bg-[#d5a6bd] border border-[#ced3d0]${columnFKey === 'timeValue' ? ' font-semibold' : ''}`,
-                'timeValue'
-              )}
+              className={withCellSelectionClass('bg-[#d5a6bd] border border-[#ced3d0]', 'timeValue')}
               style={getWidthStyle('timeValue', {
                 ...blackDividerStyle,
                 ...getCellHighlightStyle(row.id, 'timeValue'),
-                textAlign: columnGKey === 'timeValue' ? 'left' : 'right',
-                paddingRight: columnGKey === 'timeValue' ? undefined : 8,
-                ...(columnFKey === 'timeValue' ? { fontWeight: 600 } : {}),
+                textAlign: 'left',
+                paddingLeft: 8,
+                fontWeight: 600,
               })}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'timeValue')}
               {...cellClickProps('timeValue')}
             >
-              {columnFKey === 'timeValue' ? projectRollupValue : ''}
-              {columnGKey === 'timeValue' ? 'of 0.00' : ''}
+              of 0.00
             </td>
             {Array.from({ length: totalDays }).map((_, i) => (
               <td
@@ -2192,7 +2171,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
                 <input
                   type="text"
                   className={sharedInputStyle}
-                  defaultValue={columnGKey === `day-${i}` ? 'of 0.00' : ''}
+                  defaultValue=""
                   onMouseDown={(event) => handleCellMouseDown(event, row.id, `day-${i}`)}
                   onFocus={() => handleCellActivate(row.id, `day-${i}`)}
                   onPaste={(event) =>
@@ -2205,6 +2184,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
             ))}
           </tr>
         );
+      }
       case 'projectGeneral':
         return (
           <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
@@ -2799,7 +2779,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
             >
               {rowNumber}
             </td>
-            {fixedColumnConfig.map(({ key, width, className }, colIdx) => {
+            {fixedColumnConfig.map(({ key, className }, colIdx) => {
               const cellContent = (() => {
                 if (colIdx === 0) return row.archiveWeekLabel ?? '';
                 if (key === 'task') return row.archiveLabel ?? '';
