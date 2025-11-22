@@ -93,6 +93,16 @@ const formatMinutesToHHmm = (minutes) => {
   const mins = minutes % 60;
   return `${hrs}.${mins.toString().padStart(2, '0')}`;
 };
+const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Abandoned', 'Blocked', 'On Hold'];
+const SORT_INBOX_TARGET_MAP = {
+  Done: 'general',
+  Scheduled: 'general',
+  'Not Scheduled': 'unscheduled',
+  Abandoned: 'unscheduled',
+  Blocked: 'unscheduled',
+  'On Hold': 'unscheduled',
+};
+const normalizeProjectKey = (name) => (name ?? '').trim().toLowerCase();
 
 const STATUS_COLOR_MAP = {
   'Not Scheduled': { bg: '#e5e5e5', text: '#000000' },
@@ -131,6 +141,9 @@ export default function ProjectTimePlannerWireframe() {
   const [showMaxMinRows, setShowMaxMinRows] = useState(true);
   const [isListicalMenuOpen, setIsListicalMenuOpen] = useState(false);
   const [addTasksCount, setAddTasksCount] = useState('');
+  const [selectedSortStatuses, setSelectedSortStatuses] = useState(
+    () => new Set(SORTABLE_STATUSES)
+  );
   const totalDays = 84;
 
   const createTaskRow = (base) => ({
@@ -1511,10 +1524,105 @@ export default function ProjectTimePlannerWireframe() {
   const statusNames = useMemo(() => STATUS_VALUES, []);
   const recurringNames = useMemo(() => RECURRING_VALUES, []);
   const estimateNames = useMemo(() => ESTIMATE_VALUES, []);
+  const toggleSortStatus = useCallback((status) => {
+    setSelectedSortStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) {
+        next.delete(status);
+      } else {
+        next.add(status);
+      }
+      return next;
+    });
+  }, []);
 
   const handleSortInbox = useCallback(() => {
     setIsListicalMenuOpen(false);
-  }, []);
+    // Move done/scheduled inbox items into General; move abandoned/blocked/on-hold into Unscheduled.
+    setRows((prevRows) => {
+      if (!selectedSortStatuses.size) return prevRows;
+
+      const projectKeys = new Set();
+      prevRows.forEach((row) => {
+        if (row.type === 'projectGeneral') {
+          projectKeys.add(normalizeProjectKey(row.projectName));
+        }
+      });
+
+      const tasksByProject = new Map();
+      const unscheduledTasksByProject = new Map();
+      const remainingRows = [];
+
+      prevRows.forEach((row) => {
+        if (
+          row.type === 'inboxItem' &&
+          selectedSortStatuses.has(row.status ?? '')
+        ) {
+          const target = SORT_INBOX_TARGET_MAP[row.status ?? ''];
+          if (!target) {
+            remainingRows.push(row);
+            return;
+          }
+          const projectKey = normalizeProjectKey(row.projectSelection);
+          if (projectKey && projectKeys.has(projectKey)) {
+            if (target === 'general') {
+              if (!tasksByProject.has(projectKey)) tasksByProject.set(projectKey, []);
+              tasksByProject.get(projectKey).push(row);
+              return;
+            }
+            if (target === 'unscheduled') {
+              if (!unscheduledTasksByProject.has(projectKey)) {
+                unscheduledTasksByProject.set(projectKey, []);
+              }
+              unscheduledTasksByProject.get(projectKey).push(row);
+              return;
+            }
+            return;
+          }
+        }
+        remainingRows.push(row);
+      });
+
+      if (tasksByProject.size === 0 && unscheduledTasksByProject.size === 0) {
+        return prevRows;
+      }
+
+      const nextRows = [];
+      remainingRows.forEach((row) => {
+        nextRows.push(row);
+        if (row.type === 'projectGeneral') {
+          const projectKey = normalizeProjectKey(row.projectName);
+          const tasksToInsert = tasksByProject.get(projectKey);
+          if (tasksToInsert?.length) {
+            tasksToInsert.forEach((task) => {
+              nextRows.push({
+                ...task,
+                type: 'projectTask',
+                projectName: row.projectName,
+              });
+            });
+            tasksByProject.delete(projectKey);
+          }
+        }
+        if (row.type === 'projectUnscheduled') {
+          const projectKey = normalizeProjectKey(row.projectName);
+          const tasksToInsert = unscheduledTasksByProject.get(projectKey);
+          if (tasksToInsert?.length) {
+            tasksToInsert.forEach((task) => {
+              nextRows.push({
+                ...task,
+                type: 'projectTask',
+                projectName: row.projectName,
+              });
+            });
+            unscheduledTasksByProject.delete(projectKey);
+          }
+        }
+      });
+
+      return nextRows;
+    });
+  }, [setIsListicalMenuOpen, selectedSortStatuses, setRows]);
 
   const handleAddTasks = useCallback(() => {
     setIsListicalMenuOpen(false);
@@ -2885,14 +2993,32 @@ export default function ProjectTimePlannerWireframe() {
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="flex-1 rounded border border-[#ced3d0] px-2 py-1 text-[12px] font-normal uppercase tracking-normal text-slate-800"
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="self-start rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-                  onClick={handleSortInbox}
-                >
+                className="flex-1 rounded border border-[#ced3d0] px-2 py-1 text-[12px] font-normal uppercase tracking-normal text-slate-800"
+              />
+            </label>
+            <div className="flex flex-col gap-2 rounded border border-[#ced3d0] bg-white/60 p-3">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                Sort Inbox: Move statuses
+              </span>
+              <div className="flex flex-wrap gap-3">
+                {SORTABLE_STATUSES.map((status) => (
+                  <label key={status} className="flex items-center gap-2 text-[12px] font-semibold">
+                    <input
+                      type="checkbox"
+                      className={checkboxInputClass}
+                      checked={selectedSortStatuses.has(status)}
+                      onChange={() => toggleSortStatus(status)}
+                    />
+                    <span>{status}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="self-start rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
+              onClick={handleSortInbox}
+            >
                   Sort Inbox
                 </button>
               </div>
