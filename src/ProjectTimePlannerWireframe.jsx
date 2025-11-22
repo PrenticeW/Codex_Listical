@@ -132,6 +132,8 @@ const getDefaultTimeValueForEstimate = (estimate) => {
   if (minutes != null) return formatMinutesToHHmm(minutes);
   return '0.00';
 };
+const DARK_HEADER_STYLE = { backgroundColor: '#000000', color: '#ffffff' };
+const ARCHIVE_ROW_STYLE = { backgroundColor: '#d9f6e0', color: '#000000' };
 const isBrowserEnvironment = () =>
   typeof window !== 'undefined' && typeof document !== 'undefined';
 
@@ -174,6 +176,7 @@ export default function ProjectTimePlannerWireframe() {
     Array.from({ length: 20 }).forEach((_, index) => {
       rowsConfig.push(createTaskRow({ id: `inbox-item-${index}`, type: 'inboxItem', index }));
     });
+    rowsConfig.push({ id: 'archive-header', type: 'archiveHeader' });
 
     return rowsConfig;
   };
@@ -949,6 +952,21 @@ export default function ProjectTimePlannerWireframe() {
     });
   }, [startDate, totalDays]);
 
+  const foremostWeekRange = useMemo(() => {
+    if (!dates.length) return '';
+    const start = dates[0];
+    const end = dates[6];
+    if (!start || !end) return '';
+    const format = (date) =>
+      date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).replace(',', '');
+    return `${format(start)} - ${format(end)}`;
+  }, [dates]);
+
+  const foremostWeekNumber = useMemo(() => {
+    if (!dates.length || !dates[0]) return null;
+    return 1; // The foremost week in the 12-week view is the first block of 7 days.
+  }, [dates]);
+
   const monthSpans = useMemo(() => {
     if (!hasStartDate) return [{ label: 'Month', span: totalDays }];
     const firstDate = dates[0];
@@ -1282,7 +1300,7 @@ export default function ProjectTimePlannerWireframe() {
         totals[activeHeaderId] = 0;
         return;
       }
-      if (row.type === 'inboxHeader') {
+      if (row.type === 'inboxHeader' || row.type === 'archiveHeader') {
         activeHeaderId = null;
         return;
       }
@@ -1536,6 +1554,30 @@ export default function ProjectTimePlannerWireframe() {
     });
   }, []);
 
+  const handleArchiveWeek = useCallback(() => {
+    setIsListicalMenuOpen(false);
+    setRows((prevRows) => {
+      const headerIndex = prevRows.findIndex((row) => row.type === 'archiveHeader');
+      if (headerIndex === -1) return prevRows;
+      let insertIndex = headerIndex + 1;
+      while (insertIndex < prevRows.length && prevRows[insertIndex].type === 'archiveRow') {
+        insertIndex += 1;
+      }
+      const newRow = {
+        id: `archive-row-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'archiveRow',
+        dayEntries: createEmptyDayEntries(totalDays),
+        archiveLabel: foremostWeekRange,
+        archiveWeekLabel: foremostWeekNumber
+          ? `Year 1, Week ${foremostWeekNumber}`
+          : 'Year 1, Week -',
+      };
+      const nextRows = [...prevRows];
+      nextRows.splice(insertIndex, 0, newRow);
+      return nextRows;
+    });
+  }, [foremostWeekNumber, foremostWeekRange, setIsListicalMenuOpen, setRows, totalDays]);
+
   const handleSortInbox = useCallback(() => {
     setIsListicalMenuOpen(false);
     // Move done/scheduled inbox items into General; move abandoned/blocked/on-hold into Unscheduled.
@@ -1641,7 +1683,7 @@ export default function ProjectTimePlannerWireframe() {
       const targetRow = prev[targetIndex];
 
       const baseType =
-        targetRow.type === 'inboxItem' || targetRow.type === 'inboxHeader'
+        targetRow.type === 'inboxItem' || targetRow.type === 'inboxHeader' || targetRow.type === 'archiveHeader'
           ? 'inboxItem'
           : 'projectTask';
       const baseProjectName = targetRow.projectName ?? null;
@@ -2619,7 +2661,7 @@ export default function ProjectTimePlannerWireframe() {
           </tr>
         );
       case 'inboxHeader': {
-        const inboxHeaderStyle = { backgroundColor: '#000000', color: '#ffffff' };
+        const headerStyle = DARK_HEADER_STYLE;
         return (
           <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
             <td
@@ -2629,7 +2671,7 @@ export default function ProjectTimePlannerWireframe() {
                 'rowLabel'
               )}
               style={getWidthStyle('rowLabel', applyRowLabelStyle({
-                ...inboxHeaderStyle,
+                ...headerStyle,
                 ...getCellHighlightStyle(row.id, 'rowLabel'),
               }))}
               tabIndex={0}
@@ -2649,7 +2691,7 @@ export default function ProjectTimePlannerWireframe() {
               colSpan={fixedCols - 1}
               style={{
                 ...blackDividerStyle,
-                ...inboxHeaderStyle,
+                ...headerStyle,
                 ...getCellHighlightStyle(row.id, 'header-fixed'),
                 paddingLeft: 8,
                 fontWeight: 800,
@@ -2662,10 +2704,149 @@ export default function ProjectTimePlannerWireframe() {
             <td
               className={withCellSelectionClass('border-0', 'header-span')}
               colSpan={totalDays}
-              style={{ ...inboxHeaderStyle, ...getCellHighlightStyle(row.id, 'header-span') }}
+              style={{ ...headerStyle, ...getCellHighlightStyle(row.id, 'header-span') }}
               onMouseDown={(event) => handleCellMouseDown(event, row.id, 'header-span')}
               {...cellClickProps('header-span')}
             ></td>
+          </tr>
+        );
+      }
+      case 'archiveHeader': {
+        const headerStyle = DARK_HEADER_STYLE;
+        return (
+          <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
+            <td
+              {...cellMetadataProps('rowLabel')}
+              className={withCellSelectionClass(
+                `font-bold text-center border-0${isRowSelected ? ' selected-cell' : ''}`,
+                'rowLabel'
+              )}
+              style={getWidthStyle('rowLabel', applyRowLabelStyle({
+                ...headerStyle,
+                ...getCellHighlightStyle(row.id, 'rowLabel'),
+              }))}
+              tabIndex={0}
+              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'rowLabel', { highlightRow: true })}
+              onFocus={() =>
+                handleCellActivate(row.id, 'rowLabel', {
+                  highlightRow: true,
+                  preserveSelection: true,
+                })
+              }
+              onClick={(event) => handleRowClick(event, tableRow.index)}
+            >
+              {rowNumber}
+            </td>
+            <td
+              className={withCellSelectionClass('font-bold px-2 border-0', 'header-fixed')}
+              colSpan={fixedCols - 1}
+              style={{
+                ...blackDividerStyle,
+                ...headerStyle,
+                ...getCellHighlightStyle(row.id, 'header-fixed'),
+                paddingLeft: 8,
+                fontWeight: 800,
+              }}
+              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'header-fixed')}
+              {...cellClickProps('header-fixed')}
+            >
+              Archive
+            </td>
+            <td
+              className={withCellSelectionClass('border-0', 'header-span')}
+              colSpan={totalDays}
+              style={{ ...headerStyle, ...getCellHighlightStyle(row.id, 'header-span') }}
+              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'header-span')}
+              {...cellClickProps('header-span')}
+            ></td>
+          </tr>
+        );
+      }
+      case 'archiveRow': {
+        const topBorderClass =
+          previousRow && (previousRow.type === 'archiveHeader' || previousRow.type === 'archiveRow')
+            ? ' border-t-0'
+            : '';
+        return (
+          <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
+            <td
+              {...cellMetadataProps('rowLabel')}
+              className={withCellSelectionClass(
+                `text-center align-middle border border-[#ced3d0]${topBorderClass}${isRowSelected ? ' selected-cell' : ''}`,
+                'rowLabel'
+              )}
+              style={getWidthStyle('rowLabel', applyRowLabelStyle({
+                ...ARCHIVE_ROW_STYLE,
+                ...getCellHighlightStyle(row.id, 'rowLabel'),
+              }))}
+              tabIndex={0}
+              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'rowLabel', { highlightRow: true })}
+              onFocus={() =>
+                handleCellActivate(row.id, 'rowLabel', {
+                  highlightRow: true,
+                  preserveSelection: true,
+                })
+              }
+              onClick={(event) => handleRowClick(event, tableRow.index)}
+            >
+              {rowNumber}
+            </td>
+            {fixedColumnConfig.map(({ key, width, className }, colIdx) => {
+              const cellContent = (() => {
+                if (colIdx === 0) return row.archiveWeekLabel ?? '';
+                if (key === 'task') return row.archiveLabel ?? '';
+                if (key === 'estimate') return '0.00';
+                if (key === 'timeValue') return 'of 0.00 - 0.00';
+                return '';
+              })();
+              const extraStyles =
+                colIdx === 0
+                  ? { overflow: 'visible', whiteSpace: 'nowrap', paddingLeft: 16 }
+                  : key === 'task'
+                    ? { paddingLeft: 16 }
+                    : {};
+              const alignmentStyle =
+                key === 'estimate'
+                  ? { textAlign: 'right', fontWeight: 800 }
+                  : key === 'timeValue'
+                    ? { textAlign: 'left' }
+                    : {};
+              return (
+              <td
+                key={`${row.id}-${key}`}
+                className={withCellSelectionClass(
+                  `border border-[#ced3d0]${topBorderClass} ${className ?? ''} font-semibold px-2`,
+                  key
+                )}
+                style={getWidthStyle(key, {
+                  ...ARCHIVE_ROW_STYLE,
+                  ...(key === 'timeValue' ? blackDividerStyle : {}),
+                  ...getCellHighlightStyle(row.id, key),
+                  ...extraStyles,
+                  ...alignmentStyle,
+                })}
+                onMouseDown={(event) => handleCellMouseDown(event, row.id, key)}
+                {...cellClickProps(key)}
+              >
+                {cellContent}
+              </td>
+            );
+            })}
+            {Array.from({ length: totalDays }).map((_, i) => (
+              <td
+                key={`${row.id}-archive-${i}`}
+                className={withCellSelectionClass(
+                  `${getWeekBorderClass(i, 'border border-[#ced3d0]' + topBorderClass)} p-0`,
+                  `day-${i}`
+                )}
+                style={applyWeekBorderStyles(i, getWidthStyle(`day-${i}`, {
+                  backgroundColor: '#ffffff',
+                  ...getCellHighlightStyle(row.id, `day-${i}`),
+                }))}
+                onMouseDown={(event) => handleCellMouseDown(event, row.id, `day-${i}`)}
+                {...cellClickProps(`day-${i}`)}
+              ></td>
+            ))}
           </tr>
         );
       }
@@ -3014,13 +3195,22 @@ export default function ProjectTimePlannerWireframe() {
                 ))}
               </div>
             </div>
-            <button
-              type="button"
-              className="self-start rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-              onClick={handleSortInbox}
-            >
-                  Sort Inbox
-                </button>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
+                onClick={handleSortInbox}
+              >
+                Sort Inbox
+              </button>
+              <button
+                type="button"
+                className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
+                onClick={handleArchiveWeek}
+              >
+                Archive Week
+              </button>
+            </div>
               </div>
             </div>
           )}
