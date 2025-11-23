@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { SquarePlus } from 'lucide-react';
 import NavigationBar from './NavigationBar';
@@ -15,6 +15,17 @@ const COLOR_PALETTE = [
   '#a2d2a8',
 ];
 
+const normalizeItems = (list) =>
+  Array.isArray(list)
+    ? list.map((item) => ({
+        ...item,
+        reasons: Array.isArray(item.reasons) ? item.reasons : [],
+        outcomes: Array.isArray(item.outcomes) ? item.outcomes : [],
+        showOutcomes: Boolean(item.showOutcomes),
+        showOutcomeQuestion: Boolean(item.showOutcomeQuestion),
+      }))
+    : [];
+
 const loadState = () => {
   if (typeof window === 'undefined') return { shortlist: [], archived: [] };
   try {
@@ -22,8 +33,8 @@ const loadState = () => {
     if (!raw) return { shortlist: [], archived: [] };
     const parsed = JSON.parse(raw);
     return {
-      shortlist: Array.isArray(parsed?.shortlist) ? parsed.shortlist : [],
-      archived: Array.isArray(parsed?.archived) ? parsed.archived : [],
+      shortlist: normalizeItems(parsed?.shortlist),
+      archived: normalizeItems(parsed?.archived),
     };
   } catch (error) {
     console.error('Failed to read staging shortlist', error);
@@ -34,7 +45,11 @@ const loadState = () => {
 const saveState = (payload) => {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    const serialized = {
+      shortlist: normalizeItems(payload.shortlist),
+      archived: normalizeItems(payload.archived),
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
   } catch (error) {
     console.error('Failed to save staging shortlist', error);
   }
@@ -43,6 +58,14 @@ const saveState = (payload) => {
 export default function StagingPage({ currentPath = '/staging', onNavigate = () => {} }) {
   const [inputValue, setInputValue] = useState('');
   const [{ shortlist, archived }, setState] = useState(() => loadState());
+  const [reasonDrafts, setReasonDrafts] = useState({});
+  const reasonInputRefs = useRef(new Map());
+  const [pendingReasonFocus, setPendingReasonFocus] = useState(null);
+  const [outcomeDrafts, setOutcomeDrafts] = useState({});
+  const outcomeInputRefs = useRef(new Map());
+  const [pendingOutcomeFocus, setPendingOutcomeFocus] = useState(null);
+  const stepInputRefs = useRef(new Map());
+  const [pendingStepFocus, setPendingStepFocus] = useState(null);
   const [planModal, setPlanModal] = useState({
     open: false,
     itemId: null,
@@ -55,6 +78,60 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
     saveState({ shortlist, archived });
   }, [shortlist, archived]);
 
+  useEffect(() => {
+    if (!pendingReasonFocus) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const { itemId, index } = pendingReasonFocus;
+      const refs = reasonInputRefs.current.get(itemId);
+      const target = refs?.[index];
+      if (target) {
+        target.focus();
+        if (typeof target.setSelectionRange === 'function') {
+          const caret = target.value.length;
+          target.setSelectionRange(caret, caret);
+        }
+        setPendingReasonFocus(null);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingReasonFocus, shortlist]);
+
+  useEffect(() => {
+    if (!pendingOutcomeFocus) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const { itemId, index } = pendingOutcomeFocus;
+      const refs = outcomeInputRefs.current.get(itemId);
+      const target = refs?.[index];
+      if (target) {
+        target.focus();
+        if (typeof target.setSelectionRange === 'function') {
+          const caret = target.value.length;
+          target.setSelectionRange(caret, caret);
+        }
+        setPendingOutcomeFocus(null);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingOutcomeFocus, shortlist]);
+
+  useEffect(() => {
+    if (!pendingStepFocus) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const { itemId, index } = pendingStepFocus;
+      const refs = stepInputRefs.current.get(itemId);
+      const target = refs?.[index];
+      if (target) {
+        target.focus();
+        if (typeof target.setSelectionRange === 'function') {
+          const caret = target.value.length;
+          target.setSelectionRange(caret, caret);
+        }
+        setPendingStepFocus(null);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingStepFocus, shortlist]);
+
   const handleAdd = () => {
     const text = inputValue.trim();
     if (!text) return;
@@ -64,17 +141,21 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
         : `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
     setState((prev) => ({
-      shortlist: [
-        ...prev.shortlist,
-        {
-          id,
-          text,
-          color: null,
-        },
-      ],
-      archived: prev.archived,
-    }));
-    setInputValue('');
+          shortlist: [
+            ...prev.shortlist,
+            {
+              id,
+              text,
+              color: null,
+              reasons: [],
+              outcomes: [],
+              showOutcomes: false,
+              showOutcomeQuestion: false,
+            },
+          ],
+          archived: prev.archived,
+        }));
+        setInputValue('');
   };
 
   const handleRemove = (id) => {
@@ -82,6 +163,24 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
       shortlist: prev.shortlist.filter((item) => item.id !== id),
       archived: prev.archived,
     }));
+    setReasonDrafts((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    reasonInputRefs.current.delete(id);
+    setPendingReasonFocus((prev) => (prev?.itemId === id ? null : prev));
+    setOutcomeDrafts((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    outcomeInputRefs.current.delete(id);
+    setPendingOutcomeFocus((prev) => (prev?.itemId === id ? null : prev));
+    stepInputRefs.current.delete(id);
+    setPendingStepFocus((prev) => (prev?.itemId === id ? null : prev));
   };
 
   const handleArchive = (id) => {
@@ -93,6 +192,24 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
         archived: [...prev.archived, target],
       };
     });
+    setReasonDrafts((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    reasonInputRefs.current.delete(id);
+    setPendingReasonFocus((prev) => (prev?.itemId === id ? null : prev));
+    setOutcomeDrafts((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    outcomeInputRefs.current.delete(id);
+    setPendingOutcomeFocus((prev) => (prev?.itemId === id ? null : prev));
+    stepInputRefs.current.delete(id);
+    setPendingStepFocus((prev) => (prev?.itemId === id ? null : prev));
   };
 
   const openPlanModal = (item) => {
@@ -139,6 +256,310 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
         item.id === id ? { ...item, expanded: !item.expanded } : item
       ),
     }));
+  };
+
+  const handleReasonDraftChange = (itemId, value) => {
+    setReasonDrafts((prev) => ({
+      ...prev,
+      [itemId]: value,
+    }));
+  };
+
+  const handleOutcomeDraftChange = (itemId, value) => {
+    setOutcomeDrafts((prev) => ({
+      ...prev,
+      [itemId]: value,
+    }));
+  };
+
+  const handleReasonSubmit = (itemId) => {
+    const draft = (reasonDrafts[itemId] ?? '').trim();
+    if (!draft) return;
+    let nextReasonIndex = null;
+    setState((prev) => ({
+      ...prev,
+      shortlist: prev.shortlist.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              reasons: (() => {
+                const reasons = Array.isArray(item.reasons) ? item.reasons : [];
+                const updated = [...reasons, draft];
+                nextReasonIndex = updated.length - 1;
+                return updated;
+              })(),
+            }
+          : item
+      ),
+    }));
+    setReasonDrafts((prev) => ({
+      ...prev,
+      [itemId]: '',
+    }));
+    if (nextReasonIndex !== null) {
+      setPendingReasonFocus({ itemId, index: nextReasonIndex });
+    }
+  };
+
+  const handleOutcomeSubmit = (itemId) => {
+    const draft = (outcomeDrafts[itemId] ?? '').trim();
+    if (!draft) return;
+    let nextOutcomeIndex = null;
+    setState((prev) => ({
+      ...prev,
+      shortlist: prev.shortlist.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              showOutcomes: true,
+              outcomes: (() => {
+                const outcomes = Array.isArray(item.outcomes) ? item.outcomes : [];
+                const updated = [...outcomes, draft];
+                nextOutcomeIndex = updated.length - 1;
+                return updated;
+              })(),
+            }
+          : item
+      ),
+    }));
+    setOutcomeDrafts((prev) => ({
+      ...prev,
+      [itemId]: '',
+    }));
+    if (nextOutcomeIndex !== null) {
+      setPendingOutcomeFocus({ itemId, index: nextOutcomeIndex });
+    }
+  };
+
+  const handleReasonKeyDown = (event, itemId) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    handleReasonSubmit(itemId);
+  };
+
+  const handleOutcomeKeyDown = (event, itemId) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    handleOutcomeSubmit(itemId);
+  };
+
+  const handleReasonRowKeyDown = (event, itemId, reasonIndex) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    setState((prev) => ({
+      ...prev,
+      shortlist: prev.shortlist.map((item) => {
+        if (item.id !== itemId) return item;
+        const nextReasons = [...(Array.isArray(item.reasons) ? item.reasons : [])];
+        nextReasons.splice(reasonIndex + 1, 0, '');
+        return { ...item, reasons: nextReasons };
+      }),
+    }));
+    setPendingReasonFocus({ itemId, index: reasonIndex + 1 });
+  };
+
+  const handleOutcomeRowKeyDown = (event, itemId, outcomeIndex) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    setState((prev) => ({
+      ...prev,
+      shortlist: prev.shortlist.map((item) => {
+        if (item.id !== itemId) return item;
+        const nextOutcomes = [...(Array.isArray(item.outcomes) ? item.outcomes : [])];
+        nextOutcomes.splice(outcomeIndex + 1, 0, '');
+        return { ...item, outcomes: nextOutcomes };
+      }),
+    }));
+    setPendingOutcomeFocus({ itemId, index: outcomeIndex + 1 });
+  };
+
+  const handleReasonChange = (itemId, reasonIndex, value) => {
+    setState((prev) => ({
+      ...prev,
+      shortlist: prev.shortlist.map((item) => {
+        if (item.id !== itemId) return item;
+        const nextReasons = [...(Array.isArray(item.reasons) ? item.reasons : [])];
+        nextReasons[reasonIndex] = value;
+        return { ...item, reasons: nextReasons };
+      }),
+    }));
+  };
+
+  const handleOutcomeChange = (itemId, outcomeIndex, value) => {
+    setState((prev) => ({
+      ...prev,
+      shortlist: prev.shortlist.map((item) => {
+        if (item.id !== itemId) return item;
+        const nextOutcomes = [...(Array.isArray(item.outcomes) ? item.outcomes : [])];
+        nextOutcomes[outcomeIndex] = value;
+        return { ...item, outcomes: nextOutcomes };
+      }),
+    }));
+  };
+
+  const removeReason = (itemId, reasonIndex) => {
+    setState((prev) => ({
+      ...prev,
+      shortlist: prev.shortlist.map((item) => {
+        if (item.id !== itemId) return item;
+        const nextReasons = [...(Array.isArray(item.reasons) ? item.reasons : [])];
+        nextReasons.splice(reasonIndex, 1);
+        return { ...item, reasons: nextReasons };
+      }),
+    }));
+  };
+
+  const removeOutcome = (itemId, outcomeIndex) => {
+    setState((prev) => ({
+      ...prev,
+      shortlist: prev.shortlist.map((item) => {
+        if (item.id !== itemId) return item;
+        const nextOutcomes = [...(Array.isArray(item.outcomes) ? item.outcomes : [])];
+        nextOutcomes.splice(outcomeIndex, 1);
+        return { ...item, outcomes: nextOutcomes };
+      }),
+    }));
+  };
+
+  const handleStartNextStep = (itemId) => {
+    setState((prev) => ({
+      ...prev,
+      shortlist: prev.shortlist.map((item) =>
+        item.id === itemId ? { ...item, showOutcomes: true } : item
+      ),
+    }));
+  };
+
+  const handleOutcomeNextStep = (itemId) => {
+    let shouldInitStep = false;
+    setState((prev) => ({
+      ...prev,
+      shortlist: prev.shortlist.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              showOutcomeQuestion: true,
+              steps: (() => {
+                const existing = Array.isArray(item.steps) ? item.steps : [];
+                if (existing.length === 0) {
+                  shouldInitStep = true;
+                  return [''];
+                }
+                return existing;
+              })(),
+            }
+          : item
+      ),
+    }));
+    if (shouldInitStep) {
+      setPendingStepFocus({ itemId, index: 0 });
+    }
+  };
+
+  const registerReasonInputRef = (itemId, reasonIndex, node) => {
+    if (!reasonInputRefs.current.has(itemId)) {
+      reasonInputRefs.current.set(itemId, []);
+    }
+    const entries = reasonInputRefs.current.get(itemId);
+    entries[reasonIndex] = node ?? null;
+    if (
+      node &&
+      pendingReasonFocus &&
+      pendingReasonFocus.itemId === itemId &&
+      pendingReasonFocus.index === reasonIndex
+    ) {
+      node.focus();
+      if (typeof node.setSelectionRange === 'function') {
+        const caret = node.value.length;
+        node.setSelectionRange(caret, caret);
+      }
+      setPendingReasonFocus(null);
+    }
+  };
+
+  const registerOutcomeInputRef = (itemId, outcomeIndex, node) => {
+    if (!outcomeInputRefs.current.has(itemId)) {
+      outcomeInputRefs.current.set(itemId, []);
+    }
+    const entries = outcomeInputRefs.current.get(itemId);
+    entries[outcomeIndex] = node ?? null;
+    if (
+      node &&
+      pendingOutcomeFocus &&
+      pendingOutcomeFocus.itemId === itemId &&
+      pendingOutcomeFocus.index === outcomeIndex
+    ) {
+      node.focus();
+      if (typeof node.setSelectionRange === 'function') {
+        const caret = node.value.length;
+        node.setSelectionRange(caret, caret);
+      }
+      setPendingOutcomeFocus(null);
+    }
+  };
+
+  const handleStepChange = (itemId, stepIndex, value) => {
+    setState((prev) => ({
+      ...prev,
+      shortlist: prev.shortlist.map((item) => {
+        if (item.id !== itemId) return item;
+        const nextSteps = [...(Array.isArray(item.steps) ? item.steps : [''])];
+        nextSteps[stepIndex] = value;
+        return { ...item, steps: nextSteps };
+      }),
+    }));
+  };
+
+  const handleStepRowKeyDown = (event, itemId, stepIndex) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    setState((prev) => ({
+      ...prev,
+      shortlist: prev.shortlist.map((item) => {
+        if (item.id !== itemId) return item;
+        const nextSteps = [...(Array.isArray(item.steps) ? item.steps : [])];
+        nextSteps.splice(stepIndex + 1, 0, '');
+        return { ...item, steps: nextSteps };
+      }),
+    }));
+    setPendingStepFocus({ itemId, index: stepIndex + 1 });
+  };
+
+  const removeStep = (itemId, stepIndex) => {
+    setState((prev) => ({
+      ...prev,
+      shortlist: prev.shortlist.map((item) => {
+        if (item.id !== itemId) return item;
+        const nextSteps = [...(Array.isArray(item.steps) ? item.steps : [])];
+        if (nextSteps.length <= 1) {
+          nextSteps[0] = '';
+        } else {
+          nextSteps.splice(stepIndex, 1);
+        }
+        return { ...item, steps: nextSteps };
+      }),
+    }));
+  };
+
+  const registerStepInputRef = (itemId, stepIndex, node) => {
+    if (!stepInputRefs.current.has(itemId)) {
+      stepInputRefs.current.set(itemId, []);
+    }
+    const entries = stepInputRefs.current.get(itemId);
+    entries[stepIndex] = node ?? null;
+    if (
+      node &&
+      pendingStepFocus &&
+      pendingStepFocus.itemId === itemId &&
+      pendingStepFocus.index === stepIndex
+    ) {
+      node.focus();
+      if (typeof node.setSelectionRange === 'function') {
+        const caret = node.value.length;
+        node.setSelectionRange(caret, caret);
+      }
+      setPendingStepFocus(null);
+    }
   };
 
   return (
@@ -211,7 +632,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                       }}
                     >
                       <span className="flex items-center gap-2 font-semibold">
-                        {item.text}
+                        {item.projectName || item.text}
                       </span>
                       <div className="flex items-center gap-2">
                         <button
@@ -323,19 +744,137 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                       <div className="space-y-3">
                         <input
                           type="text"
+                          value={reasonDrafts[item.id] ?? ''}
+                          onChange={(e) => handleReasonDraftChange(item.id, e.target.value)}
+                          onKeyDown={(e) => handleReasonKeyDown(e, item.id)}
                           className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                           placeholder="Why do you want to start this?"
                         />
-                        <input
-                          type="text"
-                          className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                          placeholder="What do you want to be true by the end of this project?"
-                        />
-                        <input
-                          type="text"
-                          className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                          placeholder="What needs to be true in order for that to happen?"
-                        />
+                        {(item.reasons ?? []).map((reason, index) => (
+                          <div
+                            key={`${item.id}-reason-${index}`}
+                            className="grid items-center gap-3 rounded border border-[#ced3d0] bg-white p-3 shadow-inner"
+                            style={{ gridTemplateColumns: '23ch 1fr auto' }}
+                          >
+                            <span className="text-sm font-semibold text-slate-700 whitespace-nowrap">{`Reason ${index + 1}`}</span>
+                            <input
+                              type="text"
+                              value={reason}
+                              onChange={(e) => handleReasonChange(item.id, index, e.target.value)}
+                              onKeyDown={(e) => handleReasonRowKeyDown(e, item.id, index)}
+                              ref={(node) => registerReasonInputRef(item.id, index, node)}
+                              className="rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                            />
+                            <button
+                              type="button"
+                              className="text-slate-500 hover:text-slate-900"
+                              aria-label={`Delete Reason ${index + 1}`}
+                              onClick={() => removeReason(item.id, index)}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                        {(item.reasons?.length ?? 0) > 0 && !item.showOutcomes ? (
+                          <div className="pt-2">
+                            <button
+                              type="button"
+                              className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6]"
+                              onClick={() => handleStartNextStep(item.id)}
+                            >
+                              Next Step
+                            </button>
+                          </div>
+                        ) : null}
+                        {item.showOutcomes ? (
+                          <div className="space-y-3 pt-3 border-t border-dashed border-[#ced3d0] mt-3">
+                            <input
+                              type="text"
+                              value={outcomeDrafts[item.id] ?? ''}
+                              onChange={(e) => handleOutcomeDraftChange(item.id, e.target.value)}
+                              onKeyDown={(e) => handleOutcomeKeyDown(e, item.id)}
+                              className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                              placeholder="What needs to be true in order for your needs to be met?"
+                            />
+                            {(item.outcomes ?? []).map((outcome, index) => (
+                              <div
+                                key={`${item.id}-outcome-${index}`}
+                                className="grid items-center gap-3 rounded border border-[#ced3d0] bg-white p-3 shadow-inner"
+                                style={{ gridTemplateColumns: '23ch 1fr auto' }}
+                              >
+                                <span className="text-sm font-semibold text-slate-700 whitespace-nowrap">{`Measurable Outcome ${index + 1}`}</span>
+                                <input
+                                  type="text"
+                                  value={outcome}
+                                  onChange={(e) => handleOutcomeChange(item.id, index, e.target.value)}
+                                  onKeyDown={(e) => handleOutcomeRowKeyDown(e, item.id, index)}
+                                  ref={(node) => registerOutcomeInputRef(item.id, index, node)}
+                                  className="rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                                />
+                                <button
+                                  type="button"
+                                  className="text-slate-500 hover:text-slate-900"
+                                  aria-label={`Delete Measurable Outcome ${index + 1}`}
+                                  onClick={() => removeOutcome(item.id, index)}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                            {item.showOutcomeQuestion ? (
+                              <div className="space-y-2 rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm text-slate-800 shadow-inner">
+                                <div className="font-semibold">
+                                  What needs to be true in order for the outcomes to happen?
+                                </div>
+                                {item.outcomes?.length ? (
+                                  <div className="rounded border border-[#ced3d0] bg-[#f9fafb] px-3 py-2 text-sm text-slate-800 shadow-inner">
+                                    <span className="font-semibold">Measurable Outcome 1:</span>
+                                    <span className="ml-2">{item.outcomes[0]}</span>
+                                  </div>
+                                ) : null}
+                                {Array.isArray(item.steps) && item.steps.length ? (
+                                  <div className="space-y-2 pt-1">
+                                    {item.steps.map((stepValue, index) => (
+                                      <div
+                                        key={`${item.id}-step-${index}`}
+                                        className="grid items-center gap-3 rounded border border-[#ced3d0] bg-white p-3 shadow-inner"
+                                        style={{ gridTemplateColumns: '23ch 1fr auto' }}
+                                      >
+                                        <span className="text-sm font-semibold text-slate-700 whitespace-nowrap">{`Step ${index + 1}`}</span>
+                                        <input
+                                          type="text"
+                                          value={stepValue}
+                                          onChange={(e) => handleStepChange(item.id, index, e.target.value)}
+                                          onKeyDown={(e) => handleStepRowKeyDown(e, item.id, index)}
+                                          ref={(node) => registerStepInputRef(item.id, index, node)}
+                                          className="rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                                        />
+                                        <button
+                                          type="button"
+                                          className="text-slate-500 hover:text-slate-900"
+                                          aria-label={`Delete Step ${index + 1}`}
+                                          onClick={() => removeStep(item.id, index)}
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <div className="pt-2">
+                                <button
+                                  type="button"
+                                  className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6]"
+                                  onClick={() => handleOutcomeNextStep(item.id)}
+                                >
+                                  Next Step
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   ) : null}
