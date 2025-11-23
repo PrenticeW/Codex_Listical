@@ -5,7 +5,7 @@ import NavigationBar from './NavigationBar';
 
 const STORAGE_KEY = 'staging-shortlist';
 const PLAN_TABLE_ROWS = 11;
-const PLAN_TABLE_COLS = 5;
+const PLAN_TABLE_COLS = 6;
 const COLOR_PALETTE = [
   '#8e7cc3',
   '#f6b26b',
@@ -164,6 +164,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
             planTableCollapsed: false,
             hasPlan: true,
             planTableEntries: clonePlanTableEntries(item.planTableEntries),
+            planReasonRowCount: item.planReasonRowCount ?? 1,
           };
         }),
       }));
@@ -190,13 +191,36 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           const entries = clonePlanTableEntries(item.planTableEntries);
           const blankRow = Array.from({ length: PLAN_TABLE_COLS }, () => '');
           entries.splice(afterRowIdx + 1, 0, blankRow);
-          return { ...item, planTableEntries: entries };
+          const nextReasonCount = (item.planReasonRowCount ?? 1) + 1;
+          return {
+            ...item,
+            planTableEntries: entries,
+            planReasonRowCount: nextReasonCount,
+          };
         }),
       }));
       setPendingPlanFocus({ itemId, row: afterRowIdx + 1, col: 2 });
     },
     [setState, setPendingPlanFocus]
   );
+
+  const removePlanPromptRow = useCallback((itemId, rowIdx) => {
+    setState((prev) => ({
+      ...prev,
+      shortlist: prev.shortlist.map((item) => {
+        if (item.id !== itemId) return item;
+        const entries = clonePlanTableEntries(item.planTableEntries);
+        if (rowIdx < 2 || rowIdx >= entries.length) return item;
+        entries.splice(rowIdx, 1);
+        const nextReasonCount = Math.max((item.planReasonRowCount ?? 1) - 1, 1);
+        return {
+          ...item,
+          planTableEntries: entries,
+          planReasonRowCount: nextReasonCount,
+        };
+      }),
+    }));
+  }, [setState]);
 
   const handlePlanTableCellChange = (itemId, rowIdx, colIdx, value) => {
     if (
@@ -266,6 +290,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
             <div className="grid gap-[5px]">
               {shortlist.map((item) => {
                 const planEntries = clonePlanTableEntries(item.planTableEntries);
+                const reasonRowCount = item.planReasonRowCount ?? 1;
                 return (
                   <div key={item.id}>
                     <div className="flex items-start gap-2">
@@ -458,43 +483,64 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                         cellIdx === 0 || cellIdx === 1
                                           ? { width: '120px', minWidth: '120px' }
                                           : {};
-                                      if (rowIdx === 2) {
+                                      const isReasonRow =
+                                        rowIdx >= 2 && rowIdx < 2 + reasonRowCount;
+                                      if (isReasonRow) {
                                         baseStyle.backgroundColor = '#f9f3f6';
                                       }
-                                      const isPromptCell = rowIdx >= 2 && cellIdx === 2;
+                                      const isPromptCell = isReasonRow && cellIdx === 2;
+                                      const isDeleteCell = isReasonRow && cellIdx === PLAN_TABLE_COLS - 1;
+                                      if (isDeleteCell) {
+                                        baseStyle.width = '32px';
+                                        baseStyle.minWidth = '32px';
+                                        baseStyle.textAlign = 'center';
+                                      }
                                       return (
                                         <td
                                           key={`${item.id}-plan-row-${rowIdx}-cell-${cellIdx}`}
                                           className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
                                           style={Object.keys(baseStyle).length ? baseStyle : undefined}
                                         >
-                                          <input
-                                            type="text"
-                                            value={cellValue}
-                                            onChange={(e) =>
-                                              handlePlanTableCellChange(
-                                                item.id,
-                                                rowIdx,
-                                                cellIdx,
-                                                e.target.value
-                                              )
-                                            }
-                                            onKeyDown={
-                                              isPromptCell
-                                                ? (event) => {
-                                                    if (event.key === 'Enter' && !event.shiftKey) {
-                                                      event.preventDefault();
-                                                      addPlanPromptRow(item.id, rowIdx);
+                                          {isDeleteCell ? (
+                                            <button
+                                              type="button"
+                                              aria-label="Delete prompt row"
+                                              className="text-[14px] font-semibold text-slate-800"
+                                              onClick={() => removePlanPromptRow(item.id, rowIdx)}
+                                            >
+                                              X
+                                            </button>
+                                          ) : (
+                                            <input
+                                              type="text"
+                                              value={cellValue}
+                                              onChange={(e) =>
+                                                handlePlanTableCellChange(
+                                                  item.id,
+                                                  rowIdx,
+                                                  cellIdx,
+                                                  e.target.value
+                                                )
+                                              }
+                                              onKeyDown={
+                                                isPromptCell
+                                                  ? (event) => {
+                                                      if (event.key === 'Enter' && !event.shiftKey) {
+                                                        event.preventDefault();
+                                                        addPlanPromptRow(item.id, rowIdx);
+                                                      }
                                                     }
-                                                  }
-                                                : undefined
-                                            }
-                                            placeholder={isPromptCell && rowIdx === 2 ? 'Reason' : undefined}
-                                            className="w-full bg-transparent text-[14px] focus:outline-none border-none"
-                                            data-plan-item={item.id}
-                                            data-plan-row={rowIdx}
-                                            data-plan-col={cellIdx}
-                                          />
+                                                  : undefined
+                                              }
+                                              placeholder={
+                                                rowIdx === 2 && cellIdx === 2 ? 'Reason' : undefined
+                                              }
+                                              className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                                              data-plan-item={item.id}
+                                              data-plan-row={rowIdx}
+                                              data-plan-col={cellIdx}
+                                            />
+                                          )}
                                         </td>
                                       );
                                     })}
