@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SquarePlus } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import NavigationBar from './NavigationBar';
@@ -70,17 +70,27 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
     color: COLOR_PALETTE[0],
   });
   const [pendingPlanFocus, setPendingPlanFocus] = useState(null);
+  const pendingFocusRequestRef = useRef(null);
 
   useEffect(() => {
     saveState({ shortlist, archived });
   }, [shortlist, archived]);
 
   useEffect(() => {
+    if (!pendingFocusRequestRef.current) return;
+    setPendingPlanFocus(pendingFocusRequestRef.current);
+    pendingFocusRequestRef.current = null;
+  }, [shortlist]);
+
+  useEffect(() => {
     if (!pendingPlanFocus) return undefined;
     if (typeof window === 'undefined' || typeof document === 'undefined') {
       return undefined;
     }
-    const frame = window.requestAnimationFrame(() => {
+    let cancelled = false;
+    let frame = null;
+    const tryFocus = (attempt = 0) => {
+      if (cancelled) return;
       const { itemId, row, col } = pendingPlanFocus;
       const selector = `[data-plan-item="${itemId}"][data-plan-row="${row}"][data-plan-col="${col}"]`;
       const target = document.querySelector(selector);
@@ -89,10 +99,22 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
         if (target instanceof HTMLInputElement) {
           target.select();
         }
+        setPendingPlanFocus(null);
+        return;
       }
-      setPendingPlanFocus(null);
-    });
-    return () => window.cancelAnimationFrame(frame);
+      if (attempt >= 4) {
+        setPendingPlanFocus(null);
+        return;
+      }
+      frame = window.requestAnimationFrame(() => tryFocus(attempt + 1));
+    };
+    frame = window.requestAnimationFrame(() => tryFocus(0));
+    return () => {
+      cancelled = true;
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame);
+      }
+    };
   }, [pendingPlanFocus, shortlist]);
 
   const handleAdd = () => {
@@ -156,7 +178,12 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
         shortlist: prev.shortlist.map((item) => {
           if (item.id !== planModal.itemId) return item;
           if (item.planTableVisible) {
-            return { ...item, hasPlan: true };
+            return {
+              ...item,
+              hasPlan: true,
+              planOutcomeRowCount: item.planOutcomeRowCount ?? 1,
+              planOutcomeQuestionRowCount: item.planOutcomeQuestionRowCount ?? 1,
+            };
           }
           return {
             ...item,
@@ -165,6 +192,8 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
             hasPlan: true,
             planTableEntries: clonePlanTableEntries(item.planTableEntries),
             planReasonRowCount: item.planReasonRowCount ?? 1,
+            planOutcomeRowCount: item.planOutcomeRowCount ?? 1,
+            planOutcomeQuestionRowCount: item.planOutcomeQuestionRowCount ?? 1,
           };
         }),
       }));
@@ -184,13 +213,27 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
 
   const addPlanPromptRow = useCallback(
     (itemId, afterRowIdx, type = 'reason') => {
+      let nextFocus = null;
       setState((prev) => ({
         ...prev,
         shortlist: prev.shortlist.map((item) => {
           if (item.id !== itemId) return item;
           const entries = clonePlanTableEntries(item.planTableEntries);
           const blankRow = Array.from({ length: PLAN_TABLE_COLS }, () => '');
-          entries.splice(afterRowIdx + 1, 0, blankRow);
+          let insertIndex = afterRowIdx + 1;
+          if (type === 'question') {
+            const reasonCount = item.planReasonRowCount ?? 1;
+            const outcomeCount = item.planOutcomeRowCount ?? 1;
+            const reasonRowLimit = 2 + reasonCount;
+            const outcomeHeadingRow = reasonRowLimit;
+            const outcomePromptStart = outcomeHeadingRow + 1;
+            const outcomePromptEnd = outcomePromptStart + outcomeCount - 1;
+            const questionPromptStart = outcomePromptEnd + 1;
+            if (outcomeCount > 0) {
+              insertIndex = Math.min(questionPromptStart + 1, entries.length);
+            }
+          }
+          entries.splice(insertIndex, 0, blankRow);
           const nextState = { ...item, planTableEntries: entries };
           if (type === 'reason') {
             nextState.planReasonRowCount = (item.planReasonRowCount ?? 1) + 1;
@@ -198,12 +241,22 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           if (type === 'outcome') {
             nextState.planOutcomeRowCount = (item.planOutcomeRowCount ?? 1) + 1;
           }
+          if (type === 'question') {
+            nextState.planOutcomeQuestionRowCount = (item.planOutcomeQuestionRowCount ?? 1) + 1;
+          }
+          nextFocus = {
+            itemId,
+            row: insertIndex,
+            col: type === 'question' ? 1 : 2,
+          };
           return nextState;
         }),
       }));
-      setPendingPlanFocus({ itemId, row: afterRowIdx + 1, col: 2 });
+      if (nextFocus) {
+        pendingFocusRequestRef.current = nextFocus;
+      }
     },
-    [setState, setPendingPlanFocus]
+    [setState]
   );
 
   const removePlanPromptRow = useCallback(
@@ -213,11 +266,26 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
         shortlist: prev.shortlist.map((item) => {
           if (item.id !== itemId) return item;
           const entries = clonePlanTableEntries(item.planTableEntries);
+          const reasonCount = item.planReasonRowCount ?? 1;
+          const outcomeCount = item.planOutcomeRowCount ?? 1;
+          const questionCount = item.planOutcomeQuestionRowCount ?? 1;
+          const reasonStart = 2;
+          const reasonEnd = reasonStart + reasonCount; // exclusive limit
+          const outcomeStart = reasonEnd + 1;
+          const outcomeEnd = outcomeStart + outcomeCount;
+          const questionStart = outcomeEnd;
+          const questionEnd = questionStart + questionCount;
+
+          const withinReason = rowIdx >= reasonStart && rowIdx < reasonEnd;
+          const withinOutcome = rowIdx >= outcomeStart && rowIdx < outcomeEnd;
+          const withinQuestion = rowIdx >= questionStart && rowIdx < questionEnd;
+
           if (
             rowIdx < 2 ||
             rowIdx >= entries.length ||
-            (type === 'reason' && rowIdx >= 2 + (item.planReasonRowCount ?? 1)) ||
-            (type === 'outcome' && rowIdx < 2 + (item.planReasonRowCount ?? 1))
+            (type === 'reason' && !withinReason) ||
+            (type === 'outcome' && !withinOutcome) ||
+            (type === 'question' && !withinQuestion)
           ) {
             return item;
           }
@@ -228,6 +296,9 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           }
           if (type === 'outcome') {
             nextState.planOutcomeRowCount = Math.max((item.planOutcomeRowCount ?? 1) - 1, 1);
+          }
+          if (type === 'question') {
+            nextState.planOutcomeQuestionRowCount = Math.max((item.planOutcomeQuestionRowCount ?? 1) - 1, 1);
           }
           return nextState;
         }),
@@ -306,6 +377,74 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                 const planEntries = clonePlanTableEntries(item.planTableEntries);
                 const reasonRowCount = item.planReasonRowCount ?? 1;
                 const outcomeRowCount = item.planOutcomeRowCount ?? 1;
+                const questionRowCount = item.planOutcomeQuestionRowCount ?? 1;
+                const reasonRowLimit = 2 + reasonRowCount;
+                const outcomeHeadingRow = reasonRowLimit;
+                const outcomePromptStart = outcomeHeadingRow + 1;
+                const outcomePromptEnd = outcomePromptStart + outcomeRowCount - 1;
+                const questionPromptStart = outcomePromptEnd + 1;
+                const questionPromptEnd = questionPromptStart + questionRowCount - 1;
+                const hasPrimaryQuestionRow = questionRowCount > 0;
+                const primaryQuestionRowIdx = hasPrimaryQuestionRow ? questionPromptStart : null;
+                const renderQuestionPromptRow = (rowValues, rowIdx, promptIndex) => (
+                  <tr key={`${item.id}-plan-question-row-${rowIdx}`}>
+                    <td
+                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                      style={{ width: '120px', minWidth: '120px', backgroundColor: '#d9ead3' }}
+                    >
+                      <input
+                        type="text"
+                        value={rowValues[0] ?? ''}
+                        onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
+                        className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                        data-plan-item={item.id}
+                        data-plan-row={rowIdx}
+                        data-plan-col={0}
+                      />
+                    </td>
+                    <td
+                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                      colSpan={PLAN_TABLE_COLS - 2}
+                      style={{ backgroundColor: '#d9ead3' }}
+                    >
+                      <input
+                        type="text"
+                        value={rowValues[1] ?? ''}
+                        onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
+                        placeholder={promptIndex === 1 ? 'What do I want to be true in 12 weeks?' : undefined}
+                        className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
+                        data-plan-item={item.id}
+                        data-plan-row={rowIdx}
+                        data-plan-col={1}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && !event.shiftKey) {
+                            event.preventDefault();
+                            addPlanPromptRow(item.id, rowIdx, 'question');
+                          }
+                        }}
+                      />
+                    </td>
+                    <td
+                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                      style={{
+                        width: '32px',
+                        minWidth: '32px',
+                        textAlign: 'center',
+                        backgroundColor: '#d9ead3',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        aria-label="Delete question row"
+                        className="text-[14px] font-semibold text-slate-800"
+                        onClick={() => removePlanPromptRow(item.id, rowIdx, 'question')}
+                      >
+                        X
+                      </button>
+                    </td>
+                  </tr>
+                );
+                let renderedPrimaryQuestionRow = false;
                 return (
                   <div key={item.id}>
                     <div className="flex items-start gap-2">
@@ -492,9 +631,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                   );
                                 }
 
-                                const reasonRowLimit = 2 + reasonRowCount;
-
-                                if (rowIdx === reasonRowLimit) {
+                                if (rowIdx === outcomeHeadingRow) {
                                   return (
                                     <tr key={`${item.id}-plan-row-${rowIdx}`}>
                                       <td
@@ -507,33 +644,9 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                     </tr>
                                   );
                                 }
-                                if (rowIdx === reasonRowLimit + 1) {
-                                  return (
-                                    <tr key={`${item.id}-plan-row-${rowIdx}`}>
-                                      <td
-                                        className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-                                        style={{ width: '120px', minWidth: '120px', backgroundColor: '#d9ead3' }}
-                                      ></td>
-                                      <td
-                                        className="border border-[#e5e7eb] px-3 py-2 min-h/[44px]"
-                                        colSpan={PLAN_TABLE_COLS - 1}
-                                        style={{ backgroundColor: '#d9ead3' }}
-                                      >
-                                        <span className="text-[14px] font-semibold text-slate-800">
-                                          What do I want to be true in 12 weeks?
-                                        </span>
-                                      </td>
-                                    </tr>
-                                  );
-                                }
-                                const firstOutcomeRow = reasonRowLimit + 2;
-                                const promptOutcomeStart = firstOutcomeRow;
-                                const isOutcomePromptRow =
-                                  rowIdx >= promptOutcomeStart &&
-                                  rowIdx < promptOutcomeStart + outcomeRowCount;
-                                if (isOutcomePromptRow) {
-                                  const promptIndex = rowIdx - promptOutcomeStart + 1;
-                                  return (
+                                if (rowIdx >= outcomePromptStart && rowIdx <= outcomePromptEnd) {
+                                  const promptIndex = rowIdx - outcomePromptStart + 1;
+                                  const outcomeRow = (
                                     <tr key={`${item.id}-plan-row-${rowIdx}`}>
                                       {rowValues.map((cellValue, cellIdx) => {
                                         const style = { backgroundColor: '#f1f7ee' };
@@ -602,7 +715,30 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                       })}
                                     </tr>
                                   );
+                                  if (!renderedPrimaryQuestionRow && hasPrimaryQuestionRow && primaryQuestionRowIdx !== null) {
+                                    renderedPrimaryQuestionRow = true;
+                                    const primaryValues = planEntries[primaryQuestionRowIdx] ?? [];
+                                    return (
+                                      <React.Fragment key={`${item.id}-outcome-block-${rowIdx}`}>
+                                        {renderQuestionPromptRow(primaryValues, primaryQuestionRowIdx, 1)}
+                                        {outcomeRow}
+                                      </React.Fragment>
+                                    );
+                                  }
+                                  return outcomeRow;
                                 }
+                                if (rowIdx >= questionPromptStart && rowIdx <= questionPromptEnd) {
+                                  const promptIndex = rowIdx - questionPromptStart + 1;
+                                  if (promptIndex === 1) {
+                                    if (!renderedPrimaryQuestionRow && hasPrimaryQuestionRow) {
+                                      renderedPrimaryQuestionRow = true;
+                                      return renderQuestionPromptRow(rowValues, rowIdx, promptIndex);
+                                    }
+                                    return null;
+                                  }
+                                  return renderQuestionPromptRow(rowValues, rowIdx, promptIndex);
+                                }
+
 
                                 return (
                                   <tr key={`${item.id}-plan-row-${rowIdx}`}>
