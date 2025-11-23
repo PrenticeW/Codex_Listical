@@ -289,6 +289,14 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           ) {
             return item;
           }
+          const blankRow = Array.from({ length: PLAN_TABLE_COLS }, () => '');
+          const onlyReasonRow = type === 'reason' && reasonCount <= 1;
+          const onlyOutcomeRow = type === 'outcome' && outcomeCount <= 1;
+          const onlyQuestionRow = type === 'question' && questionCount <= 1;
+          if (onlyReasonRow || onlyOutcomeRow || onlyQuestionRow) {
+            entries[rowIdx] = blankRow;
+            return { ...item, planTableEntries: entries };
+          }
           entries.splice(rowIdx, 1);
           const nextState = { ...item, planTableEntries: entries };
           if (type === 'reason') {
@@ -411,7 +419,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                         type="text"
                         value={rowValues[1] ?? ''}
                         onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
-                        placeholder={promptIndex === 1 ? 'What do I want to be true in 12 weeks?' : undefined}
+                        placeholder="What do I want to be true in 12 weeks?"
                         className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
                         data-plan-item={item.id}
                         data-plan-row={rowIdx}
@@ -674,9 +682,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                                 onChange={(e) =>
                                                   handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
                                                 }
-                                                placeholder={
-                                                  promptIndex === 1 ? 'Measurable Outcome' : undefined
-                                                }
+                                                placeholder="Measurable Outcome"
                                                 className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
                                                 data-plan-item={item.id}
                                                 data-plan-row={rowIdx}
@@ -796,9 +802,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                                     }
                                                   : undefined
                                               }
-                                              placeholder={
-                                                rowIdx === 2 && cellIdx === 2 ? 'Reason' : undefined
-                                              }
+                                              placeholder={isPromptCell ? 'Reason' : undefined}
                                               className="w-full bg-transparent text-[14px] focus:outline-none border-none"
                                               data-plan-item={item.id}
                                               data-plan-row={rowIdx}
