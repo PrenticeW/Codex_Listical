@@ -183,7 +183,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
   };
 
   const addPlanPromptRow = useCallback(
-    (itemId, afterRowIdx) => {
+    (itemId, afterRowIdx, type = 'reason') => {
       setState((prev) => ({
         ...prev,
         shortlist: prev.shortlist.map((item) => {
@@ -191,12 +191,14 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           const entries = clonePlanTableEntries(item.planTableEntries);
           const blankRow = Array.from({ length: PLAN_TABLE_COLS }, () => '');
           entries.splice(afterRowIdx + 1, 0, blankRow);
-          const nextReasonCount = (item.planReasonRowCount ?? 1) + 1;
-          return {
-            ...item,
-            planTableEntries: entries,
-            planReasonRowCount: nextReasonCount,
-          };
+          const nextState = { ...item, planTableEntries: entries };
+          if (type === 'reason') {
+            nextState.planReasonRowCount = (item.planReasonRowCount ?? 1) + 1;
+          }
+          if (type === 'outcome') {
+            nextState.planOutcomeRowCount = (item.planOutcomeRowCount ?? 1) + 1;
+          }
+          return nextState;
         }),
       }));
       setPendingPlanFocus({ itemId, row: afterRowIdx + 1, col: 2 });
@@ -204,23 +206,35 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
     [setState, setPendingPlanFocus]
   );
 
-  const removePlanPromptRow = useCallback((itemId, rowIdx) => {
-    setState((prev) => ({
-      ...prev,
-      shortlist: prev.shortlist.map((item) => {
-        if (item.id !== itemId) return item;
-        const entries = clonePlanTableEntries(item.planTableEntries);
-        if (rowIdx < 2 || rowIdx >= entries.length) return item;
-        entries.splice(rowIdx, 1);
-        const nextReasonCount = Math.max((item.planReasonRowCount ?? 1) - 1, 1);
-        return {
-          ...item,
-          planTableEntries: entries,
-          planReasonRowCount: nextReasonCount,
-        };
-      }),
-    }));
-  }, [setState]);
+  const removePlanPromptRow = useCallback(
+    (itemId, rowIdx, type = 'reason') => {
+      setState((prev) => ({
+        ...prev,
+        shortlist: prev.shortlist.map((item) => {
+          if (item.id !== itemId) return item;
+          const entries = clonePlanTableEntries(item.planTableEntries);
+          if (
+            rowIdx < 2 ||
+            rowIdx >= entries.length ||
+            (type === 'reason' && rowIdx >= 2 + (item.planReasonRowCount ?? 1)) ||
+            (type === 'outcome' && rowIdx < 2 + (item.planReasonRowCount ?? 1))
+          ) {
+            return item;
+          }
+          entries.splice(rowIdx, 1);
+          const nextState = { ...item, planTableEntries: entries };
+          if (type === 'reason') {
+            nextState.planReasonRowCount = Math.max((item.planReasonRowCount ?? 1) - 1, 1);
+          }
+          if (type === 'outcome') {
+            nextState.planOutcomeRowCount = Math.max((item.planOutcomeRowCount ?? 1) - 1, 1);
+          }
+          return nextState;
+        }),
+      }));
+    },
+    [setState]
+  );
 
   const handlePlanTableCellChange = (itemId, rowIdx, colIdx, value) => {
     if (
@@ -291,6 +305,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
               {shortlist.map((item) => {
                 const planEntries = clonePlanTableEntries(item.planTableEntries);
                 const reasonRowCount = item.planReasonRowCount ?? 1;
+                const outcomeRowCount = item.planOutcomeRowCount ?? 1;
                 return (
                   <div key={item.id}>
                     <div className="flex items-start gap-2">
@@ -476,6 +491,119 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                     </tr>
                                   );
                                 }
+
+                                const reasonRowLimit = 2 + reasonRowCount;
+
+                                if (rowIdx === reasonRowLimit) {
+                                  return (
+                                    <tr key={`${item.id}-plan-row-${rowIdx}`}>
+                                      <td
+                                        colSpan={PLAN_TABLE_COLS}
+                                        className="border border-[#e5e7eb] px-3 py-2 min-h-[44px] text-left font-semibold text-[14px]"
+                                        style={{ backgroundColor: '#93c47d', color: '#1f2937' }}
+                                      >
+                                        Outcomes
+                                      </td>
+                                    </tr>
+                                  );
+                                }
+                                if (rowIdx === reasonRowLimit + 1) {
+                                  return (
+                                    <tr key={`${item.id}-plan-row-${rowIdx}`}>
+                                      <td
+                                        className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                        style={{ width: '120px', minWidth: '120px', backgroundColor: '#d9ead3' }}
+                                      ></td>
+                                      <td
+                                        className="border border-[#e5e7eb] px-3 py-2 min-h/[44px]"
+                                        colSpan={PLAN_TABLE_COLS - 1}
+                                        style={{ backgroundColor: '#d9ead3' }}
+                                      >
+                                        <span className="text-[14px] font-semibold text-slate-800">
+                                          What do I want to be true in 12 weeks?
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                }
+                                const firstOutcomeRow = reasonRowLimit + 2;
+                                const promptOutcomeStart = firstOutcomeRow;
+                                const isOutcomePromptRow =
+                                  rowIdx >= promptOutcomeStart &&
+                                  rowIdx < promptOutcomeStart + outcomeRowCount;
+                                if (isOutcomePromptRow) {
+                                  const promptIndex = rowIdx - promptOutcomeStart + 1;
+                                  return (
+                                    <tr key={`${item.id}-plan-row-${rowIdx}`}>
+                                      {rowValues.map((cellValue, cellIdx) => {
+                                        const style = { backgroundColor: '#f1f7ee' };
+                                        if (cellIdx === 0 || cellIdx === 1) {
+                                          style.width = '120px';
+                                          style.minWidth = '120px';
+                                        }
+                                        if (cellIdx === PLAN_TABLE_COLS - 1) {
+                                          style.width = '32px';
+                                          style.minWidth = '32px';
+                                          style.textAlign = 'center';
+                                        }
+                                        const isPromptCell = cellIdx === 2;
+                                        const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
+                                        return (
+                                          <td
+                                            key={`${item.id}-outcome-row-${rowIdx}-${cellIdx}`}
+                                            className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                            style={style}
+                                          >
+                                            {isPromptCell ? (
+                                              <input
+                                                type="text"
+                                                value={cellValue}
+                                                onChange={(e) =>
+                                                  handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
+                                                }
+                                                placeholder={
+                                                  promptIndex === 1 ? 'Measurable Outcome' : undefined
+                                                }
+                                                className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
+                                                data-plan-item={item.id}
+                                                data-plan-row={rowIdx}
+                                                data-plan-col={2}
+                                                onKeyDown={(event) => {
+                                                  if (event.key === 'Enter' && !event.shiftKey) {
+                                                    event.preventDefault();
+                                                    addPlanPromptRow(item.id, rowIdx, 'outcome');
+                                                  }
+                                                }}
+                                              />
+                                            ) : isDeleteCell ? (
+                                              <button
+                                                type="button"
+                                                aria-label="Delete outcome row"
+                                                className="text-[14px] font-semibold text-slate-800"
+                                                onClick={() => removePlanPromptRow(item.id, rowIdx, 'outcome')}
+                                              >
+                                                X
+                                              </button>
+                                            ) : (
+                                              <input
+                                                type="text"
+                                                value={cellValue}
+                                                onChange={(e) =>
+                                                  handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
+                                                }
+                                                className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                                                data-plan-item={item.id}
+                                                data-plan-row={rowIdx}
+                                                data-plan-col={cellIdx}
+                                              />
+                                            )}
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  );
+                                }
+
                                 return (
                                   <tr key={`${item.id}-plan-row-${rowIdx}`}>
                                     {rowValues.map((cellValue, cellIdx) => {
