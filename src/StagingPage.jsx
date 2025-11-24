@@ -259,6 +259,58 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
     [setState]
   );
 
+  const addQuestionPromptWithOutcomeRow = useCallback(
+    (itemId, questionRowIdx) => {
+      let nextFocus = null;
+      setState((prev) => ({
+        ...prev,
+        shortlist: prev.shortlist.map((item) => {
+          if (item.id !== itemId) return item;
+          const entries = clonePlanTableEntries(item.planTableEntries);
+          const createBlankRow = () => Array.from({ length: PLAN_TABLE_COLS }, () => '');
+          const reasonCount = item.planReasonRowCount ?? 1;
+          const outcomeCount = item.planOutcomeRowCount ?? 1;
+          const questionCount = item.planOutcomeQuestionRowCount ?? 1;
+          const reasonRowLimit = 2 + reasonCount;
+          const outcomeHeadingRow = reasonRowLimit;
+          const outcomePromptStart = outcomeHeadingRow + 1;
+          const outcomePromptEnd = outcomePromptStart + Math.max(outcomeCount - 1, 0);
+          const questionPromptStart = outcomePromptEnd + 1;
+          const questionPromptEnd = questionPromptStart + Math.max(questionCount - 1, 0);
+
+          const clampedQuestionRowIdx = Math.min(
+            Math.max(questionRowIdx, questionPromptStart),
+            questionPromptEnd
+          );
+          const questionRelativeIndex = Math.max(0, clampedQuestionRowIdx - questionPromptStart);
+          const questionInsertIndex = questionPromptStart + questionRelativeIndex + 1;
+          entries.splice(questionInsertIndex, 0, createBlankRow());
+
+          const outcomeRelativeIndex = Math.min(questionRelativeIndex + 1, outcomeCount);
+          const outcomeInsertIndex = outcomePromptStart + outcomeRelativeIndex;
+          entries.splice(outcomeInsertIndex, 0, createBlankRow());
+
+          nextFocus = {
+            itemId,
+            row: questionInsertIndex,
+            col: 1,
+          };
+
+          return {
+            ...item,
+            planTableEntries: entries,
+            planOutcomeRowCount: outcomeCount + 1,
+            planOutcomeQuestionRowCount: questionCount + 1,
+          };
+        }),
+      }));
+      if (nextFocus) {
+        pendingFocusRequestRef.current = nextFocus;
+      }
+    },
+    [setState]
+  );
+
   const removePlanPromptRow = useCallback(
     (itemId, rowIdx, type = 'reason') => {
       setState((prev) => ({
@@ -389,11 +441,14 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                 const reasonRowLimit = 2 + reasonRowCount;
                 const outcomeHeadingRow = reasonRowLimit;
                 const outcomePromptStart = outcomeHeadingRow + 1;
-                const outcomePromptEnd = outcomePromptStart + outcomeRowCount - 1;
+                const outcomePromptEnd = outcomePromptStart + Math.max(outcomeRowCount - 1, 0);
                 const questionPromptStart = outcomePromptEnd + 1;
-                const questionPromptEnd = questionPromptStart + questionRowCount - 1;
-                const hasPrimaryQuestionRow = questionRowCount > 0;
-                const primaryQuestionRowIdx = hasPrimaryQuestionRow ? questionPromptStart : null;
+                const questionPromptEnd = questionPromptStart + Math.max(questionRowCount - 1, 0);
+                const buildRowEntry = (rowIdx) => ({
+                  rowIdx,
+                  rowValues:
+                    planEntries[rowIdx] ?? Array.from({ length: PLAN_TABLE_COLS }, () => ''),
+                });
                 const renderQuestionPromptRow = (rowValues, rowIdx, promptIndex) => (
                   <tr key={`${item.id}-plan-question-row-${rowIdx}`}>
                     <td
@@ -427,7 +482,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' && !event.shiftKey) {
                             event.preventDefault();
-                            addPlanPromptRow(item.id, rowIdx, 'question');
+                            addQuestionPromptWithOutcomeRow(item.id, rowIdx);
                           }
                         }}
                       />
@@ -452,7 +507,149 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                     </td>
                   </tr>
                 );
-                let renderedPrimaryQuestionRow = false;
+                const renderOutcomePromptRow = (rowValues, rowIdx) => (
+                  <tr key={`${item.id}-plan-row-${rowIdx}`}>
+                    {rowValues.map((cellValue, cellIdx) => {
+                      const style = { backgroundColor: '#f1f7ee' };
+                      if (cellIdx === 0 || cellIdx === 1) {
+                        style.width = '120px';
+                        style.minWidth = '120px';
+                      }
+                      if (cellIdx === PLAN_TABLE_COLS - 1) {
+                        style.width = '32px';
+                        style.minWidth = '32px';
+                        style.textAlign = 'center';
+                      }
+                      const isPromptCell = cellIdx === 2;
+                      const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
+                      return (
+                        <td
+                          key={`${item.id}-outcome-row-${rowIdx}-${cellIdx}`}
+                          className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                          style={style}
+                        >
+                          {isPromptCell ? (
+                            <input
+                              type="text"
+                              value={cellValue}
+                              onChange={(e) =>
+                                handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
+                              }
+                              placeholder="Measurable Outcome"
+                              className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
+                              data-plan-item={item.id}
+                              data-plan-row={rowIdx}
+                              data-plan-col={2}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' && !event.shiftKey) {
+                                  event.preventDefault();
+                                  addPlanPromptRow(item.id, rowIdx, 'outcome');
+                                }
+                              }}
+                            />
+                          ) : isDeleteCell ? (
+                            <button
+                              type="button"
+                              aria-label="Delete outcome row"
+                              className="text-[14px] font-semibold text-slate-800"
+                              onClick={() => removePlanPromptRow(item.id, rowIdx, 'outcome')}
+                            >
+                              X
+                            </button>
+                          ) : (
+                            <input
+                              type="text"
+                              value={cellValue}
+                              onChange={(e) =>
+                                handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
+                              }
+                              className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                              data-plan-item={item.id}
+                              data-plan-row={rowIdx}
+                              data-plan-col={cellIdx}
+                            />
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+                const renderReasonPromptRow = (rowValues, rowIdx) => (
+                  <tr key={`${item.id}-plan-row-${rowIdx}`}>
+                    {rowValues.map((cellValue, cellIdx) => {
+                      const baseStyle =
+                        cellIdx === 0 || cellIdx === 1
+                          ? { width: '120px', minWidth: '120px', backgroundColor: '#f9f3f6' }
+                          : { backgroundColor: '#f9f3f6' };
+                      const isPromptCell = cellIdx === 2;
+                      const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
+                      if (isDeleteCell) {
+                        baseStyle.width = '32px';
+                        baseStyle.minWidth = '32px';
+                        baseStyle.textAlign = 'center';
+                      }
+                      return (
+                        <td
+                          key={`${item.id}-plan-row-${rowIdx}-cell-${cellIdx}`}
+                          className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                          style={baseStyle}
+                        >
+                          {isDeleteCell ? (
+                            <button
+                              type="button"
+                              aria-label="Delete prompt row"
+                              className="text-[14px] font-semibold text-slate-800"
+                              onClick={() => removePlanPromptRow(item.id, rowIdx)}
+                            >
+                              X
+                            </button>
+                          ) : (
+                            <input
+                              type="text"
+                              value={cellValue}
+                              onChange={(e) =>
+                                handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
+                              }
+                              onKeyDown={
+                                isPromptCell
+                                  ? (event) => {
+                                      if (event.key === 'Enter' && !event.shiftKey) {
+                                        event.preventDefault();
+                                        addPlanPromptRow(item.id, rowIdx);
+                                      }
+                                    }
+                                  : undefined
+                              }
+                              placeholder={isPromptCell ? 'Reason' : undefined}
+                              className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                              data-plan-item={item.id}
+                              data-plan-row={rowIdx}
+                              data-plan-col={cellIdx}
+                            />
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+                const reasonPromptEntries = Array.from({ length: reasonRowCount }, (_, idx) =>
+                  buildRowEntry(2 + idx)
+                );
+                const outcomeEntries = Array.from({ length: Math.max(outcomeRowCount, 0) }, (_, idx) => {
+                  const rowIdx = outcomePromptStart + idx;
+                  return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
+                });
+                const questionEntries = Array.from({ length: Math.max(questionRowCount, 0) }, (_, idx) => {
+                  const rowIdx = questionPromptStart + idx;
+                  return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
+                });
+                const pairCount = Math.min(questionEntries.length, outcomeEntries.length);
+                const questionOutcomePairs = questionEntries.slice(0, pairCount).map((question, idx) => ({
+                  question,
+                  outcome: outcomeEntries[idx],
+                }));
+                const leftoverOutcomeEntries = outcomeEntries.slice(pairCount);
+                const leftoverQuestionEntries = questionEntries.slice(pairCount);
                 return (
                   <div key={item.id}>
                     <div className="flex items-start gap-2">
@@ -588,233 +785,70 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                         <div className="rounded border border-dashed border-[#ced3d0] bg-white p-3">
                           <table className="w-full border-collapse text-left text-[14px]">
                             <tbody>
-                              {planEntries.map((rowValues, rowIdx) => {
-                                if (rowIdx === 0) {
-                                  return (
-                                    <tr key={`${item.id}-plan-row-${rowIdx}`}>
-                                      <td
-                                        colSpan={PLAN_TABLE_COLS}
-                                        className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold text-[14px]"
-                                        style={{ backgroundColor: '#d5a6bd', color: '#1f2937' }}
-                                      >
-                                        &nbsp;&nbsp;&nbsp;Reasons
-                                      </td>
-                                    </tr>
-                                  );
-                                }
-                                if (rowIdx === 1) {
-                                  return (
-                                    <tr key={`${item.id}-plan-row-${rowIdx}`}>
-                                      <td
-                                        className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-                                        style={{ width: '120px', minWidth: '120px', backgroundColor: '#ead1dc' }}
-                                      >
-                                        <input
-                                          type="text"
-                                          value={rowValues[0] ?? ''}
-                                          onChange={(e) =>
-                                            handlePlanTableCellChange(
-                                              item.id,
-                                              rowIdx,
-                                              0,
-                                              e.target.value
-                                            )
-                                          }
-                                          className="w-full bg-transparent text-[14px] focus:outline-none border-none"
-                                          data-plan-item={item.id}
-                                          data-plan-row={rowIdx}
-                                          data-plan-col={0}
-                                        />
-                                      </td>
-                                      <td
-                                        className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-                                        colSpan={PLAN_TABLE_COLS - 1}
-                                        style={{ backgroundColor: '#ead1dc' }}
-                                      >
-                                        <span className="text-[14px] font-semibold text-slate-800">
-                                          Why do I want to start this?
-                                        </span>
-                                      </td>
-                                    </tr>
-                                  );
-                                }
-
-                                if (rowIdx === outcomeHeadingRow) {
-                                  return (
-                                    <tr key={`${item.id}-plan-row-${rowIdx}`}>
-                                      <td
-                                        colSpan={PLAN_TABLE_COLS}
-                                        className="border border-[#e5e7eb] px-3 py-2 min-h-[44px] text-left font-semibold text-[14px]"
-                                        style={{ backgroundColor: '#93c47d', color: '#1f2937' }}
-                                      >
-                                        Outcomes
-                                      </td>
-                                    </tr>
-                                  );
-                                }
-                                if (rowIdx >= outcomePromptStart && rowIdx <= outcomePromptEnd) {
-                                  const promptIndex = rowIdx - outcomePromptStart + 1;
-                                  const outcomeRow = (
-                                    <tr key={`${item.id}-plan-row-${rowIdx}`}>
-                                      {rowValues.map((cellValue, cellIdx) => {
-                                        const style = { backgroundColor: '#f1f7ee' };
-                                        if (cellIdx === 0 || cellIdx === 1) {
-                                          style.width = '120px';
-                                          style.minWidth = '120px';
-                                        }
-                                        if (cellIdx === PLAN_TABLE_COLS - 1) {
-                                          style.width = '32px';
-                                          style.minWidth = '32px';
-                                          style.textAlign = 'center';
-                                        }
-                                        const isPromptCell = cellIdx === 2;
-                                        const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
-                                        return (
-                                          <td
-                                            key={`${item.id}-outcome-row-${rowIdx}-${cellIdx}`}
-                                            className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-                                            style={style}
-                                          >
-                                            {isPromptCell ? (
-                                              <input
-                                                type="text"
-                                                value={cellValue}
-                                                onChange={(e) =>
-                                                  handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
-                                                }
-                                                placeholder="Measurable Outcome"
-                                                className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
-                                                data-plan-item={item.id}
-                                                data-plan-row={rowIdx}
-                                                data-plan-col={2}
-                                                onKeyDown={(event) => {
-                                                  if (event.key === 'Enter' && !event.shiftKey) {
-                                                    event.preventDefault();
-                                                    addPlanPromptRow(item.id, rowIdx, 'outcome');
-                                                  }
-                                                }}
-                                              />
-                                            ) : isDeleteCell ? (
-                                              <button
-                                                type="button"
-                                                aria-label="Delete outcome row"
-                                                className="text-[14px] font-semibold text-slate-800"
-                                                onClick={() => removePlanPromptRow(item.id, rowIdx, 'outcome')}
-                                              >
-                                                X
-                                              </button>
-                                            ) : (
-                                              <input
-                                                type="text"
-                                                value={cellValue}
-                                                onChange={(e) =>
-                                                  handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
-                                                }
-                                                className="w-full bg-transparent text-[14px] focus:outline-none border-none"
-                                                data-plan-item={item.id}
-                                                data-plan-row={rowIdx}
-                                                data-plan-col={cellIdx}
-                                              />
-                                            )}
-                                          </td>
-                                        );
-                                      })}
-                                    </tr>
-                                  );
-                                  if (!renderedPrimaryQuestionRow && hasPrimaryQuestionRow && primaryQuestionRowIdx !== null) {
-                                    renderedPrimaryQuestionRow = true;
-                                    const primaryValues = planEntries[primaryQuestionRowIdx] ?? [];
-                                    return (
-                                      <React.Fragment key={`${item.id}-outcome-block-${rowIdx}`}>
-                                        {renderQuestionPromptRow(primaryValues, primaryQuestionRowIdx, 1)}
-                                        {outcomeRow}
-                                      </React.Fragment>
-                                    );
-                                  }
-                                  return outcomeRow;
-                                }
-                                if (rowIdx >= questionPromptStart && rowIdx <= questionPromptEnd) {
-                                  const promptIndex = rowIdx - questionPromptStart + 1;
-                                  if (promptIndex === 1) {
-                                    if (!renderedPrimaryQuestionRow && hasPrimaryQuestionRow) {
-                                      renderedPrimaryQuestionRow = true;
-                                      return renderQuestionPromptRow(rowValues, rowIdx, promptIndex);
-                                    }
-                                    return null;
-                                  }
-                                  return renderQuestionPromptRow(rowValues, rowIdx, promptIndex);
-                                }
-
-
-                                return (
-                                  <tr key={`${item.id}-plan-row-${rowIdx}`}>
-                                    {rowValues.map((cellValue, cellIdx) => {
-                                      const baseStyle =
-                                        cellIdx === 0 || cellIdx === 1
-                                          ? { width: '120px', minWidth: '120px' }
-                                          : {};
-                                      const isReasonRow =
-                                        rowIdx >= 2 && rowIdx < 2 + reasonRowCount;
-                                      if (isReasonRow) {
-                                        baseStyle.backgroundColor = '#f9f3f6';
-                                      }
-                                      const isPromptCell = isReasonRow && cellIdx === 2;
-                                      const isDeleteCell = isReasonRow && cellIdx === PLAN_TABLE_COLS - 1;
-                                      if (isDeleteCell) {
-                                        baseStyle.width = '32px';
-                                        baseStyle.minWidth = '32px';
-                                        baseStyle.textAlign = 'center';
-                                      }
-                                      return (
-                                        <td
-                                          key={`${item.id}-plan-row-${rowIdx}-cell-${cellIdx}`}
-                                          className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-                                          style={Object.keys(baseStyle).length ? baseStyle : undefined}
-                                        >
-                                          {isDeleteCell ? (
-                                            <button
-                                              type="button"
-                                              aria-label="Delete prompt row"
-                                              className="text-[14px] font-semibold text-slate-800"
-                                              onClick={() => removePlanPromptRow(item.id, rowIdx)}
-                                            >
-                                              X
-                                            </button>
-                                          ) : (
-                                            <input
-                                              type="text"
-                                              value={cellValue}
-                                              onChange={(e) =>
-                                                handlePlanTableCellChange(
-                                                  item.id,
-                                                  rowIdx,
-                                                  cellIdx,
-                                                  e.target.value
-                                                )
-                                              }
-                                              onKeyDown={
-                                                isPromptCell
-                                                  ? (event) => {
-                                                      if (event.key === 'Enter' && !event.shiftKey) {
-                                                        event.preventDefault();
-                                                        addPlanPromptRow(item.id, rowIdx);
-                                                      }
-                                                    }
-                                                  : undefined
-                                              }
-                                              placeholder={isPromptCell ? 'Reason' : undefined}
-                                              className="w-full bg-transparent text-[14px] focus:outline-none border-none"
-                                              data-plan-item={item.id}
-                                              data-plan-row={rowIdx}
-                                              data-plan-col={cellIdx}
-                                            />
-                                          )}
-                                        </td>
-                                      );
-                                    })}
-                                  </tr>
-                                );
-                              })}
+                              <tr key={`${item.id}-plan-row-0`}>
+                                <td
+                                  colSpan={PLAN_TABLE_COLS}
+                                  className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold text-[14px]"
+                                  style={{ backgroundColor: '#d5a6bd', color: '#1f2937' }}
+                                >
+                                  &nbsp;&nbsp;&nbsp;Reasons
+                                </td>
+                              </tr>
+                              <tr key={`${item.id}-plan-row-1`}>
+                                <td
+                                  className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                  style={{ width: '120px', minWidth: '120px', backgroundColor: '#ead1dc' }}
+                                >
+                                  <input
+                                    type="text"
+                                    value={planEntries[1]?.[0] ?? ''}
+                                    onChange={(e) => handlePlanTableCellChange(item.id, 1, 0, e.target.value)}
+                                    className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                                    data-plan-item={item.id}
+                                    data-plan-row={1}
+                                    data-plan-col={0}
+                                  />
+                                </td>
+                                <td
+                                  className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                  colSpan={PLAN_TABLE_COLS - 1}
+                                  style={{ backgroundColor: '#ead1dc' }}
+                                >
+                                  <span className="text-[14px] font-semibold text-slate-800">
+                                    Why do I want to start this?
+                                  </span>
+                                </td>
+                              </tr>
+                              {reasonPromptEntries.map(({ rowIdx, rowValues }) =>
+                                renderReasonPromptRow(rowValues, rowIdx)
+                              )}
+                              <tr key={`${item.id}-plan-row-${outcomeHeadingRow}`}>
+                                <td
+                                  colSpan={PLAN_TABLE_COLS}
+                                  className="border border-[#e5e7eb] px-3 py-2 min-h-[44px] text-left font-semibold text-[14px]"
+                                  style={{ backgroundColor: '#93c47d', color: '#1f2937' }}
+                                >
+                                  Outcomes
+                                </td>
+                              </tr>
+                              {questionOutcomePairs.map(({ question, outcome }) => (
+                                <React.Fragment
+                                  key={`${item.id}-plan-pair-${question.rowIdx}-${outcome.rowIdx}`}
+                                >
+                                  {renderQuestionPromptRow(
+                                    question.rowValues,
+                                    question.rowIdx,
+                                    question.promptIndex
+                                  )}
+                                  {renderOutcomePromptRow(outcome.rowValues, outcome.rowIdx)}
+                                </React.Fragment>
+                              ))}
+                              {leftoverOutcomeEntries.map(({ rowIdx, rowValues }) =>
+                                renderOutcomePromptRow(rowValues, rowIdx)
+                              )}
+                              {leftoverQuestionEntries.map(({ rowIdx, rowValues, promptIndex }) =>
+                                renderQuestionPromptRow(rowValues, rowIdx, promptIndex)
+                              )}
                             </tbody>
                           </table>
                         </div>
