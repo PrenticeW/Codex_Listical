@@ -83,8 +83,12 @@ const ensureSectionPairMetadata = ({
     const primaryRow = entries[primaryIdx];
     const secondaryRow = entries[secondaryIdx];
     if (!primaryRow && !secondaryRow) continue;
-    const existingPairId = getRowPairId(primaryRow) || getRowPairId(secondaryRow);
-    const pairId = existingPairId || createRowPairId(prefix);
+    const primaryPairId = getRowPairId(primaryRow);
+    const secondaryPairId = getRowPairId(secondaryRow);
+    if (primaryPairId && secondaryPairId && primaryPairId !== secondaryPairId) {
+      continue;
+    }
+    const pairId = primaryPairId || secondaryPairId || createRowPairId(prefix);
     setRowPairId(primaryRow, pairId);
     setRowPairId(secondaryRow, pairId);
   }
