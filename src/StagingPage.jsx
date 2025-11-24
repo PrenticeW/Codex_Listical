@@ -6,6 +6,7 @@ import NavigationBar from './NavigationBar';
 const STORAGE_KEY = 'staging-shortlist';
 const PLAN_TABLE_ROWS = 11;
 const PLAN_TABLE_COLS = 6;
+const PLAN_PAIR_META_KEY = '__pairId';
 const COLOR_PALETTE = [
   '#8e7cc3',
   '#f6b26b',
@@ -42,6 +43,145 @@ const saveState = (payload) => {
   }
 };
 
+const createRowPairId = (prefix = 'pair') => {
+  const base =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${prefix}-${base}`;
+};
+
+const getRowPairId = (row) => {
+  if (!row) return null;
+  const value = row?.[PLAN_PAIR_META_KEY];
+  return typeof value === 'string' && value ? value : null;
+};
+
+const setRowPairId = (row, pairId) => {
+  if (!row) return;
+  Object.defineProperty(row, PLAN_PAIR_META_KEY, {
+    value: pairId,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
+};
+
+const ensureSectionPairMetadata = ({
+  entries,
+  primaryStart,
+  primaryCount,
+  secondaryStart,
+  secondaryCount,
+  prefix,
+}) => {
+  if (!Array.isArray(entries)) return;
+  const pairableCount = Math.min(primaryCount, secondaryCount);
+  for (let i = 0; i < pairableCount; i += 1) {
+    const primaryIdx = primaryStart + i;
+    const secondaryIdx = secondaryStart + i;
+    const primaryRow = entries[primaryIdx];
+    const secondaryRow = entries[secondaryIdx];
+    if (!primaryRow && !secondaryRow) continue;
+    const existingPairId = getRowPairId(primaryRow) || getRowPairId(secondaryRow);
+    const pairId = existingPairId || createRowPairId(prefix);
+    setRowPairId(primaryRow, pairId);
+    setRowPairId(secondaryRow, pairId);
+  }
+  let lastPairId = null;
+  for (let i = 0; i < primaryCount; i += 1) {
+    const idx = primaryStart + i;
+    const row = entries[idx];
+    if (!row) continue;
+    const rowPairId = getRowPairId(row);
+    if (rowPairId) {
+      lastPairId = rowPairId;
+    } else if (lastPairId) {
+      setRowPairId(row, lastPairId);
+    }
+  }
+  lastPairId = null;
+  for (let i = 0; i < secondaryCount; i += 1) {
+    const idx = secondaryStart + i;
+    const row = entries[idx];
+    if (!row) continue;
+    const rowPairId = getRowPairId(row);
+    if (rowPairId) {
+      lastPairId = rowPairId;
+    } else if (lastPairId) {
+      setRowPairId(row, lastPairId);
+    }
+  }
+};
+
+const ensurePlanPairingMetadata = ({
+  entries,
+  reasonRowCount,
+  outcomeRowCount,
+  questionRowCount,
+  needsQuestionRowCount,
+  needsPlanRowCount,
+}) => {
+  if (!Array.isArray(entries)) return;
+  const outcomeHeadingRow = 2 + reasonRowCount;
+  const outcomeStart = outcomeHeadingRow + 1;
+  const questionStart = outcomeStart + outcomeRowCount;
+  ensureSectionPairMetadata({
+    entries,
+    primaryStart: outcomeStart,
+    primaryCount: outcomeRowCount,
+    secondaryStart: questionStart,
+    secondaryCount: questionRowCount,
+    prefix: 'outcome',
+  });
+  const needsHeadingRow = questionStart + questionRowCount;
+  const needsQuestionStart = needsHeadingRow + 1;
+  const needsPlanStart = needsQuestionStart + needsQuestionRowCount;
+  ensureSectionPairMetadata({
+    entries,
+    primaryStart: needsQuestionStart,
+    primaryCount: needsQuestionRowCount,
+    secondaryStart: needsPlanStart,
+    secondaryCount: needsPlanRowCount,
+    prefix: 'needs',
+  });
+};
+
+const buildPairedRowGroups = (primaryEntries, secondaryEntries) => {
+  const groupedSecondary = new Map();
+  const fallbackSecondary = [];
+  secondaryEntries.forEach((entry) => {
+    if (entry.pairId) {
+      if (!groupedSecondary.has(entry.pairId)) {
+        groupedSecondary.set(entry.pairId, []);
+      }
+      groupedSecondary.get(entry.pairId).push(entry);
+    } else {
+      fallbackSecondary.push(entry);
+    }
+  });
+
+  const pairs = [];
+  const leftoverPrimary = [];
+  primaryEntries.forEach((entry) => {
+    if (entry.pairId && groupedSecondary.has(entry.pairId)) {
+      const grouped = groupedSecondary.get(entry.pairId);
+      pairs.push({ primary: entry, secondaryList: grouped });
+      groupedSecondary.delete(entry.pairId);
+    } else if (fallbackSecondary.length) {
+      pairs.push({ primary: entry, secondaryList: [fallbackSecondary.shift()] });
+    } else {
+      leftoverPrimary.push(entry);
+    }
+  });
+
+  const leftoverSecondary = [
+    ...fallbackSecondary,
+    ...Array.from(groupedSecondary.values()).flat(),
+  ];
+  return { pairs, leftoverPrimary, leftoverSecondary };
+};
+
 const clonePlanTableEntries = (entries, ensureRows = PLAN_TABLE_ROWS) => {
   const source = Array.isArray(entries) ? entries : [];
   const rowCount = Math.max(source.length, ensureRows);
@@ -52,6 +192,14 @@ const clonePlanTableEntries = (entries, ensureRows = PLAN_TABLE_ROWS) => {
     for (let col = 0; col < PLAN_TABLE_COLS; col += 1) {
       const value = sourceRow[col];
       nextRow.push(typeof value === 'string' ? value : '');
+    }
+    if (sourceRow && sourceRow[PLAN_PAIR_META_KEY]) {
+      Object.defineProperty(nextRow, PLAN_PAIR_META_KEY, {
+        value: sourceRow[PLAN_PAIR_META_KEY],
+        writable: true,
+        configurable: true,
+        enumerable: false,
+      });
     }
     normalized.push(nextRow);
   }
@@ -71,6 +219,40 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
   });
   const [pendingPlanFocus, setPendingPlanFocus] = useState(null);
   const pendingFocusRequestRef = useRef(null);
+  useEffect(() => {
+    setState((prev) => {
+      let changed = false;
+      const nextShortlist = prev.shortlist.map((item) => {
+        if (!Array.isArray(item.planTableEntries) || item.planTableEntries.length === 0) {
+          return item;
+        }
+        const entries = clonePlanTableEntries(item.planTableEntries, item.planTableEntries.length);
+        const reasonCount = item.planReasonRowCount ?? 1;
+        const outcomeCount = item.planOutcomeRowCount ?? 1;
+        const questionCount = item.planOutcomeQuestionRowCount ?? 1;
+        const needsQuestionCount = item.planNeedsQuestionRowCount ?? 1;
+        const needsPlanCount = item.planNeedsPlanRowCount ?? 1;
+        ensurePlanPairingMetadata({
+          entries,
+          reasonRowCount: reasonCount,
+          outcomeRowCount: outcomeCount,
+          questionRowCount: questionCount,
+          needsQuestionRowCount: needsQuestionCount,
+          needsPlanRowCount: needsPlanCount,
+        });
+        const originalEntries = item.planTableEntries;
+        const hasDiff =
+          entries.length !== originalEntries.length ||
+          entries.some((row, idx) => getRowPairId(row) !== getRowPairId(originalEntries[idx]));
+        if (hasDiff) {
+          changed = true;
+          return { ...item, planTableEntries: entries };
+        }
+        return item;
+      });
+      return changed ? { ...prev, shortlist: nextShortlist } : prev;
+    });
+  }, []);
 
   useEffect(() => {
     saveState({ shortlist, archived });
@@ -177,12 +359,29 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
         ...prev,
         shortlist: prev.shortlist.map((item) => {
           if (item.id !== planModal.itemId) return item;
+          const reasonCount = item.planReasonRowCount ?? 1;
+          const outcomeCount = item.planOutcomeRowCount ?? 1;
+          const questionCount = item.planOutcomeQuestionRowCount ?? 1;
+          const needsQuestionCount = item.planNeedsQuestionRowCount ?? 1;
+          const needsPlanCount = item.planNeedsPlanRowCount ?? 1;
+          const planTableEntries = clonePlanTableEntries(item.planTableEntries);
+          ensurePlanPairingMetadata({
+            entries: planTableEntries,
+            reasonRowCount: reasonCount,
+            outcomeRowCount: outcomeCount,
+            questionRowCount: questionCount,
+            needsQuestionRowCount: needsQuestionCount,
+            needsPlanRowCount: needsPlanCount,
+          });
           if (item.planTableVisible) {
             return {
               ...item,
               hasPlan: true,
-              planOutcomeRowCount: item.planOutcomeRowCount ?? 1,
-              planOutcomeQuestionRowCount: item.planOutcomeQuestionRowCount ?? 1,
+              planOutcomeRowCount: outcomeCount,
+              planOutcomeQuestionRowCount: questionCount,
+              planNeedsQuestionRowCount: needsQuestionCount,
+              planNeedsPlanRowCount: needsPlanCount,
+              planTableEntries,
             };
           }
           return {
@@ -190,10 +389,12 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
             planTableVisible: true,
             planTableCollapsed: false,
             hasPlan: true,
-            planTableEntries: clonePlanTableEntries(item.planTableEntries),
-            planReasonRowCount: item.planReasonRowCount ?? 1,
-            planOutcomeRowCount: item.planOutcomeRowCount ?? 1,
-            planOutcomeQuestionRowCount: item.planOutcomeQuestionRowCount ?? 1,
+            planTableEntries,
+            planReasonRowCount: reasonCount,
+            planOutcomeRowCount: outcomeCount,
+            planOutcomeQuestionRowCount: questionCount,
+            planNeedsQuestionRowCount: needsQuestionCount,
+            planNeedsPlanRowCount: needsPlanCount,
           };
         }),
       }));
@@ -220,20 +421,50 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           if (item.id !== itemId) return item;
           const entries = clonePlanTableEntries(item.planTableEntries);
           const blankRow = Array.from({ length: PLAN_TABLE_COLS }, () => '');
+          const reasonCount = item.planReasonRowCount ?? 1;
+          const outcomeCount = item.planOutcomeRowCount ?? 1;
+          const questionCount = item.planOutcomeQuestionRowCount ?? 1;
+          const needsQuestionCount = item.planNeedsQuestionRowCount ?? 1;
+          const needsPlanCount = item.planNeedsPlanRowCount ?? 1;
+          ensurePlanPairingMetadata({
+            entries,
+            reasonRowCount: reasonCount,
+            outcomeRowCount: outcomeCount,
+            questionRowCount: questionCount,
+            needsQuestionRowCount: needsQuestionCount,
+            needsPlanRowCount: needsPlanCount,
+          });
+          const reasonRowLimit = 2 + reasonCount;
+          const outcomeHeadingRow = reasonRowLimit;
+          const outcomePromptStart = outcomeHeadingRow + 1;
+          const outcomePromptEnd = outcomePromptStart + outcomeCount - 1;
+          const questionPromptStart = outcomePromptEnd + 1;
+          const questionPromptEnd = questionPromptStart + questionCount - 1;
+          const needsHeadingRow = questionPromptEnd + 1;
+          const needsQuestionStart = needsHeadingRow + 1;
+          const needsQuestionEnd = needsQuestionStart + needsQuestionCount - 1;
+          const needsPlanStart = needsQuestionEnd + 1;
+          const needsPlanEnd = needsPlanStart + needsPlanCount - 1;
           let insertIndex = afterRowIdx + 1;
           if (type === 'question') {
-            const reasonCount = item.planReasonRowCount ?? 1;
-            const outcomeCount = item.planOutcomeRowCount ?? 1;
-            const reasonRowLimit = 2 + reasonCount;
-            const outcomeHeadingRow = reasonRowLimit;
-            const outcomePromptStart = outcomeHeadingRow + 1;
-            const outcomePromptEnd = outcomePromptStart + outcomeCount - 1;
-            const questionPromptStart = outcomePromptEnd + 1;
             if (outcomeCount > 0) {
               insertIndex = Math.min(questionPromptStart + 1, entries.length);
             }
           }
+          if (type === 'needsPlan') {
+            const minIndex = Math.max(needsPlanStart, 0);
+            const maxIndex = Math.min(needsPlanEnd + 1, entries.length);
+            insertIndex = Math.min(Math.max(insertIndex, minIndex), maxIndex);
+          }
           entries.splice(insertIndex, 0, blankRow);
+          if (type === 'outcome') {
+            const sourcePairId = getRowPairId(entries[afterRowIdx]) || createRowPairId('outcome');
+            setRowPairId(entries[insertIndex], sourcePairId);
+          }
+          if (type === 'needsPlan') {
+            const sourcePairId = getRowPairId(entries[afterRowIdx]) || createRowPairId('needs');
+            setRowPairId(entries[insertIndex], sourcePairId);
+          }
           const nextState = { ...item, planTableEntries: entries };
           if (type === 'reason') {
             nextState.planReasonRowCount = (item.planReasonRowCount ?? 1) + 1;
@@ -244,10 +475,13 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           if (type === 'question') {
             nextState.planOutcomeQuestionRowCount = (item.planOutcomeQuestionRowCount ?? 1) + 1;
           }
+          if (type === 'needsPlan') {
+            nextState.planNeedsPlanRowCount = (item.planNeedsPlanRowCount ?? 1) + 1;
+          }
           nextFocus = {
             itemId,
             row: insertIndex,
-            col: type === 'question' ? 1 : 2,
+            col: type === 'question' ? 1 : type === 'needsPlan' ? 2 : 2,
           };
           return nextState;
         }),
@@ -260,7 +494,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
   );
 
   const addQuestionPromptWithOutcomeRow = useCallback(
-    (itemId, questionRowIdx) => {
+    (itemId, _questionRowIdx) => {
       let nextFocus = null;
       setState((prev) => ({
         ...prev,
@@ -271,24 +505,28 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           const reasonCount = item.planReasonRowCount ?? 1;
           const outcomeCount = item.planOutcomeRowCount ?? 1;
           const questionCount = item.planOutcomeQuestionRowCount ?? 1;
+          const needsQuestionCount = item.planNeedsQuestionRowCount ?? 1;
+          const needsPlanCount = item.planNeedsPlanRowCount ?? 1;
+          ensurePlanPairingMetadata({
+            entries,
+            reasonRowCount: reasonCount,
+            outcomeRowCount: outcomeCount,
+            questionRowCount: questionCount,
+            needsQuestionRowCount: needsQuestionCount,
+            needsPlanRowCount: needsPlanCount,
+          });
           const reasonRowLimit = 2 + reasonCount;
           const outcomeHeadingRow = reasonRowLimit;
           const outcomePromptStart = outcomeHeadingRow + 1;
-          const outcomePromptEnd = outcomePromptStart + Math.max(outcomeCount - 1, 0);
-          const questionPromptStart = outcomePromptEnd + 1;
-          const questionPromptEnd = questionPromptStart + Math.max(questionCount - 1, 0);
-
-          const clampedQuestionRowIdx = Math.min(
-            Math.max(questionRowIdx, questionPromptStart),
-            questionPromptEnd
-          );
-          const questionRelativeIndex = Math.max(0, clampedQuestionRowIdx - questionPromptStart);
-          const questionInsertIndex = questionPromptStart + questionRelativeIndex + 1;
-          entries.splice(questionInsertIndex, 0, createBlankRow());
-
-          const outcomeRelativeIndex = Math.min(questionRelativeIndex + 1, outcomeCount);
-          const outcomeInsertIndex = outcomePromptStart + outcomeRelativeIndex;
+          const outcomeInsertIndex = outcomePromptStart + Math.max(outcomeCount, 0);
           entries.splice(outcomeInsertIndex, 0, createBlankRow());
+          const pairId = createRowPairId('outcome');
+          setRowPairId(entries[outcomeInsertIndex], pairId);
+
+          const questionPromptStart = outcomePromptStart + Math.max(outcomeCount + 1, 0);
+          const questionInsertIndex = questionPromptStart + Math.max(questionCount, 0);
+          entries.splice(questionInsertIndex, 0, createBlankRow());
+          setRowPairId(entries[questionInsertIndex], pairId);
 
           nextFocus = {
             itemId,
@@ -311,6 +549,60 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
     [setState]
   );
 
+  const addNeedsPromptWithPlanRow = useCallback(
+    (itemId, _needsRowIdx) => {
+      let nextFocus = null;
+      setState((prev) => ({
+        ...prev,
+        shortlist: prev.shortlist.map((item) => {
+          if (item.id !== itemId) return item;
+          const entries = clonePlanTableEntries(item.planTableEntries);
+          const createBlankRow = () => Array.from({ length: PLAN_TABLE_COLS }, () => '');
+          const reasonCount = item.planReasonRowCount ?? 1;
+          const outcomeCount = item.planOutcomeRowCount ?? 1;
+          const questionCount = item.planOutcomeQuestionRowCount ?? 1;
+          const needsQuestionCount = item.planNeedsQuestionRowCount ?? 1;
+          const needsPlanCount = item.planNeedsPlanRowCount ?? 1;
+          const reasonRowLimit = 2 + reasonCount;
+          const outcomeHeadingRow = reasonRowLimit;
+          const outcomePromptStart = outcomeHeadingRow + 1;
+          const outcomePromptEnd = outcomePromptStart + Math.max(outcomeCount - 1, 0);
+          const questionPromptStart = outcomePromptEnd + 1;
+          const questionPromptEnd = questionPromptStart + Math.max(questionCount - 1, 0);
+          const needsHeadingRow = questionPromptEnd + 1;
+          const needsQuestionStart = needsHeadingRow + 1;
+          const needsQuestionEnd = needsQuestionStart + Math.max(needsQuestionCount - 1, 0);
+          const needsPlanStart = needsQuestionEnd + 1;
+          const planInsertIndex = needsPlanStart + Math.max(needsPlanCount, 0);
+          entries.splice(planInsertIndex, 0, createBlankRow());
+          const pairId = createRowPairId('needs');
+          setRowPairId(entries[planInsertIndex], pairId);
+
+          const questionInsertIndex = needsQuestionStart + Math.max(needsQuestionCount, 0);
+          entries.splice(questionInsertIndex, 0, createBlankRow());
+          setRowPairId(entries[questionInsertIndex], pairId);
+
+          nextFocus = {
+            itemId,
+            row: questionInsertIndex,
+            col: 1,
+          };
+
+          return {
+            ...item,
+            planTableEntries: entries,
+            planNeedsQuestionRowCount: needsQuestionCount + 1,
+            planNeedsPlanRowCount: needsPlanCount + 1,
+          };
+        }),
+      }));
+      if (nextFocus) {
+        pendingFocusRequestRef.current = nextFocus;
+      }
+    },
+    [setState]
+  );
+
   const removePlanPromptRow = useCallback(
     (itemId, rowIdx, type = 'reason') => {
       setState((prev) => ({
@@ -321,32 +613,49 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           const reasonCount = item.planReasonRowCount ?? 1;
           const outcomeCount = item.planOutcomeRowCount ?? 1;
           const questionCount = item.planOutcomeQuestionRowCount ?? 1;
+          const needsQuestionCount = item.planNeedsQuestionRowCount ?? 1;
+          const needsPlanCount = item.planNeedsPlanRowCount ?? 1;
           const reasonStart = 2;
           const reasonEnd = reasonStart + reasonCount; // exclusive limit
           const outcomeStart = reasonEnd + 1;
           const outcomeEnd = outcomeStart + outcomeCount;
           const questionStart = outcomeEnd;
           const questionEnd = questionStart + questionCount;
+          const needsHeadingRow = questionEnd;
+          const needsQuestionStart = needsHeadingRow + 1;
+          const needsQuestionEnd = needsQuestionStart + needsQuestionCount;
+          const needsPlanStart = needsQuestionEnd;
+          const needsPlanEnd = needsPlanStart + needsPlanCount;
 
           const withinReason = rowIdx >= reasonStart && rowIdx < reasonEnd;
           const withinOutcome = rowIdx >= outcomeStart && rowIdx < outcomeEnd;
           const withinQuestion = rowIdx >= questionStart && rowIdx < questionEnd;
+          const withinNeedsQuestion = rowIdx >= needsQuestionStart && rowIdx < needsQuestionEnd;
+          const withinNeedsPlan = rowIdx >= needsPlanStart && rowIdx < needsPlanEnd;
 
           if (
             rowIdx < 2 ||
             rowIdx >= entries.length ||
             (type === 'reason' && !withinReason) ||
             (type === 'outcome' && !withinOutcome) ||
-            (type === 'question' && !withinQuestion)
+            (type === 'question' && !withinQuestion) ||
+            (type === 'needsQuestion' && !withinNeedsQuestion) ||
+            (type === 'needsPlan' && !withinNeedsPlan)
           ) {
             return item;
           }
           const blankRow = Array.from({ length: PLAN_TABLE_COLS }, () => '');
+          const existingPairId = getRowPairId(entries[rowIdx]);
           const onlyReasonRow = type === 'reason' && reasonCount <= 1;
           const onlyOutcomeRow = type === 'outcome' && outcomeCount <= 1;
           const onlyQuestionRow = type === 'question' && questionCount <= 1;
-          if (onlyReasonRow || onlyOutcomeRow || onlyQuestionRow) {
+          const onlyNeedsQuestionRow = type === 'needsQuestion' && needsQuestionCount <= 1;
+          const onlyNeedsPlanRow = type === 'needsPlan' && needsPlanCount <= 1;
+          if (onlyReasonRow || onlyOutcomeRow || onlyQuestionRow || onlyNeedsQuestionRow || onlyNeedsPlanRow) {
             entries[rowIdx] = blankRow;
+            if (existingPairId) {
+              setRowPairId(entries[rowIdx], existingPairId);
+            }
             return { ...item, planTableEntries: entries };
           }
           entries.splice(rowIdx, 1);
@@ -360,6 +669,12 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           if (type === 'question') {
             nextState.planOutcomeQuestionRowCount = Math.max((item.planOutcomeQuestionRowCount ?? 1) - 1, 1);
           }
+          if (type === 'needsQuestion') {
+            nextState.planNeedsQuestionRowCount = Math.max((item.planNeedsQuestionRowCount ?? 1) - 1, 1);
+          }
+          if (type === 'needsPlan') {
+            nextState.planNeedsPlanRowCount = Math.max((item.planNeedsPlanRowCount ?? 1) - 1, 1);
+          }
           return nextState;
         }),
       }));
@@ -368,12 +683,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
   );
 
   const handlePlanTableCellChange = (itemId, rowIdx, colIdx, value) => {
-    if (
-      rowIdx < 0 ||
-      rowIdx >= PLAN_TABLE_ROWS ||
-      colIdx < 0 ||
-      colIdx >= PLAN_TABLE_COLS
-    ) {
+    if (rowIdx < 0 || colIdx < 0 || colIdx >= PLAN_TABLE_COLS) {
       return;
     }
     setState((prev) => ({
@@ -438,17 +748,27 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                 const reasonRowCount = item.planReasonRowCount ?? 1;
                 const outcomeRowCount = item.planOutcomeRowCount ?? 1;
                 const questionRowCount = item.planOutcomeQuestionRowCount ?? 1;
+                const needsQuestionRowCount = item.planNeedsQuestionRowCount ?? 1;
+                const needsPlanRowCount = item.planNeedsPlanRowCount ?? 1;
                 const reasonRowLimit = 2 + reasonRowCount;
                 const outcomeHeadingRow = reasonRowLimit;
                 const outcomePromptStart = outcomeHeadingRow + 1;
                 const outcomePromptEnd = outcomePromptStart + Math.max(outcomeRowCount - 1, 0);
                 const questionPromptStart = outcomePromptEnd + 1;
                 const questionPromptEnd = questionPromptStart + Math.max(questionRowCount - 1, 0);
-                const buildRowEntry = (rowIdx) => ({
-                  rowIdx,
-                  rowValues:
-                    planEntries[rowIdx] ?? Array.from({ length: PLAN_TABLE_COLS }, () => ''),
-                });
+                const needsHeadingRow = questionPromptEnd + 1;
+                const needsQuestionStart = needsHeadingRow + 1;
+                const needsQuestionEnd = needsQuestionStart + Math.max(needsQuestionRowCount - 1, 0);
+                const needsPlanStart = needsQuestionEnd + 1;
+                const buildRowEntry = (rowIdx) => {
+                  const rowValues =
+                    planEntries[rowIdx] ?? Array.from({ length: PLAN_TABLE_COLS }, () => '');
+                  return {
+                    rowIdx,
+                    rowValues,
+                    pairId: getRowPairId(planEntries[rowIdx]),
+                  };
+                };
                 const renderQuestionPromptRow = (rowValues, rowIdx, promptIndex) => (
                   <tr key={`${item.id}-plan-question-row-${rowIdx}`}>
                     <td
@@ -632,6 +952,131 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                     })}
                   </tr>
                 );
+                const renderNeedsQuestionRow = (rowValues, rowIdx) => (
+                  <tr key={`${item.id}-needs-question-row-${rowIdx}`}>
+                    <td
+                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                      style={{ width: '120px', minWidth: '120px', backgroundColor: '#ead1dc' }}
+                    >
+                      <input
+                        type="text"
+                        value={rowValues[0] ?? ''}
+                        onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
+                        className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                        data-plan-item={item.id}
+                        data-plan-row={rowIdx}
+                        data-plan-col={0}
+                      />
+                    </td>
+                    <td
+                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                      colSpan={PLAN_TABLE_COLS - 2}
+                      style={{ backgroundColor: '#ead1dc' }}
+                    >
+                      <input
+                        type="text"
+                        value={rowValues[1] ?? ''}
+                        onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
+                        placeholder="What needs to be true in order for the outcomes to happen?"
+                        className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
+                        data-plan-item={item.id}
+                        data-plan-row={rowIdx}
+                        data-plan-col={1}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && !event.shiftKey) {
+                            event.preventDefault();
+                            addNeedsPromptWithPlanRow(item.id, rowIdx);
+                          }
+                        }}
+                      />
+                    </td>
+                    <td
+                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                      style={{
+                        width: '32px',
+                        minWidth: '32px',
+                        textAlign: 'center',
+                        backgroundColor: '#ead1dc',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        aria-label="Delete needs question row"
+                        className="text-[14px] font-semibold text-slate-800"
+                        onClick={() => removePlanPromptRow(item.id, rowIdx, 'needsQuestion')}
+                      >
+                        X
+                      </button>
+                    </td>
+                  </tr>
+                );
+                const renderNeedsPlanRow = (rowValues, rowIdx) => (
+                  <tr key={`${item.id}-needs-plan-row-${rowIdx}`}>
+                    {rowValues.map((cellValue, cellIdx) => {
+                      const style = { backgroundColor: '#f9f3f6' };
+                      if (cellIdx === 0 || cellIdx === 1) {
+                        style.width = '120px';
+                        style.minWidth = '120px';
+                      }
+                      if (cellIdx === PLAN_TABLE_COLS - 1) {
+                        style.width = '32px';
+                        style.minWidth = '32px';
+                        style.textAlign = 'center';
+                      }
+                      const isPromptCell = cellIdx === 2;
+                      const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
+                      return (
+                        <td
+                          key={`${item.id}-needs-plan-row-${rowIdx}-${cellIdx}`}
+                          className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                          style={style}
+                        >
+                          {isPromptCell ? (
+                            <input
+                              type="text"
+                              value={cellValue}
+                              onChange={(e) =>
+                                handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
+                              }
+                              placeholder="Plan"
+                              className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
+                              data-plan-item={item.id}
+                              data-plan-row={rowIdx}
+                              data-plan-col={2}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' && !event.shiftKey) {
+                                  event.preventDefault();
+                                  addPlanPromptRow(item.id, rowIdx, 'needsPlan');
+                                }
+                              }}
+                            />
+                          ) : isDeleteCell ? (
+                            <button
+                              type="button"
+                              aria-label="Delete plan row"
+                              className="text-[14px] font-semibold text-slate-800"
+                              onClick={() => removePlanPromptRow(item.id, rowIdx, 'needsPlan')}
+                            >
+                              X
+                            </button>
+                          ) : (
+                            <input
+                              type="text"
+                              value={cellValue}
+                              onChange={(e) =>
+                                handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
+                              }
+                              className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                              data-plan-item={item.id}
+                              data-plan-row={rowIdx}
+                              data-plan-col={cellIdx}
+                            />
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
                 const reasonPromptEntries = Array.from({ length: reasonRowCount }, (_, idx) =>
                   buildRowEntry(2 + idx)
                 );
@@ -643,13 +1088,27 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                   const rowIdx = questionPromptStart + idx;
                   return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
                 });
-                const pairCount = Math.min(questionEntries.length, outcomeEntries.length);
-                const questionOutcomePairs = questionEntries.slice(0, pairCount).map((question, idx) => ({
-                  question,
-                  outcome: outcomeEntries[idx],
-                }));
-                const leftoverOutcomeEntries = outcomeEntries.slice(pairCount);
-                const leftoverQuestionEntries = questionEntries.slice(pairCount);
+                const {
+                  pairs: questionOutcomeGroups,
+                  leftoverPrimary: leftoverQuestionEntries,
+                  leftoverSecondary: leftoverOutcomeEntries,
+                } = buildPairedRowGroups(questionEntries, outcomeEntries);
+                const needsQuestionEntries = Array.from(
+                  { length: Math.max(needsQuestionRowCount, 0) },
+                  (_, idx) => {
+                    const rowIdx = needsQuestionStart + idx;
+                    return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
+                  }
+                );
+                const needsPlanEntries = Array.from({ length: Math.max(needsPlanRowCount, 0) }, (_, idx) => {
+                  const rowIdx = needsPlanStart + idx;
+                  return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
+                });
+                const {
+                  pairs: needsQuestionPlanGroups,
+                  leftoverPrimary: leftoverNeedsQuestionEntries,
+                  leftoverSecondary: leftoverNeedsPlanEntries,
+                } = buildPairedRowGroups(needsQuestionEntries, needsPlanEntries);
                 return (
                   <div key={item.id}>
                     <div className="flex items-start gap-2">
@@ -831,16 +1290,18 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                   Outcomes
                                 </td>
                               </tr>
-                              {questionOutcomePairs.map(({ question, outcome }) => (
+                              {questionOutcomeGroups.map(({ primary, secondaryList }) => (
                                 <React.Fragment
-                                  key={`${item.id}-plan-pair-${question.rowIdx}-${outcome.rowIdx}`}
+                                  key={`${item.id}-plan-pair-${primary.pairId || primary.rowIdx}`}
                                 >
                                   {renderQuestionPromptRow(
-                                    question.rowValues,
-                                    question.rowIdx,
-                                    question.promptIndex
+                                    primary.rowValues,
+                                    primary.rowIdx,
+                                    primary.promptIndex
                                   )}
-                                  {renderOutcomePromptRow(outcome.rowValues, outcome.rowIdx)}
+                                  {secondaryList.map((outcome) =>
+                                    renderOutcomePromptRow(outcome.rowValues, outcome.rowIdx)
+                                  )}
                                 </React.Fragment>
                               ))}
                               {leftoverOutcomeEntries.map(({ rowIdx, rowValues }) =>
@@ -848,6 +1309,31 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                               )}
                               {leftoverQuestionEntries.map(({ rowIdx, rowValues, promptIndex }) =>
                                 renderQuestionPromptRow(rowValues, rowIdx, promptIndex)
+                              )}
+                              <tr key={`${item.id}-plan-row-${needsHeadingRow}`}>
+                                <td
+                                  colSpan={PLAN_TABLE_COLS}
+                                  className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold text-[14px]"
+                                  style={{ backgroundColor: '#d5a6bd', color: '#1f2937' }}
+                                >
+                                  &nbsp;&nbsp;&nbsp;Needs
+                                </td>
+                              </tr>
+                              {needsQuestionPlanGroups.map(({ primary, secondaryList }) => (
+                                <React.Fragment
+                                  key={`${item.id}-needs-pair-${primary.pairId || primary.rowIdx}`}
+                                >
+                                  {renderNeedsQuestionRow(primary.rowValues, primary.rowIdx)}
+                                  {secondaryList.map((plan) =>
+                                    renderNeedsPlanRow(plan.rowValues, plan.rowIdx)
+                                  )}
+                                </React.Fragment>
+                              ))}
+                              {leftoverNeedsQuestionEntries.map(({ rowIdx, rowValues }) =>
+                                renderNeedsQuestionRow(rowValues, rowIdx)
+                              )}
+                              {leftoverNeedsPlanEntries.map(({ rowIdx, rowValues }) =>
+                                renderNeedsPlanRow(rowValues, rowIdx)
                               )}
                             </tbody>
                           </table>
