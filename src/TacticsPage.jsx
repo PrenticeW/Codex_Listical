@@ -78,6 +78,22 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     }
     return hours;
   }, [startHour, startMinute]);
+  const trailingMinuteRows = useMemo(() => {
+    if (!startHour || !startMinute) return [];
+    const startMinutes = parseHour12ToMinutes(startHour);
+    const endMinutes = parseHour12ToMinutes(startMinute);
+    if (startMinutes == null || endMinutes == null) return [];
+    const startTarget = (startMinutes + MINUTES_IN_DAY - 15) % MINUTES_IN_DAY;
+    const rows = [];
+    let current = (endMinutes + 15) % MINUTES_IN_DAY;
+    for (let i = 0; i < 96; i += 1) {
+      rows.push(current);
+      if (current === startTarget) break;
+      current = (current + 15) % MINUTES_IN_DAY;
+      if (current === ((endMinutes + 15) % MINUTES_IN_DAY)) break;
+    }
+    return rows;
+  }, [startHour, startMinute]);
   const sequence = useMemo(() => {
     const startIndex = DAYS_OF_WEEK.indexOf(startDay);
     if (startIndex < 0) return [];
@@ -103,9 +119,9 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       />
       <div className="mt-20">
         <div className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm">
-          <table className="w-full border-collapse text-sm text-slate-800">
+          <table className="w-full border-collapse text-[11px] text-slate-800">
             <tbody>
-              <tr className="grid grid-cols-9">
+              <tr className="grid grid-cols-9 text-sm">
                 {Array.from({ length: 9 }, (_, index) => {
                   if (index === 0 || index === 8) {
                     return (
@@ -143,7 +159,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
               <tr className="grid grid-cols-9">
                 <td className="border border-[#e5e7eb] px-3 py-2">
                   <select
-                    className="w-full rounded border border-[#ced3d0] bg-white px-2 py-1 text-sm text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    className="w-full rounded border border-[#ced3d0] bg-white px-2 py-1 text-[11px] text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     value={startHour}
                     onChange={(event) => setStartHour(event.target.value)}
                   >
@@ -172,7 +188,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
               <tr className="grid grid-cols-9">
                 <td className="border border-[#e5e7eb] px-3 py-2">
                   <select
-                    className="w-full rounded border border-[#ced3d0] bg-white px-2 py-1 text-sm text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    className="w-full rounded border border-[#ced3d0] bg-white px-2 py-1 text-[11px] text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     value={startMinute}
                     onChange={(event) => setStartMinute(event.target.value)}
                     disabled={!startHour}
@@ -189,6 +205,19 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   <td key={`minute-row-${index}`} className="border border-[#e5e7eb] px-3 py-2"></td>
                 ))}
               </tr>
+              {trailingMinuteRows.map((minutesValue, rowIdx) => (
+                <tr key={`trailing-row-${rowIdx}`} className="grid grid-cols-9">
+                  <td className="border border-[#e5e7eb] px-3 py-2 font-semibold">
+                    {formatHour12(
+                      Math.floor(minutesValue / 60),
+                      (minutesValue % 60).toString().padStart(2, '0')
+                    )}
+                  </td>
+                  {Array.from({ length: 8 }, (_, index) => (
+                    <td key={`trailing-${rowIdx}-${index}`} className="border border-[#e5e7eb] px-3 py-2"></td>
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
