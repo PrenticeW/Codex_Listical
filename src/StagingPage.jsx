@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { SquarePlus } from 'lucide-react';
+import { SquarePlus, Pencil } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import NavigationBar from './NavigationBar';
 
@@ -65,7 +65,7 @@ const loadState = () => {
     const parsed = JSON.parse(raw);
     return {
       shortlist: Array.isArray(parsed?.shortlist) ? parsed.shortlist : [],
-      archived: Array.isArray(parsed?.archived) ? parsed.archived : [],
+      archived: [],
     };
   } catch (error) {
     console.error('Failed to read staging shortlist', error);
@@ -369,17 +369,6 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
       shortlist: prev.shortlist.filter((item) => item.id !== id),
       archived: prev.archived,
     }));
-  };
-
-  const handleArchive = (id) => {
-    setState((prev) => {
-      const target = prev.shortlist.find((item) => item.id === id);
-      if (!target) return prev;
-      return {
-        shortlist: prev.shortlist.filter((item) => item.id !== id),
-        archived: [...prev.archived, target],
-      };
-    });
   };
 
   const openPlanModal = (item) => {
@@ -1420,10 +1409,10 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                         className="relative grid rounded border border-[#ced3d0] pr-3 py-2 shadow-inner"
                         style={{
                           backgroundColor: item.color || '#f3f4f6',
-                          color: '#ffffff',
+                          color: item.color ? '#ffffff' : '#0f172a',
                           paddingLeft: '12px',
                           fontWeight: 600,
-                          gridTemplateColumns: '1fr auto 120px 32px',
+                          gridTemplateColumns: '1fr auto 140px 120px 32px',
                           alignItems: 'center',
                           gap: '12px',
                         }}
@@ -1431,40 +1420,32 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                         <div className="flex items-center gap-2 font-semibold">
                           {item.projectName || item.text}
                         </div>
-                        <div className="flex items-center gap-2 justify-end">
-                          <button
-                            type="button"
-                            className="rounded border border-[#334155] bg-white/70 px-2 py-1 text-[12px] font-semibold text-slate-800 hover:bg-white"
-                            onClick={() => handleRemove(item.id)}
-                          >
-                            Remove
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded border border-[#334155] bg-white/70 px-2 py-1 text-[12px] font-semibold text-slate-800 hover:bg-white"
-                            onClick={() => openPlanModal(item)}
-                          >
-                            {item.hasPlan ? 'Edit' : 'Make Plan'}
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded border border-[#334155] bg-white/70 px-2 py-1 text-[12px] font-semibold text-slate-800 hover:bg-white"
-                            onClick={() => handleArchive(item.id)}
-                          >
-                            Archive
-                          </button>
-                        </div>
+                        <div></div>
+                        <div style={{ width: '140px', minWidth: '140px' }}></div>
                         <div className="text-right text-[14px] font-semibold pr-2">
                           {projectPlanTimeTotal}
                         </div>
-                        <div style={{ width: '32px', minWidth: '32px' }}></div>
+                        <div
+                          style={{ width: '32px', minWidth: '32px' }}
+                          className="flex items-center justify-end"
+                        >
+                          <button
+                            type="button"
+                            className="rounded-full p-1 text-white hover:text-white/80 focus:outline-none"
+                            style={{ backgroundColor: 'rgba(255,255,255,0.6)', border: 'none' }}
+                            onClick={() => openPlanModal(item)}
+                            aria-label="Edit project"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        </div>
                         {planModal.open && planModal.itemId === item.id && (
                           <div
                             className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-[#ced3d0] bg-white p-4 shadow-xl z-[9999]"
-                            style={{ backgroundColor: '#ffffff' }}
+                            style={{ backgroundColor: '#ffffff', color: '#0f172a' }}
                           >
                             <div className="space-y-3">
-                              <div className="space-y-2">
+                              <div className="space-y-2" style={{ paddingTop: '15px' }}>
                                 <span className="text-sm font-semibold text-slate-700">Project colour</span>
                                 <div className="flex flex-wrap gap-2">
                                   {COLOR_PALETTE.map((color) => {
@@ -1488,12 +1469,12 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                   })}
                                 </div>
                               </div>
-                              <div className="space-y-1">
-                                <label className="text-sm font-semibold text-slate-700" htmlFor="plan-name">
+                              <div className="space-y-1" style={{ paddingTop: '15px' }}>
+                                <label className="text-sm font-semibold text-slate-700" htmlFor="plan-name-inline">
                                   Project Name
                                 </label>
                                 <input
-                                  id="plan-name"
+                                  id="plan-name-inline"
                                   type="text"
                                   value={planModal.projectName}
                                   onChange={(e) =>
@@ -1502,35 +1483,45 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                   className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                                 />
                               </div>
-                              <div className="space-y-1">
-                                <label className="text-sm font-semibold text-slate-700" htmlFor="plan-nickname">
+                              <div className="space-y-1" style={{ paddingTop: '15px' }}>
+                                <label className="text-sm font-semibold text-slate-700" htmlFor="plan-nickname-inline">
                                   Project Nickname
                                 </label>
                                 <input
-                                  id="plan-nickname"
+                                  id="plan-nickname-inline"
                                   type="text"
                                   value={planModal.projectNickname}
-                                  onChange={(e) =>
-                                    setPlanModal((prev) => ({ ...prev, projectNickname: e.target.value }))
-                                  }
+                                  onChange={(e) => {
+                                    const nextValue = (e.target.value || '').toUpperCase();
+                                    setPlanModal((prev) => ({ ...prev, projectNickname: nextValue }));
+                                  }}
                                   className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                                 />
                               </div>
-                              <div className="flex justify-end gap-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2" style={{ paddingTop: '15px' }}>
                                 <button
                                   type="button"
-                                  className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
-                                  onClick={handlePlanNext}
+                                  className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-100"
+                                  onClick={() => handleRemove(item.id)}
                                 >
-                                  Next
+                                  Delete Project
                                 </button>
-                                <button
-                                  type="button"
-                                  className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
-                                  onClick={handlePlanModalClose}
-                                >
-                                  Close
-                                </button>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+                                    onClick={handlePlanNext}
+                                  >
+                                    Next
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+                                    onClick={handlePlanModalClose}
+                                  >
+                                    Close
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -1707,7 +1698,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
             <div className="w-full max-w-md rounded-lg border border-[#ced3d0] bg-white p-5 shadow-xl">
               <h3 className="text-lg font-bold text-slate-900 mb-4">Plan Project</h3>
               <div className="space-y-4">
-                <div className="space-y-2">
+                <div className="space-y-2" style={{ paddingTop: '15px' }}>
                   <span className="text-sm font-semibold text-slate-700">Project colour</span>
                   <div className="flex flex-wrap gap-2">
                     {COLOR_PALETTE.map((color) => {
@@ -1725,7 +1716,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                     })}
                   </div>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1" style={{ paddingTop: '15px' }}>
                   <label className="text-sm font-semibold text-slate-700" htmlFor="plan-name">
                     Project Name
                   </label>
@@ -1737,7 +1728,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                     className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                   />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1" style={{ paddingTop: '15px' }}>
                   <label className="text-sm font-semibold text-slate-700" htmlFor="plan-nickname">
                     Project Nickname
                   </label>
@@ -1745,14 +1736,15 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                     id="plan-nickname"
                     type="text"
                     value={planModal.projectNickname}
-                    onChange={(e) =>
-                      setPlanModal((prev) => ({ ...prev, projectNickname: e.target.value }))
-                    }
+                    onChange={(e) => {
+                      const nextValue = (e.target.value || '').toUpperCase();
+                      setPlanModal((prev) => ({ ...prev, projectNickname: nextValue }));
+                    }}
                     className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                   />
                 </div>
               </div>
-              <div className="mt-5 flex justify-end">
+                <div className="mt-5 flex justify-end" style={{ paddingTop: '15px' }}>
                 <button
                   type="button"
                   className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
