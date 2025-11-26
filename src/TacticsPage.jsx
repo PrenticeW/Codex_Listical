@@ -1,4 +1,11 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import NavigationBar from './NavigationBar';
 
 const DAYS_OF_WEEK = [
@@ -122,6 +129,48 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const [activeSleepDay, setActiveSleepDay] = useState(null);
   const [resizingSleepDay, setResizingSleepDay] = useState(null);
   const [rowMetrics, setRowMetrics] = useState({});
+  const [dragPreview, setDragPreview] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const draggingSleepDayRef = useRef(null);
+  const dragAnchorOffsetRef = useRef(0);
+  const transparentDragImageRef = useRef(null);
+  const tableRef = useRef(null);
+  const [tableRect, setTableRect] = useState(null);
+  useEffect(() => {
+    const handleDragEnd = () => {
+      draggingSleepDayRef.current = null;
+      setDragPreview(null);
+      setIsDragging(false);
+      dragAnchorOffsetRef.current = 0;
+    };
+    window.addEventListener('dragend', handleDragEnd);
+    return () => {
+      window.removeEventListener('dragend', handleDragEnd);
+    };
+  }, []);
+  useEffect(() => {
+    if (transparentDragImageRef.current) return undefined;
+    const img = document.createElement('img');
+    img.src =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAuMBg3QZWZQAAAAASUVORK5CYII=';
+    Object.assign(img.style, {
+      position: 'absolute',
+      top: '-10px',
+      left: '-10px',
+      width: '1px',
+      height: '1px',
+      opacity: '0',
+      pointerEvents: 'none',
+    });
+    document.body.appendChild(img);
+    transparentDragImageRef.current = img;
+    return () => {
+      if (transparentDragImageRef.current) {
+        transparentDragImageRef.current.remove();
+        transparentDragImageRef.current = null;
+      }
+    };
+  }, []);
   useEffect(() => {
     setSleepBlocks((prev) => {
       const existing = new Map(prev.map((entry) => [entry.day, entry]));
@@ -176,30 +225,38 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     },
     [rowIndexMap, timelineRowIds]
   );
-  useEffect(() => {
-    if (!resizingSleepDay) return undefined;
-    const handleMouseMove = (event) => {
-      if (!rowMetrics || Object.keys(rowMetrics).length === 0) return;
-      const pointerY = event.clientY + (window.scrollY || 0);
-      const rowEntries = Object.entries(rowMetrics).sort(
-        (a, b) => a[1].top - b[1].top
-      );
-      if (!rowEntries.length) return;
-      let targetRowId = null;
-      for (let i = 0; i < rowEntries.length; i += 1) {
-        const [rowId, metrics] = rowEntries[i];
+  const findRowIdByPointerY = useCallback(
+    (pointerY) => {
+      if (!timelineRowIds.length) return null;
+      let target = null;
+      for (let i = 0; i < timelineRowIds.length; i += 1) {
+        const rowId = timelineRowIds[i];
+        const metrics = rowMetrics[rowId];
+        if (!metrics) continue;
         if (pointerY >= metrics.top && pointerY <= metrics.bottom) {
-          targetRowId = rowId;
+          target = rowId;
           break;
         }
       }
-      if (!targetRowId) {
-        if (pointerY < rowEntries[0][1].top) {
-          targetRowId = rowEntries[0][0];
-        } else if (pointerY > rowEntries[rowEntries.length - 1][1].bottom) {
-          targetRowId = rowEntries[rowEntries.length - 1][0];
+      if (!target) {
+        const firstMetrics = rowMetrics[timelineRowIds[0]];
+        const lastMetrics =
+          rowMetrics[timelineRowIds[timelineRowIds.length - 1]];
+        if (firstMetrics && pointerY < firstMetrics.top) {
+          target = timelineRowIds[0];
+        } else if (lastMetrics && pointerY > lastMetrics.bottom) {
+          target = timelineRowIds[timelineRowIds.length - 1];
         }
       }
+      return target;
+    },
+    [rowMetrics, timelineRowIds]
+  );
+  useEffect(() => {
+    if (!resizingSleepDay) return undefined;
+    const handleMouseMove = (event) => {
+      const pointerY = event.clientY + (window.scrollY || 0);
+      const targetRowId = findRowIdByPointerY(pointerY);
       if (!targetRowId) return;
       setSleepBlocks((prev) =>
         prev.map((entry) => {
@@ -222,7 +279,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [resizingSleepDay, rowMetrics, rowIndexMap, timelineRowIds]);
+  }, [findRowIdByPointerY, resizingSleepDay, rowIndexMap, timelineRowIds]);
   useLayoutEffect(() => {
     if (timelineRowIds.length === 0) return;
     const next = {};
@@ -248,52 +305,176 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     startMinute,
     incrementMinutes,
   ]);
+  useLayoutEffect(() => {
+    const updateTableRect = () => {
+      if (!tableRef.current) return;
+      const rect = tableRef.current.getBoundingClientRect();
+      setTableRect(rect);
+    };
+    updateTableRect();
+    window.addEventListener('resize', updateTableRect);
+    return () => {
+      window.removeEventListener('resize', updateTableRect);
+    };
+  }, [rowMetrics]);
+  const updateDragPreview = useCallback(
+    (dayLabel, rowId) => {
+      if (!dayLabel || !rowId) return;
+      const block = sleepBlockByDay.get(dayLabel);
+      if (!block) return;
+      const startIdx = rowIndexMap.get(block.startRowId);
+      const endIdx = rowIndexMap.get(block.endRowId);
+      const targetIdx = rowIndexMap.get(rowId);
+      if (startIdx == null || endIdx == null || targetIdx == null) return;
+      const span = Math.abs(endIdx - startIdx);
+      const nextEndIdx = Math.min(
+        targetIdx + span,
+        timelineRowIds.length - 1
+      );
+      setDragPreview({
+        day: dayLabel,
+        startRowId: rowId,
+        endRowId: timelineRowIds[nextEndIdx] ?? rowId,
+      });
+    },
+    [rowIndexMap, sleepBlockByDay, timelineRowIds]
+  );
+  useEffect(() => {
+    if (!isDragging) return undefined;
+    const handleDragOver = (event) => {
+      const pointerY = event.clientY + (window.scrollY || 0);
+      const adjustedY = pointerY - (dragAnchorOffsetRef.current || 0);
+      const targetRowId = findRowIdByPointerY(adjustedY);
+      if (targetRowId) {
+        updateDragPreview(draggingSleepDayRef.current, targetRowId);
+      }
+    };
+    window.addEventListener('dragover', handleDragOver);
+    return () => {
+      window.removeEventListener('dragover', handleDragOver);
+    };
+  }, [findRowIdByPointerY, isDragging, updateDragPreview]);
+  const getBlockHeight = useCallback(
+    (startRowId, endRowId) => {
+      if (!startRowId) return DEFAULT_SLEEP_CELL_HEIGHT;
+      const startIdx = rowIndexMap.get(startRowId);
+      const endIdx = rowIndexMap.get(endRowId ?? startRowId);
+      if (startIdx == null || endIdx == null) return DEFAULT_SLEEP_CELL_HEIGHT;
+      const minIdx = Math.min(startIdx, endIdx);
+      const maxIdx = Math.max(startIdx, endIdx);
+      return timelineRowIds
+        .slice(minIdx, maxIdx + 1)
+        .reduce(
+          (sum, rowKey) =>
+            sum + (rowMetrics[rowKey]?.height ?? DEFAULT_SLEEP_CELL_HEIGHT),
+          0
+        );
+    },
+    [rowIndexMap, rowMetrics, timelineRowIds]
+  );
   const handleSleepDragStart = useCallback(
     (event, dayLabel) => {
       if (!dayLabel) return;
       event.dataTransfer.setData(SLEEP_DRAG_TYPE, dayLabel);
       event.dataTransfer.effectAllowed = 'move';
+      if (event.dataTransfer.setDragImage) {
+        const dragImage = transparentDragImageRef.current;
+        if (dragImage) {
+          event.dataTransfer.setDragImage(dragImage, 0, 0);
+        }
+      }
+      draggingSleepDayRef.current = dayLabel;
+      const block = sleepBlockByDay.get(dayLabel);
+      if (block) {
+        const metrics = rowMetrics[block.startRowId];
+        const pointerY = event.clientY + (window.scrollY || 0);
+        if (metrics) {
+          const rowHeight = metrics.height || DEFAULT_SLEEP_CELL_HEIGHT;
+          const rawOffset = pointerY - metrics.top;
+          const normalizedOffset = ((rawOffset % rowHeight) + rowHeight) % rowHeight;
+          dragAnchorOffsetRef.current = normalizedOffset;
+        } else {
+          dragAnchorOffsetRef.current = 0;
+        }
+        setDragPreview({
+          day: dayLabel,
+          startRowId: block.startRowId,
+          endRowId: block.endRowId,
+        });
+      }
       setActiveSleepDay(dayLabel);
     },
-    [setActiveSleepDay]
+    [rowMetrics, setActiveSleepDay, sleepBlockByDay]
   );
-  const handleSleepDragOver = useCallback((event) => {
-    if (event.dataTransfer?.types?.includes(SLEEP_DRAG_TYPE)) {
-      event.preventDefault();
-      event.dataTransfer.dropEffect = 'move';
-    }
-  }, []);
-  const handleSleepDrop = useCallback(
+  const handleSleepDragOver = useCallback(
     (event) => {
-      const transferDay = event.dataTransfer?.getData(SLEEP_DRAG_TYPE);
-      if (!transferDay) return;
-      const targetDay = event.currentTarget.dataset.day;
-      const rowId = event.currentTarget.dataset.rowId;
-      if (!targetDay || !rowId || targetDay !== transferDay) {
+      if (!event.dataTransfer?.types?.includes(SLEEP_DRAG_TYPE)) {
         return;
       }
       event.preventDefault();
-      const targetRowIndex = rowIndexMap.get(rowId);
-      if (targetRowIndex == null) return;
-      setSleepBlocks((prev) =>
-        prev.map((entry) => {
-          if (entry.day !== transferDay) return entry;
-          const startIdx = rowIndexMap.get(entry.startRowId) ?? targetRowIndex;
-          const endIdx = rowIndexMap.get(entry.endRowId) ?? startIdx;
-          const span = Math.max(endIdx - startIdx, 0);
-          const nextEndIndex = Math.min(
-            targetRowIndex + span,
-            timelineRowIds.length - 1
-          );
-          return {
-            ...entry,
-            startRowId: rowId,
-            endRowId: timelineRowIds[nextEndIndex] ?? rowId,
-          };
-        })
-      );
+      event.dataTransfer.dropEffect = 'move';
+      const targetDay = event.currentTarget.dataset.day;
+      const rowId = event.currentTarget.dataset.rowId;
+      if (
+        !targetDay ||
+        !rowId ||
+        draggingSleepDayRef.current !== targetDay
+      ) {
+        return;
+      }
+      updateDragPreview(targetDay, rowId);
     },
-    [rowIndexMap, timelineRowIds, setSleepBlocks]
+    [updateDragPreview]
+  );
+  const applyDragPreview = useCallback(
+    (dayLabel) => {
+      if (!dragPreview || dragPreview.day !== dayLabel) return;
+      setSleepBlocks((prev) =>
+        prev.map((entry) =>
+          entry.day === dayLabel
+            ? {
+                ...entry,
+                startRowId: dragPreview.startRowId,
+                endRowId: dragPreview.endRowId,
+              }
+            : entry
+        )
+      );
+      setDragPreview(null);
+      draggingSleepDayRef.current = null;
+      setIsDragging(false);
+      dragAnchorOffsetRef.current = 0;
+    },
+    [dragPreview, setSleepBlocks]
+  );
+  const handleSleepDrop = useCallback(
+    (event) => {
+      const transferDay =
+        event.dataTransfer?.getData(SLEEP_DRAG_TYPE) ?? draggingSleepDayRef.current;
+      if (!transferDay) return;
+      event.preventDefault();
+      applyDragPreview(transferDay);
+    },
+    [applyDragPreview]
+  );
+  const handleTableDrop = useCallback(
+    (event) => {
+      if (!isDragging || !dragPreview) return;
+      event.preventDefault();
+      const transferDay =
+        event.dataTransfer?.getData(SLEEP_DRAG_TYPE) ?? draggingSleepDayRef.current;
+      if (!transferDay) return;
+      applyDragPreview(transferDay);
+    },
+    [applyDragPreview, dragPreview, isDragging]
+  );
+  const handleTableDragOver = useCallback(
+    (event) => {
+      if (isDragging) {
+        event.preventDefault();
+      }
+    },
+    [isDragging]
   );
   const handleResizeMouseDown = useCallback(
     (event, dayLabel) => {
@@ -311,17 +492,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       const block = sleepBlockByDay.get(dayLabel);
       if (!block || block.startRowId !== rowId) return null;
       const isActive = activeSleepDay === dayLabel;
-      const startIdx = rowIndexMap.get(block.startRowId) ?? 0;
-      const endIdx = rowIndexMap.get(block.endRowId) ?? startIdx;
-      const minIdx = Math.min(startIdx, endIdx);
-      const maxIdx = Math.max(startIdx, endIdx);
-      const blockHeight = timelineRowIds
-        .slice(minIdx, maxIdx + 1)
-        .reduce(
-          (sum, rowKey) =>
-            sum + (rowMetrics[rowKey]?.height ?? DEFAULT_SLEEP_CELL_HEIGHT),
-          0
-        );
+      const blockHeight = getBlockHeight(block.startRowId, block.endRowId);
       return (
         <div
           className="absolute left-0 top-0 flex w-full justify-center"
@@ -336,7 +507,8 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
               isActive ? 'outline outline-[2px]' : ''
             }`}
             style={{
-              pointerEvents: 'auto',
+              pointerEvents:
+                dragPreview && dragPreview.day === dayLabel ? 'none' : 'auto',
               ...(isActive ? { outlineColor: '#000', outlineOffset: 0 } : null),
             }}
             draggable={!resizingSleepDay}
@@ -382,11 +554,10 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       activeSleepDay,
       handleResizeMouseDown,
       handleSleepDragStart,
+      getBlockHeight,
       resizingSleepDay,
-      rowMetrics,
       rowIndexMap,
       sleepBlockByDay,
-      timelineRowIds,
     ]
   );
   const placeholderSleepValues = useMemo(() => Array(7).fill(0), []);
@@ -394,6 +565,37 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     () => placeholderSleepValues.reduce((sum, value) => sum + value, 0),
     [placeholderSleepValues]
   );
+  const renderDragOutline = useCallback(() => {
+    if (!dragPreview || !tableRect) return null;
+    const outlineHeight = getBlockHeight(
+      dragPreview.startRowId,
+      dragPreview.endRowId
+    );
+    const columnIndex = displayedWeekDays.indexOf(dragPreview.day);
+    if (columnIndex < 0) return null;
+    const baseRowIdx = rowIndexMap.get(dragPreview.startRowId);
+    if (baseRowIdx == null) return null;
+    const metrics = rowMetrics[dragPreview.startRowId];
+    if (!metrics) return null;
+    const columnWidth = (tableRect.width ?? 0) / 9;
+    const left = (columnIndex + 1) * columnWidth;
+    const top = metrics.top - tableRect.top;
+    return (
+      <div className="pointer-events-none absolute inset-0 z-20">
+        <div
+          className="absolute"
+          style={{
+            top,
+            left,
+            width: columnWidth,
+            height: outlineHeight,
+          }}
+        >
+          <div className="h-full w-full rounded border-2 border-dashed border-[#111827] bg-white/60" />
+        </div>
+      </div>
+    );
+  }, [displayedWeekDays, dragPreview, getBlockHeight, rowIndexMap, rowMetrics, tableRect]);
 
   return (
     <div className="min-h-screen bg-gray-100 text-slate-800 p-4">
@@ -408,7 +610,13 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         }
       />
       <div className="mt-20">
-        <div className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm">
+        <div
+          ref={tableRef}
+          className="relative rounded border border-[#ced3d0] bg-white p-4 shadow-sm"
+          onDrop={handleTableDrop}
+          onDragOver={handleTableDragOver}
+        >
+          {renderDragOutline()}
           <table className="w-full border-collapse text-[11px] text-slate-800">
             <tbody>
               <tr className="grid grid-cols-9 text-sm">
