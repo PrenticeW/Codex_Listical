@@ -18,10 +18,12 @@ const DAYS_OF_WEEK = [
   'Saturday',
 ];
 const MINUTES_IN_DAY = 24 * 60;
+const DAY_COLUMN_COUNT = 8;
 const SLEEP_DRAG_TYPE = 'application/x-sleep-day';
 const buildInitialSleepBlocks = (days) =>
-  days.map((day) => ({
-    day,
+  days.map((day, index) => ({
+    id: `sleep-${index}`,
+    columnIndex: index,
     startRowId: 'sleep-start',
     endRowId: 'sleep-start',
   }));
@@ -127,18 +129,39 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     buildInitialSleepBlocks(displayedWeekDays)
   );
   const [activeSleepDay, setActiveSleepDay] = useState(null);
-  const [resizingSleepDay, setResizingSleepDay] = useState(null);
+  const [resizingBlockId, setResizingBlockId] = useState(null);
   const [rowMetrics, setRowMetrics] = useState({});
   const [dragPreview, setDragPreview] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
-  const draggingSleepDayRef = useRef(null);
+  const [dayColumnRects, setDayColumnRects] = useState([]);
+  const getBlocksByColumnIndex = useCallback(
+    (columnIndex) => sleepBlocks.filter((block) => block.columnIndex === columnIndex),
+    [sleepBlocks]
+  );
+  console.log('Blocks in column 0:', getBlocksByColumnIndex(0));
+  console.log('Blocks in column 1:', getBlocksByColumnIndex(1));
+  const getBlockById = useCallback(
+    (blockId) => sleepBlocks.find((block) => block.id === blockId) ?? null,
+    [sleepBlocks]
+  );
+  const getPrimaryBlockForDay = useCallback(
+    (dayLabel) => {
+      const columnIndex = displayedWeekDays.indexOf(dayLabel);
+      if (columnIndex < 0) return null;
+      const columnBlocks = getBlocksByColumnIndex(columnIndex);
+      return columnBlocks[0] ?? null;
+    },
+    [displayedWeekDays, getBlocksByColumnIndex]
+  );
+  const draggingSleepChipIdRef = useRef(null);
   const dragAnchorOffsetRef = useRef(0);
   const transparentDragImageRef = useRef(null);
-  const tableRef = useRef(null);
+  const tableContainerRef = useRef(null);
+  const tableElementRef = useRef(null);
   const [tableRect, setTableRect] = useState(null);
   useEffect(() => {
     const handleDragEnd = () => {
-      draggingSleepDayRef.current = null;
+      draggingSleepChipIdRef.current = null;
       setDragPreview(null);
       setIsDragging(false);
       dragAnchorOffsetRef.current = 0;
@@ -173,23 +196,30 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   }, []);
   useEffect(() => {
     setSleepBlocks((prev) => {
-      const existing = new Map(prev.map((entry) => [entry.day, entry]));
-      return displayedWeekDays.map(
-        (day) =>
-          existing.get(day) ?? {
-            day,
-            startRowId: 'sleep-start',
-            endRowId: 'sleep-start',
-          }
-      );
+      const columnCount = displayedWeekDays.length;
+      const nextBlocks = prev.filter((entry) => entry.columnIndex < columnCount);
+      const trackedColumns = new Set(nextBlocks.map((entry) => entry.columnIndex));
+      for (let columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
+        if (trackedColumns.has(columnIndex)) continue;
+        nextBlocks.push({
+          id: `sleep-${columnIndex}`,
+          columnIndex,
+          startRowId: 'sleep-start',
+          endRowId: 'sleep-start',
+        });
+      }
+      return nextBlocks;
     });
     setActiveSleepDay((prev) =>
       prev && displayedWeekDays.includes(prev) ? prev : null
     );
-    setResizingSleepDay((prev) =>
-      prev && displayedWeekDays.includes(prev) ? prev : null
-    );
   }, [displayedWeekDays]);
+  useEffect(() => {
+    if (!resizingBlockId) return;
+    if (!sleepBlocks.some((block) => block.id === resizingBlockId)) {
+      setResizingBlockId(null);
+    }
+  }, [resizingBlockId, sleepBlocks]);
   const timelineRowIds = useMemo(() => {
     const rows = ['sleep-start'];
     hourRows.forEach((hourValue) => rows.push(`hour-${hourValue}`));
@@ -200,10 +230,6 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const rowIndexMap = useMemo(
     () => new Map(timelineRowIds.map((rowId, index) => [rowId, index])),
     [timelineRowIds]
-  );
-  const sleepBlockByDay = useMemo(
-    () => new Map(sleepBlocks.map((entry) => [entry.day, entry])),
-    [sleepBlocks]
   );
   const isRowWithinBlock = useCallback(
     (rowId, block) => {
@@ -253,33 +279,44 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     [rowMetrics, timelineRowIds]
   );
   useEffect(() => {
-    if (!resizingSleepDay) return undefined;
+    if (!resizingBlockId) return undefined;
+    if (!getBlockById(resizingBlockId)) {
+      setResizingBlockId(null);
+      return undefined;
+    }
     const handleMouseMove = (event) => {
       const pointerY = event.clientY + (window.scrollY || 0);
       const targetRowId = findRowIdByPointerY(pointerY);
       if (!targetRowId) return;
-      setSleepBlocks((prev) =>
-        prev.map((entry) => {
-          if (entry.day !== resizingSleepDay) return entry;
+      setSleepBlocks((prev) => {
+        let updated = false;
+        const next = prev.map((entry) => {
+          if (entry.id !== resizingBlockId) return entry;
           const startIdx = rowIndexMap.get(entry.startRowId);
           const targetIdx = rowIndexMap.get(targetRowId);
           if (startIdx == null || targetIdx == null) return entry;
+          updated = true;
           const clampedIdx = Math.max(targetIdx, startIdx);
           return {
             ...entry,
             endRowId: timelineRowIds[clampedIdx] ?? entry.startRowId,
           };
-        })
-      );
+        });
+        if (!updated) {
+          setResizingBlockId(null);
+          return prev;
+        }
+        return next;
+      });
     };
-    const handleMouseUp = () => setResizingSleepDay(null);
+    const handleMouseUp = () => setResizingBlockId(null);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [findRowIdByPointerY, resizingSleepDay, rowIndexMap, timelineRowIds]);
+  }, [findRowIdByPointerY, getBlockById, resizingBlockId, rowIndexMap, timelineRowIds]);
   useLayoutEffect(() => {
     if (timelineRowIds.length === 0) return;
     const next = {};
@@ -307,8 +344,8 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   ]);
   useLayoutEffect(() => {
     const updateTableRect = () => {
-      if (!tableRef.current) return;
-      const rect = tableRef.current.getBoundingClientRect();
+      if (!tableContainerRef.current) return;
+      const rect = tableContainerRef.current.getBoundingClientRect();
       setTableRect(rect);
     };
     updateTableRect();
@@ -317,10 +354,76 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       window.removeEventListener('resize', updateTableRect);
     };
   }, [rowMetrics]);
+  useLayoutEffect(() => {
+    if (!tableElementRef.current || typeof window === 'undefined') return undefined;
+    let animationFrame = null;
+    const measureColumns = () => {
+      if (!tableElementRef.current) return;
+      const scrollX = window.scrollX || 0;
+      const cells = tableElementRef.current.querySelectorAll('[data-day-column]');
+      if (!cells.length) return;
+      const rectMap = new Map();
+      cells.forEach((cell) => {
+        const attr = cell.getAttribute('data-day-column');
+        const index = attr == null ? NaN : parseInt(attr, 10);
+        if (Number.isNaN(index) || rectMap.has(index)) return;
+        const rect = cell.getBoundingClientRect();
+        rectMap.set(index, {
+          left: rect.left + scrollX,
+          right: rect.right + scrollX,
+          width: rect.width,
+        });
+      });
+      if (!rectMap.size) return;
+      const ordered = Array.from({ length: DAY_COLUMN_COUNT }, (_, idx) => rectMap.get(idx) ?? null);
+      setDayColumnRects(ordered);
+    };
+    const scheduleMeasure = () => {
+      if (animationFrame != null) return;
+      animationFrame = window.requestAnimationFrame(() => {
+        animationFrame = null;
+        measureColumns();
+      });
+    };
+    scheduleMeasure();
+    const tableBody = tableElementRef.current.querySelector('tbody');
+    const target = tableBody || tableElementRef.current;
+    const ResizeObserverClass = window.ResizeObserver;
+    const MutationObserverClass = window.MutationObserver;
+    let resizeObserver = null;
+    if (ResizeObserverClass && target) {
+      resizeObserver = new ResizeObserverClass(() => scheduleMeasure());
+      resizeObserver.observe(target);
+    } else {
+      window.addEventListener('resize', scheduleMeasure);
+    }
+    let mutationObserver = null;
+    const mutationTarget = tableBody || tableElementRef.current;
+    if (MutationObserverClass && mutationTarget) {
+      mutationObserver = new MutationObserverClass(() => scheduleMeasure());
+      mutationObserver.observe(mutationTarget, { childList: true, subtree: true });
+    }
+    return () => {
+      if (animationFrame != null) {
+        window.cancelAnimationFrame(animationFrame);
+        animationFrame = null;
+      }
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      } else {
+        window.removeEventListener('resize', scheduleMeasure);
+      }
+      if (mutationObserver) {
+        mutationObserver.disconnect();
+      }
+    };
+  }, [displayedWeekDays]);
   const updateDragPreview = useCallback(
-    (dayLabel, rowId) => {
-      if (!dayLabel || !rowId) return;
-      const block = sleepBlockByDay.get(dayLabel);
+    (targetColumnIndex, rowId) => {
+      if (targetColumnIndex == null || Number.isNaN(targetColumnIndex) || !rowId) return;
+      const sourceChipId = draggingSleepChipIdRef.current;
+      if (!sourceChipId) return;
+      const block = getBlockById(sourceChipId);
       if (!block) return;
       const startIdx = rowIndexMap.get(block.startRowId);
       const endIdx = rowIndexMap.get(block.endRowId);
@@ -332,28 +435,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         timelineRowIds.length - 1
       );
       setDragPreview({
-        day: dayLabel,
+        sourceChipId,
+        targetColumnIndex,
         startRowId: rowId,
         endRowId: timelineRowIds[nextEndIdx] ?? rowId,
       });
     },
-    [rowIndexMap, sleepBlockByDay, timelineRowIds]
+    [getBlockById, rowIndexMap, timelineRowIds]
   );
-  useEffect(() => {
-    if (!isDragging) return undefined;
-    const handleDragOver = (event) => {
-      const pointerY = event.clientY + (window.scrollY || 0);
-      const adjustedY = pointerY - (dragAnchorOffsetRef.current || 0);
-      const targetRowId = findRowIdByPointerY(adjustedY);
-      if (targetRowId) {
-        updateDragPreview(draggingSleepDayRef.current, targetRowId);
-      }
-    };
-    window.addEventListener('dragover', handleDragOver);
-    return () => {
-      window.removeEventListener('dragover', handleDragOver);
-    };
-  }, [findRowIdByPointerY, isDragging, updateDragPreview]);
   const getBlockHeight = useCallback(
     (startRowId, endRowId) => {
       if (!startRowId) return DEFAULT_SLEEP_CELL_HEIGHT;
@@ -373,9 +462,9 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     [rowIndexMap, rowMetrics, timelineRowIds]
   );
   const handleSleepDragStart = useCallback(
-    (event, dayLabel) => {
-      if (!dayLabel) return;
-      event.dataTransfer.setData(SLEEP_DRAG_TYPE, dayLabel);
+    (event, chipId) => {
+      if (!chipId) return;
+      event.dataTransfer.setData(SLEEP_DRAG_TYPE, chipId);
       event.dataTransfer.effectAllowed = 'move';
       if (event.dataTransfer.setDragImage) {
         const dragImage = transparentDragImageRef.current;
@@ -383,9 +472,12 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           event.dataTransfer.setDragImage(dragImage, 0, 0);
         }
       }
-      draggingSleepDayRef.current = dayLabel;
-      const block = sleepBlockByDay.get(dayLabel);
+      console.log('Dragging chip ID:', chipId);
+      draggingSleepChipIdRef.current = chipId;
+      const block = getBlockById(chipId);
       if (block) {
+        const dayLabel = displayedWeekDays[block.columnIndex];
+        if (!dayLabel) return;
         const metrics = rowMetrics[block.startRowId];
         const pointerY = event.clientY + (window.scrollY || 0);
         if (metrics) {
@@ -397,100 +489,120 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           dragAnchorOffsetRef.current = 0;
         }
         setDragPreview({
-          day: dayLabel,
+          sourceChipId: chipId,
+          targetColumnIndex: block.columnIndex,
           startRowId: block.startRowId,
           endRowId: block.endRowId,
         });
+        setActiveSleepDay(dayLabel);
       }
-      setActiveSleepDay(dayLabel);
+      setIsDragging(true);
     },
-    [rowMetrics, setActiveSleepDay, sleepBlockByDay]
+    [displayedWeekDays, getBlockById, rowMetrics, setActiveSleepDay]
   );
   const handleSleepDragOver = useCallback(
     (event) => {
-      if (!event.dataTransfer?.types?.includes(SLEEP_DRAG_TYPE)) {
-        return;
-      }
+      if (!isDragging) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = 'move';
-      const targetDay = event.currentTarget.dataset.day;
       const rowId = event.currentTarget.dataset.rowId;
-      if (
-        !targetDay ||
-        !rowId ||
-        draggingSleepDayRef.current !== targetDay
-      ) {
+      const columnIndexValue = event.currentTarget.dataset.dayColumn;
+      if (!rowId || columnIndexValue == null) {
         return;
       }
-      updateDragPreview(targetDay, rowId);
+      const columnIndex = parseInt(columnIndexValue, 10);
+      if (Number.isNaN(columnIndex)) return;
+      updateDragPreview(columnIndex, rowId);
     },
-    [updateDragPreview]
+    [isDragging, updateDragPreview]
   );
-  const applyDragPreview = useCallback(
-    (dayLabel) => {
-      if (!dragPreview || dragPreview.day !== dayLabel) return;
-      setSleepBlocks((prev) =>
-        prev.map((entry) =>
-          entry.day === dayLabel
-            ? {
-                ...entry,
-                startRowId: dragPreview.startRowId,
-                endRowId: dragPreview.endRowId,
-              }
-            : entry
-        )
-      );
-      setDragPreview(null);
-      draggingSleepDayRef.current = null;
-      setIsDragging(false);
-      dragAnchorOffsetRef.current = 0;
-    },
-    [dragPreview, setSleepBlocks]
-  );
+  const applyDragPreview = useCallback(() => {
+    if (!dragPreview) return;
+    const { sourceChipId, targetColumnIndex, startRowId, endRowId } = dragPreview;
+    if (targetColumnIndex == null || Number.isNaN(targetColumnIndex)) return;
+    const sourceBlock = getBlockById(sourceChipId);
+    if (!sourceBlock) return;
+    setSleepBlocks((prev) => {
+      const targetIndex = prev.findIndex((entry) => entry.id === sourceChipId);
+      if (targetIndex < 0) {
+        return prev;
+      }
+      const next = [...prev];
+      const target = next[targetIndex];
+      next[targetIndex] = {
+        ...target,
+        columnIndex: targetColumnIndex,
+        startRowId,
+        endRowId,
+      };
+      return next;
+    });
+    setActiveSleepDay(displayedWeekDays[targetColumnIndex] ?? null);
+    setDragPreview(null);
+    draggingSleepChipIdRef.current = null;
+    setIsDragging(false);
+    dragAnchorOffsetRef.current = 0;
+  }, [displayedWeekDays, dragPreview, getBlockById, setSleepBlocks, setActiveSleepDay]);
   const handleSleepDrop = useCallback(
     (event) => {
-      const transferDay =
-        event.dataTransfer?.getData(SLEEP_DRAG_TYPE) ?? draggingSleepDayRef.current;
-      if (!transferDay) return;
+      if (!isDragging) return;
       event.preventDefault();
-      applyDragPreview(transferDay);
+      applyDragPreview();
     },
-    [applyDragPreview]
+    [applyDragPreview, isDragging]
   );
   const handleTableDrop = useCallback(
     (event) => {
       if (!isDragging || !dragPreview) return;
       event.preventDefault();
-      const transferDay =
-        event.dataTransfer?.getData(SLEEP_DRAG_TYPE) ?? draggingSleepDayRef.current;
-      if (!transferDay) return;
-      applyDragPreview(transferDay);
+      applyDragPreview();
     },
     [applyDragPreview, dragPreview, isDragging]
   );
   const handleTableDragOver = useCallback(
     (event) => {
-      if (isDragging) {
-        event.preventDefault();
+      if (!isDragging) return;
+      event.preventDefault();
+      const pointerY = event.clientY + (window.scrollY || 0);
+      const adjustedY = pointerY - (dragAnchorOffsetRef.current || 0);
+      const targetRowId = findRowIdByPointerY(adjustedY);
+      if (!targetRowId) return;
+      const pointerX = event.clientX + (window.scrollX || 0);
+      let dayIndex = -1;
+      for (let idx = 0; idx < dayColumnRects.length; idx += 1) {
+        const rect = dayColumnRects[idx];
+        if (!rect) continue;
+        if (pointerX >= rect.left && pointerX <= rect.right) {
+          dayIndex = idx;
+          break;
+        }
       }
+      if (dayIndex < 0 || dayIndex >= displayedWeekDays.length) return;
+      updateDragPreview(dayIndex, targetRowId);
     },
-    [isDragging]
+    [dayColumnRects, displayedWeekDays, findRowIdByPointerY, isDragging, updateDragPreview]
   );
   const handleResizeMouseDown = useCallback(
-    (event, dayLabel) => {
+    (event, chipId) => {
       event.stopPropagation();
       event.preventDefault();
-      if (!dayLabel) return;
-      setActiveSleepDay(dayLabel);
-      setResizingSleepDay(dayLabel);
+      if (!chipId) return;
+      const block = getBlockById(chipId);
+      if (!block) return;
+      const dayLabel = displayedWeekDays[block.columnIndex];
+      if (dayLabel) {
+        setActiveSleepDay(dayLabel);
+      }
+      setResizingBlockId(chipId);
     },
-    [setActiveSleepDay, setResizingSleepDay]
+    [displayedWeekDays, getBlockById, setActiveSleepDay]
   );
   const renderSleepLabel = useCallback(
-    (dayLabel, rowId) => {
-      if (!dayLabel) return null;
-      const block = sleepBlockByDay.get(dayLabel);
+    (chipId, rowId) => {
+      if (!chipId) return null;
+      const block = getBlockById(chipId);
       if (!block || block.startRowId !== rowId) return null;
+      const dayLabel = displayedWeekDays[block.columnIndex] ?? '';
       const isActive = activeSleepDay === dayLabel;
       const blockHeight = getBlockHeight(block.startRowId, block.endRowId);
       return (
@@ -499,7 +611,6 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           style={{
             height: `${blockHeight}px`,
             zIndex: 10,
-            pointerEvents: 'none',
           }}
         >
           <div
@@ -508,16 +619,16 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
             }`}
             style={{
               pointerEvents:
-                dragPreview && dragPreview.day === dayLabel ? 'none' : 'auto',
+                dragPreview && dragPreview.sourceChipId === chipId ? 'none' : 'auto',
               ...(isActive ? { outlineColor: '#000', outlineOffset: 0 } : null),
             }}
-            draggable={!resizingSleepDay}
+            draggable={!resizingBlockId}
             onDragStart={(event) => {
-              if (resizingSleepDay) {
+              if (resizingBlockId) {
                 event.preventDefault();
                 return;
               }
-              handleSleepDragStart(event, dayLabel);
+              handleSleepDragStart(event, chipId);
             }}
             onClick={(event) => {
               event.stopPropagation();
@@ -529,7 +640,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
               <button
                 type="button"
                 aria-label="Stretch sleep block"
-                onMouseDown={(event) => handleResizeMouseDown(event, dayLabel)}
+                onMouseDown={(event) => handleResizeMouseDown(event, chipId)}
                 className="cursor-se-resize"
                 style={{
                   position: 'absolute',
@@ -553,11 +664,11 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     [
       activeSleepDay,
       handleResizeMouseDown,
-      handleSleepDragStart,
+      displayedWeekDays,
+      getBlockById,
       getBlockHeight,
-      resizingSleepDay,
-      rowIndexMap,
-      sleepBlockByDay,
+      resizingBlockId,
+      handleSleepDragStart,
     ]
   );
   const placeholderSleepValues = useMemo(() => Array(7).fill(0), []);
@@ -571,15 +682,20 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       dragPreview.startRowId,
       dragPreview.endRowId
     );
-    const columnIndex = displayedWeekDays.indexOf(dragPreview.day);
+    const columnIndex = dragPreview.targetColumnIndex ?? -1;
     if (columnIndex < 0) return null;
+    const columnRect = dayColumnRects[columnIndex];
+    if (!columnRect) return null;
     const baseRowIdx = rowIndexMap.get(dragPreview.startRowId);
     if (baseRowIdx == null) return null;
     const metrics = rowMetrics[dragPreview.startRowId];
     if (!metrics) return null;
-    const columnWidth = (tableRect.width ?? 0) / 9;
-    const left = (columnIndex + 1) * columnWidth;
-    const top = metrics.top - tableRect.top;
+    const scrollY = typeof window === 'undefined' ? 0 : window.scrollY || 0;
+    const scrollX = typeof window === 'undefined' ? 0 : window.scrollX || 0;
+    const containerTop = (tableRect.top ?? 0) + scrollY;
+    const containerLeft = (tableRect.left ?? 0) + scrollX;
+    const left = columnRect.left - containerLeft;
+    const top = metrics.top - containerTop;
     return (
       <div className="pointer-events-none absolute inset-0 z-20">
         <div
@@ -587,7 +703,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           style={{
             top,
             left,
-            width: columnWidth,
+            width: columnRect.width || 0,
             height: outlineHeight,
           }}
         >
@@ -595,7 +711,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         </div>
       </div>
     );
-  }, [displayedWeekDays, dragPreview, getBlockHeight, rowIndexMap, rowMetrics, tableRect]);
+  }, [dayColumnRects, displayedWeekDays, dragPreview, getBlockHeight, rowIndexMap, rowMetrics, tableRect]);
 
   return (
     <div className="min-h-screen bg-gray-100 text-slate-800 p-4">
@@ -611,13 +727,16 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       />
       <div className="mt-20">
         <div
-          ref={tableRef}
+          ref={tableContainerRef}
           className="relative rounded border border-[#ced3d0] bg-white p-4 shadow-sm"
           onDrop={handleTableDrop}
           onDragOver={handleTableDragOver}
         >
           {renderDragOutline()}
-          <table className="w-full border-collapse text-[11px] text-slate-800">
+          <table
+            ref={tableElementRef}
+            className="w-full border-collapse text-[11px] text-slate-800"
+          >
             <tbody>
               <tr className="grid grid-cols-9 text-sm">
                 {Array.from({ length: 9 }, (_, index) => {
@@ -672,24 +791,29 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     ))}
                   </select>
                 </td>
-                {Array.from({ length: 8 }, (_, index) => {
+                {Array.from({ length: DAY_COLUMN_COUNT }, (_, index) => {
                   const dayLabel = displayedWeekDays[index] ?? '';
                   const hasDay = Boolean(dayLabel);
-                  const block = hasDay ? sleepBlockByDay.get(dayLabel) : null;
+                  const columnBlocks = hasDay ? getBlocksByColumnIndex(index) : [];
                   const rowId = 'sleep-start';
-                  const isCovered = block ? isRowWithinBlock(rowId, block) : false;
-                  const showLabel = block && block.startRowId === rowId;
+                  const isCovered = columnBlocks.some((block) =>
+                    isRowWithinBlock(rowId, block)
+                  );
+                  const labels = columnBlocks
+                    .filter((block) => block.startRowId === rowId)
+                    .map((block) => renderSleepLabel(block.id, rowId));
                   return (
                     <td
                       key={`time-row-${index}`}
                       className="relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible"
                       style={isCovered ? { backgroundColor: '#d9d9d9' } : undefined}
                       data-row-id={rowId}
+                      data-day-column={index}
                       data-day={hasDay ? dayLabel : undefined}
                       onDragOver={hasDay ? handleSleepDragOver : undefined}
                       onDrop={hasDay ? handleSleepDrop : undefined}
                     >
-                      {showLabel ? renderSleepLabel(dayLabel, rowId) : null}
+                      {labels}
                     </td>
                   );
                 })}
@@ -702,24 +826,29 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   >
                     {formatHour12(hourValue)}
                   </td>
-                  {Array.from({ length: 8 }, (_, index) => {
+                  {Array.from({ length: DAY_COLUMN_COUNT }, (_, index) => {
                     const dayLabel = displayedWeekDays[index] ?? '';
                     const hasDay = Boolean(dayLabel);
                     const rowId = `hour-${hourValue}`;
-                    const block = hasDay ? sleepBlockByDay.get(dayLabel) : null;
-                    const isCovered = block ? isRowWithinBlock(rowId, block) : false;
-                    const showLabel = block && block.startRowId === rowId;
+                    const columnBlocks = hasDay ? getBlocksByColumnIndex(index) : [];
+                    const isCovered = columnBlocks.some((block) =>
+                      isRowWithinBlock(rowId, block)
+                    );
+                    const labels = columnBlocks
+                      .filter((block) => block.startRowId === rowId)
+                      .map((block) => renderSleepLabel(block.id, rowId));
                     return (
                       <td
                         key={`hour-${hourValue}-${index}`}
                         className="relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible"
                         style={isCovered ? { backgroundColor: '#d9d9d9' } : undefined}
                         data-row-id={rowId}
+                        data-day-column={index}
                         data-day={hasDay ? dayLabel : undefined}
                         onDragOver={hasDay ? handleSleepDragOver : undefined}
                         onDrop={hasDay ? handleSleepDrop : undefined}
                       >
-                        {showLabel ? renderSleepLabel(dayLabel, rowId) : null}
+                        {labels}
                       </td>
                     );
                   })}
@@ -744,24 +873,29 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     ))}
                   </select>
                 </td>
-                {Array.from({ length: 8 }, (_, index) => {
+                {Array.from({ length: DAY_COLUMN_COUNT }, (_, index) => {
                   const dayLabel = displayedWeekDays[index] ?? '';
                   const hasDay = Boolean(dayLabel);
                   const rowId = 'sleep-end';
-                  const block = hasDay ? sleepBlockByDay.get(dayLabel) : null;
-                  const isCovered = block ? isRowWithinBlock(rowId, block) : false;
-                  const showLabel = block && block.startRowId === rowId;
+                  const columnBlocks = hasDay ? getBlocksByColumnIndex(index) : [];
+                  const isCovered = columnBlocks.some((block) =>
+                    isRowWithinBlock(rowId, block)
+                  );
+                  const labels = columnBlocks
+                    .filter((block) => block.startRowId === rowId)
+                    .map((block) => renderSleepLabel(block.id, rowId));
                   return (
                     <td
                       key={`minute-row-${index}`}
                       className="relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible"
                       style={isCovered ? { backgroundColor: '#d9d9d9' } : undefined}
                       data-row-id={rowId}
+                      data-day-column={index}
                       data-day={hasDay ? dayLabel : undefined}
                       onDragOver={hasDay ? handleSleepDragOver : undefined}
                       onDrop={hasDay ? handleSleepDrop : undefined}
                     >
-                      {showLabel ? renderSleepLabel(dayLabel, rowId) : null}
+                      {labels}
                     </td>
                   );
                 })}
@@ -777,24 +911,29 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                       (minutesValue % 60).toString().padStart(2, '0')
                     )}
                   </td>
-                  {Array.from({ length: 8 }, (_, index) => {
+                  {Array.from({ length: DAY_COLUMN_COUNT }, (_, index) => {
                     const dayLabel = displayedWeekDays[index] ?? '';
                     const hasDay = Boolean(dayLabel);
                     const rowId = `trailing-${rowIdx}`;
-                    const block = hasDay ? sleepBlockByDay.get(dayLabel) : null;
-                    const isCovered = block ? isRowWithinBlock(rowId, block) : false;
-                    const showLabel = block && block.startRowId === rowId;
+                    const columnBlocks = hasDay ? getBlocksByColumnIndex(index) : [];
+                    const isCovered = columnBlocks.some((block) =>
+                      isRowWithinBlock(rowId, block)
+                    );
+                    const labels = columnBlocks
+                      .filter((block) => block.startRowId === rowId)
+                      .map((block) => renderSleepLabel(block.id, rowId));
                     return (
                       <td
                         key={`trailing-${rowIdx}-${index}`}
                         className="relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible"
                         style={isCovered ? { backgroundColor: '#d9d9d9' } : undefined}
                         data-row-id={rowId}
+                        data-day-column={index}
                         data-day={hasDay ? dayLabel : undefined}
                         onDragOver={hasDay ? handleSleepDragOver : undefined}
                         onDrop={hasDay ? handleSleepDrop : undefined}
                       >
-                        {showLabel ? renderSleepLabel(dayLabel, rowId) : null}
+                        {labels}
                       </td>
                     );
                   })}
