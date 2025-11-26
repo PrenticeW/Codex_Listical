@@ -53,6 +53,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     });
   }, [startHour]);
   const [startMinute, setStartMinute] = useState('');
+  const [incrementMinutes, setIncrementMinutes] = useState(15);
   const hourRows = useMemo(() => {
     if (!startHour || !startMinute) return [];
     const startMinutes = parseHour12ToMinutes(startHour);
@@ -83,17 +84,18 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     const startMinutes = parseHour12ToMinutes(startHour);
     const endMinutes = parseHour12ToMinutes(startMinute);
     if (startMinutes == null || endMinutes == null) return [];
-    const startTarget = (startMinutes + MINUTES_IN_DAY - 15) % MINUTES_IN_DAY;
+    const step = incrementMinutes;
+    const startTarget = (startMinutes + MINUTES_IN_DAY - step) % MINUTES_IN_DAY;
     const rows = [];
-    let current = (endMinutes + 15) % MINUTES_IN_DAY;
-    for (let i = 0; i < 96; i += 1) {
+    let current = (endMinutes + step) % MINUTES_IN_DAY;
+    for (let i = 0; i < Math.ceil(MINUTES_IN_DAY / step); i += 1) {
       rows.push(current);
       if (current === startTarget) break;
-      current = (current + 15) % MINUTES_IN_DAY;
-      if (current === ((endMinutes + 15) % MINUTES_IN_DAY)) break;
+      current = (current + step) % MINUTES_IN_DAY;
+      if (current === ((endMinutes + step) % MINUTES_IN_DAY)) break;
     }
     return rows;
-  }, [startHour, startMinute]);
+  }, [startHour, startMinute, incrementMinutes]);
   const sequence = useMemo(() => {
     const startIndex = DAYS_OF_WEEK.indexOf(startDay);
     if (startIndex < 0) return [];
@@ -102,6 +104,15 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       return DAYS_OF_WEEK[index];
     });
   }, [startDay]);
+  const displayedWeekDays = useMemo(() => {
+    if (!startDay) return DAYS_OF_WEEK.slice(0, 7);
+    return [startDay, ...sequence].slice(0, 7);
+  }, [startDay, sequence]);
+  const placeholderSleepValues = useMemo(() => Array(7).fill(0), []);
+  const placeholderSleepTotal = useMemo(
+    () => placeholderSleepValues.reduce((sum, value) => sum + value, 0),
+    [placeholderSleepValues]
+  );
 
   return (
     <div className="min-h-screen bg-gray-100 text-slate-800 p-4">
@@ -109,12 +120,10 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         currentPath={currentPath}
         onNavigate={onNavigate}
         listicalButton={
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded border border-[#ced3d0] bg-white px-3 py-2 font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6] hover:shadow-md"
-          >
-            <span>Listical</span>
-          </button>
+          <ListicalMenu
+            incrementMinutes={incrementMinutes}
+            onIncrementChange={setIncrementMinutes}
+          />
         }
       />
       <div className="mt-20">
@@ -172,7 +181,13 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   </select>
                 </td>
                 {Array.from({ length: 8 }, (_, index) => (
-                  <td key={`time-row-${index}`} className="border border-[#e5e7eb] px-3 py-2"></td>
+                  <td
+                    key={`time-row-${index}`}
+                    className="border border-[#e5e7eb] px-3 py-2 text-center"
+                    style={index < 7 ? { backgroundColor: '#d9d9d9', color: '#000', fontWeight: 700 } : undefined}
+                  >
+                    {index < 7 ? 'Sleep' : ''}
+                  </td>
                 ))}
               </tr>
               {hourRows.map((hourValue) => (
@@ -202,7 +217,11 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   </select>
                 </td>
                 {Array.from({ length: 8 }, (_, index) => (
-                  <td key={`minute-row-${index}`} className="border border-[#e5e7eb] px-3 py-2"></td>
+                  <td
+                    key={`minute-row-${index}`}
+                    className="border border-[#e5e7eb] px-3 py-2"
+                    style={index < 7 ? { backgroundColor: '#d9d9d9' } : undefined}
+                  ></td>
                 ))}
               </tr>
               {trailingMinuteRows.map((minutesValue, rowIdx) => (
@@ -218,10 +237,98 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   ))}
                 </tr>
               ))}
+              <tr>
+                <td
+                  colSpan={9}
+                  className="px-3 py-2 text-[11px]"
+                  style={{ height: '14px', backgroundColor: '#000' }}
+                ></td>
+              </tr>
+              <tr className="grid grid-cols-9 text-sm">
+                <td className="border border-[#e5e7eb]" style={{ backgroundColor: '#000' }}></td>
+                {displayedWeekDays.map((day, idx) => (
+                  <td
+                    key={`week-summary-${day}-${idx}`}
+                    className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
+                  >
+                    {day}
+                  </td>
+                ))}
+                <td
+                  className="border border-[#e5e7eb] text-center"
+                  style={{ backgroundColor: '#000', color: '#fff', fontWeight: 700 }}
+                >
+                  Total
+                </td>
+              </tr>
+              <tr className="grid grid-cols-9 text-sm">
+                <td
+                  className="border border-[#e5e7eb] px-3 py-2 text-center"
+                  style={{ backgroundColor: '#d9d9d9', color: '#000', fontWeight: 700 }}
+                >
+                  Sleep
+                </td>
+                {placeholderSleepValues.map((value, idx) => (
+                  <td
+                    key={`sleep-row-${idx}`}
+                    className="border border-[#e5e7eb] px-3 py-2 text-center"
+                    style={{ backgroundColor: '#efefef' }}
+                  >
+                    {value.toFixed(2)}
+                  </td>
+                ))}
+                <td
+                  className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
+                  style={{ backgroundColor: '#efefef' }}
+                >
+                  {placeholderSleepTotal.toFixed(2)}
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ListicalMenu({ incrementMinutes, onIncrementChange }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative inline-block">
+      <button
+        type="button"
+        className="inline-flex items-center gap-2 rounded border border-[#ced3d0] bg-white px-3 py-2 font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6] hover:shadow-md"
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span>Listical</span>
+      </button>
+      {open ? (
+        <div
+          className="absolute right-0 mt-3 w-80 rounded-lg border border-[#94a3b8] p-4 shadow-2xl z-50"
+          style={{ backgroundColor: 'rgba(255, 255, 255, 0.97)' }}
+        >
+          <div className="flex items-center" style={{ gap: '10px' }}>
+            <label
+              className="text-xs font-semibold text-slate-700 whitespace-nowrap"
+              htmlFor="increment-select"
+              style={{ backgroundColor: 'rgba(255, 255, 255, 0.97)' }}
+            >
+              Increment
+            </label>
+            <select
+              id="increment-select"
+              className="flex-1 rounded border border-[#ced3d0] bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              value={incrementMinutes}
+              onChange={(event) => onIncrementChange(parseInt(event.target.value, 10) || 15)}
+            >
+              <option value={15}>15 minutes</option>
+              <option value={30}>30 minutes</option>
+            </select>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
