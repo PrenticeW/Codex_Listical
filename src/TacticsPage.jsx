@@ -128,7 +128,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const [sleepBlocks, setSleepBlocks] = useState(() =>
     buildInitialSleepBlocks(displayedWeekDays)
   );
-  const [activeSleepDay, setActiveSleepDay] = useState(null);
+  const [selectedBlockId, setSelectedBlockId] = useState(null);
   const [resizingBlockId, setResizingBlockId] = useState(null);
   const [rowMetrics, setRowMetrics] = useState({});
   const [dragPreview, setDragPreview] = useState(null);
@@ -210,10 +210,12 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       }
       return nextBlocks;
     });
-    setActiveSleepDay((prev) =>
-      prev && displayedWeekDays.includes(prev) ? prev : null
-    );
   }, [displayedWeekDays]);
+  useEffect(() => {
+    setSelectedBlockId((prev) =>
+      prev && sleepBlocks.some((block) => block.id === prev) ? prev : null
+    );
+  }, [sleepBlocks]);
   useEffect(() => {
     if (!resizingBlockId) return;
     if (!sleepBlocks.some((block) => block.id === resizingBlockId)) {
@@ -476,8 +478,6 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       draggingSleepChipIdRef.current = chipId;
       const block = getBlockById(chipId);
       if (block) {
-        const dayLabel = displayedWeekDays[block.columnIndex];
-        if (!dayLabel) return;
         const metrics = rowMetrics[block.startRowId];
         const pointerY = event.clientY + (window.scrollY || 0);
         if (metrics) {
@@ -494,11 +494,11 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           startRowId: block.startRowId,
           endRowId: block.endRowId,
         });
-        setActiveSleepDay(dayLabel);
+        setSelectedBlockId(chipId);
       }
       setIsDragging(true);
     },
-    [displayedWeekDays, getBlockById, rowMetrics, setActiveSleepDay]
+    [getBlockById, rowMetrics]
   );
   const handleSleepDragOver = useCallback(
     (event) => {
@@ -537,12 +537,12 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       };
       return next;
     });
-    setActiveSleepDay(displayedWeekDays[targetColumnIndex] ?? null);
+    setSelectedBlockId(sourceChipId);
     setDragPreview(null);
     draggingSleepChipIdRef.current = null;
     setIsDragging(false);
     dragAnchorOffsetRef.current = 0;
-  }, [displayedWeekDays, dragPreview, getBlockById, setSleepBlocks, setActiveSleepDay]);
+  }, [dragPreview, getBlockById, setSleepBlocks]);
   const handleSleepDrop = useCallback(
     (event) => {
       if (!isDragging) return;
@@ -589,21 +589,19 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       if (!chipId) return;
       const block = getBlockById(chipId);
       if (!block) return;
-      const dayLabel = displayedWeekDays[block.columnIndex];
-      if (dayLabel) {
-        setActiveSleepDay(dayLabel);
-      }
+      setSelectedBlockId(chipId);
       setResizingBlockId(chipId);
     },
-    [displayedWeekDays, getBlockById, setActiveSleepDay]
+    [getBlockById]
   );
+  const highlightedBlockId =
+    dragPreview?.sourceChipId ?? resizingBlockId ?? selectedBlockId ?? null;
   const renderSleepLabel = useCallback(
     (chipId, rowId) => {
       if (!chipId) return null;
       const block = getBlockById(chipId);
       if (!block || block.startRowId !== rowId) return null;
-      const dayLabel = displayedWeekDays[block.columnIndex] ?? '';
-      const isActive = activeSleepDay === dayLabel;
+      const isActive = highlightedBlockId === block.id;
       const blockHeight = getBlockHeight(block.startRowId, block.endRowId);
       return (
         <div
@@ -632,7 +630,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
             }}
             onClick={(event) => {
               event.stopPropagation();
-              setActiveSleepDay((prev) => (prev === dayLabel ? null : dayLabel));
+              setSelectedBlockId((prev) => (prev === chipId ? null : chipId));
             }}
           >
             Sleep
@@ -662,13 +660,12 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       );
     },
     [
-      activeSleepDay,
-      handleResizeMouseDown,
-      displayedWeekDays,
       getBlockById,
       getBlockHeight,
-      resizingBlockId,
+      handleResizeMouseDown,
       handleSleepDragStart,
+      highlightedBlockId,
+      resizingBlockId,
     ]
   );
   const placeholderSleepValues = useMemo(() => Array(7).fill(0), []);
@@ -796,9 +793,13 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   const hasDay = Boolean(dayLabel);
                   const columnBlocks = hasDay ? getBlocksByColumnIndex(index) : [];
                   const rowId = 'sleep-start';
-                  const isCovered = columnBlocks.some((block) =>
-                    isRowWithinBlock(rowId, block)
-                  );
+                  const activeBlock =
+                    highlightedBlockId != null
+                      ? columnBlocks.find((block) => block.id === highlightedBlockId)
+                      : null;
+                  const isCovered = activeBlock
+                    ? isRowWithinBlock(rowId, activeBlock)
+                    : false;
                   const labels = columnBlocks
                     .filter((block) => block.startRowId === rowId)
                     .map((block) => renderSleepLabel(block.id, rowId));
@@ -831,9 +832,13 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     const hasDay = Boolean(dayLabel);
                     const rowId = `hour-${hourValue}`;
                     const columnBlocks = hasDay ? getBlocksByColumnIndex(index) : [];
-                    const isCovered = columnBlocks.some((block) =>
-                      isRowWithinBlock(rowId, block)
-                    );
+                    const activeBlock =
+                      highlightedBlockId != null
+                        ? columnBlocks.find((block) => block.id === highlightedBlockId)
+                        : null;
+                    const isCovered = activeBlock
+                      ? isRowWithinBlock(rowId, activeBlock)
+                      : false;
                     const labels = columnBlocks
                       .filter((block) => block.startRowId === rowId)
                       .map((block) => renderSleepLabel(block.id, rowId));
@@ -878,9 +883,13 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   const hasDay = Boolean(dayLabel);
                   const rowId = 'sleep-end';
                   const columnBlocks = hasDay ? getBlocksByColumnIndex(index) : [];
-                  const isCovered = columnBlocks.some((block) =>
-                    isRowWithinBlock(rowId, block)
-                  );
+                  const activeBlock =
+                    highlightedBlockId != null
+                      ? columnBlocks.find((block) => block.id === highlightedBlockId)
+                      : null;
+                  const isCovered = activeBlock
+                    ? isRowWithinBlock(rowId, activeBlock)
+                    : false;
                   const labels = columnBlocks
                     .filter((block) => block.startRowId === rowId)
                     .map((block) => renderSleepLabel(block.id, rowId));
@@ -916,9 +925,13 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     const hasDay = Boolean(dayLabel);
                     const rowId = `trailing-${rowIdx}`;
                     const columnBlocks = hasDay ? getBlocksByColumnIndex(index) : [];
-                    const isCovered = columnBlocks.some((block) =>
-                      isRowWithinBlock(rowId, block)
-                    );
+                    const activeBlock =
+                      highlightedBlockId != null
+                        ? columnBlocks.find((block) => block.id === highlightedBlockId)
+                        : null;
+                    const isCovered = activeBlock
+                      ? isRowWithinBlock(rowId, activeBlock)
+                      : false;
                     const labels = columnBlocks
                       .filter((block) => block.startRowId === rowId)
                       .map((block) => renderSleepLabel(block.id, rowId));
