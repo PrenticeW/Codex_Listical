@@ -717,6 +717,18 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     },
     [displayedWeekDays]
   );
+
+  const cellMenuBlockId = useMemo(() => {
+    const target = cellMenu ?? selectedCell;
+    if (!target) return null;
+    const { columnIndex, rowId } = target;
+    if (columnIndex == null || !rowId) return null;
+    const columnBlocks = getProjectChipsByColumnIndex(columnIndex);
+    const block = columnBlocks.find((entry) => entry.startRowId === rowId);
+    return block?.id ?? null;
+  }, [cellMenu, selectedCell, getProjectChipsByColumnIndex]);
+
+  const removableBlockId = cellMenuBlockId ?? selectedBlockId;
   const handleProjectSelection = useCallback(
     (projectId) => {
       if (!projectId) return;
@@ -762,6 +774,12 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     },
     [cellMenu, closeCellMenu, selectedCell, setProjectChips, setSelectedBlockId]
   );
+  const handleRemoveSelectedChip = useCallback(() => {
+    if (!removableBlockId) return;
+    setProjectChips((prev) => prev.filter((block) => block.id !== removableBlockId));
+    setSelectedBlockId((prev) => (prev === removableBlockId ? null : prev));
+    closeCellMenu();
+  }, [closeCellMenu, removableBlockId, setProjectChips]);
   useEffect(() => {
     if (!cellMenu) return undefined;
     const handlePointerDown = (event) => {
@@ -1158,9 +1176,29 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
             <span>BUFFER</span>
           </button>
         </div>
+        <div className="border-t border-[#e5e7eb] px-3 py-2">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold text-slate-800 hover:bg-[#f2fdf6] disabled:text-slate-400 disabled:hover:bg-transparent"
+            onClick={handleRemoveSelectedChip}
+            disabled={!removableBlockId}
+          >
+            <span
+              className="inline-flex h-3 w-3 flex-shrink-0 rounded-full"
+              style={{ backgroundColor: removableBlockId ? '#ef4444' : '#d1d5db' }}
+            ></span>
+            <span>Remove chip</span>
+          </button>
+        </div>
       </div>
     );
-  }, [cellMenu, handleProjectSelection, highlightedProjects]);
+  }, [
+    cellMenu,
+    handleProjectSelection,
+    highlightedProjects,
+    handleRemoveSelectedChip,
+    removableBlockId,
+  ]);
 
   return (
     <div className="min-h-screen bg-gray-100 text-slate-800 p-4">
