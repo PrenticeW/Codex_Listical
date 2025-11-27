@@ -691,17 +691,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const closeCellMenu = useCallback(() => {
     setCellMenu(null);
   }, []);
-  const handleCellClick = useCallback(
+  const handleCellContextMenu = useCallback(
     (event, columnIndex, rowId) => {
+      event.preventDefault();
+      event.stopPropagation();
       if (columnIndex == null || rowId == null) return;
       const hasDay = Boolean(displayedWeekDays[columnIndex]);
       if (!hasDay) return;
-      const alreadySelected = isCellSelected(columnIndex, rowId);
-      toggleCellSelection(columnIndex, rowId);
-      if (alreadySelected) {
-        closeCellMenu();
-        return;
-      }
+      setSelectedCell({ columnIndex, rowId });
       const cellRect = event.currentTarget.getBoundingClientRect();
       const scrollY = typeof window === 'undefined' ? 0 : window.scrollY || 0;
       const scrollX = typeof window === 'undefined' ? 0 : window.scrollX || 0;
@@ -718,7 +715,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         },
       });
     },
-    [closeCellMenu, displayedWeekDays, isCellSelected, toggleCellSelection]
+    [displayedWeekDays]
   );
   const handleProjectSelection = useCallback(
     (projectId) => {
@@ -1162,7 +1159,10 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                       data-day={hasDay ? dayLabel : undefined}
                       onDragOver={hasDay ? handleSleepDragOver : undefined}
                       onDrop={hasDay ? handleSleepDrop : undefined}
-                      onClick={hasDay ? (event) => handleCellClick(event, index, rowId) : undefined}
+                      onClick={hasDay ? () => toggleCellSelection(index, rowId) : undefined}
+                      onContextMenu={
+                        hasDay ? (event) => handleCellContextMenu(event, index, rowId) : undefined
+                      }
                     >
                       {labels}
                     </td>
@@ -1213,7 +1213,10 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                       data-day={hasDay ? dayLabel : undefined}
                       onDragOver={hasDay ? handleSleepDragOver : undefined}
                       onDrop={hasDay ? handleSleepDrop : undefined}
-                      onClick={hasDay ? (event) => handleCellClick(event, index, rowId) : undefined}
+                      onClick={hasDay ? () => toggleCellSelection(index, rowId) : undefined}
+                      onContextMenu={
+                        hasDay ? (event) => handleCellContextMenu(event, index, rowId) : undefined
+                      }
                     >
                       {labels}
                     </td>
@@ -1276,7 +1279,10 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                       data-day={hasDay ? dayLabel : undefined}
                       onDragOver={hasDay ? handleSleepDragOver : undefined}
                       onDrop={hasDay ? handleSleepDrop : undefined}
-                      onClick={hasDay ? (event) => handleCellClick(event, index, rowId) : undefined}
+                      onClick={hasDay ? () => toggleCellSelection(index, rowId) : undefined}
+                      onContextMenu={
+                        hasDay ? (event) => handleCellContextMenu(event, index, rowId) : undefined
+                      }
                     >
                       {labels}
                     </td>
@@ -1330,7 +1336,10 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                       data-day={hasDay ? dayLabel : undefined}
                       onDragOver={hasDay ? handleSleepDragOver : undefined}
                       onDrop={hasDay ? handleSleepDrop : undefined}
-                      onClick={hasDay ? (event) => handleCellClick(event, index, rowId) : undefined}
+                      onClick={hasDay ? () => toggleCellSelection(index, rowId) : undefined}
+                      onContextMenu={
+                        hasDay ? (event) => handleCellContextMenu(event, index, rowId) : undefined
+                      }
                     >
                       {labels}
                     </td>
