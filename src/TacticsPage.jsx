@@ -114,7 +114,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     });
   }, [startHour]);
   const [startMinute, setStartMinute] = useState('');
-  const [incrementMinutes, setIncrementMinutes] = useState(30);
+  const [incrementMinutes, setIncrementMinutes] = useState(60);
   const hourRows = useMemo(() => {
     if (!startHour || !startMinute) return [];
     const startMinutes = parseHour12ToMinutes(startHour);
@@ -1498,10 +1498,11 @@ function ListicalMenu({ incrementMinutes, onIncrementChange }) {
               id="increment-select"
               className="flex-1 rounded border border-[#ced3d0] bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
               value={incrementMinutes}
-              onChange={(event) => onIncrementChange(parseInt(event.target.value, 10) || 30)}
+              onChange={(event) => onIncrementChange(parseInt(event.target.value, 10) || 60)}
             >
               <option value={15}>15 minutes</option>
               <option value={30}>30 minutes</option>
+              <option value={60}>1 hour</option>
             </select>
           </div>
         </div>
