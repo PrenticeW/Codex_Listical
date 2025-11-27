@@ -96,25 +96,32 @@ const formatDuration = (minutes) => {
 
 export default function TacticsPage({ currentPath = '/tactics', onNavigate = () => {} }) {
   const [startDay, setStartDay] = useState(DAYS_OF_WEEK[0]);
-  const hourOptions = useMemo(
-    () => Array.from({ length: 24 }, (_, hour) => formatHour12(hour)),
-    []
-  );
+  const [incrementMinutes, setIncrementMinutes] = useState(60);
+  const hourOptions = useMemo(() => {
+    const step = Math.max(1, incrementMinutes);
+    const totalSteps = Math.ceil(MINUTES_IN_DAY / step);
+    return Array.from({ length: totalSteps }, (_, index) => {
+      const totalMinutes = (index * step) % MINUTES_IN_DAY;
+      const hour24 = Math.floor(totalMinutes / 60);
+      const minutes = (totalMinutes % 60).toString().padStart(2, '0');
+      return formatHour12(hour24, minutes);
+    });
+  }, [incrementMinutes]);
   const [startHour, setStartHour] = useState('');
   const minuteOptions = useMemo(() => {
     if (!startHour) return [];
     const baseMinutes = parseHour12ToMinutes(startHour);
     if (baseMinutes == null) return [];
-    const increments = 96;
+    const step = Math.max(1, incrementMinutes);
+    const increments = Math.ceil(MINUTES_IN_DAY / step);
     return Array.from({ length: increments }, (_, index) => {
-      const totalMinutes = (baseMinutes + index * 15) % MINUTES_IN_DAY;
+      const totalMinutes = (baseMinutes + index * step) % MINUTES_IN_DAY;
       const hour24 = Math.floor(totalMinutes / 60);
       const minutes = (totalMinutes % 60).toString().padStart(2, '0');
       return formatHour12(hour24, minutes);
     });
-  }, [startHour]);
+  }, [startHour, incrementMinutes]);
   const [startMinute, setStartMinute] = useState('');
-  const [incrementMinutes, setIncrementMinutes] = useState(60);
   const hourRows = useMemo(() => {
     if (!startHour || !startMinute) return [];
     const startMinutes = parseHour12ToMinutes(startHour);
@@ -1619,11 +1626,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                 className={`grid grid-cols-9 text-sm cursor-pointer ${
                   selectedSummaryRowId === 'rest-summary' ? 'outline outline-[2px]' : ''
                 }`}
-                style={
-                  selectedSummaryRowId === 'rest-summary'
+                style={{
+                  backgroundColor: '#666666',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  ...(selectedSummaryRowId === 'rest-summary'
                     ? { outlineColor: '#000', outlineOffset: 0 }
-                    : undefined
-                }
+                    : null),
+                }}
                 tabIndex={0}
                 onClick={() => toggleSummaryRowSelection('rest-summary')}
                 onKeyDown={(event) => {
@@ -1643,14 +1653,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   <td
                     key={`rest-row-${day}-${idx}`}
                     className="border border-[#e5e7eb] px-3 py-2 text-center"
-                    style={{ backgroundColor: '#efefef' }}
+                    style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700 }}
                   >
                     {formatDuration(restColumnTotals[idx] ?? 0)}
                   </td>
                 ))}
                 <td
                   className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
-                  style={{ backgroundColor: '#efefef' }}
+                  style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700 }}
                 >
                   {formatDuration(totalRestMinutes)}
                 </td>
