@@ -195,8 +195,13 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const [editingChipIsCustom, setEditingChipIsCustom] = useState(false);
   const [editingCustomProjectId, setEditingCustomProjectId] = useState(null);
   const editingInputRef = useRef(null);
+  const [colorEditorProjectId, setColorEditorProjectId] = useState(null);
+  const [colorEditorColor, setColorEditorColor] = useState('#c9daf8');
+  const colorInputRef = useRef(null);
   const [customProjects, setCustomProjects] = useState([]);
   const customSequenceRef = useRef(0);
+  const [editingCustomColorId, setEditingCustomColorId] = useState(null);
+  const [editingCustomColorValue, setEditingCustomColorValue] = useState('#c9daf8');
   const getProjectChipsByColumnIndex = useCallback(
     (columnIndex) => projectChips.filter((block) => block.columnIndex === columnIndex),
     [projectChips]
@@ -229,6 +234,11 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       editingInputRef.current.select();
     }
   }, [editingChipId]);
+  useEffect(() => {
+    if (colorEditorProjectId && colorInputRef.current) {
+      colorInputRef.current.focus();
+    }
+  }, [colorEditorProjectId]);
   useEffect(() => {
     const handleDragEnd = () => {
       draggingSleepChipIdRef.current = null;
@@ -808,6 +818,38 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     setCustomProjects((prev) => [...prev, customProject]);
     handleProjectSelection(customId);
   }, [handleProjectSelection]);
+  const handleDeleteCustomProject = useCallback(
+    (projectId) => {
+      if (!projectId) return;
+      setCustomProjects((prev) => prev.filter((project) => project.id !== projectId));
+      setProjectChips((prev) => prev.filter((block) => block.projectId !== projectId));
+      if (colorEditorProjectId === projectId) {
+        setColorEditorProjectId(null);
+      }
+      closeCellMenu();
+    },
+    [colorEditorProjectId, closeCellMenu]
+  );
+  const finishColorEdit = useCallback(() => {
+    setColorEditorProjectId(null);
+  }, []);
+  const startColorEdit = useCallback((projectId, currentColor = '#c9daf8') => {
+    setColorEditorProjectId(projectId);
+    setColorEditorColor(currentColor || '#c9daf8');
+  }, []);
+  const handleColorChange = useCallback(
+    (value) => {
+      if (!colorEditorProjectId) return;
+      setCustomProjects((prev) =>
+        prev.map((project) =>
+          project.id === colorEditorProjectId ? { ...project, color: value } : project
+        )
+      );
+      setColorEditorColor(value);
+      finishColorEdit();
+    },
+    [colorEditorProjectId, finishColorEdit]
+  );
   useEffect(() => {
     if (!cellMenu) return undefined;
     const handlePointerDown = (event) => {
@@ -1113,11 +1155,11 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
               event.stopPropagation();
               setSelectedBlockId((prev) => (prev === chipId ? null : chipId));
             }}
-      onDoubleClick={(event) => {
-        event.stopPropagation();
-        handleStartLabelEdit(chipId);
-      }}
-    >
+            onDoubleClick={(event) => {
+              event.stopPropagation();
+              handleStartLabelEdit(chipId);
+            }}
+          >
             {isEditing ? (
               <input
                 ref={editingInputRef}
@@ -1251,23 +1293,75 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         </div>
         {dropdownProjects.length ? (
           <ul className="max-h-60 overflow-auto py-1 list-none">
-            {dropdownProjects.map((project) => (
-              <li key={project.id}>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold text-slate-800 hover:bg-[#f2fdf6]"
-                  onClick={() => handleProjectSelection(project.id)}
-                >
-                  <span
-                    className="inline-flex h-3 w-3 flex-shrink-0 rounded-full"
-                    style={{ backgroundColor: project.color || '#0f172a' }}
-                  ></span>
-                  <span>
-                    {project.id.startsWith('custom-') ? project.label.toUpperCase() : project.label}
-                  </span>
-                </button>
-              </li>
-            ))}
+                {dropdownProjects.map((project) => {
+                  const isCustom = project.id.startsWith('custom-');
+                  return (
+                    <li key={project.id}>
+                      <div className="flex items-center justify-between px-3 py-2">
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 text-left text-[11px] font-semibold text-slate-800 hover:bg-[#f2fdf6]"
+                          onClick={() => handleProjectSelection(project.id)}
+                        >
+                          <span
+                            className="inline-flex h-3 w-3 flex-shrink-0 rounded-full"
+                            style={{ backgroundColor: project.color || '#0f172a' }}
+                          ></span>
+                          <span>
+                            {isCustom ? project.label.toUpperCase() : project.label}
+                          </span>
+                        </button>
+                        {isCustom ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              className="flex items-center gap-1 rounded border border-[#cbd5f5] px-2 py-1 text-[9px] font-semibold text-slate-700 hover:bg-[#eef2ff]"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                startColorEdit(project.id, project.color);
+                              }}
+                            >
+                              <span
+                                className="inline-flex h-3 w-3 flex-shrink-0 rounded-full border border-[#94a3b8]"
+                                style={{ backgroundColor: project.color || '#c9daf8' }}
+                              ></span>
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="flex items-center gap-1 rounded border border-[#fecaca] px-2 py-1 text-[9px] font-semibold text-[#b91c1c] hover:bg-[#fee2e2]"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleDeleteCustomProject(project.id);
+                              }}
+                            >
+                              <span
+                                className="inline-flex h-3 w-3 flex-shrink-0 rounded-full border border-[#b91c1c]"
+                                style={{ backgroundColor: '#fee2e2' }}
+                              ></span>
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        ) : null}
+                  </div>
+                  {colorEditorProjectId === project.id ? (
+                    <div className="px-3 py-1">
+                      <input
+                        ref={(node) => {
+                          colorInputRef.current = node;
+                        }}
+                        type="color"
+                        className="h-8 w-full cursor-pointer rounded border border-[#94a3b8] p-0"
+                        value={colorEditorColor}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => handleColorChange(event.target.value)}
+                        onBlur={finishColorEdit}
+                      />
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <div className="px-3 py-2 text-[11px] text-slate-500">No staged projects found</div>
@@ -1332,8 +1426,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     handleProjectSelection,
     dropdownProjects,
     handleCreateCustomProject,
+    handleDeleteCustomProject,
     handleRemoveSelectedChip,
     removableBlockId,
+    startColorEdit,
+    colorEditorProjectId,
+    colorEditorColor,
+    handleColorChange,
+    finishColorEdit,
   ]);
 
   return (
