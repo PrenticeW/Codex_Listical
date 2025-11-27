@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SquarePlus, Pencil } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import NavigationBar from './NavigationBar';
+import { loadStagingState, saveStagingState } from './stagingStorage';
 
-const STORAGE_KEY = 'staging-shortlist';
 const PLAN_TABLE_ROWS = 15;
 const PLAN_TABLE_COLS = 6;
 const PLAN_PAIR_META_KEY = '__pairId';
@@ -55,31 +55,6 @@ const parseTimeValueToMinutes = (value) => {
   if (Number.isNaN(hours)) return 0;
   const safeMinutes = Number.isNaN(minutes) ? 0 : Math.min(Math.max(minutes, 0), 59);
   return hours * 60 + safeMinutes;
-};
-
-const loadState = () => {
-  if (typeof window === 'undefined') return { shortlist: [], archived: [] };
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { shortlist: [], archived: [] };
-    const parsed = JSON.parse(raw);
-    return {
-      shortlist: Array.isArray(parsed?.shortlist) ? parsed.shortlist : [],
-      archived: [],
-    };
-  } catch (error) {
-    console.error('Failed to read staging shortlist', error);
-    return { shortlist: [], archived: [] };
-  }
-};
-
-const saveState = (payload) => {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  } catch (error) {
-    console.error('Failed to save staging shortlist', error);
-  }
 };
 
 const createRowPairId = (prefix = 'pair') => {
@@ -252,7 +227,7 @@ const clonePlanTableEntries = (entries, ensureRows = PLAN_TABLE_ROWS) => {
 const createEmptyPlanTable = () => clonePlanTableEntries(null);
 export default function StagingPage({ currentPath = '/staging', onNavigate = () => {} }) {
   const [inputValue, setInputValue] = useState('');
-  const [{ shortlist, archived }, setState] = useState(() => loadState());
+  const [{ shortlist, archived }, setState] = useState(() => loadStagingState());
   const [planModal, setPlanModal] = useState({
     open: false,
     itemId: null,
@@ -298,7 +273,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
   }, []);
 
   useEffect(() => {
-    saveState({ shortlist, archived });
+    saveStagingState({ shortlist, archived });
   }, [shortlist, archived]);
 
   useEffect(() => {

@@ -7,6 +7,7 @@ import React, {
   useState,
 } from 'react';
 import NavigationBar from './NavigationBar';
+import { loadStagingState, STAGING_STORAGE_KEY } from './stagingStorage';
 
 const DAYS_OF_WEEK = [
   'Sunday',
@@ -26,6 +27,7 @@ const buildInitialSleepBlocks = (days) =>
     columnIndex: index,
     startRowId: 'sleep-start',
     endRowId: 'sleep-start',
+    projectId: 'sleep',
   }));
 const DEFAULT_SLEEP_CELL_HEIGHT = 44;
 
@@ -162,7 +164,8 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     if (!startDay) return DAYS_OF_WEEK.slice(0, 7);
     return [startDay, ...sequence].slice(0, 7);
   }, [startDay, sequence]);
-  const [sleepBlocks, setSleepBlocks] = useState(() =>
+  const visibleColumnCount = displayedWeekDays.length || DAY_COLUMN_COUNT;
+  const [projectChips, setProjectChips] = useState(() =>
     buildInitialSleepBlocks(displayedWeekDays)
   );
   const [selectedBlockId, setSelectedBlockId] = useState(null);
@@ -171,24 +174,26 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const [dragPreview, setDragPreview] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dayColumnRects, setDayColumnRects] = useState([]);
-  const getBlocksByColumnIndex = useCallback(
-    (columnIndex) => sleepBlocks.filter((block) => block.columnIndex === columnIndex),
-    [sleepBlocks]
+  const [stagingProjects, setStagingProjects] = useState([]);
+  const [selectedSummaryRowId, setSelectedSummaryRowId] = useState(null);
+  const getProjectChipsByColumnIndex = useCallback(
+    (columnIndex) => projectChips.filter((block) => block.columnIndex === columnIndex),
+    [projectChips]
   );
-  console.log('Blocks in column 0:', getBlocksByColumnIndex(0));
-  console.log('Blocks in column 1:', getBlocksByColumnIndex(1));
-  const getBlockById = useCallback(
-    (blockId) => sleepBlocks.find((block) => block.id === blockId) ?? null,
-    [sleepBlocks]
+  console.log('Blocks in column 0:', getProjectChipsByColumnIndex(0));
+  console.log('Blocks in column 1:', getProjectChipsByColumnIndex(1));
+  const getProjectChipById = useCallback(
+    (blockId) => projectChips.find((block) => block.id === blockId) ?? null,
+    [projectChips]
   );
   const getPrimaryBlockForDay = useCallback(
     (dayLabel) => {
       const columnIndex = displayedWeekDays.indexOf(dayLabel);
       if (columnIndex < 0) return null;
-      const columnBlocks = getBlocksByColumnIndex(columnIndex);
+      const columnBlocks = getProjectChipsByColumnIndex(columnIndex);
       return columnBlocks[0] ?? null;
     },
-    [displayedWeekDays, getBlocksByColumnIndex]
+    [displayedWeekDays, getProjectChipsByColumnIndex]
   );
   const draggingSleepChipIdRef = useRef(null);
   const dragAnchorOffsetRef = useRef(0);
@@ -232,7 +237,29 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     };
   }, []);
   useEffect(() => {
-    setSleepBlocks((prev) => {
+    if (typeof window === 'undefined') return undefined;
+    const readProjects = () => {
+      const state = loadStagingState();
+      setStagingProjects(Array.isArray(state?.shortlist) ? state.shortlist : []);
+    };
+    readProjects();
+    const handleStorage = (event) => {
+      if (event?.key && event.key !== STAGING_STORAGE_KEY) return;
+      readProjects();
+    };
+    const handleVisibility = () => {
+      if (document.hidden) return;
+      readProjects();
+    };
+    window.addEventListener('storage', handleStorage);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
+  useEffect(() => {
+    setProjectChips((prev) => {
       const columnCount = displayedWeekDays.length;
       const nextBlocks = prev.filter((entry) => entry.columnIndex < columnCount);
       const trackedColumns = new Set(nextBlocks.map((entry) => entry.columnIndex));
@@ -243,6 +270,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           columnIndex,
           startRowId: 'sleep-start',
           endRowId: 'sleep-start',
+          projectId: 'sleep',
         });
       }
       return nextBlocks;
@@ -250,15 +278,15 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   }, [displayedWeekDays]);
   useEffect(() => {
     setSelectedBlockId((prev) =>
-      prev && sleepBlocks.some((block) => block.id === prev) ? prev : null
+      prev && projectChips.some((block) => block.id === prev) ? prev : null
     );
-  }, [sleepBlocks]);
+  }, [projectChips]);
   useEffect(() => {
     if (!resizingBlockId) return;
-    if (!sleepBlocks.some((block) => block.id === resizingBlockId)) {
+    if (!projectChips.some((block) => block.id === resizingBlockId)) {
       setResizingBlockId(null);
     }
-  }, [resizingBlockId, sleepBlocks]);
+  }, [resizingBlockId, projectChips]);
   const timelineRowIds = useMemo(() => {
     const rows = ['sleep-start'];
     hourRows.forEach((hourValue) => rows.push(`hour-${hourValue}`));
@@ -319,7 +347,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   );
   useEffect(() => {
     if (!resizingBlockId) return undefined;
-    if (!getBlockById(resizingBlockId)) {
+    if (!getProjectChipById(resizingBlockId)) {
       setResizingBlockId(null);
       return undefined;
     }
@@ -327,7 +355,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       const pointerY = event.clientY + (window.scrollY || 0);
       const targetRowId = findRowIdByPointerY(pointerY);
       if (!targetRowId) return;
-      setSleepBlocks((prev) => {
+      setProjectChips((prev) => {
         let updated = false;
         const next = prev.map((entry) => {
           if (entry.id !== resizingBlockId) return entry;
@@ -355,7 +383,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [findRowIdByPointerY, getBlockById, resizingBlockId, rowIndexMap, timelineRowIds]);
+  }, [findRowIdByPointerY, getProjectChipById, resizingBlockId, rowIndexMap, timelineRowIds]);
   useLayoutEffect(() => {
     if (timelineRowIds.length === 0) return;
     const next = {};
@@ -462,7 +490,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       if (targetColumnIndex == null || Number.isNaN(targetColumnIndex) || !rowId) return;
       const sourceChipId = draggingSleepChipIdRef.current;
       if (!sourceChipId) return;
-      const block = getBlockById(sourceChipId);
+      const block = getProjectChipById(sourceChipId);
       if (!block) return;
       const startIdx = rowIndexMap.get(block.startRowId);
       const endIdx = rowIndexMap.get(block.endRowId);
@@ -480,7 +508,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         endRowId: timelineRowIds[nextEndIdx] ?? rowId,
       });
     },
-    [getBlockById, rowIndexMap, timelineRowIds]
+    [getProjectChipById, rowIndexMap, timelineRowIds]
   );
   const getBlockHeight = useCallback(
     (startRowId, endRowId) => {
@@ -513,7 +541,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       }
       console.log('Dragging chip ID:', chipId);
       draggingSleepChipIdRef.current = chipId;
-      const block = getBlockById(chipId);
+      const block = getProjectChipById(chipId);
       if (block) {
         const metrics = rowMetrics[block.startRowId];
         const pointerY = event.clientY + (window.scrollY || 0);
@@ -535,7 +563,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       }
       setIsDragging(true);
     },
-    [getBlockById, rowMetrics]
+    [getProjectChipById, rowMetrics]
   );
   const handleSleepDragOver = useCallback(
     (event) => {
@@ -557,9 +585,9 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     if (!dragPreview) return;
     const { sourceChipId, targetColumnIndex, startRowId, endRowId } = dragPreview;
     if (targetColumnIndex == null || Number.isNaN(targetColumnIndex)) return;
-    const sourceBlock = getBlockById(sourceChipId);
+    const sourceBlock = getProjectChipById(sourceChipId);
     if (!sourceBlock) return;
-    setSleepBlocks((prev) => {
+    setProjectChips((prev) => {
       const targetIndex = prev.findIndex((entry) => entry.id === sourceChipId);
       if (targetIndex < 0) {
         return prev;
@@ -579,7 +607,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     draggingSleepChipIdRef.current = null;
     setIsDragging(false);
     dragAnchorOffsetRef.current = 0;
-  }, [dragPreview, getBlockById, setSleepBlocks]);
+  }, [dragPreview, getProjectChipById, setProjectChips]);
   const handleSleepDrop = useCallback(
     (event) => {
       if (!isDragging) return;
@@ -624,20 +652,134 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       event.stopPropagation();
       event.preventDefault();
       if (!chipId) return;
-      const block = getBlockById(chipId);
+      const block = getProjectChipById(chipId);
       if (!block) return;
       setSelectedBlockId(chipId);
       setResizingBlockId(chipId);
     },
-    [getBlockById]
+    [getProjectChipById]
   );
   const highlightedBlockId =
     dragPreview?.sourceChipId ?? resizingBlockId ?? selectedBlockId ?? null;
-  const renderSleepLabel = useCallback(
+  const toggleSummaryRowSelection = useCallback((rowId) => {
+    setSelectedSummaryRowId((prev) => (prev === rowId ? null : rowId));
+  }, []);
+  const highlightedProjects = useMemo(() => {
+    if (!stagingProjects.length) return [];
+    return stagingProjects
+      .filter((project) => {
+        const colorValue = typeof project?.color === 'string' ? project.color.trim() : '';
+        if (!colorValue) return false;
+        return colorValue.toLowerCase() !== '#f3f4f6';
+      })
+      .map((project) => {
+        const nickname = (project.projectNickname || '').trim();
+        const label = nickname || project.projectName || project.text || 'Project';
+        return {
+          id: project.id,
+          label,
+          color: project.color,
+        };
+      });
+  }, [stagingProjects]);
+  const projectMetadata = useMemo(() => {
+    const map = new Map();
+    map.set('sleep', {
+      label: 'Sleep',
+      color: '#d9d9d9',
+      textColor: '#000000',
+    });
+    highlightedProjects.forEach((project) => {
+      map.set(project.id, {
+        label: project.label,
+        color: project.color || '#0f172a',
+        textColor: '#ffffff',
+      });
+    });
+    return map;
+  }, [highlightedProjects]);
+  const projectColumnTotals = useMemo(() => {
+    const totals = new Map();
+    const columnLength = visibleColumnCount || DAY_COLUMN_COUNT;
+    projectChips.forEach((block) => {
+      const targetProjectId = block.projectId || 'sleep';
+      const columnIndex =
+        typeof block.columnIndex === 'number' ? block.columnIndex : 0;
+      if (columnIndex < 0 || columnIndex >= columnLength) {
+        return;
+      }
+      const duration = getBlockDuration(
+        block,
+        rowIndexMap,
+        timelineRowIds,
+        incrementMinutes
+      );
+      if (duration <= 0) return;
+      if (!totals.has(targetProjectId)) {
+        totals.set(targetProjectId, Array.from({ length: columnLength }, () => 0));
+      }
+      const columnTotals = totals.get(targetProjectId);
+      if (!Array.isArray(columnTotals)) return;
+      columnTotals[columnIndex] += duration;
+    });
+    return totals;
+  }, [
+    incrementMinutes,
+    projectChips,
+    rowIndexMap,
+    timelineRowIds,
+    visibleColumnCount,
+  ]);
+  const sleepColumnTotals = useMemo(() => {
+    const totals = projectColumnTotals.get('sleep');
+    if (Array.isArray(totals) && totals.length === visibleColumnCount) {
+      return totals;
+    }
+    if (Array.isArray(totals)) {
+      const padLength = Math.max(visibleColumnCount - totals.length, 0);
+      return [...totals, ...Array.from({ length: padLength }, () => 0)].slice(
+        0,
+        visibleColumnCount
+      );
+    }
+    return Array.from({ length: visibleColumnCount }, () => 0);
+  }, [projectColumnTotals, visibleColumnCount]);
+  const totalSleepMinutes = useMemo(
+    () => sleepColumnTotals.reduce((sum, value) => sum + value, 0),
+    [sleepColumnTotals]
+  );
+  const projectSummaries = useMemo(
+    () =>
+      highlightedProjects.map((project) => {
+        const totals = projectColumnTotals.get(project.id);
+        const columnTotals = Array.isArray(totals)
+          ? [
+              ...totals,
+              ...Array.from(
+                { length: Math.max(visibleColumnCount - totals.length, 0) },
+                () => 0
+              ),
+            ].slice(0, visibleColumnCount)
+          : Array.from({ length: visibleColumnCount }, () => 0);
+        const totalMinutes = columnTotals.reduce((sum, value) => sum + value, 0);
+        return {
+          ...project,
+          columnTotals,
+          totalMinutes,
+        };
+      }),
+    [highlightedProjects, projectColumnTotals, visibleColumnCount]
+  );
+  const renderProjectChip = useCallback(
     (chipId, rowId) => {
       if (!chipId) return null;
-      const block = getBlockById(chipId);
+      const block = getProjectChipById(chipId);
       if (!block || block.startRowId !== rowId) return null;
+      const projectId = block.projectId || 'sleep';
+      const metadata = projectMetadata.get(projectId);
+      const label = metadata?.label ?? 'Project';
+      const backgroundColor = metadata?.color ?? '#d9d9d9';
+      const textColor = metadata?.textColor ?? '#000';
       const isActive = highlightedBlockId === block.id;
       const blockHeight = getBlockHeight(block.startRowId, block.endRowId);
       return (
@@ -649,12 +791,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           }}
         >
           <div
-            className={`relative w-full cursor-move select-none rounded border border-transparent px-2 py-1 text-center text-[11px] font-semibold text-black shadow-sm bg-[#d9d9d9] ${
+            className={`relative w-full cursor-move select-none rounded border border-transparent px-2 py-1 text-center text-[11px] font-semibold shadow-sm ${
               isActive ? 'outline outline-[2px]' : ''
             }`}
             style={{
               pointerEvents:
                 dragPreview && dragPreview.sourceChipId === chipId ? 'none' : 'auto',
+              backgroundColor,
+              color: textColor,
               ...(isActive ? { outlineColor: '#000', outlineOffset: 0 } : null),
             }}
             draggable={!resizingBlockId}
@@ -670,11 +814,11 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
               setSelectedBlockId((prev) => (prev === chipId ? null : chipId));
             }}
           >
-            Sleep
+            {label}
             {isActive ? (
               <button
                 type="button"
-                aria-label="Stretch sleep block"
+                aria-label="Stretch project block"
                 onMouseDown={(event) => handleResizeMouseDown(event, chipId)}
                 className="cursor-se-resize"
                 style={{
@@ -697,41 +841,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       );
     },
     [
-      getBlockById,
+      getProjectChipById,
       getBlockHeight,
       handleResizeMouseDown,
       handleSleepDragStart,
       highlightedBlockId,
+      projectMetadata,
       resizingBlockId,
     ]
-  );
-  const columnSleepTotals = useMemo(
-    () =>
-      displayedWeekDays.map((_, columnIndex) => {
-        const columnBlocks = getBlocksByColumnIndex(columnIndex);
-        return columnBlocks.reduce(
-          (sum, block) =>
-            sum +
-            getBlockDuration(
-              block,
-              rowIndexMap,
-              timelineRowIds,
-              incrementMinutes
-            ),
-          0
-        );
-      }),
-    [
-      displayedWeekDays,
-      getBlocksByColumnIndex,
-      incrementMinutes,
-      rowIndexMap,
-      timelineRowIds,
-    ]
-  );
-  const totalSleepMinutes = useMemo(
-    () => columnSleepTotals.reduce((sum, value) => sum + value, 0),
-    [columnSleepTotals]
   );
   const renderDragOutline = useCallback(() => {
     if (!dragPreview || !tableRect) return null;
@@ -851,7 +968,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                 {Array.from({ length: DAY_COLUMN_COUNT }, (_, index) => {
                   const dayLabel = displayedWeekDays[index] ?? '';
                   const hasDay = Boolean(dayLabel);
-                  const columnBlocks = hasDay ? getBlocksByColumnIndex(index) : [];
+                  const columnBlocks = hasDay ? getProjectChipsByColumnIndex(index) : [];
                   const rowId = 'sleep-start';
                   const activeBlock =
                     highlightedBlockId != null
@@ -862,7 +979,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     : false;
                   const labels = columnBlocks
                     .filter((block) => block.startRowId === rowId)
-                    .map((block) => renderSleepLabel(block.id, rowId));
+                    .map((block) => renderProjectChip(block.id, rowId));
                   return (
                     <td
                       key={`time-row-${index}`}
@@ -891,7 +1008,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     const dayLabel = displayedWeekDays[index] ?? '';
                     const hasDay = Boolean(dayLabel);
                     const rowId = `hour-${hourValue}`;
-                    const columnBlocks = hasDay ? getBlocksByColumnIndex(index) : [];
+                    const columnBlocks = hasDay ? getProjectChipsByColumnIndex(index) : [];
                     const activeBlock =
                       highlightedBlockId != null
                         ? columnBlocks.find((block) => block.id === highlightedBlockId)
@@ -901,7 +1018,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                       : false;
                     const labels = columnBlocks
                       .filter((block) => block.startRowId === rowId)
-                      .map((block) => renderSleepLabel(block.id, rowId));
+                      .map((block) => renderProjectChip(block.id, rowId));
                     return (
                       <td
                         key={`hour-${hourValue}-${index}`}
@@ -942,7 +1059,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   const dayLabel = displayedWeekDays[index] ?? '';
                   const hasDay = Boolean(dayLabel);
                   const rowId = 'sleep-end';
-                  const columnBlocks = hasDay ? getBlocksByColumnIndex(index) : [];
+                  const columnBlocks = hasDay ? getProjectChipsByColumnIndex(index) : [];
                   const activeBlock =
                     highlightedBlockId != null
                       ? columnBlocks.find((block) => block.id === highlightedBlockId)
@@ -952,7 +1069,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     : false;
                   const labels = columnBlocks
                     .filter((block) => block.startRowId === rowId)
-                    .map((block) => renderSleepLabel(block.id, rowId));
+                    .map((block) => renderProjectChip(block.id, rowId));
                   return (
                     <td
                       key={`minute-row-${index}`}
@@ -984,7 +1101,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     const dayLabel = displayedWeekDays[index] ?? '';
                     const hasDay = Boolean(dayLabel);
                     const rowId = `trailing-${rowIdx}`;
-                    const columnBlocks = hasDay ? getBlocksByColumnIndex(index) : [];
+                    const columnBlocks = hasDay ? getProjectChipsByColumnIndex(index) : [];
                     const activeBlock =
                       highlightedBlockId != null
                         ? columnBlocks.find((block) => block.id === highlightedBlockId)
@@ -994,7 +1111,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                       : false;
                     const labels = columnBlocks
                       .filter((block) => block.startRowId === rowId)
-                      .map((block) => renderSleepLabel(block.id, rowId));
+                      .map((block) => renderProjectChip(block.id, rowId));
                     return (
                       <td
                         key={`trailing-${rowIdx}-${index}`}
@@ -1036,7 +1153,24 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   Total
                 </td>
               </tr>
-              <tr className="grid grid-cols-9 text-sm">
+              <tr
+                className={`grid grid-cols-9 text-sm cursor-pointer ${
+                  selectedSummaryRowId === 'sleep-summary' ? 'outline outline-[2px]' : ''
+                }`}
+                style={
+                  selectedSummaryRowId === 'sleep-summary'
+                    ? { outlineColor: '#000', outlineOffset: 0 }
+                    : undefined
+                }
+                tabIndex={0}
+                onClick={() => toggleSummaryRowSelection('sleep-summary')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    toggleSummaryRowSelection('sleep-summary');
+                  }
+                }}
+              >
                 <td
                   className="border border-[#e5e7eb] px-3 py-2 text-center"
                   style={{ backgroundColor: '#d9d9d9', color: '#000', fontWeight: 700 }}
@@ -1044,7 +1178,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   Sleep
                 </td>
                 {displayedWeekDays.map((day, idx) => {
-                  const minutes = columnSleepTotals[idx] ?? 0;
+                  const minutes = sleepColumnTotals[idx] ?? 0;
                   return (
                     <td
                       key={`sleep-row-${day}-${idx}`}
@@ -1058,10 +1192,56 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                 <td
                   className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
                   style={{ backgroundColor: '#efefef' }}
-                >
-                  {formatDuration(totalSleepMinutes)}
-                </td>
-              </tr>
+                  >
+                    {formatDuration(totalSleepMinutes)}
+                  </td>
+                </tr>
+              {projectSummaries.map((summary) => {
+                const rowSelected = selectedSummaryRowId === summary.id;
+                return (
+                  <tr
+                    key={`project-summary-${summary.id}`}
+                    className={`grid grid-cols-9 text-sm cursor-pointer ${
+                      rowSelected ? 'outline outline-[2px]' : ''
+                    }`}
+                    style={rowSelected ? { outlineColor: '#000', outlineOffset: 0 } : undefined}
+                    tabIndex={0}
+                    onClick={() => toggleSummaryRowSelection(summary.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        toggleSummaryRowSelection(summary.id);
+                      }
+                    }}
+                  >
+                    <td
+                      className="border border-[#e5e7eb] px-3 py-2 text-center"
+                      style={{
+                        backgroundColor: summary.color || '#0f172a',
+                        color: '#ffffff',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {summary.label}
+                  </td>
+                  {displayedWeekDays.map((day, idx) => (
+                    <td
+                      key={`project-${summary.id}-${day}-${idx}`}
+                      className="border border-[#e5e7eb] px-3 py-2 text-center text-[11px]"
+                      style={{ backgroundColor: '#ffffff' }}
+                    >
+                      {formatDuration(summary.columnTotals[idx] ?? 0)}
+                    </td>
+                  ))}
+                  <td
+                    className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold text-[11px]"
+                    style={{ backgroundColor: '#ffffff' }}
+                  >
+                    {formatDuration(summary.totalMinutes)}
+                  </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
