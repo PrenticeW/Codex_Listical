@@ -59,8 +59,23 @@ const getBlockDuration = (block, rowIndexMap, timelineRowIds, incrementMinutes) 
   if (startIdx == null || endIdx == null) {
     return 0;
   }
-  const rowCount = Math.abs(endIdx - startIdx) + 1;
-  return rowCount * incrementMinutes;
+  const minIdx = Math.min(startIdx, endIdx);
+  const maxIdx = Math.max(startIdx, endIdx);
+  let totalMinutes = 0;
+  for (let idx = minIdx; idx <= maxIdx; idx += 1) {
+    const rowId = timelineRowIds[idx];
+    if (!rowId) {
+      continue;
+    }
+    if (rowId === 'sleep-start' || rowId.startsWith('hour-')) {
+      totalMinutes += 60;
+      continue;
+    }
+    if (rowId === 'sleep-end' || rowId.startsWith('trailing-')) {
+      totalMinutes += incrementMinutes;
+    }
+  }
+  return totalMinutes;
 };
 
 const formatDuration = (minutes) => {
@@ -92,7 +107,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     });
   }, [startHour]);
   const [startMinute, setStartMinute] = useState('');
-  const [incrementMinutes, setIncrementMinutes] = useState(15);
+  const [incrementMinutes, setIncrementMinutes] = useState(30);
   const hourRows = useMemo(() => {
     if (!startHour || !startMinute) return [];
     const startMinutes = parseHour12ToMinutes(startHour);
@@ -1084,7 +1099,7 @@ function ListicalMenu({ incrementMinutes, onIncrementChange }) {
               id="increment-select"
               className="flex-1 rounded border border-[#ced3d0] bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
               value={incrementMinutes}
-              onChange={(event) => onIncrementChange(parseInt(event.target.value, 10) || 15)}
+              onChange={(event) => onIncrementChange(parseInt(event.target.value, 10) || 30)}
             >
               <option value={15}>15 minutes</option>
               <option value={30}>30 minutes</option>
