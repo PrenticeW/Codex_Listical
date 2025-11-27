@@ -806,6 +806,12 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       color: '#d9d9d9',
       textColor: '#000000',
     });
+    map.set('rest', {
+      label: 'REST',
+      color: '#666666',
+      textColor: '#ffffff',
+      fontWeight: 700,
+    });
     highlightedProjects.forEach((project) => {
       map.set(project.id, {
         label: project.label,
@@ -865,6 +871,24 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     () => sleepColumnTotals.reduce((sum, value) => sum + value, 0),
     [sleepColumnTotals]
   );
+  const restColumnTotals = useMemo(() => {
+    const totals = projectColumnTotals.get('rest');
+    if (Array.isArray(totals) && totals.length === visibleColumnCount) {
+      return totals;
+    }
+    if (Array.isArray(totals)) {
+      const padLength = Math.max(visibleColumnCount - totals.length, 0);
+      return [...totals, ...Array.from({ length: padLength }, () => 0)].slice(
+        0,
+        visibleColumnCount
+      );
+    }
+    return Array.from({ length: visibleColumnCount }, () => 0);
+  }, [projectColumnTotals, visibleColumnCount]);
+  const totalRestMinutes = useMemo(
+    () => restColumnTotals.reduce((sum, value) => sum + value, 0),
+    [restColumnTotals]
+  );
   const projectSummaries = useMemo(
     () =>
       highlightedProjects.map((project) => {
@@ -897,6 +921,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       const label = metadata?.label ?? 'Project';
       const backgroundColor = metadata?.color ?? '#d9d9d9';
       const textColor = metadata?.textColor ?? '#000';
+      const fontWeight = metadata?.fontWeight ?? 600;
       const isActive = highlightedBlockId === block.id;
       const blockHeight = getBlockHeight(block.startRowId, block.endRowId);
       return (
@@ -916,6 +941,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                 dragPreview && dragPreview.sourceChipId === chipId ? 'none' : 'auto',
               backgroundColor,
               color: textColor,
+              fontWeight,
               ...(isActive ? { outlineColor: '#000', outlineOffset: 0 } : null),
             }}
             draggable={!resizingBlockId}
@@ -1041,6 +1067,32 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         ) : (
           <div className="px-3 py-2 text-[11px] text-slate-500">No staged projects found</div>
         )}
+        <div className="border-t border-[#e5e7eb] px-3 py-2">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold text-slate-800 hover:bg-[#f2fdf6]"
+            onClick={() => handleProjectSelection('sleep')}
+          >
+            <span
+              className="inline-flex h-3 w-3 flex-shrink-0 rounded-full"
+              style={{ backgroundColor: '#d9d9d9' }}
+            ></span>
+            <span>Sleep</span>
+          </button>
+        </div>
+        <div className="border-t border-[#e5e7eb] px-3 py-2">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold text-slate-800 hover:bg-[#f2fdf6]"
+            onClick={() => handleProjectSelection('rest')}
+          >
+            <span
+              className="inline-flex h-3 w-3 flex-shrink-0 rounded-full"
+              style={{ backgroundColor: '#666666' }}
+            ></span>
+            <span>REST</span>
+          </button>
+        </div>
       </div>
     );
   }, [cellMenu, handleProjectSelection, highlightedProjects]);
@@ -1437,29 +1489,69 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                       style={{
                         backgroundColor: summary.color || '#0f172a',
                         color: '#ffffff',
-                      fontWeight: 700,
-                    }}
-                  >
-                    {summary.label}
-                  </td>
-                  {displayedWeekDays.map((day, idx) => (
+                        fontWeight: 700,
+                      }}
+                    >
+                      {summary.label}
+                    </td>
+                    {displayedWeekDays.map((day, idx) => (
+                      <td
+                        key={`project-${summary.id}-${day}-${idx}`}
+                        className="border border-[#e5e7eb] px-3 py-2 text-center text-[11px]"
+                        style={{ backgroundColor: '#ffffff' }}
+                      >
+                        {formatDuration(summary.columnTotals[idx] ?? 0)}
+                      </td>
+                    ))}
                     <td
-                      key={`project-${summary.id}-${day}-${idx}`}
-                      className="border border-[#e5e7eb] px-3 py-2 text-center text-[11px]"
+                      className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold text-[11px]"
                       style={{ backgroundColor: '#ffffff' }}
                     >
-                      {formatDuration(summary.columnTotals[idx] ?? 0)}
+                      {formatDuration(summary.totalMinutes)}
                     </td>
-                  ))}
-                  <td
-                    className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold text-[11px]"
-                    style={{ backgroundColor: '#ffffff' }}
-                  >
-                    {formatDuration(summary.totalMinutes)}
-                  </td>
                   </tr>
                 );
               })}
+              <tr
+                className={`grid grid-cols-9 text-sm cursor-pointer ${
+                  selectedSummaryRowId === 'rest-summary' ? 'outline outline-[2px]' : ''
+                }`}
+                style={
+                  selectedSummaryRowId === 'rest-summary'
+                    ? { outlineColor: '#000', outlineOffset: 0 }
+                    : undefined
+                }
+                tabIndex={0}
+                onClick={() => toggleSummaryRowSelection('rest-summary')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    toggleSummaryRowSelection('rest-summary');
+                  }
+                }}
+              >
+                <td
+                  className="border border-[#e5e7eb] px-3 py-2 text-center"
+                  style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700 }}
+                >
+                  REST
+                </td>
+                {displayedWeekDays.map((day, idx) => (
+                  <td
+                    key={`rest-row-${day}-${idx}`}
+                    className="border border-[#e5e7eb] px-3 py-2 text-center"
+                    style={{ backgroundColor: '#efefef' }}
+                  >
+                    {formatDuration(restColumnTotals[idx] ?? 0)}
+                  </td>
+                ))}
+                <td
+                  className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
+                  style={{ backgroundColor: '#efefef' }}
+                >
+                  {formatDuration(totalRestMinutes)}
+                </td>
+              </tr>
             </tbody>
           </table>
           {renderCellProjectMenu()}
