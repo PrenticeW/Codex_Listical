@@ -30,6 +30,11 @@ const buildInitialSleepBlocks = (days) =>
     projectId: 'sleep',
   }));
 const DEFAULT_SLEEP_CELL_HEIGHT = 44;
+let chipSequence = 0;
+const createProjectChipId = () => {
+  chipSequence += 1;
+  return `chip-${chipSequence}`;
+};
 
 const formatHour12 = (hour, minutes = '00') => {
   const period = hour >= 12 ? 'PM' : 'AM';
@@ -176,6 +181,8 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const [dayColumnRects, setDayColumnRects] = useState([]);
   const [stagingProjects, setStagingProjects] = useState([]);
   const [selectedSummaryRowId, setSelectedSummaryRowId] = useState(null);
+  const [selectedCell, setSelectedCell] = useState(null);
+  const [cellMenu, setCellMenu] = useState(null);
   const getProjectChipsByColumnIndex = useCallback(
     (columnIndex) => projectChips.filter((block) => block.columnIndex === columnIndex),
     [projectChips]
@@ -200,6 +207,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const transparentDragImageRef = useRef(null);
   const tableContainerRef = useRef(null);
   const tableElementRef = useRef(null);
+  const cellMenuRef = useRef(null);
   const [tableRect, setTableRect] = useState(null);
   useEffect(() => {
     const handleDragEnd = () => {
@@ -664,6 +672,118 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const toggleSummaryRowSelection = useCallback((rowId) => {
     setSelectedSummaryRowId((prev) => (prev === rowId ? null : rowId));
   }, []);
+  const toggleCellSelection = useCallback((columnIndex, rowId) => {
+    if (columnIndex == null || rowId == null) return;
+    setSelectedCell((prev) => {
+      if (prev && prev.columnIndex === columnIndex && prev.rowId === rowId) {
+        return null;
+      }
+      return { columnIndex, rowId };
+    });
+  }, []);
+  const isCellSelected = useCallback(
+    (columnIndex, rowId) =>
+      selectedCell != null &&
+      selectedCell.columnIndex === columnIndex &&
+      selectedCell.rowId === rowId,
+    [selectedCell]
+  );
+  const closeCellMenu = useCallback(() => {
+    setCellMenu(null);
+  }, []);
+  const handleCellClick = useCallback(
+    (event, columnIndex, rowId) => {
+      if (columnIndex == null || rowId == null) return;
+      const hasDay = Boolean(displayedWeekDays[columnIndex]);
+      if (!hasDay) return;
+      const alreadySelected = isCellSelected(columnIndex, rowId);
+      toggleCellSelection(columnIndex, rowId);
+      if (alreadySelected) {
+        closeCellMenu();
+        return;
+      }
+      const cellRect = event.currentTarget.getBoundingClientRect();
+      const scrollY = typeof window === 'undefined' ? 0 : window.scrollY || 0;
+      const scrollX = typeof window === 'undefined' ? 0 : window.scrollX || 0;
+      const containerRect = tableContainerRef.current?.getBoundingClientRect();
+      const containerTop = (containerRect?.top ?? 0) + scrollY;
+      const containerLeft = (containerRect?.left ?? 0) + scrollX;
+      setCellMenu({
+        columnIndex,
+        rowId,
+        position: {
+          top: cellRect.bottom + scrollY - containerTop + 4,
+          left: cellRect.left + scrollX - containerLeft,
+          width: cellRect.width,
+        },
+      });
+    },
+    [closeCellMenu, displayedWeekDays, isCellSelected, toggleCellSelection]
+  );
+  const handleProjectSelection = useCallback(
+    (projectId) => {
+      if (!projectId) return;
+      const target = selectedCell ?? cellMenu;
+      if (!target) return;
+      const { columnIndex, rowId } = target;
+      if (columnIndex == null || !rowId) return;
+      let assignedId = null;
+      setProjectChips((prev) => {
+        let updated = false;
+        const next = prev.map((entry) => {
+          if (entry.columnIndex === columnIndex && entry.startRowId === rowId) {
+            updated = true;
+            assignedId = entry.id;
+            return {
+              ...entry,
+              projectId,
+              endRowId: rowId,
+            };
+          }
+          return entry;
+        });
+        if (updated) {
+          return next;
+        }
+        const chipId = createProjectChipId();
+        assignedId = chipId;
+        return [
+          ...prev,
+          {
+            id: chipId,
+            columnIndex,
+            startRowId: rowId,
+            endRowId: rowId,
+            projectId,
+          },
+        ];
+      });
+      if (assignedId) {
+        setSelectedBlockId(assignedId);
+      }
+      closeCellMenu();
+    },
+    [cellMenu, closeCellMenu, selectedCell, setProjectChips, setSelectedBlockId]
+  );
+  useEffect(() => {
+    if (!cellMenu) return undefined;
+    const handlePointerDown = (event) => {
+      const menuNode = cellMenuRef.current;
+      if (menuNode && menuNode.contains(event.target)) return;
+      closeCellMenu();
+    };
+    window.addEventListener('mousedown', handlePointerDown);
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+    };
+  }, [cellMenu, closeCellMenu]);
+  useEffect(() => {
+    if (!cellMenu) return;
+    const hasDay = Boolean(displayedWeekDays[cellMenu.columnIndex]);
+    if (!hasDay) {
+      closeCellMenu();
+    }
+  }, [cellMenu, closeCellMenu, displayedWeekDays]);
   const highlightedProjects = useMemo(() => {
     if (!stagingProjects.length) return [];
     return stagingProjects
@@ -886,6 +1006,47 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       </div>
     );
   }, [dayColumnRects, displayedWeekDays, dragPreview, getBlockHeight, rowIndexMap, rowMetrics, tableRect]);
+  const renderCellProjectMenu = useCallback(() => {
+    if (!cellMenu) return null;
+    const { position } = cellMenu;
+    return (
+      <div
+        ref={cellMenuRef}
+        className="absolute z-30 rounded border border-[#94a3b8] shadow-2xl"
+        style={{
+          top: position?.top ?? 0,
+          left: position?.left ?? 0,
+          minWidth: Math.max(position?.width ?? 0, 180),
+          backgroundColor: '#f8fafc',
+        }}
+      >
+        <div className="border-b border-[#e5e7eb] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+          Staged Projects
+        </div>
+        {highlightedProjects.length ? (
+          <ul className="max-h-60 overflow-auto py-1 list-none">
+            {highlightedProjects.map((project) => (
+              <li key={project.id}>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold text-slate-800 hover:bg-[#f2fdf6]"
+                  onClick={() => handleProjectSelection(project.id)}
+                >
+                  <span
+                    className="inline-flex h-3 w-3 flex-shrink-0 rounded-full"
+                    style={{ backgroundColor: project.color || '#0f172a' }}
+                  ></span>
+                  <span>{project.label}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="px-3 py-2 text-[11px] text-slate-500">No staged projects found</div>
+        )}
+      </div>
+    );
+  }, [cellMenu, handleProjectSelection, highlightedProjects]);
 
   return (
     <div className="min-h-screen bg-gray-100 text-slate-800 p-4">
@@ -980,16 +1141,28 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   const labels = columnBlocks
                     .filter((block) => block.startRowId === rowId)
                     .map((block) => renderProjectChip(block.id, rowId));
+                  const cellSelected = isCellSelected(index, rowId);
+                  const cellStyle = {};
+                  if (isCovered) {
+                    cellStyle.backgroundColor = '#d9d9d9';
+                  }
+                  if (cellSelected) {
+                    cellStyle.outlineColor = '#000';
+                    cellStyle.outlineOffset = 0;
+                  }
                   return (
                     <td
                       key={`time-row-${index}`}
-                      className="relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible"
-                      style={isCovered ? { backgroundColor: '#d9d9d9' } : undefined}
+                      className={`relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible ${
+                        cellSelected ? 'outline outline-[2px]' : ''
+                      }`}
+                      style={Object.keys(cellStyle).length ? cellStyle : undefined}
                       data-row-id={rowId}
                       data-day-column={index}
                       data-day={hasDay ? dayLabel : undefined}
                       onDragOver={hasDay ? handleSleepDragOver : undefined}
                       onDrop={hasDay ? handleSleepDrop : undefined}
+                      onClick={hasDay ? (event) => handleCellClick(event, index, rowId) : undefined}
                     >
                       {labels}
                     </td>
@@ -1016,24 +1189,36 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     const isCovered = activeBlock
                       ? isRowWithinBlock(rowId, activeBlock)
                       : false;
-                    const labels = columnBlocks
-                      .filter((block) => block.startRowId === rowId)
-                      .map((block) => renderProjectChip(block.id, rowId));
-                    return (
-                      <td
-                        key={`hour-${hourValue}-${index}`}
-                        className="relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible"
-                        style={isCovered ? { backgroundColor: '#d9d9d9' } : undefined}
-                        data-row-id={rowId}
-                        data-day-column={index}
-                        data-day={hasDay ? dayLabel : undefined}
-                        onDragOver={hasDay ? handleSleepDragOver : undefined}
-                        onDrop={hasDay ? handleSleepDrop : undefined}
-                      >
-                        {labels}
-                      </td>
-                    );
-                  })}
+                  const labels = columnBlocks
+                    .filter((block) => block.startRowId === rowId)
+                    .map((block) => renderProjectChip(block.id, rowId));
+                  const cellSelected = isCellSelected(index, rowId);
+                  const cellStyle = {};
+                  if (isCovered) {
+                    cellStyle.backgroundColor = '#d9d9d9';
+                  }
+                  if (cellSelected) {
+                    cellStyle.outlineColor = '#000';
+                    cellStyle.outlineOffset = 0;
+                  }
+                  return (
+                    <td
+                      key={`hour-${hourValue}-${index}`}
+                      className={`relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible ${
+                        cellSelected ? 'outline outline-[2px]' : ''
+                      }`}
+                      style={Object.keys(cellStyle).length ? cellStyle : undefined}
+                      data-row-id={rowId}
+                      data-day-column={index}
+                      data-day={hasDay ? dayLabel : undefined}
+                      onDragOver={hasDay ? handleSleepDragOver : undefined}
+                      onDrop={hasDay ? handleSleepDrop : undefined}
+                      onClick={hasDay ? (event) => handleCellClick(event, index, rowId) : undefined}
+                    >
+                      {labels}
+                    </td>
+                  );
+                })}
                 </tr>
               ))}
               <tr className="grid grid-cols-9">
@@ -1070,16 +1255,28 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   const labels = columnBlocks
                     .filter((block) => block.startRowId === rowId)
                     .map((block) => renderProjectChip(block.id, rowId));
+                  const cellSelected = isCellSelected(index, rowId);
+                  const cellStyle = {};
+                  if (isCovered) {
+                    cellStyle.backgroundColor = '#d9d9d9';
+                  }
+                  if (cellSelected) {
+                    cellStyle.outlineColor = '#000';
+                    cellStyle.outlineOffset = 0;
+                  }
                   return (
                     <td
                       key={`minute-row-${index}`}
-                      className="relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible"
-                      style={isCovered ? { backgroundColor: '#d9d9d9' } : undefined}
+                      className={`relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible ${
+                        cellSelected ? 'outline outline-[2px]' : ''
+                      }`}
+                      style={Object.keys(cellStyle).length ? cellStyle : undefined}
                       data-row-id={rowId}
                       data-day-column={index}
                       data-day={hasDay ? dayLabel : undefined}
                       onDragOver={hasDay ? handleSleepDragOver : undefined}
                       onDrop={hasDay ? handleSleepDrop : undefined}
+                      onClick={hasDay ? (event) => handleCellClick(event, index, rowId) : undefined}
                     >
                       {labels}
                     </td>
@@ -1109,24 +1306,36 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     const isCovered = activeBlock
                       ? isRowWithinBlock(rowId, activeBlock)
                       : false;
-                    const labels = columnBlocks
-                      .filter((block) => block.startRowId === rowId)
-                      .map((block) => renderProjectChip(block.id, rowId));
-                    return (
-                      <td
-                        key={`trailing-${rowIdx}-${index}`}
-                        className="relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible"
-                        style={isCovered ? { backgroundColor: '#d9d9d9' } : undefined}
-                        data-row-id={rowId}
-                        data-day-column={index}
-                        data-day={hasDay ? dayLabel : undefined}
-                        onDragOver={hasDay ? handleSleepDragOver : undefined}
-                        onDrop={hasDay ? handleSleepDrop : undefined}
-                      >
-                        {labels}
-                      </td>
-                    );
-                  })}
+                  const labels = columnBlocks
+                    .filter((block) => block.startRowId === rowId)
+                    .map((block) => renderProjectChip(block.id, rowId));
+                  const cellSelected = isCellSelected(index, rowId);
+                  const cellStyle = {};
+                  if (isCovered) {
+                    cellStyle.backgroundColor = '#d9d9d9';
+                  }
+                  if (cellSelected) {
+                    cellStyle.outlineColor = '#000';
+                    cellStyle.outlineOffset = 0;
+                  }
+                  return (
+                    <td
+                      key={`trailing-${rowIdx}-${index}`}
+                      className={`relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible ${
+                        cellSelected ? 'outline outline-[2px]' : ''
+                      }`}
+                      style={Object.keys(cellStyle).length ? cellStyle : undefined}
+                      data-row-id={rowId}
+                      data-day-column={index}
+                      data-day={hasDay ? dayLabel : undefined}
+                      onDragOver={hasDay ? handleSleepDragOver : undefined}
+                      onDrop={hasDay ? handleSleepDrop : undefined}
+                      onClick={hasDay ? (event) => handleCellClick(event, index, rowId) : undefined}
+                    >
+                      {labels}
+                    </td>
+                  );
+                })}
                 </tr>
               ))}
               <tr>
@@ -1244,6 +1453,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
               })}
             </tbody>
           </table>
+          {renderCellProjectMenu()}
         </div>
       </div>
     </div>
