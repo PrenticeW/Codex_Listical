@@ -812,6 +812,12 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       textColor: '#ffffff',
       fontWeight: 700,
     });
+    map.set('buffer', {
+      label: 'BUFFER',
+      color: '#fe8afe',
+      textColor: '#ffffff',
+      fontWeight: 700,
+    });
     highlightedProjects.forEach((project) => {
       map.set(project.id, {
         label: project.label,
@@ -889,6 +895,52 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     () => restColumnTotals.reduce((sum, value) => sum + value, 0),
     [restColumnTotals]
   );
+  const workingColumnTotals = useMemo(() => {
+    const totals = Array.from({ length: visibleColumnCount }, () => 0);
+    projectColumnTotals.forEach((values, projectId) => {
+      if (projectId === 'sleep' || projectId === 'rest') return;
+      if (!Array.isArray(values)) return;
+      for (let idx = 0; idx < visibleColumnCount; idx += 1) {
+        totals[idx] += values[idx] ?? 0;
+      }
+    });
+    return totals;
+  }, [projectColumnTotals, visibleColumnCount]);
+  const totalWorkingMinutes = useMemo(
+    () => workingColumnTotals.reduce((sum, value) => sum + value, 0),
+    [workingColumnTotals]
+  );
+  const bufferColumnTotals = useMemo(() => {
+    const totals = projectColumnTotals.get('buffer');
+    if (Array.isArray(totals) && totals.length === visibleColumnCount) {
+      return totals;
+    }
+    if (Array.isArray(totals)) {
+      const padLength = Math.max(visibleColumnCount - totals.length, 0);
+      return [...totals, ...Array.from({ length: padLength }, () => 0)].slice(
+        0,
+        visibleColumnCount
+      );
+    }
+    return Array.from({ length: visibleColumnCount }, () => 0);
+  }, [projectColumnTotals, visibleColumnCount]);
+  const totalBufferMinutes = useMemo(
+    () => bufferColumnTotals.reduce((sum, value) => sum + value, 0),
+    [bufferColumnTotals]
+  );
+  const availableColumnTotals = useMemo(
+    () =>
+      Array.from({ length: visibleColumnCount }, (_, idx) => {
+        const working = workingColumnTotals[idx] ?? 0;
+        const buffer = bufferColumnTotals[idx] ?? 0;
+        return working + buffer;
+      }),
+    [workingColumnTotals, bufferColumnTotals, visibleColumnCount]
+  );
+  const totalAvailableMinutes = useMemo(
+    () => availableColumnTotals.reduce((sum, value) => sum + value, 0),
+    [availableColumnTotals]
+  );
   const projectSummaries = useMemo(
     () =>
       highlightedProjects.map((project) => {
@@ -933,7 +985,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           }}
         >
           <div
-            className={`relative w-full cursor-move select-none rounded border border-transparent px-2 py-1 text-center text-[11px] font-semibold shadow-sm ${
+            className={`relative flex h-full w-full cursor-move select-none items-center justify-center rounded border border-transparent px-2 py-1 text-center text-[11px] font-semibold shadow-sm ${
               isActive ? 'outline outline-[2px]' : ''
             }`}
             style={{
@@ -1091,6 +1143,19 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
               style={{ backgroundColor: '#666666' }}
             ></span>
             <span>REST</span>
+          </button>
+        </div>
+        <div className="border-t border-[#e5e7eb] px-3 py-2">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold text-slate-800 hover:bg-[#f2fdf6]"
+            onClick={() => handleProjectSelection('buffer')}
+          >
+            <span
+              className="inline-flex h-3 w-3 flex-shrink-0 rounded-full"
+              style={{ backgroundColor: '#fe8afe' }}
+            ></span>
+            <span>BUFFER</span>
           </button>
         </div>
       </div>
@@ -1550,6 +1615,145 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   style={{ backgroundColor: '#efefef' }}
                 >
                   {formatDuration(totalRestMinutes)}
+                </td>
+              </tr>
+              <tr
+                className="grid grid-cols-9"
+                style={{ backgroundColor: '#ffffff', height: '14px' }}
+              >
+                {Array.from({ length: 9 }, (_, cellIndex) => (
+                  <td
+                    key={`spacer-${cellIndex}`}
+                    className="px-1"
+                    style={{ border: 0, backgroundColor: '#ffffff' }}
+                  />
+                ))}
+              </tr>
+              <tr
+                className={`grid grid-cols-9 text-sm cursor-pointer ${
+                  selectedSummaryRowId === 'working-summary' ? 'outline outline-[2px]' : ''
+                }`}
+                style={
+                  selectedSummaryRowId === 'working-summary'
+                    ? { outlineColor: '#000', outlineOffset: 0 }
+                    : undefined
+                }
+                tabIndex={0}
+                onClick={() => toggleSummaryRowSelection('working-summary')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    toggleSummaryRowSelection('working-summary');
+                  }
+                }}
+              >
+                <td
+                  className="border border-[#e5e7eb] px-3 py-2 text-center"
+                  style={{
+                    backgroundColor: '#b6d7a8',
+                    color: '#0f172a',
+                    fontWeight: 700,
+                  }}
+                >
+                  Working Hours
+                </td>
+                {displayedWeekDays.map((day, idx) => (
+                  <td
+                    key={`working-row-${day}-${idx}`}
+                    className="border border-[#e5e7eb] px-3 py-2 text-center text-[11px]"
+                    style={{ backgroundColor: '#d9ead3' }}
+                  >
+                    {formatDuration(workingColumnTotals[idx] ?? 0)}
+                  </td>
+                ))}
+                <td
+                  className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold text-[11px]"
+                  style={{ backgroundColor: '#d9ead3' }}
+                >
+                  {formatDuration(totalWorkingMinutes)}
+                </td>
+              </tr>
+              <tr
+                className={`grid grid-cols-9 text-sm cursor-pointer ${
+                  selectedSummaryRowId === 'buffer-summary' ? 'outline outline-[2px]' : ''
+                }`}
+                style={
+                  selectedSummaryRowId === 'buffer-summary'
+                    ? { outlineColor: '#000', outlineOffset: 0 }
+                    : undefined
+                }
+                tabIndex={0}
+                onClick={() => toggleSummaryRowSelection('buffer-summary')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    toggleSummaryRowSelection('buffer-summary');
+                  }
+                }}
+              >
+                  <td
+                    className="border border-[#e5e7eb] px-3 py-2 text-center text-[#000000]"
+                    style={{
+                      backgroundColor: '#ffffff',
+                      fontWeight: 700,
+                    }}
+                  >
+                    Buffer
+                  </td>
+                {displayedWeekDays.map((day, idx) => (
+                  <td
+                    key={`buffer-row-${day}-${idx}`}
+                    className="border border-[#e5e7eb] px-3 py-2 text-center text-[11px]"
+                    style={{ backgroundColor: '#ffffff' }}
+                  >
+                    {formatDuration(bufferColumnTotals[idx] ?? 0)}
+                  </td>
+                ))}
+                <td
+                  className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold text-[11px]"
+                  style={{ backgroundColor: '#ffffff' }}
+                >
+                  {formatDuration(totalBufferMinutes)}
+                </td>
+              </tr>
+              <tr
+                className={`grid grid-cols-9 text-sm cursor-pointer ${
+                  selectedSummaryRowId === 'available-summary' ? 'outline outline-[2px]' : ''
+                }`}
+                style={
+                  selectedSummaryRowId === 'available-summary'
+                    ? { outlineColor: '#000', outlineOffset: 0 }
+                    : undefined
+                }
+                tabIndex={0}
+                onClick={() => toggleSummaryRowSelection('available-summary')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    toggleSummaryRowSelection('available-summary');
+                  }
+                }}
+              >
+                <td
+                  className="border border-[#e5e7eb] px-3 py-2 text-center"
+                  style={{ backgroundColor: '#ffffff', color: '#000000', fontWeight: 700 }}
+                >
+                  Available Hours
+                </td>
+                {displayedWeekDays.map((day, idx) => (
+                  <td
+                    key={`available-row-${day}-${idx}`}
+                    className="border border-[#e5e7eb] px-3 py-2 text-center text-[11px]"
+                    style={{ backgroundColor: '#ffffff' }}
+                  >
+                    {formatDuration(availableColumnTotals[idx] ?? 0)}
+                  </td>
+                ))}
+                <td
+                  className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold text-[11px]"
+                  style={{ backgroundColor: '#ffffff' }}
+                >
+                  {formatDuration(totalAvailableMinutes)}
                 </td>
               </tr>
             </tbody>
