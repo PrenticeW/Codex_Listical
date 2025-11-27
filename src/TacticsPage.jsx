@@ -1041,7 +1041,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const workingColumnTotals = useMemo(() => {
     const totals = Array.from({ length: visibleColumnCount }, () => 0);
     projectColumnTotals.forEach((values, projectId) => {
-      if (projectId === 'sleep' || projectId === 'rest') return;
+      if (projectId === 'sleep' || projectId === 'rest' || projectId === 'buffer') return;
       if (!Array.isArray(values)) return;
       for (let idx = 0; idx < visibleColumnCount; idx += 1) {
         totals[idx] += values[idx] ?? 0;
