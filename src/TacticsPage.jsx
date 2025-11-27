@@ -190,6 +190,9 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const [selectedSummaryRowId, setSelectedSummaryRowId] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
   const [cellMenu, setCellMenu] = useState(null);
+  const [editingChipId, setEditingChipId] = useState(null);
+  const [editingChipLabel, setEditingChipLabel] = useState('');
+  const editingInputRef = useRef(null);
   const getProjectChipsByColumnIndex = useCallback(
     (columnIndex) => projectChips.filter((block) => block.columnIndex === columnIndex),
     [projectChips]
@@ -216,6 +219,12 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const tableElementRef = useRef(null);
   const cellMenuRef = useRef(null);
   const [tableRect, setTableRect] = useState(null);
+  useEffect(() => {
+    if (editingChipId && editingInputRef.current) {
+      editingInputRef.current.focus();
+      editingInputRef.current.select();
+    }
+  }, [editingChipId]);
   useEffect(() => {
     const handleDragEnd = () => {
       draggingSleepChipIdRef.current = null;
@@ -852,6 +861,31 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     });
     return map;
   }, [highlightedProjects]);
+  const handleStartLabelEdit = useCallback(
+    (chipId) => {
+      const block = getProjectChipById(chipId);
+      if (!block) return;
+      const metadata = projectMetadata.get(block.projectId);
+      const fallbackLabel = metadata?.label ?? block.projectId ?? 'Project';
+      setEditingChipLabel(block.displayLabel ?? fallbackLabel);
+      setEditingChipId(chipId);
+    },
+    [getProjectChipById, projectMetadata]
+  );
+  const handleConfirmLabelEdit = useCallback(() => {
+    if (!editingChipId) return;
+    setProjectChips((prev) =>
+      prev.map((block) =>
+        block.id === editingChipId ? { ...block, displayLabel: editingChipLabel } : block
+      )
+    );
+    setEditingChipId(null);
+    setEditingChipLabel('');
+  }, [editingChipId, editingChipLabel, setProjectChips]);
+  const handleCancelLabelEdit = useCallback(() => {
+    setEditingChipId(null);
+    setEditingChipLabel('');
+  }, []);
   const projectColumnTotals = useMemo(() => {
     const totals = new Map();
     const columnLength = visibleColumnCount || DAY_COLUMN_COUNT;
@@ -995,12 +1029,13 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       if (!block || block.startRowId !== rowId) return null;
       const projectId = block.projectId || 'sleep';
       const metadata = projectMetadata.get(projectId);
-      const label = metadata?.label ?? 'Project';
+      const displayLabel = block.displayLabel ?? metadata?.label ?? 'Project';
       const backgroundColor = metadata?.color ?? '#d9d9d9';
       const textColor = metadata?.textColor ?? '#000';
       const fontWeight = metadata?.fontWeight ?? 600;
       const isActive = highlightedBlockId === block.id;
       const blockHeight = getBlockHeight(block.startRowId, block.endRowId);
+      const isEditing = editingChipId === block.id;
       return (
         <div
           className="absolute left-0 top-0 flex w-full justify-center"
@@ -1021,7 +1056,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
               fontWeight,
               ...(isActive ? { outlineColor: '#000', outlineOffset: 0 } : null),
             }}
-            draggable={!resizingBlockId}
+            draggable={!resizingBlockId && !isEditing}
             onDragStart={(event) => {
               if (resizingBlockId) {
                 event.preventDefault();
@@ -1033,8 +1068,31 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
               event.stopPropagation();
               setSelectedBlockId((prev) => (prev === chipId ? null : chipId));
             }}
+            onDoubleClick={(event) => {
+              event.stopPropagation();
+              handleStartLabelEdit(chipId);
+            }}
           >
-            {label}
+            {isEditing ? (
+              <input
+                ref={editingInputRef}
+                className="w-full bg-white px-1 text-[11px] font-semibold text-slate-800 outline-none"
+                value={editingChipLabel}
+                onChange={(event) => setEditingChipLabel(event.target.value)}
+                onBlur={handleConfirmLabelEdit}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    handleConfirmLabelEdit();
+                  } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    handleCancelLabelEdit();
+                  }
+                }}
+              />
+            ) : (
+              displayLabel
+            )}
             {isActive ? (
               <button
                 type="button"
@@ -1068,6 +1126,11 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       highlightedBlockId,
       projectMetadata,
       resizingBlockId,
+      editingChipId,
+      editingChipLabel,
+      handleStartLabelEdit,
+      handleConfirmLabelEdit,
+      handleCancelLabelEdit,
     ]
   );
   const renderDragOutline = useCallback(() => {
