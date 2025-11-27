@@ -192,7 +192,11 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const [cellMenu, setCellMenu] = useState(null);
   const [editingChipId, setEditingChipId] = useState(null);
   const [editingChipLabel, setEditingChipLabel] = useState('');
+  const [editingChipIsCustom, setEditingChipIsCustom] = useState(false);
+  const [editingCustomProjectId, setEditingCustomProjectId] = useState(null);
   const editingInputRef = useRef(null);
+  const [customProjects, setCustomProjects] = useState([]);
+  const customSequenceRef = useRef(0);
   const getProjectChipsByColumnIndex = useCallback(
     (columnIndex) => projectChips.filter((block) => block.columnIndex === columnIndex),
     [projectChips]
@@ -796,6 +800,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     setSelectedBlockId((prev) => (prev === removableBlockId ? null : prev));
     closeCellMenu();
   }, [closeCellMenu, removableBlockId, setProjectChips]);
+  const handleCreateCustomProject = useCallback(() => {
+    customSequenceRef.current += 1;
+    const customId = `custom-${Date.now()}-${customSequenceRef.current}`;
+    const label = `Custom ${customSequenceRef.current}`;
+    const customProject = { id: customId, label: label.toUpperCase(), color: '#c9daf8' };
+    setCustomProjects((prev) => [...prev, customProject]);
+    handleProjectSelection(customId);
+  }, [handleProjectSelection]);
   useEffect(() => {
     if (!cellMenu) return undefined;
     const handlePointerDown = (event) => {
@@ -833,6 +845,10 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         };
       });
   }, [stagingProjects]);
+  const dropdownProjects = useMemo(
+    () => [...customProjects, ...highlightedProjects],
+    [customProjects, highlightedProjects]
+  );
   const projectMetadata = useMemo(() => {
     const map = new Map();
     map.set('sleep', {
@@ -852,7 +868,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       textColor: '#ffffff',
       fontWeight: 700,
     });
-    highlightedProjects.forEach((project) => {
+    dropdownProjects.forEach((project) => {
       map.set(project.id, {
         label: project.label,
         color: project.color || '#0f172a',
@@ -860,31 +876,57 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       });
     });
     return map;
-  }, [highlightedProjects]);
+  }, [dropdownProjects]);
   const handleStartLabelEdit = useCallback(
     (chipId) => {
       const block = getProjectChipById(chipId);
       if (!block) return;
       const metadata = projectMetadata.get(block.projectId);
       const fallbackLabel = metadata?.label ?? block.projectId ?? 'Project';
-      setEditingChipLabel(block.displayLabel ?? fallbackLabel);
+      const isCustom = typeof block.projectId === 'string' && block.projectId.startsWith('custom-');
+      const labelValue = block.displayLabel ?? fallbackLabel;
+      setEditingChipIsCustom(isCustom);
+      setEditingChipLabel(isCustom ? labelValue.toUpperCase() : labelValue);
+      setEditingCustomProjectId(isCustom ? block.projectId : null);
       setEditingChipId(chipId);
     },
     [getProjectChipById, projectMetadata]
   );
   const handleConfirmLabelEdit = useCallback(() => {
     if (!editingChipId) return;
+    const normalizedLabel = editingChipIsCustom
+      ? editingChipLabel.toUpperCase()
+      : editingChipLabel;
     setProjectChips((prev) =>
       prev.map((block) =>
-        block.id === editingChipId ? { ...block, displayLabel: editingChipLabel } : block
+        block.id === editingChipId ? { ...block, displayLabel: normalizedLabel } : block
       )
     );
+    if (editingChipIsCustom && editingCustomProjectId) {
+      setCustomProjects((prev) =>
+        prev.map((project) =>
+          project.id === editingCustomProjectId
+            ? { ...project, label: normalizedLabel }
+            : project
+        )
+      );
+    }
     setEditingChipId(null);
     setEditingChipLabel('');
-  }, [editingChipId, editingChipLabel, setProjectChips]);
+    setEditingChipIsCustom(false);
+    setEditingCustomProjectId(null);
+  }, [
+    editingChipId,
+    editingChipIsCustom,
+    editingChipLabel,
+    editingCustomProjectId,
+    setProjectChips,
+  ]);
   const handleCancelLabelEdit = useCallback(() => {
     setEditingChipId(null);
     setEditingChipLabel('');
+    setEditingChipIsCustom(false);
+    setEditingCustomProjectId(null);
   }, []);
   const projectColumnTotals = useMemo(() => {
     const totals = new Map();
@@ -1035,6 +1077,9 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       const fontWeight = metadata?.fontWeight ?? 600;
       const isActive = highlightedBlockId === block.id;
       const blockHeight = getBlockHeight(block.startRowId, block.endRowId);
+      const isCustomProject =
+        typeof block.projectId === 'string' && block.projectId.startsWith('custom-');
+      const normalizedLabel = isCustomProject ? displayLabel.toUpperCase() : displayLabel;
       const isEditing = editingChipId === block.id;
       return (
         <div
@@ -1068,17 +1113,21 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
               event.stopPropagation();
               setSelectedBlockId((prev) => (prev === chipId ? null : chipId));
             }}
-            onDoubleClick={(event) => {
-              event.stopPropagation();
-              handleStartLabelEdit(chipId);
-            }}
-          >
+      onDoubleClick={(event) => {
+        event.stopPropagation();
+        handleStartLabelEdit(chipId);
+      }}
+    >
             {isEditing ? (
               <input
                 ref={editingInputRef}
                 className="w-full bg-white px-1 text-[11px] font-semibold text-slate-800 outline-none"
                 value={editingChipLabel}
-                onChange={(event) => setEditingChipLabel(event.target.value)}
+                onChange={(event) =>
+                  setEditingChipLabel(
+                    editingChipIsCustom ? event.target.value.toUpperCase() : event.target.value
+                  )
+                }
                 onBlur={handleConfirmLabelEdit}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
@@ -1091,7 +1140,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                 }}
               />
             ) : (
-              displayLabel
+              normalizedLabel
             )}
             {isActive ? (
               <button
@@ -1131,6 +1180,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       handleStartLabelEdit,
       handleConfirmLabelEdit,
       handleCancelLabelEdit,
+      editingChipIsCustom,
     ]
   );
   const renderDragOutline = useCallback(() => {
@@ -1186,9 +1236,22 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         <div className="border-b border-[#e5e7eb] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
           Staged Projects
         </div>
-        {highlightedProjects.length ? (
+        <div className="border-t border-[#e5e7eb] px-3 py-2">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold text-slate-800 hover:bg-[#f2fdf6]"
+            onClick={handleCreateCustomProject}
+          >
+            <span
+              className="inline-flex h-3 w-3 flex-shrink-0 rounded-full"
+              style={{ backgroundColor: '#c9daf8' }}
+            ></span>
+            <span>CUSTOM</span>
+          </button>
+        </div>
+        {dropdownProjects.length ? (
           <ul className="max-h-60 overflow-auto py-1 list-none">
-            {highlightedProjects.map((project) => (
+            {dropdownProjects.map((project) => (
               <li key={project.id}>
                 <button
                   type="button"
@@ -1199,7 +1262,9 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     className="inline-flex h-3 w-3 flex-shrink-0 rounded-full"
                     style={{ backgroundColor: project.color || '#0f172a' }}
                   ></span>
-                  <span>{project.label}</span>
+                  <span>
+                    {project.id.startsWith('custom-') ? project.label.toUpperCase() : project.label}
+                  </span>
                 </button>
               </li>
             ))}
@@ -1265,7 +1330,8 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   }, [
     cellMenu,
     handleProjectSelection,
-    highlightedProjects,
+    dropdownProjects,
+    handleCreateCustomProject,
     handleRemoveSelectedChip,
     removableBlockId,
   ]);
