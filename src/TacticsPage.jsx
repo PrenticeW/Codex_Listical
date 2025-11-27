@@ -50,6 +50,28 @@ const parseHour12ToMinutes = (value) => {
   return hours * 60 + minutes;
 };
 
+const getBlockDuration = (block, rowIndexMap, timelineRowIds, incrementMinutes) => {
+  if (!block || !rowIndexMap || !timelineRowIds?.length || !incrementMinutes) {
+    return 0;
+  }
+  const startIdx = rowIndexMap.get(block.startRowId);
+  const endIdx = rowIndexMap.get(block.endRowId ?? block.startRowId);
+  if (startIdx == null || endIdx == null) {
+    return 0;
+  }
+  const rowCount = Math.abs(endIdx - startIdx) + 1;
+  return rowCount * incrementMinutes;
+};
+
+const formatDuration = (minutes) => {
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    return '0:00';
+  }
+  const hours = Math.floor(minutes / 60);
+  const remaining = Math.abs(minutes % 60);
+  return `${hours}:${remaining.toString().padStart(2, '0')}`;
+};
+
 export default function TacticsPage({ currentPath = '/tactics', onNavigate = () => {} }) {
   const [startDay, setStartDay] = useState(DAYS_OF_WEEK[0]);
   const hourOptions = useMemo(
@@ -668,10 +690,33 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       resizingBlockId,
     ]
   );
-  const placeholderSleepValues = useMemo(() => Array(7).fill(0), []);
-  const placeholderSleepTotal = useMemo(
-    () => placeholderSleepValues.reduce((sum, value) => sum + value, 0),
-    [placeholderSleepValues]
+  const columnSleepTotals = useMemo(
+    () =>
+      displayedWeekDays.map((_, columnIndex) => {
+        const columnBlocks = getBlocksByColumnIndex(columnIndex);
+        return columnBlocks.reduce(
+          (sum, block) =>
+            sum +
+            getBlockDuration(
+              block,
+              rowIndexMap,
+              timelineRowIds,
+              incrementMinutes
+            ),
+          0
+        );
+      }),
+    [
+      displayedWeekDays,
+      getBlocksByColumnIndex,
+      incrementMinutes,
+      rowIndexMap,
+      timelineRowIds,
+    ]
+  );
+  const totalSleepMinutes = useMemo(
+    () => columnSleepTotals.reduce((sum, value) => sum + value, 0),
+    [columnSleepTotals]
   );
   const renderDragOutline = useCallback(() => {
     if (!dragPreview || !tableRect) return null;
@@ -983,20 +1028,23 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                 >
                   Sleep
                 </td>
-                {placeholderSleepValues.map((value, idx) => (
-                  <td
-                    key={`sleep-row-${idx}`}
-                    className="border border-[#e5e7eb] px-3 py-2 text-center"
-                    style={{ backgroundColor: '#efefef' }}
-                  >
-                    {value.toFixed(2)}
-                  </td>
-                ))}
+                {displayedWeekDays.map((day, idx) => {
+                  const minutes = columnSleepTotals[idx] ?? 0;
+                  return (
+                    <td
+                      key={`sleep-row-${day}-${idx}`}
+                      className="border border-[#e5e7eb] px-3 py-2 text-center"
+                      style={{ backgroundColor: '#efefef' }}
+                    >
+                      {formatDuration(minutes)}
+                    </td>
+                  );
+                })}
                 <td
                   className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
                   style={{ backgroundColor: '#efefef' }}
                 >
-                  {placeholderSleepTotal.toFixed(2)}
+                  {formatDuration(totalSleepMinutes)}
                 </td>
               </tr>
             </tbody>
