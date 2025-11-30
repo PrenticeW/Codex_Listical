@@ -190,6 +190,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const [selectedSummaryRowId, setSelectedSummaryRowId] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
   const [cellMenu, setCellMenu] = useState(null);
+  const [clipboardProject, setClipboardProject] = useState(null);
   const [editingChipId, setEditingChipId] = useState(null);
   const [editingChipLabel, setEditingChipLabel] = useState('');
   const [editingChipIsCustom, setEditingChipIsCustom] = useState(false);
@@ -250,7 +251,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     return () => {
       window.removeEventListener('dragend', handleDragEnd);
     };
-  }, []);
+  }, [setSelectedBlockId]);
   useEffect(() => {
     if (transparentDragImageRef.current) return undefined;
     const img = document.createElement('img');
@@ -273,7 +274,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         transparentDragImageRef.current = null;
       }
     };
-  }, []);
+  }, [setSelectedBlockId]);
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const readProjects = () => {
@@ -295,7 +296,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       window.removeEventListener('storage', handleStorage);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, []);
+  }, [setSelectedBlockId]);
   useEffect(() => {
     setProjectChips((prev) => {
       const columnCount = displayedWeekDays.length;
@@ -393,26 +394,26 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       const pointerY = event.clientY + (window.scrollY || 0);
       const targetRowId = findRowIdByPointerY(pointerY);
       if (!targetRowId) return;
-      setProjectChips((prev) => {
-        let updated = false;
-        const next = prev.map((entry) => {
-          if (entry.id !== resizingBlockId) return entry;
-          const startIdx = rowIndexMap.get(entry.startRowId);
-          const targetIdx = rowIndexMap.get(targetRowId);
-          if (startIdx == null || targetIdx == null) return entry;
-          updated = true;
-          const clampedIdx = Math.max(targetIdx, startIdx);
-          return {
-            ...entry,
-            endRowId: timelineRowIds[clampedIdx] ?? entry.startRowId,
-          };
+        setProjectChips((prev) => {
+          let updated = false;
+          const next = prev.map((entry) => {
+            if (entry.id !== resizingBlockId) return entry;
+            const startIdx = rowIndexMap.get(entry.startRowId);
+            const targetIdx = rowIndexMap.get(targetRowId);
+            if (startIdx == null || targetIdx == null) return entry;
+            updated = true;
+            const clampedIdx = Math.max(targetIdx, startIdx);
+            return {
+              ...entry,
+              endRowId: timelineRowIds[clampedIdx] ?? entry.startRowId,
+            };
+          });
+          if (!updated) {
+            setResizingBlockId(null);
+            return prev;
+          }
+          return next;
         });
-        if (!updated) {
-          setResizingBlockId(null);
-          return prev;
-        }
-        return next;
-      });
     };
     const handleMouseUp = () => setResizingBlockId(null);
     window.addEventListener('mousemove', handleMouseMove);
@@ -597,11 +598,12 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           startRowId: block.startRowId,
           endRowId: block.endRowId,
         });
+        setSelectedCell(null);
         setSelectedBlockId(chipId);
       }
       setIsDragging(true);
     },
-    [getProjectChipById, rowMetrics]
+    [getProjectChipById, rowMetrics, setSelectedCell]
   );
   const handleSleepDragOver = useCallback(
     (event) => {
@@ -640,12 +642,13 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       };
       return next;
     });
+    setSelectedCell(null);
     setSelectedBlockId(sourceChipId);
     setDragPreview(null);
     draggingSleepChipIdRef.current = null;
     setIsDragging(false);
     dragAnchorOffsetRef.current = 0;
-  }, [dragPreview, getProjectChipById, setProjectChips]);
+  }, [dragPreview, getProjectChipById, setProjectChips, setSelectedCell]);
   const handleSleepDrop = useCallback(
     (event) => {
       if (!isDragging) return;
@@ -704,13 +707,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   }, []);
   const toggleCellSelection = useCallback((columnIndex, rowId) => {
     if (columnIndex == null || rowId == null) return;
+    setSelectedBlockId(null);
     setSelectedCell((prev) => {
       if (prev && prev.columnIndex === columnIndex && prev.rowId === rowId) {
         return null;
       }
       return { columnIndex, rowId };
     });
-  }, []);
+  }, [setSelectedBlockId]);
   const isCellSelected = useCallback(
     (columnIndex, rowId) =>
       selectedCell != null &&
@@ -760,12 +764,15 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
 
   const removableBlockId = cellMenuBlockId ?? selectedBlockId;
   const handleProjectSelection = useCallback(
-    (projectId) => {
+    (projectId, options = {}) => {
       if (!projectId) return;
       const target = selectedCell ?? cellMenu;
       if (!target) return;
       const { columnIndex, rowId } = target;
       if (columnIndex == null || !rowId) return;
+      const { startRowIdOverride, endRowIdOverride, displayLabelOverride } = options;
+      const targetStartRowId = startRowIdOverride ?? rowId;
+      const targetEndRowId = endRowIdOverride ?? targetStartRowId;
       let assignedId = null;
       setProjectChips((prev) => {
         let updated = false;
@@ -776,7 +783,10 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
             return {
               ...entry,
               projectId,
-              endRowId: rowId,
+              endRowId: targetEndRowId,
+              startRowId: targetStartRowId,
+              displayLabel:
+                displayLabelOverride != null ? displayLabelOverride : entry.displayLabel,
             };
           }
           return entry;
@@ -791,9 +801,12 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           {
             id: chipId,
             columnIndex,
-            startRowId: rowId,
-            endRowId: rowId,
+            startRowId: targetStartRowId,
+            endRowId: targetEndRowId,
             projectId,
+            ...(displayLabelOverride != null
+              ? { displayLabel: displayLabelOverride }
+              : {}),
           },
         ];
       });
@@ -801,9 +814,52 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         setSelectedBlockId(assignedId);
       }
       closeCellMenu();
+      setSelectedCell(null);
     },
-    [cellMenu, closeCellMenu, selectedCell, setProjectChips, setSelectedBlockId]
+    [cellMenu, closeCellMenu, selectedCell, setProjectChips, setSelectedBlockId, setSelectedCell]
   );
+  const handleCopySelectedBlock = useCallback(() => {
+    if (!selectedBlockId) return;
+    const block = getProjectChipById(selectedBlockId);
+    if (!block) return;
+    setClipboardProject({
+      projectId: block.projectId ?? 'sleep',
+      displayLabel: block.displayLabel ?? null,
+      startRowId: block.startRowId,
+      endRowId: block.endRowId,
+    });
+  }, [getProjectChipById, selectedBlockId]);
+  const handlePasteIntoCell = useCallback(() => {
+    if (!clipboardProject || !selectedCell) return;
+    const baseRowId = selectedCell.rowId;
+    if (!baseRowId) return;
+    const rowIdx = rowIndexMap.get(baseRowId);
+    if (rowIdx == null) return;
+    const sourceStartIdx = rowIndexMap.get(
+      clipboardProject.startRowId ?? clipboardProject.endRowId ?? baseRowId
+    );
+    const sourceEndIdx = rowIndexMap.get(
+      clipboardProject.endRowId ?? clipboardProject.startRowId ?? baseRowId
+    );
+    if (sourceStartIdx == null || sourceEndIdx == null) return;
+    const span = sourceEndIdx - sourceStartIdx;
+    const targetEndIdx = Math.min(
+      Math.max(rowIdx + span, 0),
+      timelineRowIds.length - 1
+    );
+    const endRowId = timelineRowIds[targetEndIdx] ?? baseRowId;
+    handleProjectSelection(clipboardProject.projectId, {
+      startRowIdOverride: baseRowId,
+      endRowIdOverride: endRowId,
+      displayLabelOverride: clipboardProject.displayLabel ?? undefined,
+    });
+  }, [
+    clipboardProject,
+    selectedCell,
+    handleProjectSelection,
+    rowIndexMap,
+    timelineRowIds,
+  ]);
   const handleRemoveSelectedChip = useCallback(() => {
     if (!removableBlockId) return;
     setProjectChips((prev) => prev.filter((block) => block.id !== removableBlockId));
@@ -869,6 +925,35 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       closeCellMenu();
     }
   }, [cellMenu, closeCellMenu, displayedWeekDays]);
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.defaultPrevented) return;
+      if (!(event.metaKey || event.ctrlKey)) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+      if (target instanceof HTMLElement && target.isContentEditable) {
+        return;
+      }
+      const key = event.key?.toLowerCase();
+      if (key === 'c') {
+        handleCopySelectedBlock();
+        event.preventDefault();
+      } else if (key === 'v') {
+        handlePasteIntoCell();
+        event.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleCopySelectedBlock, handlePasteIntoCell]);
   const highlightedProjects = useMemo(() => {
     if (!stagingProjects.length) return [];
     return stagingProjects
@@ -1153,6 +1238,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
             }}
             onClick={(event) => {
               event.stopPropagation();
+              setSelectedCell(null);
               setSelectedBlockId((prev) => (prev === chipId ? null : chipId));
             }}
             onDoubleClick={(event) => {
@@ -1223,6 +1309,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       handleConfirmLabelEdit,
       handleCancelLabelEdit,
       editingChipIsCustom,
+      setSelectedCell,
     ]
   );
   const renderDragOutline = useCallback(() => {
