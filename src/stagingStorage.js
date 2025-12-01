@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'staging-shortlist';
+export const STAGING_STORAGE_EVENT = 'staging-state-update';
 
 const getWindowRef = () => (typeof window !== 'undefined' ? window : null);
 
@@ -28,6 +29,11 @@ export const saveStagingState = (payload) => {
   if (!win) return;
   try {
     win.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    const event =
+      typeof CustomEvent === 'function'
+        ? new CustomEvent(STAGING_STORAGE_EVENT, { detail: payload })
+        : new Event(STAGING_STORAGE_EVENT);
+    win.dispatchEvent(event);
   } catch (error) {
     console.error('Failed to save staging shortlist', error);
   }

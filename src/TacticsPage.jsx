@@ -7,7 +7,7 @@ import React, {
   useState,
 } from 'react';
 import NavigationBar from './NavigationBar';
-import { loadStagingState, STAGING_STORAGE_KEY } from './stagingStorage';
+import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from './stagingStorage';
 
 const DAYS_OF_WEEK = [
   'Sunday',
@@ -292,8 +292,10 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     };
     window.addEventListener('storage', handleStorage);
     document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener(STAGING_STORAGE_EVENT, handleStorage);
     return () => {
       window.removeEventListener('storage', handleStorage);
+      window.removeEventListener(STAGING_STORAGE_EVENT, handleStorage);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [setSelectedBlockId]);
