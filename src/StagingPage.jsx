@@ -7,16 +7,49 @@ import { loadStagingState, saveStagingState } from './stagingStorage';
 const PLAN_TABLE_ROWS = 15;
 const PLAN_TABLE_COLS = 6;
 const PLAN_PAIR_META_KEY = '__pairId';
-const COLOR_PALETTE = [
-  '#8e7cc3',
-  '#f6b26b',
-  '#b4a7d6',
-  '#93c47d',
-  '#6fa8dc',
-  '#76a5af',
-  '#c9b4e6',
-  '#a2d2a8',
-];
+const COLOR_SWATCH_HUES = [0, 28, 45, 90, 150, 210, 270, 300];
+const COLOR_SWATCH_LIGHTNESS = [40, 50, 60, 70];
+const COLOR_SATURATION = 75;
+const COLOR_PALETTE = COLOR_SWATCH_HUES.flatMap((hue) =>
+  COLOR_SWATCH_LIGHTNESS.map(
+    (lightness) => `hsl(${hue}, ${COLOR_SATURATION}%, ${lightness}%)`
+  )
+);
+
+const ColorSwatchGrid = ({
+  selectedColor,
+  onSelect = () => {},
+  buttonSize = 28,
+  columns = 4,
+}) => {
+  const normalizedColor = selectedColor || COLOR_PALETTE[0];
+  return (
+    <div
+      className="grid gap-2"
+      style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+    >
+      {COLOR_PALETTE.map((color) => {
+        const isActive = color === normalizedColor;
+        return (
+          <button
+            key={color}
+            type="button"
+            className="rounded transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            style={{
+              width: buttonSize,
+              height: buttonSize,
+              backgroundColor: color,
+              border: isActive ? '2px solid #0f172a' : '2px solid rgba(15,23,42,0.35)',
+              boxShadow: '0 1px 2px rgba(15,23,42,0.25)',
+            }}
+            onClick={() => onSelect(color)}
+            aria-label={`Select color ${color}`}
+          />
+        );
+      })}
+    </div>
+  );
+};
 const PLAN_ESTIMATE_OPTIONS = [
   '-',
   'Custom',
@@ -381,9 +414,15 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
             needsQuestionRowCount: needsQuestionCount,
             needsPlanRowCount: needsPlanCount,
           });
+          const nextProjectMetadata = {
+            projectName: planModal.projectName,
+            projectNickname: planModal.projectNickname,
+            color: planModal.color ?? item.color,
+          };
           if (item.planTableVisible) {
             return {
               ...item,
+              ...nextProjectMetadata,
               hasPlan: true,
               planOutcomeRowCount: outcomeCount,
               planOutcomeQuestionRowCount: questionCount,
@@ -395,6 +434,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           }
           return {
             ...item,
+            ...nextProjectMetadata,
             planTableVisible: true,
             planTableCollapsed: false,
             hasPlan: true,
@@ -1361,6 +1401,10 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                   leftoverPrimary: leftoverNeedsQuestionEntries,
                   leftoverSecondary: leftoverNeedsPlanEntries,
                 } = buildPairedRowGroups(needsQuestionEntries, needsPlanEntries);
+                const isEditing = planModal.open && planModal.itemId === item.id;
+                const activeColor = isEditing ? planModal.color ?? item.color : item.color;
+                const headerBackground = activeColor || '#f3f4f6';
+                const headerTextColor = activeColor ? '#ffffff' : '#0f172a';
                 return (
                   <div key={item.id}>
                     <div className="flex items-start gap-2">
@@ -1383,8 +1427,8 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                       <div
                         className="relative grid rounded border border-[#ced3d0] pr-3 py-2 shadow-inner"
                         style={{
-                          backgroundColor: item.color || '#f3f4f6',
-                          color: item.color ? '#ffffff' : '#0f172a',
+                          backgroundColor: headerBackground,
+                          color: headerTextColor,
                           paddingLeft: '12px',
                           fontWeight: 600,
                           gridTemplateColumns: '1fr auto 140px 120px 32px',
@@ -1422,27 +1466,14 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                             <div className="space-y-3">
                               <div className="space-y-2" style={{ paddingTop: '15px' }}>
                                 <span className="text-sm font-semibold text-slate-700">Project colour</span>
-                                <div className="flex flex-wrap gap-2">
-                                  {COLOR_PALETTE.map((color) => {
-                                    const isActive = color === (planModal.color || COLOR_PALETTE[0]);
-                                    return (
-                                      <button
-                                        key={color}
-                                        type="button"
-                                        className={`border ${isActive ? 'border-black ring-2 ring-black/50' : 'border-[#ced3d0]'}`}
-                                        style={{
-                                          backgroundColor: color,
-                                          borderRadius: '9999px',
-                                          height: '15px',
-                                          width: '30px',
-                                          padding: 0,
-                                        }}
-                                        onClick={() => setPlanModal((prev) => ({ ...prev, color }))}
-                                        aria-label={`Select color ${color}`}
-                                      ></button>
-                                    );
-                                  })}
-                                </div>
+                                <ColorSwatchGrid
+                                  selectedColor={planModal.color}
+                                  onSelect={(color) =>
+                                    setPlanModal((prev) => ({ ...prev, color }))
+                                  }
+                                  buttonSize={28}
+                                  columns={4}
+                                />
                               </div>
                               <div className="space-y-1" style={{ paddingTop: '15px' }}>
                                 <label className="text-sm font-semibold text-slate-700" htmlFor="plan-name-inline">
@@ -1675,21 +1706,12 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
               <div className="space-y-4">
                 <div className="space-y-2" style={{ paddingTop: '15px' }}>
                   <span className="text-sm font-semibold text-slate-700">Project colour</span>
-                  <div className="flex flex-wrap gap-2">
-                    {COLOR_PALETTE.map((color) => {
-                      const isActive = color === (planModal.color || COLOR_PALETTE[0]);
-                      return (
-                        <button
-                          key={color}
-                          type="button"
-                          className={`h-8 w-8 rounded-full border ${isActive ? 'border-black ring-2 ring-black/50' : 'border-[#ced3d0]'}`}
-                          style={{ backgroundColor: color }}
-                          onClick={() => setPlanModal((prev) => ({ ...prev, color }))}
-                          aria-label={`Select color ${color}`}
-                        ></button>
-                      );
-                    })}
-                  </div>
+                  <ColorSwatchGrid
+                    selectedColor={planModal.color}
+                    onSelect={(color) => setPlanModal((prev) => ({ ...prev, color }))}
+                    buttonSize={34}
+                    columns={5}
+                  />
                 </div>
                 <div className="space-y-1" style={{ paddingTop: '15px' }}>
                   <label className="text-sm font-semibold text-slate-700" htmlFor="plan-name">
