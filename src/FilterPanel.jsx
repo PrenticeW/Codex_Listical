@@ -10,7 +10,6 @@ export default function FilterPanel({
   projectNames,
   selectedProjectFilters,
   handleProjectFilterSelect,
-  handleProjectFilterButtonClick,
   closeProjectFilterMenu,
   statusFilterMenu,
   statusFilterMenuRef,
@@ -18,7 +17,6 @@ export default function FilterPanel({
   statusNames,
   selectedStatusFilters,
   handleStatusFilterSelect,
-  handleStatusFilterButtonClick,
   closeStatusFilterMenu,
   recurringFilterMenu,
   recurringFilterMenuRef,
@@ -26,7 +24,6 @@ export default function FilterPanel({
   recurringNames,
   selectedRecurringFilters,
   handleRecurringFilterSelect,
-  handleRecurringFilterButtonClick,
   closeRecurringFilterMenu,
   estimateFilterMenu,
   estimateFilterMenuRef,
@@ -34,7 +31,6 @@ export default function FilterPanel({
   estimateNames,
   selectedEstimateFilters,
   handleEstimateFilterSelect,
-  handleEstimateFilterButtonClick,
   closeEstimateFilterMenu,
 }) {
   useEffect(() => {

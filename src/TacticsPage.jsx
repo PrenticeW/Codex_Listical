@@ -201,8 +201,6 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const colorInputRef = useRef(null);
   const [customProjects, setCustomProjects] = useState([]);
   const customSequenceRef = useRef(0);
-  const [editingCustomColorId, setEditingCustomColorId] = useState(null);
-  const [editingCustomColorValue, setEditingCustomColorValue] = useState('#c9daf8');
   const getProjectChipsByColumnIndex = useCallback(
     (columnIndex) => projectChips.filter((block) => block.columnIndex === columnIndex),
     [projectChips]
@@ -212,15 +210,6 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const getProjectChipById = useCallback(
     (blockId) => projectChips.find((block) => block.id === blockId) ?? null,
     [projectChips]
-  );
-  const getPrimaryBlockForDay = useCallback(
-    (dayLabel) => {
-      const columnIndex = displayedWeekDays.indexOf(dayLabel);
-      if (columnIndex < 0) return null;
-      const columnBlocks = getProjectChipsByColumnIndex(columnIndex);
-      return columnBlocks[0] ?? null;
-    },
-    [displayedWeekDays, getProjectChipsByColumnIndex]
   );
   const draggingSleepChipIdRef = useRef(null);
   const dragAnchorOffsetRef = useRef(0);
@@ -1312,6 +1301,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       handleCancelLabelEdit,
       editingChipIsCustom,
       setSelectedCell,
+      dragPreview,
     ]
   );
   const renderDragOutline = useCallback(() => {
@@ -1349,7 +1339,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         </div>
       </div>
     );
-  }, [dayColumnRects, displayedWeekDays, dragPreview, getBlockHeight, rowIndexMap, rowMetrics, tableRect]);
+  }, [dayColumnRects, dragPreview, getBlockHeight, rowIndexMap, rowMetrics, tableRect]);
   const renderCellProjectMenu = useCallback(() => {
     if (!cellMenu) return null;
     const { position } = cellMenu;

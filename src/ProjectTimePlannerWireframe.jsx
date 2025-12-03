@@ -1,11 +1,12 @@
 // Im ready to work
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReactTable, getCoreRowModel } from '@tanstack/react-table';
-import { ListFilter } from 'lucide-react';
 import NavigationBar from './NavigationBar';
 import useTimelineRows from './timeline/useTimelineRows';
 import useCellSelection from './hooks/useCellSelection';
 import FilterPanel from './FilterPanel';
+import ProjectListicalMenu from './ProjectListicalMenu';
+import TimelineHeader from './TimelineHeader';
 
 const PROTECTED_STATUSES = new Set(['Done', 'Abandoned', 'Blocked', 'On Hold', 'Skipped', 'Special']);
 const TASK_ROW_TYPES = new Set(['projectTask', 'inboxItem']);
@@ -98,6 +99,18 @@ const formatMinutesToHHmm = (minutes) => {
   const mins = minutes % 60;
   return `${hrs}.${mins.toString().padStart(2, '0')}`;
 };
+const COL_W = {
+  rowLabel: 36,
+  check: 24,
+  project: 120,
+  status: 120,
+  task: 240,
+  recurring: 80,
+  estimate: 100,
+  timeValue: 80,
+  day: 60,
+};
+const ROW_H = 26;
 const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Abandoned', 'Blocked', 'On Hold'];
 const SORT_INBOX_TARGET_MAP = {
   Done: 'general',
@@ -217,19 +230,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   const [lastSelectedRowIndex, setLastSelectedRowIndex] = useState(null);
   const clearSelectionRef = useRef(() => {});
   const selectedRowIdSet = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
-  const handleCellActivate = (rowId, cellId, { highlightRow = false, preserveSelection = false } = {}) => {
-    const preserveRowSelection = preserveSelection || shouldPreserveSelection();
-    setActiveCell({ rowId, cellId });
-    if (highlightRow) {
-      setHighlightedRowId(rowId);
-    } else {
-      setHighlightedRowId(null);
-      if (!preserveRowSelection && selectedRowIds.length) {
-        setSelectedRowIds([]);
-        setLastSelectedRowIndex(null);
-      }
-    }
-  };
 
   const handleCellClear = useCallback(
     ({ clearRowSelection = true } = {}) => {
@@ -247,8 +247,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   const [copiedCell, setCopiedCell] = useState(null);
   const [copiedCellHighlight, setCopiedCellHighlight] = useState(null);
   const copiedCellHighlightTimeoutRef = useRef(null);
-  const listicalButtonRef = useRef(null);
-  const listicalMenuRef = useRef(null);
   const [activeFilterColumns, setActiveFilterColumns] = useState(() => new Set());
   const [selectedProjectFilters, setSelectedProjectFilters] = useState(() => new Set());
   const [projectFilterMenu, setProjectFilterMenu] = useState(() => ({
@@ -339,8 +337,27 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       shift: Boolean(event?.shiftKey),
     };
   };
-  const shouldPreserveSelection = () =>
-    pointerModifierRef.current.meta || pointerModifierRef.current.shift;
+  const shouldPreserveSelection = useCallback(
+    () => pointerModifierRef.current.meta || pointerModifierRef.current.shift,
+    []
+  );
+
+  const handleCellActivate = useCallback(
+    (rowId, cellId, { highlightRow = false, preserveSelection = false } = {}) => {
+      const preserveRowSelection = preserveSelection || shouldPreserveSelection();
+      setActiveCell({ rowId, cellId });
+      if (highlightRow) {
+        setHighlightedRowId(rowId);
+      } else {
+        setHighlightedRowId(null);
+        if (!preserveRowSelection && selectedRowIds.length) {
+          setSelectedRowIds([]);
+          setLastSelectedRowIndex(null);
+        }
+      }
+    },
+    [selectedRowIds, shouldPreserveSelection]
+  );
 
   const updateDragIndex = (value) => {
     dragIndexRef.current = value;
@@ -703,19 +720,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     pendingRowClickModifierRef.current = { meta: false, shift: false };
   };
 
-  const COL_W = {
-    rowLabel: 36,
-    check: 24,
-    project: 120,
-    status: 120,
-    task: 240,
-    recurring: 80,
-    estimate: 100,
-    timeValue: 80,
-    day: 60,
-  };
-
-  const ROW_H = 26;
   const blackDividerStyle = { borderRight: '4px solid #000000' };
   const sharedInputStyle = 'w-full h-full text-[12px] px-2 border-none focus:outline-none focus:ring-0 bg-transparent';
   const checkboxInputClass = 'accent-black h-4 w-4 cursor-pointer focus:outline-none focus:ring-0';
@@ -1046,8 +1050,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   };
   const getWeekBorderClass = (_index, baseClass = '') => baseClass;
 
-  const createStyle = (backgroundColor, color) => ({ backgroundColor, color });
-
   const columnTotals = useMemo(() => {
     const totals = {};
     for (let i = 0; i < totalDays; i += 1) {
@@ -1071,10 +1073,8 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     monthSpans,
     weeksCount,
     showMaxMinRows,
-    totalDays,
     columnTotals,
     fixedColumnConfig,
-    getWidthStyle,
     applyWeekBorderStyles,
     getWeekBorderClass,
     blackDividerStyle,
@@ -1082,8 +1082,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   });
 
   const timelineRowCount = timelineRows.length;
-
-  const [monthsRow, weeksRow, datesRow, weekdaysRow, ...bufferRows] = timelineRows;
 
   const getColumnLabel = (index) => {
     let label = '';
@@ -1448,9 +1446,8 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   const statusNames = useMemo(() => STATUS_VALUES, []);
   const recurringNames = useMemo(() => RECURRING_VALUES, []);
   const estimateNames = useMemo(() => ESTIMATE_VALUES, []);
-  const toggleSortStatus = useCallback((status) => {
-    setIsListicalMenuOpen(false);
-    setRows((prevRows) => {
+  const insertArchiveRow = useCallback(
+    (prevRows) => {
       const headerIndex = prevRows.findIndex((row) => row.type === 'archiveHeader');
       if (headerIndex === -1) return prevRows;
       let insertIndex = headerIndex + 1;
@@ -1469,8 +1466,24 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       const nextRows = [...prevRows];
       nextRows.splice(insertIndex, 0, newRow);
       return nextRows;
+    },
+    [foremostWeekNumber, foremostWeekRange, totalDays]
+  );
+  const toggleSortStatus = useCallback((status) => {
+    setSelectedSortStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) {
+        next.delete(status);
+      } else {
+        next.add(status);
+      }
+      return next;
     });
-  }, [foremostWeekNumber, foremostWeekRange, setIsListicalMenuOpen, setRows, totalDays]);
+  }, []);
+  const handleArchiveWeek = useCallback(() => {
+    setIsListicalMenuOpen(false);
+    setRows((prevRows) => insertArchiveRow(prevRows));
+  }, [insertArchiveRow]);
 
   const handleSortInbox = useCallback(() => {
     setIsListicalMenuOpen(false);
@@ -1603,156 +1616,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     setAddTasksCount('');
   }, [addTasksCount, activeRowId, highlightedRowId, selectedRowIds, setRows]);
 
-  useEffect(() => {
-    if (!isListicalMenuOpen || !isBrowserEnvironment()) return undefined;
-    const handleClickOutside = (event) => {
-      const menuNode = listicalMenuRef.current;
-      const buttonNode = listicalButtonRef.current;
-      if (menuNode && menuNode.contains(event.target)) return;
-      if (buttonNode && buttonNode.contains(event.target)) return;
-      setIsListicalMenuOpen(false);
-    };
-
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setIsListicalMenuOpen(false);
-      }
-    };
-
-    window.addEventListener('mousedown', handleClickOutside, true);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('mousedown', handleClickOutside, true);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isListicalMenuOpen]);
-
-  const renderTimelineRow = (config) => {
-    if (!config) return null;
-    const {
-      id,
-      rowClassName,
-      rowLabelStyle,
-      rowLabelClassName = 'text-center font-semibold border border-[#ced3d0]',
-      fixedCellStyle,
-      fixedCellClassName = 'border border-[#ced3d0]',
-      fixedCells = [],
-      cells = [],
-      rowLabelContent = '',
-    } = config;
-    const isFilterRow = id === 'totals';
-
-    const renderContentWithFilterButton = (content, columnKey = null) => {
-      if (!isFilterRow || !columnKey || columnKey === 'rowLabel') return content;
-      const columnLetter = columnLetterByKey[columnKey];
-      if (columnLetter && FILTER_BLOCKED_LETTERS.has(columnLetter)) return content;
-      const isProjectFilterButton = columnKey === 'project';
-      const isStatusFilterButton = columnKey === 'status';
-      const isRecurringFilterButton = columnKey === 'recurring';
-      const isEstimateFilterButton = columnKey === 'estimate';
-      const isActive = isProjectFilterButton
-        ? projectFilterMenu.open || selectedProjectFilters.size > 0
-        : isStatusFilterButton
-          ? statusFilterMenu.open || selectedStatusFilters.size > 0
-          : isRecurringFilterButton
-            ? recurringFilterMenu.open || selectedRecurringFilters.size > 0
-            : isEstimateFilterButton
-              ? estimateFilterMenu.open || selectedEstimateFilters.size > 0
-              : activeFilterColumns.has(columnKey);
-      return (
-        <div className="flex w-full items-center justify-end gap-1">
-          <span className="leading-tight">{content}</span>
-          <button
-            type="button"
-            aria-label={`Toggle filter for ${columnKey}`}
-            aria-pressed={isActive}
-            title={isActive ? 'Filter active' : 'Add filter'}
-            ref={
-              isProjectFilterButton
-                ? projectFilterButtonRef
-                : isStatusFilterButton
-                  ? statusFilterButtonRef
-                  : isRecurringFilterButton
-                    ? recurringFilterButtonRef
-                    : isEstimateFilterButton
-                      ? estimateFilterButtonRef
-                      : null
-            }
-            onClick={(event) => {
-              if (isProjectFilterButton) {
-                handleProjectFilterButtonClick(event);
-              } else if (isStatusFilterButton) {
-                handleStatusFilterButtonClick(event);
-              } else if (isRecurringFilterButton) {
-                handleRecurringFilterButtonClick(event);
-              } else if (isEstimateFilterButton) {
-                handleEstimateFilterButtonClick(event);
-              } else {
-                event.preventDefault();
-                event.stopPropagation();
-                toggleFilterColumn(columnKey);
-              }
-            }}
-            className={`inline-flex h-[22px] w-[22px] items-center justify-center bg-transparent p-0 transition-colors ${
-              isActive ? 'text-green-600' : 'text-green-400 hover:text-green-600'
-            }`}
-            style={{ border: 'none' }}
-          >
-            <ListFilter className="h-full w-full" strokeWidth={isActive ? 2.2 : 2} />
-          </button>
-        </div>
-      );
-    };
-
-    return (
-      <tr key={`row-${id}`} className={`h-[${ROW_H}px] ${rowClassName ?? ''}`}>
-        <td
-          className={`${rowLabelClassName} p-0`}
-          style={getWidthStyle('rowLabel', applyRowLabelStyle(rowLabelStyle || {}))}
-        >
-          {renderContentWithFilterButton(rowLabelContent, 'rowLabel')}
-        </td>
-        {fixedCells.length > 0
-          ? fixedCells.map((cell) => (
-              <td
-                key={cell.key}
-                colSpan={cell.colSpan ?? 1}
-                className={`${cell.className ?? fixedCellClassName} p-0`}
-                style={{
-                  ...(fixedCellStyle || {}),
-                  ...(cell.columnKey
-                    ? getWidthStyle(cell.columnKey, cell.style || {})
-                    : cell.style || {}),
-                }}
-              >
-                {renderContentWithFilterButton(cell.content, cell.columnKey ?? cell.key)}
-              </td>
-            ))
-          : (
-            <td
-              colSpan={fixedCols - 1}
-              className={`${fixedCellClassName} p-0`}
-              style={fixedCellStyle}
-            ></td>
-          )}
-        {cells.map((cell) => (
-          <td
-            key={cell.key}
-            colSpan={cell.colSpan ?? 1}
-            className={[cell.className || '', 'p-0'].join(' ').trim()}
-            style={
-              cell.columnKey
-                ? getWidthStyle(cell.columnKey, cell.style || {})
-                : cell.style
-            }
-          >
-            {renderContentWithFilterButton(cell.content, cell.columnKey)}
-          </td>
-        ))}
-      </tr>
-    );
-  };
-
   const EstimateOptions = () => (
     <>
       <option>-</option>
@@ -1781,41 +1644,17 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     </>
   );
 
-  const renderDataRow = (
+  const createRowRenderContext = (
     tableRow,
-    { previousRowOriginal, rowProps = {}, isActive = false } = {}
+    { previousRowOriginal = null, rowProps = {}, isActive = false } = {}
   ) => {
     const row = tableRow.original;
     const previousRow = previousRowOriginal;
-    const rowNumber = timelineRowCount + tableRow.index + 1; // Continue numbering after timeline header rows.
-    const isDraggingRow = dragIndex === tableRow.index;
     const rowId = row.id;
+    const rowNumber = timelineRowCount + tableRow.index + 1;
+    const isDraggingRow = dragIndex === tableRow.index;
     const isRowSelected = selectedRowIdSet.has(rowId);
-    const commitRowUpdate = (updater, { markInteraction = false } = {}) => {
-      updateRowValues(
-        tableRow.index,
-        updater,
-        markInteraction ? { markInteraction: true } : undefined
-      );
-    };
-    const ensureInteractionMarked = () => {
-      if (!TASK_ROW_TYPES.has(row.type) || row.hasUserInteraction) return;
-      updateRowValues(tableRow.index, {}, { markInteraction: true });
-    };
-    const cellMetadataProps = (cellId) => ({
-      'data-row-id': row.id,
-      'data-column-key': cellId,
-    });
-    const withCellSelectionClass = (className = '', cellKey) => {
-      const classes = [];
-      if (className) classes.push(className);
-      if (cellKey && (isCellActive(row.id, cellKey) || isCellInSelection(row.id, cellKey))) classes.push('active-cell');
-      return classes.join(' ');
-    };
-    const cellClickProps = (columnId) => ({
-      ...cellMetadataProps(columnId),
-      onFocus: () => handleCellClick(tableRow.index, columnId),
-    });
+
     const rowPropsLocal = {
       ...rowProps,
       style: {
@@ -1838,1049 +1677,1189 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     if (hoverIndex === tableRow.index + 1) indicatorShadows.push('inset 0 -2px 0 0 #2563eb');
     if (highlight) indicatorShadows.push('0 0 0 2px rgba(37,99,235,0.35)');
     if (isRowSelected) indicatorShadows.push('0 0 0 2px rgba(59,130,246,0.5)');
-    if (indicatorShadows.length > 0) {
-      rowPropsLocal.style.boxShadow = indicatorShadows.join(', ');
-    } else {
-      rowPropsLocal.style.boxShadow = 'none';
-    }
+    rowPropsLocal.style.boxShadow = indicatorShadows.length
+      ? indicatorShadows.join(', ')
+      : 'none';
 
-    switch (row.type) {
-      case 'projectHeader': {
-        const projectRollupValue = projectHeaderTotals[rowId] ?? '0.00';
-        return (
-          <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
-            <td
-              {...cellMetadataProps('rowLabel')}
-              className={withCellSelectionClass(
-                `text-center font-semibold border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`,
-                'rowLabel'
-              )}
-              style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(row.id, 'rowLabel')))}
-              tabIndex={0}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'rowLabel', { highlightRow: true })}
-              onFocus={() =>
-                handleCellActivate(row.id, 'rowLabel', {
-                  highlightRow: true,
-                  preserveSelection: true,
-                })
-              }
-              onClick={(event) => handleRowClick(event, tableRow.index)}
-            >
-              {rowNumber}
-            </td>
-            <td
-              className={withCellSelectionClass('bg-[#d5a6bd] font-extrabold px-2 text-[12px]', 'check')}
-              style={getWidthStyle('check', {
-                ...getCellHighlightStyle(row.id, 'check'),
-                overflow: 'visible',
-                whiteSpace: 'nowrap',
-                fontWeight: 800,
-                paddingLeft: 8,
-              })}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'check')}
-              {...cellClickProps('check')}
-            >
-              {row.projectName}
-            </td>
-            <td
-              className={withCellSelectionClass('bg-[#d5a6bd]', 'project')}
-              style={getWidthStyle('project', getCellHighlightStyle(row.id, 'project'))}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'project')}
-              {...cellClickProps('project')}
-            ></td>
-            <td
-              className={withCellSelectionClass('bg-[#d5a6bd]', 'status')}
-              style={getWidthStyle('status', getCellHighlightStyle(row.id, 'status'))}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'status')}
-              {...cellClickProps('status')}
-            ></td>
-            <td
-              className={withCellSelectionClass('bg-[#d5a6bd]', 'task')}
-              style={getWidthStyle('task', getCellHighlightStyle(row.id, 'task'))}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'task')}
-              {...cellClickProps('task')}
-            ></td>
-            {showRecurring && (
-              <td
-                className={withCellSelectionClass('bg-[#d5a6bd]', 'recurring')}
-                style={getWidthStyle('recurring', getCellHighlightStyle(row.id, 'recurring'))}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, 'recurring')}
-                {...cellClickProps('recurring')}
-              ></td>
-            )}
-            <td
-              className={withCellSelectionClass('bg-[#d5a6bd] text-right pr-2 font-semibold', 'estimate')}
-              style={getWidthStyle('estimate', {
-                ...getCellHighlightStyle(row.id, 'estimate'),
-                textAlign: 'right',
-                paddingRight: 8,
-                fontWeight: 600,
-              })}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'estimate')}
-              {...cellClickProps('estimate')}
-            >
-              {projectRollupValue}
-            </td>
-            <td
-              className={withCellSelectionClass('bg-[#d5a6bd] border border-[#ced3d0]', 'timeValue')}
-              style={getWidthStyle('timeValue', {
-                ...blackDividerStyle,
-                ...getCellHighlightStyle(row.id, 'timeValue'),
-                textAlign: 'left',
-                paddingLeft: 8,
-                fontWeight: 600,
-              })}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'timeValue')}
-              {...cellClickProps('timeValue')}
-            >
-              of 0.00
-            </td>
-            {Array.from({ length: totalDays }).map((_, i) => (
-              <td
-                key={`${row.id}-hdr-${i}`}
-                style={{
-                  ...applyWeekBorderStyles(i, getWidthStyle(`day-${i}`)),
-                  ...getCellHighlightStyle(row.id, `day-${i}`),
-                }}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, `day-${i}`)}
-                className={withCellSelectionClass(
-                  `${getWeekBorderClass(i, 'bg-white border border-[#ced3d0]')} p-0`,
-                  `day-${i}`
-                )}
-                {...cellClickProps(`day-${i}`)}
-              >
-                <input
-                  type="text"
-                  className={sharedInputStyle}
-                  defaultValue=""
-                  onMouseDown={(event) => handleCellMouseDown(event, row.id, `day-${i}`)}
-                  onFocus={() => handleCellActivate(row.id, `day-${i}`)}
-                  onPaste={(event) =>
-                    handleOverwritePaste(event, (text) => {
-                      event.currentTarget.value = text;
-                    })
-                  }
-                />
-              </td>
-            ))}
-          </tr>
-        );
+    const commitRowUpdate = (updater, options) => {
+      updateRowValues(
+        tableRow.index,
+        updater,
+        options?.markInteraction ? { markInteraction: true } : undefined
+      );
+    };
+    const ensureInteractionMarked = () => {
+      if (!TASK_ROW_TYPES.has(row.type) || row.hasUserInteraction) return;
+      updateRowValues(tableRow.index, {}, { markInteraction: true });
+    };
+    const cellMetadataProps = (cellId) => ({
+      'data-row-id': row.id,
+      'data-column-key': cellId,
+    });
+    const withCellSelectionClass = (className = '', cellKey) => {
+      const classes = [];
+      if (className) classes.push(className);
+      if (cellKey && (isCellActive(row.id, cellKey) || isCellInSelection(row.id, cellKey))) {
+        classes.push('active-cell');
       }
-      case 'projectGeneral':
-        return (
-          <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
-            <td
-              {...cellMetadataProps('rowLabel')}
-              className={withCellSelectionClass(
-                `text-center border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`,
-                'rowLabel'
-              )}
-              style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(row.id, 'rowLabel')))}
-              tabIndex={0}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'rowLabel', { highlightRow: true })}
-              onFocus={() =>
-                handleCellActivate(row.id, 'rowLabel', {
-                  highlightRow: true,
-                  preserveSelection: true,
-                })
-              }
-              onClick={(event) => handleRowClick(event, tableRow.index)}
-            >
-              {rowNumber}
-            </td>
-            <td
-              className={withCellSelectionClass('bg-[#f2e5eb]', 'check')}
-              style={getWidthStyle('check', getCellHighlightStyle(row.id, 'check'))}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'check')}
-              {...cellClickProps('check')}
-            ></td>
-            <td
-              className={withCellSelectionClass('bg-[#f2e5eb]', 'project')}
-              style={getWidthStyle('project', getCellHighlightStyle(row.id, 'project'))}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'project')}
-              {...cellClickProps('project')}
-            ></td>
-            <td
-              className={withCellSelectionClass('bg-[#f2e5eb]', 'status')}
-              style={getWidthStyle('status', getCellHighlightStyle(row.id, 'status'))}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'status')}
-              {...cellClickProps('status')}
-            ></td>
-            <td
-              className={withCellSelectionClass('bg-[#f2e5eb] px-2 font-extrabold text-[12px]', 'task')}
-              style={getWidthStyle('task', { fontWeight: 800, paddingLeft: 8, ...getCellHighlightStyle(row.id, 'task') })}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'task')}
-              {...cellClickProps('task')}
-            >
-              General
-            </td>
-            {showRecurring && (
-              <td
-                className={withCellSelectionClass('bg-[#f2e5eb]', 'recurring')}
-                style={getWidthStyle('recurring', getCellHighlightStyle(row.id, 'recurring'))}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, 'recurring')}
-                {...cellClickProps('recurring')}
-              ></td>
-            )}
-            <td
-              className={withCellSelectionClass('bg-[#f2e5eb]', 'estimate')}
-              style={getWidthStyle('estimate', getCellHighlightStyle(row.id, 'estimate'))}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'estimate')}
-              {...cellClickProps('estimate')}
-            ></td>
-            <td
-              className={withCellSelectionClass('bg-[#f2e5eb] border border-[#ced3d0]', 'timeValue')}
-              style={getWidthStyle('timeValue', {
-                ...blackDividerStyle,
-                ...getCellHighlightStyle(row.id, 'timeValue'),
-                textAlign: 'right',
-                paddingRight: 8,
-              })}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'timeValue')}
-              {...cellClickProps('timeValue')}
-            ></td>
-            {Array.from({ length: totalDays }).map((_, i) => (
-              <td
-                key={`${row.id}-gen-${i}`}
-                style={{
-                  ...applyWeekBorderStyles(i, getWidthStyle(`day-${i}`)),
-                  ...getCellHighlightStyle(row.id, `day-${i}`),
-                }}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, `day-${i}`)}
-                className={withCellSelectionClass(
-                  `${getWeekBorderClass(i, 'bg-white border border-[#ced3d0]')} p-0`,
-                  `day-${i}`
-                )}
-                {...cellClickProps(`day-${i}`)}
-              >
-                <input
-                  type="text"
-                  className={sharedInputStyle}
-                  defaultValue=""
-                  onMouseDown={(event) => handleCellMouseDown(event, row.id, `day-${i}`)}
-                  onFocus={() => handleCellActivate(row.id, `day-${i}`)}
-                  onPaste={(event) =>
-                    handleOverwritePaste(event, (text) => {
-                      event.currentTarget.value = text;
-                    })
-                  }
-                />
-              </td>
-            ))}
-          </tr>
-        );
-      case 'projectTask': {
-        const dayEntries = Array.isArray(row.dayEntries) ? row.dayEntries : [];
-        const isCustomEstimate = row.estimate === 'Custom';
-        const updateTaskName = (value) => {
-          commitRowUpdate({ taskName: value }, { markInteraction: true });
-        };
-        const updateDayEntry = (dayIndex, value) => {
-          commitRowUpdate(
-            (currentRow) => {
-              const existingEntries = Array.isArray(currentRow.dayEntries)
-                ? [...currentRow.dayEntries]
-                : createEmptyDayEntries(totalDays);
-              existingEntries[dayIndex] = value;
-              const updates = { dayEntries: existingEntries };
-              if ((value ?? '').trim() && currentRow.status === 'Not Scheduled') {
-                updates.status = 'Scheduled';
-              }
-              return updates;
-            },
-            { markInteraction: true }
-          );
-        };
-        const updateTimeValue = (value) => {
-          if (!isCustomEstimate) return;
-          commitRowUpdate(
-            (currentRow) => {
-              const updates = { timeValue: value };
-              const syncedEntries = syncDayEntriesWithTimeValue(
-                currentRow.dayEntries,
-                value,
-                currentRow.timeValue
-              );
-              if (syncedEntries !== currentRow.dayEntries) {
-                updates.dayEntries = syncedEntries;
-              }
-              return updates;
-            },
-            { markInteraction: true }
-          );
-        };
-        return (
-          <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
-            <td
-              {...cellMetadataProps('rowLabel')}
-              className={withCellSelectionClass(
-                `text-center align-middle border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`,
-                'rowLabel'
-              )}
-              style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(row.id, 'rowLabel')))}
-              tabIndex={0}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'rowLabel', { highlightRow: true })}
-              onFocus={() =>
-                handleCellActivate(row.id, 'rowLabel', {
-                  highlightRow: true,
-                  preserveSelection: true,
-                })
-              }
-              onClick={(event) => handleRowClick(event, tableRow.index)}
-            >
-              {rowNumber}
-            </td>
-            <td
-              className={withCellSelectionClass('border border-[#ced3d0] p-0 check-cell', 'check')}
-              style={getWidthStyle('check', getCellHighlightStyle(row.id, 'check'))}
-              {...cellClickProps('check')}
-            >
-              <div className="flex h-full w-full items-center justify-center">
-                <input
-                  type="checkbox"
-                  className={checkboxInputClass}
-                  onMouseDown={(event) => handleCellMouseDown(event, row.id, 'check')}
-                  onFocus={() => handleCellActivate(row.id, 'check')}
-                  onChange={ensureInteractionMarked}
-                />
-              </div>
-            </td>
-            <td
-              style={getWidthStyle('project', getCellHighlightStyle(row.id, 'project'))}
-              className={withCellSelectionClass('border border-[#ced3d0] p-0', 'project')}
-              {...cellClickProps('project')}
-            >
-              <select
-                className={`${sharedInputStyle} uppercase project-pill-select`}
-                style={getProjectSelectStyle(row.projectSelection)}
-                value={row.projectSelection ?? '-'}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  commitRowUpdate({ projectSelection: nextValue }, { markInteraction: true });
-                }}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, 'project')}
-                onFocus={() => handleCellActivate(row.id, 'project')}
-              >
-                <option>-</option>
-                <option>PROJECT A</option>
-                <option>PROJECT B</option>
-                <option>PROJECT C</option>
-              </select>
-            </td>
-            <td
-              style={getWidthStyle('status', getCellHighlightStyle(row.id, 'status'))}
-              className={withCellSelectionClass('border border-[#ced3d0] p-0', 'status')}
-              {...cellClickProps('status')}
-            >
-              <div className="status-pill-container">
-                <select
-                  className="status-pill-select"
-                  style={getStatusColorStyle(row.status)}
-                  value={row.status ?? '-'}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    commitRowUpdate({ status: nextValue }, { markInteraction: true });
-                  }}
-                  onMouseDown={(event) => handleCellMouseDown(event, row.id, 'status')}
-                  onFocus={() => handleCellActivate(row.id, 'status')}
-                >
-                  <StatusOptions />
-                </select>
-              </div>
-            </td>
-            <td
-              style={getWidthStyle('task', getCellHighlightStyle(row.id, 'task'))}
-              className={withCellSelectionClass('border border-[#ced3d0] p-0', 'task')}
-              {...cellClickProps('task')}
-            >
-              <input
-                type="text"
-                className={sharedInputStyle}
-                value={row.taskName ?? ''}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, 'task')}
-                onFocus={() => handleCellActivate(row.id, 'task')}
-                onChange={(event) => updateTaskName(event.target.value)}
-                onPaste={(event) =>
-                  handleOverwritePaste(event, (text) => updateTaskName(text))
-                }
-              />
-            </td>
-            {showRecurring && (
-              <td
-                className={withCellSelectionClass('border border-[#ced3d0] p-0', 'recurring')}
-                style={getWidthStyle('recurring', getCellHighlightStyle(row.id, 'recurring'))}
-                {...cellClickProps('recurring')}
-              >
-                <div className="flex h-full w-full items-center justify-center">
-                  <input
-                    type="checkbox"
-                    className={checkboxInputClass}
-                    checked={row.recurring === 'Recurring'}
-                    onMouseDown={(event) => handleCellMouseDown(event, row.id, 'recurring')}
-                    onFocus={() => handleCellActivate(row.id, 'recurring')}
-                    onChange={(event) => {
-                      const nextValue = event.target.checked ? 'Recurring' : 'Not Recurring';
-                      commitRowUpdate({ recurring: nextValue }, { markInteraction: true });
-                    }}
-                  />
-                </div>
-              </td>
-            )}
-            <td
-              style={getWidthStyle('estimate', getCellHighlightStyle(row.id, 'estimate'))}
-              className={withCellSelectionClass('border border-[#ced3d0] p-0', 'estimate')}
-              {...cellClickProps('estimate')}
-            >
-              <select
-                className={sharedInputStyle}
-                value={row.estimate ?? '-'}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  commitRowUpdate(
-                    (currentRow) => {
-                      const updates = { estimate: nextValue };
-                      const minutes = parseEstimateLabelToMinutes(nextValue);
-                      let nextTimeValue;
-                      if (minutes != null) {
-                        nextTimeValue = formatMinutesToHHmm(minutes);
-                      } else if (nextValue === 'Custom') {
-                        nextTimeValue = '0.00';
-                      } else {
-                        nextTimeValue = '0.00';
-                      }
-                      updates.timeValue = nextTimeValue;
-                      const syncedEntries = syncDayEntriesWithTimeValue(
-                        currentRow.dayEntries,
-                        nextTimeValue,
-                        currentRow.timeValue
-                      );
-                      if (syncedEntries !== currentRow.dayEntries) {
-                        updates.dayEntries = syncedEntries;
-                      }
-                      return updates;
-                    },
-                    { markInteraction: true }
-                  );
-                }}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, 'estimate')}
-                onFocus={() => handleCellActivate(row.id, 'estimate')}
-              >
-                <EstimateOptions />
-              </select>
-            </td>
-            <td
-              className={withCellSelectionClass('border border-[#ced3d0] p-0', 'timeValue')}
-              style={getWidthStyle('timeValue', {
-                ...blackDividerStyle,
-                ...getCellHighlightStyle(row.id, 'timeValue'),
-                textAlign: 'right',
-                paddingRight: 8,
-              })}
-              {...cellClickProps('timeValue')}
-            >
-              <input
-                type="text"
-                className={`${sharedInputStyle} text-right pr-2`}
-                value={row.timeValue ?? '0.00'}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, 'timeValue')}
-                onFocus={() => handleCellActivate(row.id, 'timeValue')}
-                onChange={(event) => {
-                  if (!isCustomEstimate) return;
-                  updateTimeValue(event.target.value);
-                }}
-                onPaste={(event) => {
-                  if (!isCustomEstimate) return;
-                  handleOverwritePaste(event, (text) => updateTimeValue(text));
-                }}
-                readOnly={!isCustomEstimate}
-              />
-            </td>
-            {Array.from({ length: totalDays }).map((_, i) => (
-              <td
-                key={`${row.id}-task-${i}`}
-                style={{
-                  ...applyWeekBorderStyles(i, getWidthStyle(`day-${i}`)),
-                  ...getCellHighlightStyle(row.id, `day-${i}`),
-                }}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, `day-${i}`)}
-                className={withCellSelectionClass(
-                  `${getWeekBorderClass(i, 'border border-[#ced3d0]')} p-0`,
-                  `day-${i}`
-                )}
-                {...cellClickProps(`day-${i}`)}
-              >
-                <input
-                  type="text"
-                  className={sharedInputStyle}
-                  value={dayEntries[i] ?? ''}
-                  onMouseDown={(event) => handleCellMouseDown(event, row.id, `day-${i}`)}
-                  onFocus={() => handleCellActivate(row.id, `day-${i}`)}
-                  onChange={(event) => updateDayEntry(i, event.target.value)}
-                  onPaste={(event) =>
-                    handleOverwritePaste(event, (text) => updateDayEntry(i, text))
-                  }
-                  data-time-entry="true"
-                />
-              </td>
-            ))}
-          </tr>
-        );
-      }
-      case 'projectUnscheduled':
-        return (
-          <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
-            <td
-              {...cellMetadataProps('rowLabel')}
-              className={withCellSelectionClass(
-                `text-center border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`,
-                'rowLabel'
-              )}
-              style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(row.id, 'rowLabel')))}
-              tabIndex={0}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'rowLabel', { highlightRow: true })}
-              onFocus={() =>
-                handleCellActivate(row.id, 'rowLabel', {
-                  highlightRow: true,
-                  preserveSelection: true,
-                })
-              }
-              onClick={(event) => handleRowClick(event, tableRow.index)}
-            >
-              {rowNumber}
-            </td>
-            <td
-              className={withCellSelectionClass('bg-[#f2e5eb]', 'check')}
-              style={getWidthStyle('check', getCellHighlightStyle(row.id, 'check'))}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'check')}
-              {...cellClickProps('check')}
-            ></td>
-            <td
-              className={withCellSelectionClass('bg-[#f2e5eb]', 'project')}
-              style={getWidthStyle('project', getCellHighlightStyle(row.id, 'project'))}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'project')}
-              {...cellClickProps('project')}
-            ></td>
-            <td
-              className={withCellSelectionClass('bg-[#f2e5eb]', 'status')}
-              style={getWidthStyle('status', getCellHighlightStyle(row.id, 'status'))}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'status')}
-              {...cellClickProps('status')}
-            ></td>
-            <td
-              className={withCellSelectionClass('bg-[#f2e5eb] px-2 font-extrabold text-[12px]', 'task')}
-              style={getWidthStyle('task', { fontWeight: 800, paddingLeft: 8, ...getCellHighlightStyle(row.id, 'task') })}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'task')}
-              {...cellClickProps('task')}
-            >
-              Unscheduled
-            </td>
-            {showRecurring && (
-              <td
-                className={withCellSelectionClass('bg-[#f2e5eb]', 'recurring')}
-                style={getWidthStyle('recurring', getCellHighlightStyle(row.id, 'recurring'))}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, 'recurring')}
-                {...cellClickProps('recurring')}
-              ></td>
-            )}
-            <td
-              className={withCellSelectionClass('bg-[#f2e5eb]', 'estimate')}
-              style={getWidthStyle('estimate', getCellHighlightStyle(row.id, 'estimate'))}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'estimate')}
-              {...cellClickProps('estimate')}
-            ></td>
-            <td
-              className={withCellSelectionClass('bg-[#f2e5eb] border border-[#ced3d0]', 'timeValue')}
-              style={getWidthStyle('timeValue', {
-                ...blackDividerStyle,
-                ...getCellHighlightStyle(row.id, 'timeValue'),
-                textAlign: 'right',
-                paddingRight: 8,
-              })}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'timeValue')}
-              {...cellClickProps('timeValue')}
-            ></td>
-            {Array.from({ length: totalDays }).map((_, i) => (
-              <td
-                key={`${row.id}-uns-${i}`}
-                style={{
-                  ...applyWeekBorderStyles(i, getWidthStyle(`day-${i}`)),
-                  ...getCellHighlightStyle(row.id, `day-${i}`),
-                }}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, `day-${i}`)}
-                className={withCellSelectionClass(
-                  `${getWeekBorderClass(i, 'bg-white border border-[#ced3d0]')} p-0`,
-                  `day-${i}`
-                )}
-                {...cellClickProps(`day-${i}`)}
-              >
-                <input
-                  type="text"
-                  className={sharedInputStyle}
-                  defaultValue=""
-                  onMouseDown={(event) => handleCellMouseDown(event, row.id, `day-${i}`)}
-                  onFocus={() => handleCellActivate(row.id, `day-${i}`)}
-                  onPaste={(event) =>
-                    handleOverwritePaste(event, (text) => {
-                      event.currentTarget.value = text;
-                    })
-                  }
-                />
-              </td>
-            ))}
-          </tr>
-        );
-      case 'inboxHeader': {
-        const headerStyle = DARK_HEADER_STYLE;
-        return (
-          <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
-            <td
-              {...cellMetadataProps('rowLabel')}
-              className={withCellSelectionClass(
-                `font-bold text-center border-0${isRowSelected ? ' selected-cell' : ''}`,
-                'rowLabel'
-              )}
-              style={getWidthStyle('rowLabel', applyRowLabelStyle({
-                ...headerStyle,
-                ...getCellHighlightStyle(row.id, 'rowLabel'),
-              }))}
-              tabIndex={0}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'rowLabel', { highlightRow: true })}
-              onFocus={() =>
-                handleCellActivate(row.id, 'rowLabel', {
-                  highlightRow: true,
-                  preserveSelection: true,
-                })
-              }
-              onClick={(event) => handleRowClick(event, tableRow.index)}
-            >
-              {rowNumber}
-            </td>
-            <td
-              className={withCellSelectionClass('font-bold px-2 border-0', 'header-fixed')}
-              colSpan={fixedCols - 1}
-              style={{
-                ...blackDividerStyle,
-                ...headerStyle,
-                ...getCellHighlightStyle(row.id, 'header-fixed'),
-                paddingLeft: 8,
-                fontWeight: 800,
-              }}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'header-fixed')}
-              {...cellClickProps('header-fixed')}
-            >
-              Inbox
-            </td>
-            <td
-              className={withCellSelectionClass('border-0', 'header-span')}
-              colSpan={totalDays}
-              style={{ ...headerStyle, ...getCellHighlightStyle(row.id, 'header-span') }}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'header-span')}
-              {...cellClickProps('header-span')}
-            ></td>
-          </tr>
-        );
-      }
-      case 'archiveHeader': {
-        const headerStyle = DARK_HEADER_STYLE;
-        return (
-          <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
-            <td
-              {...cellMetadataProps('rowLabel')}
-              className={withCellSelectionClass(
-                `font-bold text-center border-0${isRowSelected ? ' selected-cell' : ''}`,
-                'rowLabel'
-              )}
-              style={getWidthStyle('rowLabel', applyRowLabelStyle({
-                ...headerStyle,
-                ...getCellHighlightStyle(row.id, 'rowLabel'),
-              }))}
-              tabIndex={0}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'rowLabel', { highlightRow: true })}
-              onFocus={() =>
-                handleCellActivate(row.id, 'rowLabel', {
-                  highlightRow: true,
-                  preserveSelection: true,
-                })
-              }
-              onClick={(event) => handleRowClick(event, tableRow.index)}
-            >
-              {rowNumber}
-            </td>
-            <td
-              className={withCellSelectionClass('font-bold px-2 border-0', 'header-fixed')}
-              colSpan={fixedCols - 1}
-              style={{
-                ...blackDividerStyle,
-                ...headerStyle,
-                ...getCellHighlightStyle(row.id, 'header-fixed'),
-                paddingLeft: 8,
-                fontWeight: 800,
-              }}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'header-fixed')}
-              {...cellClickProps('header-fixed')}
-            >
-              Archive
-            </td>
-            <td
-              className={withCellSelectionClass('border-0', 'header-span')}
-              colSpan={totalDays}
-              style={{ ...headerStyle, ...getCellHighlightStyle(row.id, 'header-span') }}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'header-span')}
-              {...cellClickProps('header-span')}
-            ></td>
-          </tr>
-        );
-      }
-      case 'archiveRow': {
-        const topBorderClass =
-          previousRow && (previousRow.type === 'archiveHeader' || previousRow.type === 'archiveRow')
-            ? ' border-t-0'
-            : '';
-        return (
-          <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
-            <td
-              {...cellMetadataProps('rowLabel')}
-              className={withCellSelectionClass(
-                `text-center align-middle border border-[#ced3d0]${topBorderClass}${isRowSelected ? ' selected-cell' : ''}`,
-                'rowLabel'
-              )}
-              style={getWidthStyle('rowLabel', applyRowLabelStyle({
-                ...ARCHIVE_ROW_STYLE,
-                ...getCellHighlightStyle(row.id, 'rowLabel'),
-              }))}
-              tabIndex={0}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'rowLabel', { highlightRow: true })}
-              onFocus={() =>
-                handleCellActivate(row.id, 'rowLabel', {
-                  highlightRow: true,
-                  preserveSelection: true,
-                })
-              }
-              onClick={(event) => handleRowClick(event, tableRow.index)}
-            >
-              {rowNumber}
-            </td>
-            {fixedColumnConfig.map(({ key, className }, colIdx) => {
-              const cellContent = (() => {
-                if (colIdx === 0) return row.archiveWeekLabel ?? '';
-                if (key === 'task') return row.archiveLabel ?? '';
-                if (key === 'estimate') return '0.00';
-                if (key === 'timeValue') return 'of 0.00 - 0.00';
-                return '';
-              })();
-              const extraStyles =
-                colIdx === 0
-                  ? { overflow: 'visible', whiteSpace: 'nowrap', paddingLeft: 16 }
-                  : key === 'task'
-                    ? { paddingLeft: 16 }
-                    : {};
-              const alignmentStyle =
-                key === 'estimate'
-                  ? { textAlign: 'right', fontWeight: 800 }
-                  : key === 'timeValue'
-                    ? { textAlign: 'left' }
-                    : {};
-              return (
-              <td
-                key={`${row.id}-${key}`}
-                className={withCellSelectionClass(
-                  `border border-[#ced3d0]${topBorderClass} ${className ?? ''} font-semibold px-2`,
-                  key
-                )}
-                style={getWidthStyle(key, {
-                  ...ARCHIVE_ROW_STYLE,
-                  ...(key === 'timeValue' ? blackDividerStyle : {}),
-                  ...getCellHighlightStyle(row.id, key),
-                  ...extraStyles,
-                  ...alignmentStyle,
-                })}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, key)}
-                {...cellClickProps(key)}
-              >
-                {cellContent}
-              </td>
-            );
-            })}
-            {Array.from({ length: totalDays }).map((_, i) => (
-              <td
-                key={`${row.id}-archive-${i}`}
-                className={withCellSelectionClass(
-                  `${getWeekBorderClass(i, 'border border-[#ced3d0]' + topBorderClass)} p-0`,
-                  `day-${i}`
-                )}
-                style={applyWeekBorderStyles(i, getWidthStyle(`day-${i}`, {
-                  backgroundColor: '#ffffff',
-                  ...getCellHighlightStyle(row.id, `day-${i}`),
-                }))}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, `day-${i}`)}
-                {...cellClickProps(`day-${i}`)}
-              ></td>
-            ))}
-          </tr>
-        );
-      }
-      case 'inboxItem': {
-        const topBorderClass = previousRow && previousRow.type === 'inboxHeader' ? ' border-t-0' : '';
-        const dayEntries = Array.isArray(row.dayEntries) ? row.dayEntries : [];
-        const isCustomEstimate = row.estimate === 'Custom';
-        const updateTaskName = (value) => {
-          commitRowUpdate({ taskName: value }, { markInteraction: true });
-        };
-        const updateDayEntry = (dayIndex, value) => {
-          commitRowUpdate(
-            (currentRow) => {
-              const existingEntries = Array.isArray(currentRow.dayEntries)
-                ? [...currentRow.dayEntries]
-                : createEmptyDayEntries(totalDays);
-              existingEntries[dayIndex] = value;
-              const updates = { dayEntries: existingEntries };
-              if ((value ?? '').trim() && currentRow.status === 'Not Scheduled') {
-                updates.status = 'Scheduled';
-              }
-              return updates;
-            },
-            { markInteraction: true }
-          );
-        };
-        const updateTimeValue = (value) => {
-          if (!isCustomEstimate) return;
-          commitRowUpdate(
-            (currentRow) => {
-              const updates = { timeValue: value };
-              const syncedEntries = syncDayEntriesWithTimeValue(
-                currentRow.dayEntries,
-                value,
-                currentRow.timeValue
-              );
-              if (syncedEntries !== currentRow.dayEntries) {
-                updates.dayEntries = syncedEntries;
-              }
-              return updates;
-            },
-            { markInteraction: true }
-          );
-        };
-        return (
-          <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
-            <td
-              {...cellMetadataProps('rowLabel')}
-              className={withCellSelectionClass(
-                `text-center align-middle border border-[#ced3d0]${topBorderClass} bg-white${isRowSelected ? ' selected-cell' : ''}`,
-                'rowLabel'
-              )}
-              style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(row.id, 'rowLabel')))}
-              tabIndex={0}
-              onMouseDown={(event) => handleCellMouseDown(event, row.id, 'rowLabel', { highlightRow: true })}
-              onFocus={() =>
-                handleCellActivate(row.id, 'rowLabel', {
-                  highlightRow: true,
-                  preserveSelection: true,
-                })
-              }
-              onClick={(event) => handleRowClick(event, tableRow.index)}
-            >
-              {rowNumber}
-            </td>
-            <td
-              className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0 check-cell`, 'check')}
-              style={getWidthStyle('check', getCellHighlightStyle(row.id, 'check'))}
-              {...cellClickProps('check')}
-            >
-              <div className="flex h-full w-full items-center justify-center">
-                <input
-                  type="checkbox"
-                  className={checkboxInputClass}
-                  onMouseDown={(event) => handleCellMouseDown(event, row.id, 'check')}
-                  onFocus={() => handleCellActivate(row.id, 'check')}
-                  onChange={ensureInteractionMarked}
-                />
-              </div>
-            </td>
-            <td
-              style={getWidthStyle('project', getCellHighlightStyle(row.id, 'project'))}
-              className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'project')}
-              {...cellClickProps('project')}
-            >
-              <select
-                className={`${sharedInputStyle} uppercase project-pill-select`}
-                style={getProjectSelectStyle(row.projectSelection)}
-                value={row.projectSelection ?? '-'}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  commitRowUpdate({ projectSelection: nextValue }, { markInteraction: true });
-                }}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, 'project')}
-                onFocus={() => handleCellActivate(row.id, 'project')}
-              >
-                <option>-</option>
-                <option>PROJECT A</option>
-                <option>PROJECT B</option>
-                <option>PROJECT C</option>
-              </select>
-            </td>
-            <td
-              style={getWidthStyle('status', getCellHighlightStyle(row.id, 'status'))}
-              className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'status')}
-              {...cellClickProps('status')}
-            >
-              <div className="status-pill-container">
-                <select
-                  className="status-pill-select"
-                  style={getStatusColorStyle(row.status)}
-                  value={row.status ?? '-'}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    commitRowUpdate({ status: nextValue }, { markInteraction: true });
-                  }}
-                  onMouseDown={(event) => handleCellMouseDown(event, row.id, 'status')}
-                  onFocus={() => handleCellActivate(row.id, 'status')}
-                >
-                  <StatusOptions />
-                </select>
-              </div>
-            </td>
-            <td
-              style={getWidthStyle('task', getCellHighlightStyle(row.id, 'task'))}
-              className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'task')}
-              {...cellClickProps('task')}
-            >
-              <input
-                type="text"
-                className={sharedInputStyle}
-                value={row.taskName ?? ''}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, 'task')}
-                onFocus={() => handleCellActivate(row.id, 'task')}
-                onChange={(event) => updateTaskName(event.target.value)}
-                onPaste={(event) =>
-                  handleOverwritePaste(event, (text) => updateTaskName(text))
-                }
-              />
-            </td>
-            {showRecurring && (
-              <td
-                className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'recurring')}
-                style={getWidthStyle('recurring', getCellHighlightStyle(row.id, 'recurring'))}
-                {...cellClickProps('recurring')}
-              >
-                <div className="flex h-full w-full items-center justify-center">
-                  <input
-                    type="checkbox"
-                    className={checkboxInputClass}
-                    checked={row.recurring === 'Recurring'}
-                    onMouseDown={(event) => handleCellMouseDown(event, row.id, 'recurring')}
-                    onFocus={() => handleCellActivate(row.id, 'recurring')}
-                    onChange={(event) => {
-                      const nextValue = event.target.checked ? 'Recurring' : 'Not Recurring';
-                      commitRowUpdate({ recurring: nextValue }, { markInteraction: true });
-                    }}
-                  />
-                </div>
-              </td>
-            )}
-            <td
-              style={getWidthStyle('estimate', getCellHighlightStyle(row.id, 'estimate'))}
-              className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'estimate')}
-              {...cellClickProps('estimate')}
-            >
-              <select
-                className={sharedInputStyle}
-                value={row.estimate ?? '-'}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  commitRowUpdate(
-                    (currentRow) => {
-                      const updates = { estimate: nextValue };
-                      const minutes = parseEstimateLabelToMinutes(nextValue);
-                      let nextTimeValue;
-                      if (minutes != null) {
-                        nextTimeValue = formatMinutesToHHmm(minutes);
-                      } else if (nextValue === 'Custom') {
-                        nextTimeValue = '0.00';
-                      } else {
-                        nextTimeValue = '0.00';
-                      }
-                      updates.timeValue = nextTimeValue;
-                      const syncedEntries = syncDayEntriesWithTimeValue(
-                        currentRow.dayEntries,
-                        nextTimeValue,
-                        currentRow.timeValue
-                      );
-                      if (syncedEntries !== currentRow.dayEntries) {
-                        updates.dayEntries = syncedEntries;
-                      }
-                      return updates;
-                    },
-                    { markInteraction: true }
-                  );
-                }}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, 'estimate')}
-                onFocus={() => handleCellActivate(row.id, 'estimate')}
-              >
-                <EstimateOptions />
-              </select>
-            </td>
-            <td
-              className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'timeValue')}
-              style={getWidthStyle('timeValue', {
-                ...blackDividerStyle,
-                ...getCellHighlightStyle(row.id, 'timeValue'),
-                textAlign: 'right',
-                paddingRight: 8,
-              })}
-              {...cellClickProps('timeValue')}
-            >
-              <input
-                type="text"
-                className={`${sharedInputStyle} text-right pr-2`}
-                value={row.timeValue ?? '0.00'}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, 'timeValue')}
-                onFocus={() => handleCellActivate(row.id, 'timeValue')}
-                onChange={(event) => {
-                  if (!isCustomEstimate) return;
-                  updateTimeValue(event.target.value);
-                }}
-                onPaste={(event) => {
-                  if (!isCustomEstimate) return;
-                  handleOverwritePaste(event, (text) => updateTimeValue(text));
-                }}
-                readOnly={!isCustomEstimate}
-              />
-            </td>
-            {Array.from({ length: totalDays }).map((_, i) => (
-              <td
-                key={`${row.id}-${i}`}
-                style={{
-                  ...applyWeekBorderStyles(i, getWidthStyle(`day-${i}`)),
-                  ...getCellHighlightStyle(row.id, `day-${i}`),
-                }}
-                onMouseDown={(event) => handleCellMouseDown(event, row.id, `day-${i}`)}
-                className={withCellSelectionClass(
-                  `${getWeekBorderClass(i, 'border border-[#ced3d0]' + topBorderClass)} p-0`,
-                  `day-${i}`
-                )}
-                {...cellClickProps(`day-${i}`)}
-              >
-                <input
-                  type="text"
-                  className={sharedInputStyle}
-                  value={dayEntries[i] ?? ''}
-                  onMouseDown={(event) => handleCellMouseDown(event, row.id, `day-${i}`)}
-                  onFocus={() => handleCellActivate(row.id, `day-${i}`)}
-                  onChange={(event) => updateDayEntry(i, event.target.value)}
-                  onPaste={(event) =>
-                    handleOverwritePaste(event, (text) => updateDayEntry(i, text))
-                  }
-                  data-time-entry="true"
-                />
-              </td>
-            ))}
-          </tr>
-        );
-      }
-      default:
-        return null;
-    }
+      return classes.join(' ');
+    };
+    const cellClickProps = (columnId) => ({
+      ...cellMetadataProps(columnId),
+      onFocus: () => handleCellClick(tableRow.index, columnId),
+    });
+
+    return {
+      tableRow,
+      row,
+      previousRow,
+      rowId,
+      rowNumber,
+      isRowSelected,
+      rowPropsLocal,
+      commitRowUpdate,
+      ensureInteractionMarked,
+      cellMetadataProps,
+      withCellSelectionClass,
+      cellClickProps,
+    };
   };
+
+  const renderProjectHeaderRow = ({
+    row,
+    rowId,
+    rowNumber,
+    isRowSelected,
+    rowPropsLocal,
+    cellMetadataProps,
+    withCellSelectionClass,
+    cellClickProps,
+    tableRow,
+  }) => {
+    const projectRollupValue = projectHeaderTotals[rowId] ?? '0.00';
+    return (
+      <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
+        <td
+          {...cellMetadataProps('rowLabel')}
+          className={withCellSelectionClass(
+            `text-center font-semibold border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`,
+            'rowLabel'
+          )}
+          style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(rowId, 'rowLabel')))}
+          tabIndex={0}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'rowLabel', { highlightRow: true })}
+          onFocus={() =>
+            handleCellActivate(rowId, 'rowLabel', {
+              highlightRow: true,
+              preserveSelection: true,
+            })
+          }
+          onClick={(event) => handleRowClick(event, tableRow.index)}
+        >
+          {rowNumber}
+        </td>
+        <td
+          className={withCellSelectionClass('bg-[#d5a6bd] font-extrabold px-2 text-[12px]', 'check')}
+          style={getWidthStyle('check', {
+            ...getCellHighlightStyle(rowId, 'check'),
+            overflow: 'visible',
+            whiteSpace: 'nowrap',
+            fontWeight: 800,
+            paddingLeft: 8,
+          })}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'check')}
+          {...cellClickProps('check')}
+        >
+          {row.projectName}
+        </td>
+        <td
+          className={withCellSelectionClass('bg-[#d5a6bd]', 'project')}
+          style={getWidthStyle('project', getCellHighlightStyle(rowId, 'project'))}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'project')}
+          {...cellClickProps('project')}
+        ></td>
+        <td
+          className={withCellSelectionClass('bg-[#d5a6bd]', 'status')}
+          style={getWidthStyle('status', getCellHighlightStyle(rowId, 'status'))}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'status')}
+          {...cellClickProps('status')}
+        ></td>
+        <td
+          className={withCellSelectionClass('bg-[#d5a6bd]', 'task')}
+          style={getWidthStyle('task', getCellHighlightStyle(rowId, 'task'))}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'task')}
+          {...cellClickProps('task')}
+        ></td>
+        {showRecurring && (
+          <td
+            className={withCellSelectionClass('bg-[#d5a6bd]', 'recurring')}
+            style={getWidthStyle('recurring', getCellHighlightStyle(rowId, 'recurring'))}
+            onMouseDown={(event) => handleCellMouseDown(event, rowId, 'recurring')}
+            {...cellClickProps('recurring')}
+          ></td>
+        )}
+        <td
+          className={withCellSelectionClass('bg-[#d5a6bd] text-right pr-2 font-semibold', 'estimate')}
+          style={getWidthStyle('estimate', {
+            ...getCellHighlightStyle(rowId, 'estimate'),
+            textAlign: 'right',
+            paddingRight: 8,
+            fontWeight: 600,
+          })}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'estimate')}
+          {...cellClickProps('estimate')}
+        >
+          {projectRollupValue}
+        </td>
+        <td
+          className={withCellSelectionClass('bg-[#d5a6bd] border border-[#ced3d0]', 'timeValue')}
+          style={getWidthStyle('timeValue', {
+            ...blackDividerStyle,
+            ...getCellHighlightStyle(rowId, 'timeValue'),
+            textAlign: 'left',
+            paddingLeft: 8,
+            fontWeight: 600,
+          })}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'timeValue')}
+          {...cellClickProps('timeValue')}
+        >
+          of 0.00
+        </td>
+        {Array.from({ length: totalDays }).map((_, i) => (
+          <td
+            key={`${rowId}-hdr-${i}`}
+            style={{
+              ...applyWeekBorderStyles(i, getWidthStyle(`day-${i}`)),
+              ...getCellHighlightStyle(rowId, `day-${i}`),
+            }}
+            onMouseDown={(event) => handleCellMouseDown(event, rowId, `day-${i}`)}
+            className={withCellSelectionClass(
+              `${getWeekBorderClass(i, 'bg-white border border-[#ced3d0]')} p-0`,
+              `day-${i}`
+            )}
+            {...cellClickProps(`day-${i}`)}
+          >
+            <input
+              type="text"
+              className={sharedInputStyle}
+              defaultValue=""
+              onMouseDown={(event) => handleCellMouseDown(event, rowId, `day-${i}`)}
+              onFocus={() => handleCellActivate(rowId, `day-${i}`)}
+              onPaste={(event) =>
+                handleOverwritePaste(event, (text) => {
+                  event.currentTarget.value = text;
+                })
+              }
+            />
+          </td>
+        ))}
+      </tr>
+    );
+  };
+
+  const renderProjectGeneralRow = ({
+    rowId,
+    rowNumber,
+    isRowSelected,
+    rowPropsLocal,
+    cellMetadataProps,
+    withCellSelectionClass,
+    cellClickProps,
+    tableRow,
+  }) => (
+    <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
+      <td
+        {...cellMetadataProps('rowLabel')}
+        className={withCellSelectionClass(
+          `text-center border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`,
+          'rowLabel'
+        )}
+        style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(rowId, 'rowLabel')))}
+        tabIndex={0}
+        onMouseDown={(event) => handleCellMouseDown(event, rowId, 'rowLabel', { highlightRow: true })}
+        onFocus={() =>
+          handleCellActivate(rowId, 'rowLabel', {
+            highlightRow: true,
+            preserveSelection: true,
+          })
+        }
+        onClick={(event) => handleRowClick(event, tableRow.index)}
+      >
+        {rowNumber}
+      </td>
+      <td
+        className={withCellSelectionClass('bg-[#f2e5eb]', 'check')}
+        style={getWidthStyle('check', getCellHighlightStyle(rowId, 'check'))}
+        onMouseDown={(event) => handleCellMouseDown(event, rowId, 'check')}
+        {...cellClickProps('check')}
+      ></td>
+      <td
+        className={withCellSelectionClass('bg-[#f2e5eb]', 'project')}
+        style={getWidthStyle('project', getCellHighlightStyle(rowId, 'project'))}
+        onMouseDown={(event) => handleCellMouseDown(event, rowId, 'project')}
+        {...cellClickProps('project')}
+      ></td>
+      <td
+        className={withCellSelectionClass('bg-[#f2e5eb]', 'status')}
+        style={getWidthStyle('status', getCellHighlightStyle(rowId, 'status'))}
+        onMouseDown={(event) => handleCellMouseDown(event, rowId, 'status')}
+        {...cellClickProps('status')}
+      ></td>
+      <td
+        className={withCellSelectionClass('bg-[#f2e5eb] px-2 font-extrabold text-[12px]', 'task')}
+        style={getWidthStyle('task', { fontWeight: 800, paddingLeft: 8, ...getCellHighlightStyle(rowId, 'task') })}
+        onMouseDown={(event) => handleCellMouseDown(event, rowId, 'task')}
+        {...cellClickProps('task')}
+      >
+        General
+      </td>
+      {showRecurring && (
+        <td
+          className={withCellSelectionClass('bg-[#f2e5eb]', 'recurring')}
+          style={getWidthStyle('recurring', getCellHighlightStyle(rowId, 'recurring'))}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'recurring')}
+          {...cellClickProps('recurring')}
+        ></td>
+      )}
+      <td
+        className={withCellSelectionClass('bg-[#f2e5eb]', 'estimate')}
+        style={getWidthStyle('estimate', getCellHighlightStyle(rowId, 'estimate'))}
+        onMouseDown={(event) => handleCellMouseDown(event, rowId, 'estimate')}
+        {...cellClickProps('estimate')}
+      ></td>
+      <td
+        className={withCellSelectionClass('bg-[#f2e5eb] border border-[#ced3d0]', 'timeValue')}
+        style={getWidthStyle('timeValue', {
+          ...blackDividerStyle,
+          ...getCellHighlightStyle(rowId, 'timeValue'),
+          textAlign: 'right',
+          paddingRight: 8,
+        })}
+        onMouseDown={(event) => handleCellMouseDown(event, rowId, 'timeValue')}
+        {...cellClickProps('timeValue')}
+      ></td>
+      {Array.from({ length: totalDays }).map((_, i) => (
+        <td
+          key={`${rowId}-gen-${i}`}
+          style={{
+            ...applyWeekBorderStyles(i, getWidthStyle(`day-${i}`)),
+            ...getCellHighlightStyle(rowId, `day-${i}`),
+          }}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, `day-${i}`)}
+          className={withCellSelectionClass(
+            `${getWeekBorderClass(i, 'bg-white border border-[#ced3d0]')} p-0`,
+            `day-${i}`
+          )}
+          {...cellClickProps(`day-${i}`)}
+        >
+          <input
+            type="text"
+            className={sharedInputStyle}
+            defaultValue=""
+            onMouseDown={(event) => handleCellMouseDown(event, rowId, `day-${i}`)}
+            onFocus={() => handleCellActivate(rowId, `day-${i}`)}
+            onPaste={(event) =>
+              handleOverwritePaste(event, (text) => {
+                event.currentTarget.value = text;
+              })
+            }
+          />
+        </td>
+      ))}
+    </tr>
+  );
+
+  const renderProjectTaskRow = ({
+    row,
+    rowId,
+    rowNumber,
+    isRowSelected,
+    rowPropsLocal,
+    cellMetadataProps,
+    withCellSelectionClass,
+    cellClickProps,
+    tableRow,
+    commitRowUpdate,
+    ensureInteractionMarked,
+  }) => {
+    const dayEntries = Array.isArray(row.dayEntries) ? row.dayEntries : [];
+    const isCustomEstimate = row.estimate === 'Custom';
+    const updateTaskName = (value) => {
+      commitRowUpdate({ taskName: value }, { markInteraction: true });
+    };
+    const updateDayEntry = (dayIndex, value) => {
+      commitRowUpdate(
+        (currentRow) => {
+          const existingEntries = Array.isArray(currentRow.dayEntries)
+            ? [...currentRow.dayEntries]
+            : createEmptyDayEntries(totalDays);
+          existingEntries[dayIndex] = value;
+          const updates = { dayEntries: existingEntries };
+          if ((value ?? '').trim() && currentRow.status === 'Not Scheduled') {
+            updates.status = 'Scheduled';
+          }
+          return updates;
+        },
+        { markInteraction: true }
+      );
+    };
+    const updateTimeValue = (value) => {
+      if (!isCustomEstimate) return;
+      commitRowUpdate(
+        (currentRow) => {
+          const updates = { timeValue: value };
+          const syncedEntries = syncDayEntriesWithTimeValue(
+            currentRow.dayEntries,
+            value,
+            currentRow.timeValue
+          );
+          if (syncedEntries !== currentRow.dayEntries) {
+            updates.dayEntries = syncedEntries;
+          }
+          return updates;
+        },
+        { markInteraction: true }
+      );
+    };
+    return (
+      <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
+        <td
+          {...cellMetadataProps('rowLabel')}
+          className={withCellSelectionClass(
+            `text-center align-middle border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`,
+            'rowLabel'
+          )}
+          style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(rowId, 'rowLabel')))}
+          tabIndex={0}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'rowLabel', { highlightRow: true })}
+          onFocus={() =>
+            handleCellActivate(rowId, 'rowLabel', {
+              highlightRow: true,
+              preserveSelection: true,
+            })
+          }
+          onClick={(event) => handleRowClick(event, tableRow.index)}
+        >
+          {rowNumber}
+        </td>
+        <td
+          className={withCellSelectionClass('border border-[#ced3d0] p-0 check-cell', 'check')}
+          style={getWidthStyle('check', getCellHighlightStyle(rowId, 'check'))}
+          {...cellClickProps('check')}
+        >
+          <div className="flex h-full w-full items-center justify-center">
+            <input
+              type="checkbox"
+              className={checkboxInputClass}
+              onMouseDown={(event) => handleCellMouseDown(event, rowId, 'check')}
+              onFocus={() => handleCellActivate(rowId, 'check')}
+              onChange={ensureInteractionMarked}
+            />
+          </div>
+        </td>
+        <td
+          style={getWidthStyle('project', getCellHighlightStyle(rowId, 'project'))}
+          className={withCellSelectionClass('border border-[#ced3d0] p-0', 'project')}
+          {...cellClickProps('project')}
+        >
+          <select
+            className={`${sharedInputStyle} uppercase project-pill-select`}
+            style={getProjectSelectStyle(row.projectSelection)}
+            value={row.projectSelection ?? '-'}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              commitRowUpdate({ projectSelection: nextValue }, { markInteraction: true });
+            }}
+            onMouseDown={(event) => handleCellMouseDown(event, rowId, 'project')}
+            onFocus={() => handleCellActivate(rowId, 'project')}
+          >
+            <option>-</option>
+            <option>PROJECT A</option>
+            <option>PROJECT B</option>
+            <option>PROJECT C</option>
+          </select>
+        </td>
+        <td
+          style={getWidthStyle('status', getCellHighlightStyle(rowId, 'status'))}
+          className={withCellSelectionClass('border border-[#ced3d0] p-0', 'status')}
+          {...cellClickProps('status')}
+        >
+          <div className="status-pill-container">
+            <select
+              className="status-pill-select"
+              style={getStatusColorStyle(row.status)}
+              value={row.status ?? '-'}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                commitRowUpdate({ status: nextValue }, { markInteraction: true });
+              }}
+              onMouseDown={(event) => handleCellMouseDown(event, rowId, 'status')}
+              onFocus={() => handleCellActivate(rowId, 'status')}
+            >
+              <StatusOptions />
+            </select>
+          </div>
+        </td>
+        <td
+          style={getWidthStyle('task', getCellHighlightStyle(rowId, 'task'))}
+          className={withCellSelectionClass('border border-[#ced3d0] p-0', 'task')}
+          {...cellClickProps('task')}
+        >
+          <input
+            type="text"
+            className={sharedInputStyle}
+            value={row.taskName ?? ''}
+            onMouseDown={(event) => handleCellMouseDown(event, rowId, 'task')}
+            onFocus={() => handleCellActivate(rowId, 'task')}
+            onChange={(event) => updateTaskName(event.target.value)}
+            onPaste={(event) =>
+              handleOverwritePaste(event, (text) => updateTaskName(text))
+            }
+          />
+        </td>
+        {showRecurring && (
+          <td
+            className={withCellSelectionClass('border border-[#ced3d0] p-0', 'recurring')}
+            style={getWidthStyle('recurring', getCellHighlightStyle(rowId, 'recurring'))}
+            {...cellClickProps('recurring')}
+          >
+            <div className="flex h-full w-full items-center justify-center">
+              <input
+                type="checkbox"
+                className={checkboxInputClass}
+                checked={row.recurring === 'Recurring'}
+                onMouseDown={(event) => handleCellMouseDown(event, rowId, 'recurring')}
+                onFocus={() => handleCellActivate(rowId, 'recurring')}
+                onChange={(event) => {
+                  const nextValue = event.target.checked ? 'Recurring' : 'Not Recurring';
+                  commitRowUpdate({ recurring: nextValue }, { markInteraction: true });
+                }}
+              />
+            </div>
+          </td>
+        )}
+        <td
+          style={getWidthStyle('estimate', getCellHighlightStyle(rowId, 'estimate'))}
+          className={withCellSelectionClass('border border-[#ced3d0] p-0', 'estimate')}
+          {...cellClickProps('estimate')}
+        >
+          <select
+            className={sharedInputStyle}
+            value={row.estimate ?? '-'}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              commitRowUpdate(
+                (currentRow) => {
+                  const updates = { estimate: nextValue };
+                  const minutes = parseEstimateLabelToMinutes(nextValue);
+                  let nextTimeValue;
+                  if (minutes != null) {
+                    nextTimeValue = formatMinutesToHHmm(minutes);
+                  } else if (nextValue === 'Custom') {
+                    nextTimeValue = '0.00';
+                  } else {
+                    nextTimeValue = '0.00';
+                  }
+                  updates.timeValue = nextTimeValue;
+                  const syncedEntries = syncDayEntriesWithTimeValue(
+                    currentRow.dayEntries,
+                    nextTimeValue,
+                    currentRow.timeValue
+                  );
+                  if (syncedEntries !== currentRow.dayEntries) {
+                    updates.dayEntries = syncedEntries;
+                  }
+                  return updates;
+                },
+                { markInteraction: true }
+              );
+            }}
+            onMouseDown={(event) => handleCellMouseDown(event, rowId, 'estimate')}
+            onFocus={() => handleCellActivate(rowId, 'estimate')}
+          >
+            <EstimateOptions />
+          </select>
+        </td>
+        <td
+          className={withCellSelectionClass('border border-[#ced3d0] p-0', 'timeValue')}
+          style={getWidthStyle('timeValue', {
+            ...blackDividerStyle,
+            ...getCellHighlightStyle(rowId, 'timeValue'),
+            textAlign: 'right',
+            paddingRight: 8,
+          })}
+          {...cellClickProps('timeValue')}
+        >
+          <input
+            type="text"
+            className={`${sharedInputStyle} text-right pr-2`}
+            value={row.timeValue ?? '0.00'}
+            onMouseDown={(event) => handleCellMouseDown(event, rowId, 'timeValue')}
+            onFocus={() => handleCellActivate(rowId, 'timeValue')}
+            onChange={(event) => {
+              if (!isCustomEstimate) return;
+              updateTimeValue(event.target.value);
+            }}
+            onPaste={(event) => {
+              if (!isCustomEstimate) return;
+              handleOverwritePaste(event, (text) => updateTimeValue(text));
+            }}
+            readOnly={!isCustomEstimate}
+          />
+        </td>
+        {Array.from({ length: totalDays }).map((_, i) => (
+          <td
+            key={`${rowId}-task-${i}`}
+            style={{
+              ...applyWeekBorderStyles(i, getWidthStyle(`day-${i}`)),
+              ...getCellHighlightStyle(rowId, `day-${i}`),
+            }}
+            onMouseDown={(event) => handleCellMouseDown(event, rowId, `day-${i}`)}
+            className={withCellSelectionClass(
+              `${getWeekBorderClass(i, 'border border-[#ced3d0]')} p-0`,
+              `day-${i}`
+            )}
+            {...cellClickProps(`day-${i}`)}
+          >
+            <input
+              type="text"
+              className={sharedInputStyle}
+              value={dayEntries[i] ?? ''}
+              onMouseDown={(event) => handleCellMouseDown(event, rowId, `day-${i}`)}
+              onFocus={() => handleCellActivate(rowId, `day-${i}`)}
+              onChange={(event) => updateDayEntry(i, event.target.value)}
+              onPaste={(event) =>
+                handleOverwritePaste(event, (text) => updateDayEntry(i, text))
+              }
+              data-time-entry="true"
+            />
+          </td>
+        ))}
+      </tr>
+    );
+  };
+
+  const renderProjectUnscheduledRow = ({
+    rowId,
+    rowNumber,
+    isRowSelected,
+    rowPropsLocal,
+    cellMetadataProps,
+    withCellSelectionClass,
+    cellClickProps,
+    tableRow,
+  }) => (
+    <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
+      <td
+        {...cellMetadataProps('rowLabel')}
+        className={withCellSelectionClass(
+          `text-center border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`,
+          'rowLabel'
+        )}
+        style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(rowId, 'rowLabel')))}
+        tabIndex={0}
+        onMouseDown={(event) => handleCellMouseDown(event, rowId, 'rowLabel', { highlightRow: true })}
+        onFocus={() =>
+          handleCellActivate(rowId, 'rowLabel', {
+            highlightRow: true,
+            preserveSelection: true,
+          })
+        }
+        onClick={(event) => handleRowClick(event, tableRow.index)}
+      >
+        {rowNumber}
+      </td>
+      <td
+        className={withCellSelectionClass('bg-[#f2e5eb]', 'check')}
+        style={getWidthStyle('check', getCellHighlightStyle(rowId, 'check'))}
+        onMouseDown={(event) => handleCellMouseDown(event, rowId, 'check')}
+        {...cellClickProps('check')}
+      ></td>
+      <td
+        className={withCellSelectionClass('bg-[#f2e5eb]', 'project')}
+        style={getWidthStyle('project', getCellHighlightStyle(rowId, 'project'))}
+        onMouseDown={(event) => handleCellMouseDown(event, rowId, 'project')}
+        {...cellClickProps('project')}
+      ></td>
+      <td
+        className={withCellSelectionClass('bg-[#f2e5eb]', 'status')}
+        style={getWidthStyle('status', getCellHighlightStyle(rowId, 'status'))}
+        onMouseDown={(event) => handleCellMouseDown(event, rowId, 'status')}
+        {...cellClickProps('status')}
+      ></td>
+      <td
+        className={withCellSelectionClass('bg-[#f2e5eb] px-2 font-extrabold text-[12px]', 'task')}
+        style={getWidthStyle('task', { fontWeight: 800, paddingLeft: 8, ...getCellHighlightStyle(rowId, 'task') })}
+        onMouseDown={(event) => handleCellMouseDown(event, rowId, 'task')}
+        {...cellClickProps('task')}
+      >
+        Unscheduled
+      </td>
+      {showRecurring && (
+        <td
+          className={withCellSelectionClass('bg-[#f2e5eb]', 'recurring')}
+          style={getWidthStyle('recurring', getCellHighlightStyle(rowId, 'recurring'))}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'recurring')}
+          {...cellClickProps('recurring')}
+        ></td>
+      )}
+      <td
+        className={withCellSelectionClass('bg-[#f2e5eb]', 'estimate')}
+        style={getWidthStyle('estimate', getCellHighlightStyle(rowId, 'estimate'))}
+        onMouseDown={(event) => handleCellMouseDown(event, rowId, 'estimate')}
+        {...cellClickProps('estimate')}
+      ></td>
+      <td
+        className={withCellSelectionClass('bg-[#f2e5eb] border border-[#ced3d0]', 'timeValue')}
+        style={getWidthStyle('timeValue', {
+          ...blackDividerStyle,
+          ...getCellHighlightStyle(rowId, 'timeValue'),
+          textAlign: 'right',
+          paddingRight: 8,
+        })}
+        onMouseDown={(event) => handleCellMouseDown(event, rowId, 'timeValue')}
+        {...cellClickProps('timeValue')}
+      ></td>
+      {Array.from({ length: totalDays }).map((_, i) => (
+        <td
+          key={`${rowId}-uns-${i}`}
+          style={{
+            ...applyWeekBorderStyles(i, getWidthStyle(`day-${i}`)),
+            ...getCellHighlightStyle(rowId, `day-${i}`),
+          }}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, `day-${i}`)}
+          className={withCellSelectionClass(
+            `${getWeekBorderClass(i, 'bg-white border border-[#ced3d0]')} p-0`,
+            `day-${i}`
+          )}
+          {...cellClickProps(`day-${i}`)}
+        >
+          <input
+            type="text"
+            className={sharedInputStyle}
+            defaultValue=""
+            onMouseDown={(event) => handleCellMouseDown(event, rowId, `day-${i}`)}
+            onFocus={() => handleCellActivate(rowId, `day-${i}`)}
+            onPaste={(event) =>
+              handleOverwritePaste(event, (text) => {
+                event.currentTarget.value = text;
+              })
+            }
+          />
+        </td>
+      ))}
+    </tr>
+  );
+
+  const renderInboxHeaderRow = ({
+    rowId,
+    rowNumber,
+    isRowSelected,
+    rowPropsLocal,
+    cellMetadataProps,
+    withCellSelectionClass,
+    cellClickProps,
+  }) => {
+    const headerStyle = DARK_HEADER_STYLE;
+    return (
+      <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
+        <td
+          {...cellMetadataProps('rowLabel')}
+          className={withCellSelectionClass(
+            `font-bold text-center border-0${isRowSelected ? ' selected-cell' : ''}`,
+            'rowLabel'
+          )}
+          style={getWidthStyle('rowLabel', applyRowLabelStyle({
+            ...headerStyle,
+            ...getCellHighlightStyle(rowId, 'rowLabel'),
+          }))}
+          tabIndex={0}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'rowLabel', { highlightRow: true })}
+          onFocus={() =>
+            handleCellActivate(rowId, 'rowLabel', {
+              highlightRow: true,
+              preserveSelection: true,
+            })
+          }
+        >
+          {rowNumber}
+        </td>
+        <td
+          className={withCellSelectionClass('font-bold px-2 border-0', 'header-fixed')}
+          colSpan={fixedCols - 1}
+          style={{
+            ...blackDividerStyle,
+            ...headerStyle,
+            ...getCellHighlightStyle(rowId, 'header-fixed'),
+            paddingLeft: 8,
+            fontWeight: 800,
+          }}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'header-fixed')}
+          {...cellClickProps('header-fixed')}
+        >
+          Inbox
+        </td>
+        <td
+          className={withCellSelectionClass('border-0', 'header-span')}
+          colSpan={totalDays}
+          style={{ ...headerStyle, ...getCellHighlightStyle(rowId, 'header-span') }}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'header-span')}
+          {...cellClickProps('header-span')}
+        ></td>
+      </tr>
+    );
+  };
+
+  const renderArchiveHeaderRow = ({
+    rowId,
+    rowNumber,
+    isRowSelected,
+    rowPropsLocal,
+    cellMetadataProps,
+    withCellSelectionClass,
+    cellClickProps,
+  }) => {
+    const headerStyle = DARK_HEADER_STYLE;
+    return (
+      <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
+        <td
+          {...cellMetadataProps('rowLabel')}
+          className={withCellSelectionClass(
+            `font-bold text-center border-0${isRowSelected ? ' selected-cell' : ''}`,
+            'rowLabel'
+          )}
+          style={getWidthStyle('rowLabel', applyRowLabelStyle({
+            ...headerStyle,
+            ...getCellHighlightStyle(rowId, 'rowLabel'),
+          }))}
+          tabIndex={0}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'rowLabel', { highlightRow: true })}
+          onFocus={() =>
+            handleCellActivate(rowId, 'rowLabel', {
+              highlightRow: true,
+              preserveSelection: true,
+            })
+          }
+        >
+          {rowNumber}
+        </td>
+        <td
+          className={withCellSelectionClass('font-bold px-2 border-0', 'header-fixed')}
+          colSpan={fixedCols - 1}
+          style={{
+            ...blackDividerStyle,
+            ...headerStyle,
+            ...getCellHighlightStyle(rowId, 'header-fixed'),
+            paddingLeft: 8,
+            fontWeight: 800,
+          }}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'header-fixed')}
+          {...cellClickProps('header-fixed')}
+        >
+          Archive
+        </td>
+        <td
+          className={withCellSelectionClass('border-0', 'header-span')}
+          colSpan={totalDays}
+          style={{ ...headerStyle, ...getCellHighlightStyle(rowId, 'header-span') }}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'header-span')}
+          {...cellClickProps('header-span')}
+        ></td>
+      </tr>
+    );
+  };
+
+  const renderArchiveRow = ({
+    row,
+    rowId,
+    rowNumber,
+    isRowSelected,
+    rowPropsLocal,
+    cellMetadataProps,
+    withCellSelectionClass,
+    cellClickProps,
+    previousRow,
+    tableRow,
+  }) => {
+    const topBorderClass =
+      previousRow && (previousRow.type === 'archiveHeader' || previousRow.type === 'archiveRow')
+        ? ' border-t-0'
+        : '';
+    return (
+      <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
+        <td
+          {...cellMetadataProps('rowLabel')}
+          className={withCellSelectionClass(
+            `text-center align-middle border border-[#ced3d0]${topBorderClass}${isRowSelected ? ' selected-cell' : ''}`,
+            'rowLabel'
+          )}
+          style={getWidthStyle('rowLabel', applyRowLabelStyle({
+            ...ARCHIVE_ROW_STYLE,
+            ...getCellHighlightStyle(rowId, 'rowLabel'),
+          }))}
+          tabIndex={0}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'rowLabel', { highlightRow: true })}
+          onFocus={() =>
+            handleCellActivate(rowId, 'rowLabel', {
+              highlightRow: true,
+              preserveSelection: true,
+            })
+          }
+          onClick={(event) => handleRowClick(event, tableRow.index)}
+        >
+          {rowNumber}
+        </td>
+        {fixedColumnConfig.map(({ key, className }, colIdx) => {
+          const cellContent = (() => {
+            if (colIdx === 0) return row.archiveWeekLabel ?? '';
+            if (key === 'task') return row.archiveLabel ?? '';
+            if (key === 'estimate') return '0.00';
+            if (key === 'timeValue') return 'of 0.00 - 0.00';
+            return '';
+          })();
+          const extraStyles =
+            colIdx === 0
+              ? { overflow: 'visible', whiteSpace: 'nowrap', paddingLeft: 16 }
+              : key === 'task'
+                ? { paddingLeft: 16 }
+                : {};
+          const alignmentStyle =
+            key === 'estimate'
+              ? { textAlign: 'right', fontWeight: 800 }
+              : key === 'timeValue'
+                ? { textAlign: 'left' }
+                : {};
+          return (
+            <td
+              key={`${rowId}-${key}`}
+              className={withCellSelectionClass(
+                `border border-[#ced3d0]${topBorderClass} ${className ?? ''} font-semibold px-2`,
+                key
+              )}
+              style={getWidthStyle(key, {
+                ...ARCHIVE_ROW_STYLE,
+                ...(key === 'timeValue' ? blackDividerStyle : {}),
+                ...getCellHighlightStyle(rowId, key),
+                ...extraStyles,
+                ...alignmentStyle,
+              })}
+              onMouseDown={(event) => handleCellMouseDown(event, rowId, key)}
+              {...cellClickProps(key)}
+            >
+              {cellContent}
+            </td>
+          );
+        })}
+        {Array.from({ length: totalDays }).map((_, i) => (
+          <td
+            key={`${rowId}-archive-${i}`}
+            className={withCellSelectionClass(
+              `${getWeekBorderClass(i, 'border border-[#ced3d0]' + topBorderClass)} p-0`,
+              `day-${i}`
+            )}
+            style={applyWeekBorderStyles(i, getWidthStyle(`day-${i}`, {
+              backgroundColor: '#ffffff',
+              ...getCellHighlightStyle(rowId, `day-${i}`),
+            }))}
+            onMouseDown={(event) => handleCellMouseDown(event, rowId, `day-${i}`)}
+            {...cellClickProps(`day-${i}`)}
+          ></td>
+        ))}
+      </tr>
+    );
+  };
+
+  const renderInboxItemRow = ({
+    row,
+    rowId,
+    rowNumber,
+    isRowSelected,
+    rowPropsLocal,
+    cellMetadataProps,
+    withCellSelectionClass,
+    cellClickProps,
+    tableRow,
+    commitRowUpdate,
+    ensureInteractionMarked,
+    previousRow,
+  }) => {
+    const topBorderClass = previousRow && previousRow.type === 'inboxHeader' ? ' border-t-0' : '';
+    const dayEntries = Array.isArray(row.dayEntries) ? row.dayEntries : [];
+    const isCustomEstimate = row.estimate === 'Custom';
+    const updateTaskName = (value) => {
+      commitRowUpdate({ taskName: value }, { markInteraction: true });
+    };
+    const updateDayEntry = (dayIndex, value) => {
+      commitRowUpdate(
+        (currentRow) => {
+          const existingEntries = Array.isArray(currentRow.dayEntries)
+            ? [...currentRow.dayEntries]
+            : createEmptyDayEntries(totalDays);
+          existingEntries[dayIndex] = value;
+          const updates = { dayEntries: existingEntries };
+          if ((value ?? '').trim() && currentRow.status === 'Not Scheduled') {
+            updates.status = 'Scheduled';
+          }
+          return updates;
+        },
+        { markInteraction: true }
+      );
+    };
+    const updateTimeValue = (value) => {
+      if (!isCustomEstimate) return;
+      commitRowUpdate(
+        (currentRow) => {
+          const updates = { timeValue: value };
+          const syncedEntries = syncDayEntriesWithTimeValue(
+            currentRow.dayEntries,
+            value,
+            currentRow.timeValue
+          );
+          if (syncedEntries !== currentRow.dayEntries) {
+            updates.dayEntries = syncedEntries;
+          }
+          return updates;
+        },
+        { markInteraction: true }
+      );
+    };
+    return (
+      <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
+        <td
+          {...cellMetadataProps('rowLabel')}
+          className={withCellSelectionClass(
+            `text-center align-middle border border-[#ced3d0]${topBorderClass} bg-white${
+              isRowSelected ? ' selected-cell' : ''
+            }`,
+            'rowLabel'
+          )}
+          style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(rowId, 'rowLabel')))}
+          tabIndex={0}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'rowLabel', { highlightRow: true })}
+          onFocus={() =>
+            handleCellActivate(rowId, 'rowLabel', {
+              highlightRow: true,
+              preserveSelection: true,
+            })
+          }
+          onClick={(event) => handleRowClick(event, tableRow.index)}
+        >
+          {rowNumber}
+        </td>
+        <td
+          className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0 check-cell`, 'check')}
+          style={getWidthStyle('check', getCellHighlightStyle(rowId, 'check'))}
+          {...cellClickProps('check')}
+        >
+          <div className="flex h-full w-full items-center justify-center">
+            <input
+              type="checkbox"
+              className={checkboxInputClass}
+              onMouseDown={(event) => handleCellMouseDown(event, rowId, 'check')}
+              onFocus={() => handleCellActivate(rowId, 'check')}
+              onChange={ensureInteractionMarked}
+            />
+          </div>
+        </td>
+        <td
+          style={getWidthStyle('project', getCellHighlightStyle(rowId, 'project'))}
+          className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'project')}
+          {...cellClickProps('project')}
+        >
+          <select
+            className={`${sharedInputStyle} uppercase project-pill-select`}
+            style={getProjectSelectStyle(row.projectSelection)}
+            value={row.projectSelection ?? '-'}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              commitRowUpdate({ projectSelection: nextValue }, { markInteraction: true });
+            }}
+            onMouseDown={(event) => handleCellMouseDown(event, rowId, 'project')}
+            onFocus={() => handleCellActivate(rowId, 'project')}
+          >
+            <option>-</option>
+            <option>PROJECT A</option>
+            <option>PROJECT B</option>
+            <option>PROJECT C</option>
+          </select>
+        </td>
+        <td
+          style={getWidthStyle('status', getCellHighlightStyle(rowId, 'status'))}
+          className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'status')}
+          {...cellClickProps('status')}
+        >
+          <div className="status-pill-container">
+            <select
+              className="status-pill-select"
+              style={getStatusColorStyle(row.status)}
+              value={row.status ?? '-'}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                commitRowUpdate({ status: nextValue }, { markInteraction: true });
+              }}
+              onMouseDown={(event) => handleCellMouseDown(event, rowId, 'status')}
+              onFocus={() => handleCellActivate(rowId, 'status')}
+            >
+              <StatusOptions />
+            </select>
+          </div>
+        </td>
+        <td
+          style={getWidthStyle('task', getCellHighlightStyle(rowId, 'task'))}
+          className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'task')}
+          {...cellClickProps('task')}
+        >
+          <input
+            type="text"
+            className={sharedInputStyle}
+            value={row.taskName ?? ''}
+            onMouseDown={(event) => handleCellMouseDown(event, rowId, 'task')}
+            onFocus={() => handleCellActivate(rowId, 'task')}
+            onChange={(event) => updateTaskName(event.target.value)}
+            onPaste={(event) =>
+              handleOverwritePaste(event, (text) => updateTaskName(text))
+            }
+          />
+        </td>
+        {showRecurring && (
+          <td
+            className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'recurring')}
+            style={getWidthStyle('recurring', getCellHighlightStyle(rowId, 'recurring'))}
+            {...cellClickProps('recurring')}
+          >
+            <div className="flex h-full w-full items-center justify-center">
+              <input
+                type="checkbox"
+                className={checkboxInputClass}
+                checked={row.recurring === 'Recurring'}
+                onMouseDown={(event) => handleCellMouseDown(event, rowId, 'recurring')}
+                onFocus={() => handleCellActivate(rowId, 'recurring')}
+                onChange={(event) => {
+                  const nextValue = event.target.checked ? 'Recurring' : 'Not Recurring';
+                  commitRowUpdate({ recurring: nextValue }, { markInteraction: true });
+                }}
+              />
+            </div>
+          </td>
+        )}
+        <td
+          style={getWidthStyle('estimate', getCellHighlightStyle(rowId, 'estimate'))}
+          className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'estimate')}
+          {...cellClickProps('estimate')}
+        >
+          <select
+            className={sharedInputStyle}
+            value={row.estimate ?? '-'}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              commitRowUpdate(
+                (currentRow) => {
+                  const updates = { estimate: nextValue };
+                  const minutes = parseEstimateLabelToMinutes(nextValue);
+                  let nextTimeValue;
+                  if (minutes != null) {
+                    nextTimeValue = formatMinutesToHHmm(minutes);
+                  } else if (nextValue === 'Custom') {
+                    nextTimeValue = '0.00';
+                  } else {
+                    nextTimeValue = '0.00';
+                  }
+                  updates.timeValue = nextTimeValue;
+                  const syncedEntries = syncDayEntriesWithTimeValue(
+                    currentRow.dayEntries,
+                    nextTimeValue,
+                    currentRow.timeValue
+                  );
+                  if (syncedEntries !== currentRow.dayEntries) {
+                    updates.dayEntries = syncedEntries;
+                  }
+                  return updates;
+                },
+                { markInteraction: true }
+              );
+            }}
+            onMouseDown={(event) => handleCellMouseDown(event, rowId, 'estimate')}
+            onFocus={() => handleCellActivate(rowId, 'estimate')}
+          >
+            <EstimateOptions />
+          </select>
+        </td>
+        <td
+          className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'timeValue')}
+          style={getWidthStyle('timeValue', {
+            ...blackDividerStyle,
+            ...getCellHighlightStyle(rowId, 'timeValue'),
+            textAlign: 'right',
+            paddingRight: 8,
+          })}
+          {...cellClickProps('timeValue')}
+        >
+          <input
+            type="text"
+            className={`${sharedInputStyle} text-right pr-2`}
+            value={row.timeValue ?? '0.00'}
+            onMouseDown={(event) => handleCellMouseDown(event, rowId, 'timeValue')}
+            onFocus={() => handleCellActivate(rowId, 'timeValue')}
+            onChange={(event) => {
+              if (!isCustomEstimate) return;
+              updateTimeValue(event.target.value);
+            }}
+            onPaste={(event) => {
+              if (!isCustomEstimate) return;
+              handleOverwritePaste(event, (text) => updateTimeValue(text));
+            }}
+            readOnly={!isCustomEstimate}
+          />
+        </td>
+        {Array.from({ length: totalDays }).map((_, i) => (
+          <td
+            key={`${rowId}-${i}`}
+            style={{
+              ...applyWeekBorderStyles(i, getWidthStyle(`day-${i}`)),
+              ...getCellHighlightStyle(rowId, `day-${i}`),
+            }}
+            onMouseDown={(event) => handleCellMouseDown(event, rowId, `day-${i}`)}
+            className={withCellSelectionClass(
+              `${getWeekBorderClass(i, 'border border-[#ced3d0]' + topBorderClass)} p-0`,
+              `day-${i}`
+            )}
+            {...cellClickProps(`day-${i}`)}
+          >
+            <input
+              type="text"
+              className={sharedInputStyle}
+              value={dayEntries[i] ?? ''}
+              onMouseDown={(event) => handleCellMouseDown(event, rowId, `day-${i}`)}
+              onFocus={() => handleCellActivate(rowId, `day-${i}`)}
+              onChange={(event) => updateDayEntry(i, event.target.value)}
+              onPaste={(event) =>
+                handleOverwritePaste(event, (text) => updateDayEntry(i, text))
+              }
+              data-time-entry="true"
+            />
+          </td>
+        ))}
+      </tr>
+    );
+  };
+
+  const rowRenderers = {
+    projectHeader: renderProjectHeaderRow,
+    projectGeneral: renderProjectGeneralRow,
+    projectTask: renderProjectTaskRow,
+    projectUnscheduled: renderProjectUnscheduledRow,
+    inboxHeader: renderInboxHeaderRow,
+    archiveHeader: renderArchiveHeaderRow,
+    archiveRow: renderArchiveRow,
+    inboxItem: renderInboxItemRow,
+  };
+
+  const renderDataRow = (tableRow, options = {}) => {
+    const context = createRowRenderContext(tableRow, options);
+    const renderer = rowRenderers[context.row.type];
+    return renderer ? renderer(context) : null;
+  };
+
 
   return (
     <div ref={tableContainerRef} className="relative overflow-x-auto p-4 text-[12px] bg-gray-100">
@@ -2888,105 +2867,26 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
         currentPath={currentPath}
         onNavigate={onNavigate}
         listicalButton={
-          <div>
-            <button
-              type="button"
-              ref={listicalButtonRef}
-              onClick={() => setIsListicalMenuOpen((prev) => !prev)}
-              aria-expanded={isListicalMenuOpen}
-              className="inline-flex items-center gap-2 rounded border border-[#ced3d0] bg-white px-3 py-2 font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6] hover:shadow-md"
-            >
-              <span>Listical</span>
-            </button>
-            {isListicalMenuOpen && (
-              <div
-                ref={listicalMenuRef}
-                className="absolute z-20 mt-2 w-[36rem] rounded border border-[#ced3d0] bg-[#f2fdf6] p-4 shadow-lg"
-              >
-                <div className="flex flex-col gap-3 text-[12px] text-slate-800">
-                  <label className="flex items-center gap-2 font-semibold">
-                    <input
-                      type="checkbox"
-                      className={checkboxInputClass}
-                      checked={showRecurring}
-                      onChange={() => setShowRecurring(!showRecurring)}
-                    />
-                    Show Recurring
-                  </label>
-                  <label className="flex items-center gap-2 font-semibold">
-                    <input
-                      type="checkbox"
-                      className={checkboxInputClass}
-                      checked={showMaxMinRows}
-                      onChange={() => setShowMaxMinRows(!showMaxMinRows)}
-                    />
-                    Toggle Max/Min Hours
-                  </label>
-                  <div className="flex items-center gap-3 font-semibold text-slate-800">
-                    <span className="text-[11px] uppercase tracking-wide text-slate-600">Add Tasks</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={addTasksCount}
-                      onChange={(e) => setAddTasksCount(e.target.value)}
-                      className="w-24 rounded border border-[#ced3d0] px-2 py-1 text-[12px] font-normal uppercase tracking-normal text-slate-800"
-                      placeholder="0"
-                    />
-                    <button
-                      type="button"
-                      className="rounded border border-[#ced3d0] bg-white px-4 py-1 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-                      onClick={handleAddTasks}
-                    >
-                      Ok
-                    </button>
-                  </div>
-                  <label className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                    <span>Start Date</span>
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                  className="flex-1 rounded border border-[#ced3d0] px-2 py-1 text-[12px] font-normal uppercase tracking-normal text-slate-800"
-                />
-              </label>
-              <div className="flex flex-col gap-2 rounded border border-[#ced3d0] bg-white/60 p-3">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                  Sort Inbox: Move statuses
-                </span>
-                <div className="flex flex-wrap gap-3">
-                  {SORTABLE_STATUSES.map((status) => (
-                    <label key={status} className="flex items-center gap-2 text-[12px] font-semibold">
-                      <input
-                        type="checkbox"
-                        className={checkboxInputClass}
-                        checked={selectedSortStatuses.has(status)}
-                        onChange={() => toggleSortStatus(status)}
-                      />
-                      <span>{status}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <button
-                  type="button"
-                  className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-                  onClick={handleSortInbox}
-                >
-                  Sort Inbox
-                </button>
-                <button
-                  type="button"
-                  className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-                  onClick={handleArchiveWeek}
-                >
-                  Archive Week
-                </button>
-              </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <ProjectListicalMenu
+            isOpen={isListicalMenuOpen}
+            onToggle={() => setIsListicalMenuOpen((prev) => !prev)}
+            onClose={() => setIsListicalMenuOpen(false)}
+            showRecurring={showRecurring}
+            onToggleShowRecurring={() => setShowRecurring((prev) => !prev)}
+            showMaxMinRows={showMaxMinRows}
+            onToggleShowMaxMinRows={() => setShowMaxMinRows((prev) => !prev)}
+            addTasksCount={addTasksCount}
+            onAddTasksCountChange={(value) => setAddTasksCount(value)}
+            handleAddTasks={handleAddTasks}
+            startDate={startDate}
+            onStartDateChange={(value) => setStartDate(value)}
+            selectedSortStatuses={selectedSortStatuses}
+            onToggleSortStatus={toggleSortStatus}
+            handleSortInbox={handleSortInbox}
+            handleArchiveWeek={handleArchiveWeek}
+            checkboxInputClass={checkboxInputClass}
+            sortableStatuses={SORTABLE_STATUSES}
+          />
         }
       />
 
@@ -3012,15 +2912,34 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
             );
           })}
           </tr>
-          {timelineRows.length > 0 && (
-            <>
-              {renderTimelineRow(monthsRow)}
-              {renderTimelineRow(weeksRow)}
-              {renderTimelineRow(datesRow)}
-              {renderTimelineRow(weekdaysRow)}
-              {bufferRows.map((bufferRow) => renderTimelineRow(bufferRow))}
-            </>
-          )}
+          <TimelineHeader
+            timelineRows={timelineRows}
+            columnStructure={columnStructure}
+            columnLetters={columnLetters}
+            columnLetterByKey={columnLetterByKey}
+            getWidthStyle={getWidthStyle}
+            fixedCols={fixedCols}
+            ROW_H={ROW_H}
+            activeFilterColumns={activeFilterColumns}
+            projectFilterMenu={projectFilterMenu}
+            projectFilterButtonRef={projectFilterButtonRef}
+            handleProjectFilterButtonClick={handleProjectFilterButtonClick}
+            selectedProjectFilters={selectedProjectFilters}
+            statusFilterMenu={statusFilterMenu}
+            statusFilterButtonRef={statusFilterButtonRef}
+            handleStatusFilterButtonClick={handleStatusFilterButtonClick}
+            selectedStatusFilters={selectedStatusFilters}
+            recurringFilterMenu={recurringFilterMenu}
+            recurringFilterButtonRef={recurringFilterButtonRef}
+            handleRecurringFilterButtonClick={handleRecurringFilterButtonClick}
+            selectedRecurringFilters={selectedRecurringFilters}
+            estimateFilterMenu={estimateFilterMenu}
+            estimateFilterButtonRef={estimateFilterButtonRef}
+            handleEstimateFilterButtonClick={handleEstimateFilterButtonClick}
+            selectedEstimateFilters={selectedEstimateFilters}
+            toggleFilterColumn={toggleFilterColumn}
+            applyRowLabelStyle={applyRowLabelStyle}
+          />
         </thead>
 
         <tbody>
@@ -3048,7 +2967,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
         projectNames={projectNames}
         selectedProjectFilters={selectedProjectFilters}
         handleProjectFilterSelect={handleProjectFilterSelect}
-        handleProjectFilterButtonClick={handleProjectFilterButtonClick}
         closeProjectFilterMenu={closeProjectFilterMenu}
         statusFilterMenu={statusFilterMenu}
         statusFilterMenuRef={statusFilterMenuRef}
@@ -3056,7 +2974,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
         statusNames={statusNames}
         selectedStatusFilters={selectedStatusFilters}
         handleStatusFilterSelect={handleStatusFilterSelect}
-        handleStatusFilterButtonClick={handleStatusFilterButtonClick}
         closeStatusFilterMenu={closeStatusFilterMenu}
         recurringFilterMenu={recurringFilterMenu}
         recurringFilterMenuRef={recurringFilterMenuRef}
@@ -3064,7 +2981,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
         recurringNames={recurringNames}
         selectedRecurringFilters={selectedRecurringFilters}
         handleRecurringFilterSelect={handleRecurringFilterSelect}
-        handleRecurringFilterButtonClick={handleRecurringFilterButtonClick}
         closeRecurringFilterMenu={closeRecurringFilterMenu}
         estimateFilterMenu={estimateFilterMenu}
         estimateFilterMenuRef={estimateFilterMenuRef}
@@ -3072,7 +2988,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
         estimateNames={estimateNames}
         selectedEstimateFilters={selectedEstimateFilters}
         handleEstimateFilterSelect={handleEstimateFilterSelect}
-        handleEstimateFilterButtonClick={handleEstimateFilterButtonClick}
         closeEstimateFilterMenu={closeEstimateFilterMenu}
       />
     </div>

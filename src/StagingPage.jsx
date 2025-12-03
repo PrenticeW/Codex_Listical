@@ -257,7 +257,6 @@ const clonePlanTableEntries = (entries, ensureRows = PLAN_TABLE_ROWS) => {
   return normalized;
 };
 
-const createEmptyPlanTable = () => clonePlanTableEntries(null);
 export default function StagingPage({ currentPath = '/staging', onNavigate = () => {} }) {
   const [inputValue, setInputValue] = useState('');
   const [{ shortlist, archived }, setState] = useState(() => loadStagingState());
@@ -557,7 +556,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
   );
 
   const addQuestionPromptWithOutcomeRow = useCallback(
-    (itemId, _questionRowIdx) => {
+    (itemId) => {
       let nextFocus = null;
       setState((prev) => ({
         ...prev,
@@ -613,7 +612,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
   );
 
   const addNeedsPromptWithPlanRow = useCallback(
-    (itemId, _needsRowIdx) => {
+    (itemId) => {
       let nextFocus = null;
       setState((prev) => ({
         ...prev,
@@ -880,7 +879,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                     pairId: getRowPairId(planEntries[rowIdx]),
                   };
                 };
-                const renderQuestionPromptRow = (rowValues, rowIdx, promptIndex) => (
+                const renderQuestionPromptRow = (rowValues, rowIdx) => (
                   <tr key={`${item.id}-plan-question-row-${rowIdx}`}>
                     <td
                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
@@ -913,7 +912,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' && !event.shiftKey) {
                             event.preventDefault();
-                            addQuestionPromptWithOutcomeRow(item.id, rowIdx);
+                            addQuestionPromptWithOutcomeRow(item.id);
                           }
                         }}
                       />
@@ -1096,7 +1095,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' && !event.shiftKey) {
                             event.preventDefault();
-                            addNeedsPromptWithPlanRow(item.id, rowIdx);
+                            addNeedsPromptWithPlanRow(item.id);
                           }
                         }}
                       />
@@ -1589,8 +1588,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                 >
                                   {renderQuestionPromptRow(
                                     primary.rowValues,
-                                    primary.rowIdx,
-                                    primary.promptIndex
+                                    primary.rowIdx
                                   )}
                                   {secondaryList.map((outcome) =>
                                     renderOutcomePromptRow(outcome.rowValues, outcome.rowIdx)
@@ -1600,8 +1598,8 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                               {leftoverOutcomeEntries.map(({ rowIdx, rowValues }) =>
                                 renderOutcomePromptRow(rowValues, rowIdx)
                               )}
-                              {leftoverQuestionEntries.map(({ rowIdx, rowValues, promptIndex }) =>
-                                renderQuestionPromptRow(rowValues, rowIdx, promptIndex)
+                              {leftoverQuestionEntries.map(({ rowIdx, rowValues }) =>
+                                renderQuestionPromptRow(rowValues, rowIdx)
                               )}
                               <tr key={`${item.id}-plan-row-${needsHeadingRow}`}>
                                 <td
