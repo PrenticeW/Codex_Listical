@@ -3,6 +3,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useReactTable, getCoreRowModel } from '@tanstack/react-table';
 import { ListFilter } from 'lucide-react';
 import NavigationBar from './NavigationBar';
+import useTimelineRows from './timeline/useTimelineRows';
+import useCellSelection from './hooks/useCellSelection';
+import FilterPanel from './FilterPanel';
 
 const PROTECTED_STATUSES = new Set(['Done', 'Abandoned', 'Blocked', 'On Hold', 'Skipped', 'Special']);
 const TASK_ROW_TYPES = new Set(['projectTask', 'inboxItem']);
@@ -39,7 +42,7 @@ const createEmptyDayEntries = (count) => Array.from({ length: count }, () => '')
 const isTaskColumnEmpty = (row) => !(row.taskName ?? '').trim();
 const ROW_LABEL_BASE_STYLE = { backgroundColor: '#d9f6e0', color: '#065f46' };
 const applyRowLabelStyle = (style = {}) => ({ ...style, ...ROW_LABEL_BASE_STYLE });
-const FILTER_BLOCKED_LETTERS = new Set(['A', 'D', 'G']);
+const FILTER_BLOCKED_LETTERS = new Set(['A', 'D', 'F']);
 const coerceNumber = (value) => {
   if (value == null) return null;
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -131,6 +134,13 @@ const getProjectSelectStyle = (value) => {
 
 const DARK_HEADER_STYLE = { backgroundColor: '#000000', color: '#ffffff' };
 const ARCHIVE_ROW_STYLE = { backgroundColor: '#d9f6e0', color: '#000000' };
+const formatDateForInput = (date) => {
+  const year = date.getFullYear().toString().padStart(4, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const isBrowserEnvironment = () =>
   typeof window !== 'undefined' && typeof document !== 'undefined';
 const SETTINGS_STORAGE_KEY = 'listical-settings';
@@ -154,8 +164,9 @@ const readStoredSettings = () => {
 
 export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavigate = () => {} }) {
   const storedSettings = readStoredSettings();
+  const defaultStartDate = useMemo(() => formatDateForInput(new Date()), []);
   const [showRecurring, setShowRecurring] = useState(storedSettings?.showRecurring ?? true);
-  const [startDate, setStartDate] = useState(storedSettings?.startDate ?? "");
+  const [startDate, setStartDate] = useState(storedSettings?.startDate ?? defaultStartDate);
   const [showMaxMinRows, setShowMaxMinRows] = useState(true);
   const [isListicalMenuOpen, setIsListicalMenuOpen] = useState(false);
   const [addTasksCount, setAddTasksCount] = useState('');
@@ -204,8 +215,8 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   const [activeCell, setActiveCell] = useState(null);
   const [selectedRowIds, setSelectedRowIds] = useState([]);
   const [lastSelectedRowIndex, setLastSelectedRowIndex] = useState(null);
+  const clearSelectionRef = useRef(() => {});
   const selectedRowIdSet = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
-
   const handleCellActivate = (rowId, cellId, { highlightRow = false, preserveSelection = false } = {}) => {
     const preserveRowSelection = preserveSelection || shouldPreserveSelection();
     setActiveCell({ rowId, cellId });
@@ -220,22 +231,17 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     }
   };
 
-  const handleCellMouseDown = (event, rowId, cellId, options = {}) => {
-    updatePointerModifierState(event);
-    const preserveSelection = Boolean(event?.metaKey || event?.ctrlKey || event?.shiftKey);
-    handleCellActivate(rowId, cellId, { ...options, preserveSelection });
-  };
-
   const handleCellClear = useCallback(
     ({ clearRowSelection = true } = {}) => {
       setActiveCell(null);
       setHighlightedRowId(null);
+      clearSelectionRef.current();
       if (clearRowSelection) {
         setSelectedRowIds([]);
         setLastSelectedRowIndex(null);
       }
     },
-    [setActiveCell, setHighlightedRowId, setSelectedRowIds, setLastSelectedRowIndex]
+    [setActiveCell, setHighlightedRowId, setLastSelectedRowIndex, setSelectedRowIds]
   );
 
   const [copiedCell, setCopiedCell] = useState(null);
@@ -280,18 +286,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   const isCellActive = (rowId, cellId) =>
     activeCell && activeCell.rowId === rowId && activeCell.cellId === cellId;
 
-  const getCellHighlightStyle = (rowId, cellId) => {
-    const style = {};
-    if (isCellActive(rowId, cellId)) {
-      style.filter = 'brightness(0.96)';
-      style.position = 'relative';
-      style.zIndex = 2;
-    }
-    if (copiedCellHighlight && copiedCellHighlight.rowId === rowId && copiedCellHighlight.cellId === cellId) {
-      style.boxShadow = '0 0 0 2px rgba(59,130,246,0.9)';
-    }
-    return style;
-  };
   const [activeRowId, setActiveRowId] = useState(null);
   const [dragIndex, setDragIndex] = useState(null);
   const [hoverIndex, setHoverIndex] = useState(null);
@@ -317,7 +311,9 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     const parsed = readStoredSettings();
     if (parsed) {
       setColumnWidths(parsed.columnWidths ?? {});
-      setStartDate(parsed.startDate ?? '');
+      if (parsed.startDate) {
+        setStartDate(parsed.startDate);
+      }
       setShowRecurring(parsed.showRecurring ?? true);
     }
     setSettingsLoaded(true);
@@ -707,16 +703,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     pendingRowClickModifierRef.current = { meta: false, shift: false };
   };
 
-  const handleCellClick = (rowIndex, columnId) => {
-    if (blockClickRef.current) return;
-    const currentRows = table.getRowModel().rows;
-    const targetRow = currentRows[rowIndex];
-    if (!targetRow) return;
-    handleCellActivate(targetRow.original.id, columnId, {
-      preserveSelection: shouldPreserveSelection(),
-    });
-  };
-
   const COL_W = {
     rowLabel: 36,
     check: 24,
@@ -1054,236 +1040,47 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     }
     if (style.borderLeft === undefined || style.borderLeft === 'none') {
       style.borderLeft =
-        isWeekStart(index) && index !== 0 ? '2px solid #000000' : '1px solid #ced3d0';
+      isWeekStart(index) && index !== 0 ? '2px solid #000000' : '1px solid #ced3d0';
     }
     return style;
   };
-
   const getWeekBorderClass = (_index, baseClass = '') => baseClass;
 
   const createStyle = (backgroundColor, color) => ({ backgroundColor, color });
 
   const columnTotals = useMemo(() => {
     const totals = {};
+    for (let i = 0; i < totalDays; i += 1) {
+      totals[`day-${i}`] = 0;
+    }
     rows.forEach((row) => {
-      if (!TASK_ROW_TYPES.has(row.type)) return;
-      if (Array.isArray(row.dayEntries)) {
-        row.dayEntries.forEach((entry, index) => {
-          const numericValue = coerceNumber(entry);
-          if (numericValue == null) return;
-          const key = `day-${index}`;
-          totals[key] = (totals[key] ?? 0) + numericValue;
-        });
-      }
-      const numericTimeValue = coerceNumber(row.timeValue);
-      if (numericTimeValue != null) {
-        totals.timeValue = (totals.timeValue ?? 0) + numericTimeValue;
-      }
+      if (!Array.isArray(row.dayEntries)) return;
+      row.dayEntries.forEach((value, idx) => {
+        if (idx < 0 || idx >= totalDays) return;
+        const normalizedValue = coerceNumber(value);
+        if (normalizedValue == null) return;
+        const key = `day-${idx}`;
+        totals[key] = (totals[key] ?? 0) + normalizedValue;
+      });
     });
     return totals;
-  }, [rows]);
+  }, [rows, totalDays]);
 
-  const timelineRowConfig = useMemo(() => {
-    const fixedTimelineStyle = createStyle('#000000', '#ffffff');
-    const timelineHeaderStyle = createStyle('#ffffff', '#000000');
-    const weekdayCellStyle = createStyle('#efefef', '#000000');
-    const weekendCellStyle = createStyle('#d9d9d9', '#000000');
+  const { timelineRows } = useTimelineRows({
+    dates,
+    monthSpans,
+    weeksCount,
+    showMaxMinRows,
+    totalDays,
+    columnTotals,
+    fixedColumnConfig,
+    getWidthStyle,
+    applyWeekBorderStyles,
+    getWeekBorderClass,
+    blackDividerStyle,
+    formatTotalValue,
+  });
 
-    const weekBoundaryClass = (index, baseClass = 'border border-[#ced3d0]') =>
-      getWeekBorderClass(index, baseClass);
-
-    const isMonthTransitionAfter = (index) => {
-      const current = dates[index];
-      const next = dates[index + 1];
-      if (!current || !next) return false;
-      return (
-        current.getMonth() !== next.getMonth() || current.getFullYear() !== next.getFullYear()
-      );
-    };
-
-    const isMonthTransitionBefore = (index) => (index === 0 ? false : isMonthTransitionAfter(index - 1));
-
-    const fixedHeaderCellStyle = createStyle('#000000', '#ffffff');
-
-    let rowCounter = 1;
-
-    const monthsRow = {
-      id: 'months',
-      rowLabelStyle: fixedTimelineStyle,
-      rowLabelClassName: 'text-center font-semibold border border-[#ced3d0] text-white',
-      fixedCellStyle: { ...fixedTimelineStyle, ...blackDividerStyle },
-      fixedCellClassName: 'border-0 text-white',
-      rowLabelContent: String(rowCounter++),
-      cells: monthSpans.map((m, idx) => ({
-        key: `month-${idx}`,
-        colSpan: m.span,
-        content: m.label,
-        style: timelineHeaderStyle,
-        className: `text-center font-semibold border border-black ${
-          idx < monthSpans.length - 1 ? 'border-r-2 border-black' : ''
-        }`,
-      })),
-    };
-
-    const weeksRow = {
-      id: 'weeks',
-      rowLabelStyle: fixedTimelineStyle,
-      rowLabelClassName: 'text-center font-semibold border border-[#ced3d0] text-white',
-      fixedCellStyle: { ...fixedTimelineStyle, ...blackDividerStyle },
-      fixedCellClassName: 'border-0 text-white',
-      rowLabelContent: String(rowCounter++),
-      cells: Array.from({ length: weeksCount }).map((_, w) => ({
-        key: `week-${w}`,
-        colSpan: 7,
-        content: `Week ${w + 1}`,
-        style: timelineHeaderStyle,
-        className: `text-center font-semibold border border-black ${
-          w < weeksCount - 1 ? 'border-r-2 border-black' : ''
-        }`,
-      })),
-    };
-
-    const datesRow = {
-      id: 'dates',
-      rowLabelStyle: fixedTimelineStyle,
-      rowLabelClassName: 'text-center font-semibold border border-[#ced3d0] text-white',
-      fixedCellStyle: null,
-      fixedCellClassName: 'border-0 text-white',
-      rowLabelContent: String(rowCounter++),
-      fixedCells: fixedColumnConfig.map(({ key, label, width, className }) => ({
-        key: `dates-fixed-${key}`,
-        columnKey: key,
-        content: label,
-        className: `border border-[#ced3d0] ${className ?? ''}`,
-        style: {
-          width,
-          ...fixedHeaderCellStyle,
-          ...(key === 'timeValue' ? blackDividerStyle : {}),
-        },
-      })),
-      cells: dates.map((d, i) => ({
-        key: `date-${i}`,
-        columnKey: `day-${i}`,
-        content: d ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '--',
-        style: applyWeekBorderStyles(i, { ...timelineHeaderStyle }),
-        className: `${weekBoundaryClass(i)} text-center text-black`,
-      })),
-    };
-
-    const weekdaysRow = {
-      id: 'weekdays',
-      rowLabelStyle: fixedTimelineStyle,
-      rowLabelClassName: 'text-center font-semibold border border-[#ced3d0] text-white',
-      fixedCellStyle: { ...fixedTimelineStyle, ...blackDividerStyle },
-      fixedCellClassName: 'border-0 text-white',
-      rowLabelContent: String(rowCounter++),
-      cells: dates.map((d, i) => ({
-        key: `weekday-${i}`,
-        columnKey: `day-${i}`,
-        content: d ? d.toLocaleDateString('en-GB', { weekday: 'short' }).charAt(0) : '',
-        style: (() => {
-          const baseStyle = !d
-            ? timelineHeaderStyle
-            : [0, 6].includes(d.getDay())
-            ? weekendCellStyle
-            : weekdayCellStyle;
-          const leftBorderIsBlack = isMonthTransitionBefore(i) || (isWeekStart(i) && i !== 0);
-          const style = {
-            ...baseStyle,
-            borderTop: '1px solid #000000',
-            borderBottom: '1px solid #000000',
-            borderLeft: leftBorderIsBlack ? '2px solid #000000' : '1px solid #ced3d0',
-            borderRight: '1px solid #ced3d0',
-          };
-          if (isWeekBoundary(i) || isMonthTransitionAfter(i)) {
-            style.borderRight = '2px solid #000000';
-          }
-          return style;
-        })(),
-        className: 'text-center text-black font-semibold',
-      })),
-    };
-
-    const createBufferRow = (suffix, fillColor, options = {}) => {
-      const bufferRow = {
-        id: `buffer-${suffix}`,
-        rowLabelStyle: options.rowLabelStyle ?? fixedTimelineStyle,
-        rowLabelClassName: options.rowLabelClassName ?? 'text-center font-semibold border-0 text-white',
-        fixedCellStyle: options.fixedCellStyle ?? { ...fixedTimelineStyle, ...blackDividerStyle },
-        fixedCellClassName: options.fixedCellClassName ?? 'border-0 text-white',
-        rowLabelContent: String(rowCounter++),
-        cells: dates.map((_, i) => {
-          const style = applyWeekBorderStyles(i, {
-            backgroundColor: fillColor,
-            color: '#000000',
-          });
-
-          if (style.borderLeft === '1px solid #ced3d0') {
-            style.borderLeft = '1px solid transparent';
-          }
-          if (style.borderRight === '1px solid #ced3d0') {
-            style.borderRight = '1px solid transparent';
-          }
-          style.borderTop = '1px solid transparent';
-          style.borderBottom = '1px solid transparent';
-
-          return {
-            key: `buffer-${suffix}-${i}`,
-            columnKey: `day-${i}`,
-            content: '',
-            style,
-            className: '',
-          };
-        }),
-      };
-
-      return bufferRow;
-    };
-
-    const rows = [monthsRow, weeksRow, datesRow, weekdaysRow];
-    if (showMaxMinRows) {
-      rows.push(createBufferRow(1, '#ead1dc'));
-      rows.push(createBufferRow(2, '#f2e5eb'));
-    }
-
-    const totalsRow = {
-      id: 'totals',
-      rowLabelStyle: { backgroundColor: '#ead1dc', color: '#000000' },
-      rowLabelClassName: 'text-center font-semibold border border-[#ced3d0]',
-      fixedCellStyle: { backgroundColor: '#ead1dc', color: '#000000' },
-      fixedCellClassName: 'border border-[#ced3d0] font-semibold px-2 text-right',
-      rowLabelContent: String(rowCounter++),
-      fixedCells: fixedColumnConfig.map(({ key, width, className }) => ({
-        key: `total-fixed-${key}`,
-        columnKey: key,
-        content: '',
-        className: `border border-[#ced3d0] font-semibold px-2 text-right ${className ?? ''}`,
-        style: {
-          width,
-          backgroundColor: '#ead1dc',
-          color: '#000000',
-          ...(key === 'timeValue' ? blackDividerStyle : {}),
-        },
-      })),
-      cells: dates.map((_, i) => ({
-        key: `total-day-${i}`,
-        columnKey: `day-${i}`,
-        content: formatTotalValue(columnTotals[`day-${i}`]),
-        style: applyWeekBorderStyles(i, {
-          backgroundColor: '#ead1dc',
-          color: '#000000',
-          fontWeight: 600,
-        }),
-        className: getWeekBorderClass(i, 'border border-[#ced3d0] text-center font-semibold'),
-      })),
-    };
-
-    rows.push(totalsRow);
-
-    return rows;
-  }, [dates, monthSpans, weeksCount, showMaxMinRows, columnTotals, fixedColumnConfig]);
-
-  const timelineRows = timelineRowConfig;
   const timelineRowCount = timelineRows.length;
 
   const [monthsRow, weeksRow, datesRow, weekdaysRow, ...bufferRows] = timelineRows;
@@ -1317,6 +1114,21 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     return structure;
   }, [fixedColumnConfig, totalDays]);
 
+  const {
+    columnIndexByKey,
+    rowIndexById,
+    getCellDescriptorKey,
+    getRangeSelectionKeys,
+    isCellInSelection,
+    setSelectedCellKeys,
+    setSelectionAnchor,
+    setSelectionFocus,
+    clearSelection,
+    cellSelectionAnchorRef,
+  } = useCellSelection({ columnStructure, tableRows });
+
+  clearSelectionRef.current = clearSelection;
+
   const columnLetters = useMemo(
     () =>
       columnStructure.map((_, idx) => (idx === 0 ? '' : getColumnLabel(idx - 1))),
@@ -1330,6 +1142,83 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     });
     return map;
   }, [columnStructure, columnLetters]);
+
+  const handleCellMouseDown = (event, rowId, cellId, options = {}) => {
+    const isInteractive =
+      event.target instanceof Element &&
+      Boolean(event.target.closest('input, select, textarea, button, a'));
+    if (!isInteractive) {
+      event.preventDefault();
+    }
+    updatePointerModifierState(event);
+    const preserveSelection = Boolean(event?.metaKey || event?.ctrlKey || event?.shiftKey);
+    const descriptor = {
+      rowIndex: rowIndexById.get(rowId) ?? null,
+      columnIndex: columnIndexByKey[cellId] ?? null,
+      rowId,
+      cellId,
+    };
+    const anchorExists = Boolean(cellSelectionAnchorRef.current);
+    const isShift = pointerModifierRef.current.shift;
+    const isMeta = pointerModifierRef.current.meta;
+    const descriptorKey = getCellDescriptorKey(rowId, cellId);
+    if (descriptor.columnIndex != null || descriptor.rowIndex != null) {
+      if (isShift && anchorExists) {
+        setSelectionFocus(descriptor);
+        const rangeKeys = getRangeSelectionKeys(
+          cellSelectionAnchorRef.current,
+          descriptor
+        );
+        setSelectedCellKeys(rangeKeys);
+      } else {
+        setSelectionAnchor(descriptor);
+        setSelectionFocus(descriptor);
+        if (isMeta) {
+          setSelectedCellKeys((prev) => {
+            const next = new Set(prev);
+            if (descriptorKey) {
+              if (next.has(descriptorKey)) next.delete(descriptorKey);
+              else next.add(descriptorKey);
+            }
+            return next;
+          });
+        } else {
+          setSelectedCellKeys(descriptorKey ? new Set([descriptorKey]) : new Set());
+        }
+      }
+    }
+    handleCellActivate(rowId, cellId, { ...options, preserveSelection });
+  };
+
+  const getCellHighlightStyle = (rowId, cellId) => {
+    const style = {};
+  if (isCellActive(rowId, cellId)) {
+    style.backgroundColor = '#fceef3';
+    style.outline = '2px solid #3b82f6';
+    style.outlineOffset = '-2px';
+    style.position = 'relative';
+    style.zIndex = 2;
+  }
+  if (copiedCellHighlight && copiedCellHighlight.rowId === rowId && copiedCellHighlight.cellId === cellId) {
+    style.boxShadow = '0 0 0 2px rgba(59,130,246,0.9)';
+  }
+    if (isCellInSelection(rowId, cellId)) {
+      const selectionShadow = '0 0 0 2px rgba(37,99,235,0.45)';
+      style.boxShadow = style.boxShadow ? `${style.boxShadow}, ${selectionShadow}` : selectionShadow;
+    }
+    return style;
+  };
+
+  const handleCellClick = (rowIndex, columnId) => {
+    if (blockClickRef.current) return;
+    const currentRows = table.getRowModel().rows;
+    const targetRow = currentRows[rowIndex];
+    if (!targetRow) return;
+    const rowId = targetRow.original.id;
+    handleCellActivate(rowId, columnId, {
+      preserveSelection: shouldPreserveSelection(),
+    });
+  };
 
   const projectHeaderTotals = useMemo(() => {
     const totals = {};
@@ -1556,46 +1445,10 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [rows]);
 
-  useEffect(() => {
-    if (!projectFilterMenu.open || !isBrowserEnvironment()) return undefined;
-    const handleClickOutside = (event) => {
-      const menuNode = projectFilterMenuRef.current;
-      const buttonNode = projectFilterButtonRef.current;
-      if (menuNode && menuNode.contains(event.target)) return;
-      if (buttonNode && buttonNode.contains(event.target)) return;
-      closeProjectFilterMenu();
-    };
-
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        closeProjectFilterMenu();
-      }
-    };
-
-    window.addEventListener('mousedown', handleClickOutside, true);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('mousedown', handleClickOutside, true);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [closeProjectFilterMenu, projectFilterMenu.open]);
-
   const statusNames = useMemo(() => STATUS_VALUES, []);
   const recurringNames = useMemo(() => RECURRING_VALUES, []);
   const estimateNames = useMemo(() => ESTIMATE_VALUES, []);
   const toggleSortStatus = useCallback((status) => {
-    setSelectedSortStatuses((prev) => {
-      const next = new Set(prev);
-      if (next.has(status)) {
-        next.delete(status);
-      } else {
-        next.add(status);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleArchiveWeek = useCallback(() => {
     setIsListicalMenuOpen(false);
     setRows((prevRows) => {
       const headerIndex = prevRows.findIndex((row) => row.type === 'archiveHeader');
@@ -1773,78 +1626,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isListicalMenuOpen]);
-
-  useEffect(() => {
-    if (!statusFilterMenu.open || !isBrowserEnvironment()) return undefined;
-    const handleClickOutside = (event) => {
-      const menuNode = statusFilterMenuRef.current;
-      const buttonNode = statusFilterButtonRef.current;
-      if (menuNode && menuNode.contains(event.target)) return;
-      if (buttonNode && buttonNode.contains(event.target)) return;
-      closeStatusFilterMenu();
-    };
-
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        closeStatusFilterMenu();
-      }
-    };
-
-    window.addEventListener('mousedown', handleClickOutside, true);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('mousedown', handleClickOutside, true);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [closeStatusFilterMenu, statusFilterMenu.open]);
-
-  useEffect(() => {
-    if (!recurringFilterMenu.open || !isBrowserEnvironment()) return undefined;
-    const handleClickOutside = (event) => {
-      const menuNode = recurringFilterMenuRef.current;
-      const buttonNode = recurringFilterButtonRef.current;
-      if (menuNode && menuNode.contains(event.target)) return;
-      if (buttonNode && buttonNode.contains(event.target)) return;
-      closeRecurringFilterMenu();
-    };
-
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        closeRecurringFilterMenu();
-      }
-    };
-
-    window.addEventListener('mousedown', handleClickOutside, true);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('mousedown', handleClickOutside, true);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [closeRecurringFilterMenu, recurringFilterMenu.open]);
-
-  useEffect(() => {
-    if (!estimateFilterMenu.open || !isBrowserEnvironment()) return undefined;
-    const handleClickOutside = (event) => {
-      const menuNode = estimateFilterMenuRef.current;
-      const buttonNode = estimateFilterButtonRef.current;
-      if (menuNode && menuNode.contains(event.target)) return;
-      if (buttonNode && buttonNode.contains(event.target)) return;
-      closeEstimateFilterMenu();
-    };
-
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        closeEstimateFilterMenu();
-      }
-    };
-
-    window.addEventListener('mousedown', handleClickOutside, true);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('mousedown', handleClickOutside, true);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [closeEstimateFilterMenu, estimateFilterMenu.open]);
 
   const renderTimelineRow = (config) => {
     if (!config) return null;
@@ -2028,12 +1809,11 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     const withCellSelectionClass = (className = '', cellKey) => {
       const classes = [];
       if (className) classes.push(className);
-      if (cellKey && isCellActive(row.id, cellKey)) classes.push('active-cell');
+      if (cellKey && (isCellActive(row.id, cellKey) || isCellInSelection(row.id, cellKey))) classes.push('active-cell');
       return classes.join(' ');
     };
     const cellClickProps = (columnId) => ({
       ...cellMetadataProps(columnId),
-      onClick: () => handleCellClick(tableRow.index, columnId),
       onFocus: () => handleCellClick(tableRow.index, columnId),
     });
     const rowPropsLocal = {
@@ -3232,7 +3012,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
             );
           })}
           </tr>
-          {timelineRowConfig.length > 0 && (
+          {timelineRows.length > 0 && (
             <>
               {renderTimelineRow(monthsRow)}
               {renderTimelineRow(weeksRow)}
@@ -3261,106 +3041,40 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
           })}
         </tbody>
       </table>
-      {projectFilterMenu.open && (
-        <div
-          ref={projectFilterMenuRef}
-          className="fixed z-50 mt-1 min-w-[200px] overflow-hidden rounded border border-[#ced3d0] bg-white text-[12px] shadow-lg"
-          style={{ top: projectFilterMenu.top, left: projectFilterMenu.left }}
-        >
-          <div className="max-h-64 overflow-y-auto">
-            {projectNames.length === 0 ? (
-              <div className="px-3 py-2 text-slate-600">No projects available</div>
-            ) : (
-              projectNames.map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  className={`flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-100 ${
-                    selectedProjectFilters.has(name) ? 'font-semibold text-slate-900' : 'text-slate-800'
-                  }`}
-                  onClick={() => handleProjectFilterSelect(name)}
-                >
-                  <span>{name}</span>
-                  {selectedProjectFilters.has(name) ? <span>✓</span> : null}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-      {statusFilterMenu.open && (
-        <div
-          ref={statusFilterMenuRef}
-          className="fixed z-50 mt-1 min-w-[200px] overflow-hidden rounded border border-[#ced3d0] bg-white text-[12px] shadow-lg"
-          style={{ top: statusFilterMenu.top, left: statusFilterMenu.left }}
-        >
-          <div className="max-h-64 overflow-y-auto">
-            {statusNames.length === 0 ? (
-              <div className="px-3 py-2 text-slate-600">No statuses available</div>
-            ) : (
-              statusNames.map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  className={`flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-100 ${
-                    selectedStatusFilters.has(name) ? 'font-semibold text-slate-900' : 'text-slate-800'
-                  }`}
-                  onClick={() => handleStatusFilterSelect(name)}
-                >
-                  <span>{name}</span>
-                  {selectedStatusFilters.has(name) ? <span>✓</span> : null}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-      {recurringFilterMenu.open && (
-        <div
-          ref={recurringFilterMenuRef}
-          className="fixed z-50 mt-1 min-w-[200px] overflow-hidden rounded border border-[#ced3d0] bg-white text-[12px] shadow-lg"
-          style={{ top: recurringFilterMenu.top, left: recurringFilterMenu.left }}
-        >
-          <div className="max-h-64 overflow-y-auto">
-            {recurringNames.map((name) => (
-              <button
-                key={name}
-                type="button"
-                className={`flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-100 ${
-                  selectedRecurringFilters.has(name) ? 'font-semibold text-slate-900' : 'text-slate-800'
-                }`}
-                onClick={() => handleRecurringFilterSelect(name)}
-              >
-                <span>{name}</span>
-                {selectedRecurringFilters.has(name) ? <span>✓</span> : null}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      {estimateFilterMenu.open && (
-        <div
-          ref={estimateFilterMenuRef}
-          className="fixed z-50 mt-1 min-w-[200px] overflow-hidden rounded border border-[#ced3d0] bg-white text-[12px] shadow-lg"
-          style={{ top: estimateFilterMenu.top, left: estimateFilterMenu.left }}
-        >
-          <div className="max-h-64 overflow-y-auto">
-            {estimateNames.map((name) => (
-              <button
-                key={name}
-                type="button"
-                className={`flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-100 ${
-                  selectedEstimateFilters.has(name) ? 'font-semibold text-slate-900' : 'text-slate-800'
-                }`}
-                onClick={() => handleEstimateFilterSelect(name)}
-              >
-                <span>{name}</span>
-                {selectedEstimateFilters.has(name) ? <span>✓</span> : null}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <FilterPanel
+        projectFilterMenu={projectFilterMenu}
+        projectFilterMenuRef={projectFilterMenuRef}
+        projectFilterButtonRef={projectFilterButtonRef}
+        projectNames={projectNames}
+        selectedProjectFilters={selectedProjectFilters}
+        handleProjectFilterSelect={handleProjectFilterSelect}
+        handleProjectFilterButtonClick={handleProjectFilterButtonClick}
+        closeProjectFilterMenu={closeProjectFilterMenu}
+        statusFilterMenu={statusFilterMenu}
+        statusFilterMenuRef={statusFilterMenuRef}
+        statusFilterButtonRef={statusFilterButtonRef}
+        statusNames={statusNames}
+        selectedStatusFilters={selectedStatusFilters}
+        handleStatusFilterSelect={handleStatusFilterSelect}
+        handleStatusFilterButtonClick={handleStatusFilterButtonClick}
+        closeStatusFilterMenu={closeStatusFilterMenu}
+        recurringFilterMenu={recurringFilterMenu}
+        recurringFilterMenuRef={recurringFilterMenuRef}
+        recurringFilterButtonRef={recurringFilterButtonRef}
+        recurringNames={recurringNames}
+        selectedRecurringFilters={selectedRecurringFilters}
+        handleRecurringFilterSelect={handleRecurringFilterSelect}
+        handleRecurringFilterButtonClick={handleRecurringFilterButtonClick}
+        closeRecurringFilterMenu={closeRecurringFilterMenu}
+        estimateFilterMenu={estimateFilterMenu}
+        estimateFilterMenuRef={estimateFilterMenuRef}
+        estimateFilterButtonRef={estimateFilterButtonRef}
+        estimateNames={estimateNames}
+        selectedEstimateFilters={selectedEstimateFilters}
+        handleEstimateFilterSelect={handleEstimateFilterSelect}
+        handleEstimateFilterButtonClick={handleEstimateFilterButtonClick}
+        closeEstimateFilterMenu={closeEstimateFilterMenu}
+      />
     </div>
   );
 }
