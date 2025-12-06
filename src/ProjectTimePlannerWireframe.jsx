@@ -5,10 +5,13 @@ import NavigationBar from './NavigationBar';
 import useTimelineRows from './timeline/useTimelineRows';
 import useCellSelection from './hooks/useCellSelection';
 import useRowDragSelection from './hooks/useRowDragSelection';
-import useRowRenderers from './hooks/useRowRenderers';
+import usePlannerFilters from './hooks/usePlannerFilters';
+import usePlannerInteractions from './hooks/usePlannerInteractions';
+import usePlannerRowRendering from './hooks/usePlannerRowRendering';
 import FilterPanel from './FilterPanel';
 import ProjectListicalMenu from './ProjectListicalMenu';
 import TimelineHeader from './TimelineHeader';
+import isBrowserEnvironment from './utils/isBrowserEnvironment';
 
 const PROTECTED_STATUSES = new Set(['Done', 'Abandoned', 'Blocked', 'On Hold', 'Skipped', 'Special']);
 const TASK_ROW_TYPES = new Set(['projectTask', 'inboxItem']);
@@ -156,8 +159,6 @@ const formatDateForInput = (date) => {
   return `${year}-${month}-${day}`;
 };
 
-const isBrowserEnvironment = () =>
-  typeof window !== 'undefined' && typeof document !== 'undefined';
 const SETTINGS_STORAGE_KEY = 'listical-settings';
 const readStoredSettings = () => {
   if (!isBrowserEnvironment()) return null;
@@ -227,10 +228,10 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   // A simulated mouse drag updates this array directly so TanStack Table sees the new ordering.
   const [rows, setRows] = useState(buildInitialRows);
   const [highlightedRowId, setHighlightedRowId] = useState(null);
-  const [activeCell, setActiveCell] = useState(null);
   const [selectedRowIds, setSelectedRowIds] = useState([]);
   const [lastSelectedRowIndex, setLastSelectedRowIndex] = useState(null);
   const clearSelectionRef = useRef(() => {});
+  const clearActiveCellRef = useRef(() => {});
   const selectedRowIdSet = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
   const rowIndexMap = useMemo(() => {
     const map = new Map();
@@ -244,68 +245,50 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
 
   const handleCellClear = useCallback(
     ({ clearRowSelection = true } = {}) => {
-      setActiveCell(null);
-      setHighlightedRowId(null);
+      clearActiveCellRef.current();
       clearSelectionRef.current();
       if (clearRowSelection) {
         setSelectedRowIds([]);
         setLastSelectedRowIndex(null);
       }
     },
-    [setActiveCell, setHighlightedRowId, setLastSelectedRowIndex, setSelectedRowIds]
+    [setLastSelectedRowIndex, setSelectedRowIds]
   );
 
-  const [copiedCell, setCopiedCell] = useState(null);
-  const [copiedCellHighlight, setCopiedCellHighlight] = useState(null);
-  const copiedCellHighlightTimeoutRef = useRef(null);
-  const [activeFilterColumns, setActiveFilterColumns] = useState(() => new Set());
-  const [selectedProjectFilters, setSelectedProjectFilters] = useState(() => new Set());
-  const [projectFilterMenu, setProjectFilterMenu] = useState(() => ({
-    open: false,
-    left: 0,
-    top: 0,
-  }));
-  const projectFilterButtonRef = useRef(null);
-  const projectFilterMenuRef = useRef(null);
-  const [selectedStatusFilters, setSelectedStatusFilters] = useState(() => new Set());
-  const [statusFilterMenu, setStatusFilterMenu] = useState(() => ({
-    open: false,
-    left: 0,
-    top: 0,
-  }));
-  const statusFilterButtonRef = useRef(null);
-  const statusFilterMenuRef = useRef(null);
-  const [selectedRecurringFilters, setSelectedRecurringFilters] = useState(() => new Set());
-  const [recurringFilterMenu, setRecurringFilterMenu] = useState(() => ({
-    open: false,
-    left: 0,
-    top: 0,
-  }));
-  const recurringFilterButtonRef = useRef(null);
-  const recurringFilterMenuRef = useRef(null);
-  const [selectedEstimateFilters, setSelectedEstimateFilters] = useState(() => new Set());
-  const [estimateFilterMenu, setEstimateFilterMenu] = useState(() => ({
-    open: false,
-    left: 0,
-    top: 0,
-  }));
-  const estimateFilterButtonRef = useRef(null);
-  const estimateFilterMenuRef = useRef(null);
-
-  const isCellActive = (rowId, cellId) =>
-    activeCell && activeCell.rowId === rowId && activeCell.cellId === cellId;
-
-  const tableContainerRef = useRef(null);
+  const filters = usePlannerFilters();
+  const {
+    activeFilterColumns,
+    toggleFilterColumn,
+    projectFilterMenu,
+    projectFilterMenuRef,
+    projectFilterButtonRef,
+    selectedProjectFilters,
+    handleProjectFilterSelect,
+    handleProjectFilterButtonClick,
+    closeProjectFilterMenu,
+    statusFilterMenu,
+    statusFilterMenuRef,
+    statusFilterButtonRef,
+    selectedStatusFilters,
+    handleStatusFilterSelect,
+    handleStatusFilterButtonClick,
+    closeStatusFilterMenu,
+    recurringFilterMenu,
+    recurringFilterMenuRef,
+    recurringFilterButtonRef,
+    selectedRecurringFilters,
+    handleRecurringFilterSelect,
+    handleRecurringFilterButtonClick,
+    closeRecurringFilterMenu,
+    estimateFilterMenu,
+    estimateFilterMenuRef,
+    estimateFilterButtonRef,
+    selectedEstimateFilters,
+    handleEstimateFilterSelect,
+    handleEstimateFilterButtonClick,
+    closeEstimateFilterMenu,
+  } = filters;
   const [columnWidths, setColumnWidths] = useState(storedSettings?.columnWidths ?? {});
-  const columnResizeRef = useRef(null);
-  const columnResizeListenersRef = useRef({ move: null, up: null });
-  const detachColumnResizeListeners = useCallback(() => {
-    if (!isBrowserEnvironment()) return;
-    const { move, up } = columnResizeListenersRef.current;
-    if (move) window.removeEventListener('mousemove', move);
-    if (up) window.removeEventListener('mouseup', up);
-    columnResizeListenersRef.current = { move: null, up: null };
-  }, []);
   const [settingsLoaded, setSettingsLoaded] = useState(Boolean(storedSettings));
 
   useEffect(() => {
@@ -464,38 +447,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     setHighlightedRowId,
   });
 
-  const handleCellActivate = useCallback(
-    (rowId, cellId, { highlightRow = false, preserveSelection = false } = {}) => {
-      const preserveRowSelection = preserveSelection || shouldPreserveSelection();
-      setActiveCell({ rowId, cellId });
-      if (highlightRow) {
-        setHighlightedRowId(rowId);
-      } else {
-        setHighlightedRowId(null);
-        if (!preserveRowSelection && selectedRowIds.length) {
-          setSelectedRowIds([]);
-          setLastSelectedRowIndex(null);
-        }
-      }
-    },
-    [selectedRowIds, shouldPreserveSelection, setHighlightedRowId]
-  );
-
-  useEffect(() => {
-    if (!isBrowserEnvironment()) return undefined;
-    const handlePointerDownOutside = (event) => {
-      if (!tableContainerRef.current) return;
-      if (!(event.target instanceof Node)) return;
-      if (tableContainerRef.current.contains(event.target)) return;
-      handleCellClear();
-    };
-
-    document.addEventListener('pointerdown', handlePointerDownOutside);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDownOutside);
-    };
-  }, [handleCellClear]);
-
   const blackDividerStyle = { borderRight: '4px solid #000000' };
   const sharedInputStyle = 'w-full h-full text-[12px] px-2 border-none focus:outline-none focus:ring-0 bg-transparent';
   const checkboxInputClass = 'accent-black h-4 w-4 cursor-pointer focus:outline-none focus:ring-0';
@@ -547,204 +498,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       };
     },
     [getColumnWidth]
-  );
-
-  const fallbackCopyToClipboard = (text) => {
-    if (!isBrowserEnvironment()) return;
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.focus();
-    textarea.select();
-    try {
-      document.execCommand('copy');
-    } catch {
-      // ignore copy errors
-    } finally {
-      document.body.removeChild(textarea);
-    }
-  };
-
-  const copyTextToClipboard = useCallback((text) => {
-    if (!text) return;
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(text).catch(() => fallbackCopyToClipboard(text));
-    } else {
-      fallbackCopyToClipboard(text);
-    }
-  }, []);
-
-  const copyCellContents = useCallback(
-    (cell, { includeClipboard = true } = {}) => {
-      if (!cell || !tableContainerRef.current) return '';
-      const selector = `[data-row-id="${cell.rowId}"][data-column-key="${cell.cellId}"]`;
-      const cellElement = tableContainerRef.current.querySelector(selector);
-      if (!cellElement) return '';
-      let text = '';
-      const formElement = cellElement.querySelector('input, textarea, select');
-      if (formElement) {
-        if (formElement.tagName === 'SELECT') {
-          const selectEl = formElement;
-          text = selectEl.options[selectEl.selectedIndex]?.text ?? selectEl.value ?? '';
-        } else {
-          text = formElement.value ?? formElement.textContent ?? '';
-        }
-      } else {
-        text = cellElement.textContent?.trim() ?? '';
-      }
-      if (text && includeClipboard) {
-        copyTextToClipboard(text);
-      }
-      return text;
-    },
-    [copyTextToClipboard]
-  );
-
-  const handleOverwritePaste = useCallback((event, applyValue) => {
-    if (typeof applyValue !== 'function') return;
-    const clipboardData = event.clipboardData;
-    if (!clipboardData) return;
-    const text = clipboardData.getData('text/plain');
-    if (text == null) return;
-    event.preventDefault();
-    applyValue(text);
-  }, []);
-
-  useEffect(() => {
-    if (!isBrowserEnvironment()) return undefined;
-    const handleKeyDown = (event) => {
-      if (!(event.metaKey || event.ctrlKey)) return;
-      if (event.altKey || event.shiftKey) return;
-      const key = event.key?.toLowerCase();
-      if (key !== 'c' && key !== 'v') return;
-      const selection = window.getSelection ? window.getSelection() : null;
-      const hasDocumentSelection = Boolean(selection && !selection.isCollapsed);
-      const activeElement = document.activeElement;
-      const isEditableElement =
-        activeElement &&
-        (activeElement.tagName === 'INPUT' ||
-          activeElement.tagName === 'TEXTAREA' ||
-          activeElement.isContentEditable);
-      const hasEditableSelection =
-        isEditableElement &&
-        typeof activeElement.selectionStart === 'number' &&
-        typeof activeElement.selectionEnd === 'number' &&
-        activeElement.selectionStart !== activeElement.selectionEnd;
-      const shouldDeferToNativeCopy =
-        key === 'c' && (hasDocumentSelection || hasEditableSelection);
-      const shouldDeferToNativePaste = key === 'v' && isEditableElement;
-      if (shouldDeferToNativeCopy || shouldDeferToNativePaste) return;
-
-      if (key === 'c') {
-        if (!activeCell) return;
-        event.preventDefault();
-        copyCellContents(activeCell);
-        const isDifferentCell =
-          copiedCell?.rowId !== activeCell.rowId || copiedCell?.cellId !== activeCell.cellId;
-        if (isDifferentCell) {
-          setCopiedCell(activeCell);
-        }
-        setCopiedCellHighlight(activeCell);
-        if (copiedCellHighlightTimeoutRef.current) {
-          clearTimeout(copiedCellHighlightTimeoutRef.current);
-        }
-        copiedCellHighlightTimeoutRef.current = window.setTimeout(() => {
-          setCopiedCellHighlight(null);
-          copiedCellHighlightTimeoutRef.current = null;
-        }, 300);
-        return;
-      }
-
-      if (!copiedCell) return;
-      event.preventDefault();
-      if (
-        activeCell &&
-        activeCell.rowId === copiedCell.rowId &&
-        activeCell.cellId === copiedCell.cellId
-      ) {
-        return;
-      }
-      handleCellActivate(copiedCell.rowId, copiedCell.cellId);
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [activeCell, copiedCell, handleCellActivate, copyCellContents]);
-
-  useEffect(
-    () => () => {
-      if (copiedCellHighlightTimeoutRef.current) {
-        clearTimeout(copiedCellHighlightTimeoutRef.current);
-        copiedCellHighlightTimeoutRef.current = null;
-      }
-    },
-    []
-  );
-
-  const handleColumnResizeMouseMove = useCallback(
-    (event) => {
-      if (!isBrowserEnvironment()) return;
-      const info = columnResizeRef.current;
-      if (!info) return;
-      const delta = event.clientX - info.startX;
-      const newWidth = Math.max(MIN_COLUMN_WIDTH, info.startWidth + delta);
-      setColumnWidths((prev) => {
-        if (prev[info.key] === newWidth) return prev;
-        return { ...prev, [info.key]: newWidth };
-      });
-    },
-    [setColumnWidths]
-  );
-
-  const handleColumnResizeMouseUp = useCallback(() => {
-    if (!isBrowserEnvironment()) return;
-    columnResizeRef.current = null;
-    detachColumnResizeListeners();
-  }, [detachColumnResizeListeners]);
-
-  const handleColumnResizeMouseDown = useCallback(
-    (event, columnKey) => {
-      if (!isBrowserEnvironment()) return;
-      event.preventDefault();
-      event.stopPropagation();
-      columnResizeRef.current = {
-        key: columnKey,
-        startX: event.clientX,
-        startWidth: getColumnWidth(columnKey),
-      };
-
-      const move = (moveEvent) => handleColumnResizeMouseMove(moveEvent);
-      const up = () => handleColumnResizeMouseUp();
-      columnResizeListenersRef.current = { move, up };
-      window.addEventListener('mousemove', move);
-      window.addEventListener('mouseup', up);
-    },
-    [getColumnWidth, handleColumnResizeMouseMove, handleColumnResizeMouseUp]
-  );
-
-  const renderResizeHandle = useCallback(
-    (columnKey) => (
-      <div
-        className="column-resize-handle"
-        style={{
-          position: 'absolute',
-          top: 0,
-          right: -COLUMN_RESIZE_HANDLE_WIDTH / 2,
-          width: COLUMN_RESIZE_HANDLE_WIDTH,
-          height: '100%',
-          cursor: 'col-resize',
-          zIndex: 20,
-        }}
-        onMouseDown={(event) => handleColumnResizeMouseDown(event, columnKey)}
-        role="separator"
-        aria-orientation="vertical"
-      />
-    ),
-    [handleColumnResizeMouseDown]
   );
 
   const fixedCols = fixedColumnConfig.length + 1;
@@ -903,173 +656,41 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
 
   clearSelectionRef.current = clearSelection;
 
-  const columnLetters = useMemo(
-    () =>
-      columnStructure.map((_, idx) => (idx === 0 ? '' : getColumnLabel(idx - 1))),
-    [columnStructure]
-  );
+  const interactions = usePlannerInteractions({
+    columnWidths,
+    setColumnWidths,
+    minColumnWidth: MIN_COLUMN_WIDTH,
+    rowIndexById,
+    columnIndexByKey,
+    getCellDescriptorKey,
+    getRangeSelectionKeys,
+    cellSelectionAnchorRef,
+    setSelectedCellKeys,
+    setSelectionAnchor,
+    setSelectionFocus,
+    isCellInSelection,
+    selectedRowIds,
+    setSelectedRowIds,
+    setLastSelectedRowIndex,
+    setHighlightedRowId,
+    shouldPreserveSelection,
+    blockClickRef,
+    pointerModifierRef,
+    updatePointerModifierState,
+    table,
+  });
 
-  const columnLetterByKey = useMemo(() => {
-    const map = {};
-    columnStructure.forEach((col, idx) => {
-      map[col.key] = columnLetters[idx];
-    });
-    return map;
-  }, [columnStructure, columnLetters]);
-
-  const handleCellMouseDown = (event, rowId, cellId, options = {}) => {
-    const isInteractive =
-      event.target instanceof Element &&
-      Boolean(event.target.closest('input, select, textarea, button, a'));
-    if (!isInteractive) {
-      event.preventDefault();
-    }
-    updatePointerModifierState(event);
-    const preserveSelection = Boolean(event?.metaKey || event?.ctrlKey || event?.shiftKey);
-    const descriptor = {
-      rowIndex: rowIndexById.get(rowId) ?? null,
-      columnIndex: columnIndexByKey[cellId] ?? null,
-      rowId,
-      cellId,
-    };
-    const anchorExists = Boolean(cellSelectionAnchorRef.current);
-    const isShift = pointerModifierRef.current.shift;
-    const isMeta = pointerModifierRef.current.meta;
-    const descriptorKey = getCellDescriptorKey(rowId, cellId);
-    if (descriptor.columnIndex != null || descriptor.rowIndex != null) {
-      if (isShift && anchorExists) {
-        setSelectionFocus(descriptor);
-        const rangeKeys = getRangeSelectionKeys(
-          cellSelectionAnchorRef.current,
-          descriptor
-        );
-        setSelectedCellKeys(rangeKeys);
-      } else {
-        setSelectionAnchor(descriptor);
-        setSelectionFocus(descriptor);
-        if (isMeta) {
-          setSelectedCellKeys((prev) => {
-            const next = new Set(prev);
-            if (descriptorKey) {
-              if (next.has(descriptorKey)) next.delete(descriptorKey);
-              else next.add(descriptorKey);
-            }
-            return next;
-          });
-        } else {
-          setSelectedCellKeys(descriptorKey ? new Set([descriptorKey]) : new Set());
-        }
-      }
-    }
-    handleCellActivate(rowId, cellId, { ...options, preserveSelection });
-  };
-
-  const getCellHighlightStyle = (rowId, cellId) => {
-    const style = {};
-  if (isCellActive(rowId, cellId)) {
-    style.backgroundColor = '#fceef3';
-    style.outline = '2px solid #3b82f6';
-    style.outlineOffset = '-2px';
-    style.position = 'relative';
-    style.zIndex = 2;
-  }
-  if (copiedCellHighlight && copiedCellHighlight.rowId === rowId && copiedCellHighlight.cellId === cellId) {
-    style.boxShadow = '0 0 0 2px rgba(59,130,246,0.9)';
-  }
-    if (isCellInSelection(rowId, cellId)) {
-      const selectionShadow = '0 0 0 2px rgba(37,99,235,0.45)';
-      style.boxShadow = style.boxShadow ? `${style.boxShadow}, ${selectionShadow}` : selectionShadow;
-    }
-    return style;
-  };
-
-  const handleCellClick = (rowIndex, columnId) => {
-    if (blockClickRef.current) return;
-    const currentRows = table.getRowModel().rows;
-    const targetRow = currentRows[rowIndex];
-    if (!targetRow) return;
-    const rowId = targetRow.original.id;
-    handleCellActivate(rowId, columnId, {
-      preserveSelection: shouldPreserveSelection(),
-    });
-  };
-
-  const createRowRenderContext = (tableRow, { previousRowOriginal = null, rowProps = {}, isActive = false } = {}) => {
-    const row = tableRow?.original ?? {};
-    const rowId = row?.id ?? null;
-    const tableRowIndex = typeof tableRow?.index === 'number' ? tableRow.index : null;
-    const rowNumber = tableRowIndex != null ? tableRowIndex + 1 : null;
-    const isRowSelected = Boolean(rowId && selectedRowIdSet.has(rowId));
-    const rowPropsLocal = { ...rowProps };
-
-    if (isActive) {
-      rowPropsLocal['data-active-row'] = 'true';
-    }
-    if (rowId) {
-      rowPropsLocal['data-row-id'] = rowId;
-    }
-
-    const cellMetadataProps = (columnKey) => {
-      const props = {};
-      if (rowId) props['data-row-id'] = rowId;
-      if (columnKey) props['data-column-key'] = columnKey;
-      if (tableRowIndex != null) {
-        props['data-row-index'] = tableRowIndex;
-      }
-      const columnIndex = columnIndexByKey[columnKey];
-      if (columnIndex != null) {
-        props['data-column-index'] = columnIndex;
-      }
-      return props;
-    };
-
-    const cellClickProps = (columnKey) => {
-      if (tableRowIndex == null) return {};
-      return {
-        onClick: () => handleCellClick(tableRowIndex, columnKey),
-      };
-    };
-
-    const withCellSelectionClass = (baseClass = '', columnKey) => {
-      const classes = [];
-      if (baseClass) classes.push(baseClass);
-      if (isCellActive(rowId, columnKey)) classes.push('active-cell');
-      if (isCellInSelection(rowId, columnKey)) classes.push('selected-cell');
-      return classes.join(' ').trim();
-    };
-
-    const commitRowUpdate = (updater, options) => {
-      if (!rowId) return;
-      const targetIndex = rowIndexMap.get(rowId);
-      if (targetIndex == null) return;
-      updateRowValues(targetIndex, updater, options);
-    };
-
-    const ensureInteractionMarked = () => {
-      commitRowUpdate(
-        (currentRow) => {
-          if (currentRow?.hasUserInteraction) return null;
-          return { hasUserInteraction: true };
-        },
-        { markInteraction: true }
-      );
-    };
-
-    return {
-      row,
-      rowId,
-      rowNumber,
-      isRowSelected,
-      rowPropsLocal,
-      cellMetadataProps,
-      withCellSelectionClass,
-      cellClickProps,
-      tableRow,
-      previousRow: previousRowOriginal,
-      commitRowUpdate,
-      ensureInteractionMarked,
-    };
-  };
+  const {
+    tableContainerRef,
+    handleCellActivate,
+    handleCellMouseDown,
+    handleCellClick,
+    getCellHighlightStyle,
+    handleOverwritePaste,
+    handleColumnResizeMouseDown,
+    clearActiveCell,
+    isCellActive,
+  } = interactions;
 
   const projectHeaderTotals = useMemo(() => {
     const totals = {};
@@ -1101,190 +722,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     return formattedTotals;
   }, [rows]);
 
-  const toggleFilterColumn = useCallback(
-    (columnKey) => {
-      if (!columnKey) return;
-      setActiveFilterColumns((prev) => {
-        const next = new Set(prev);
-        if (next.has(columnKey)) {
-          next.delete(columnKey);
-        } else {
-          next.add(columnKey);
-        }
-        return next;
-      });
-    },
-    [setActiveFilterColumns]
-  );
-
-  const closeProjectFilterMenu = useCallback(() => {
-    setProjectFilterMenu({ open: false, left: 0, top: 0 });
-  }, []);
-
-  const handleProjectFilterSelect = useCallback(
-    (projectName) => {
-      setSelectedProjectFilters((prev) => {
-        const next = new Set(prev);
-        if (next.has(projectName)) {
-          next.delete(projectName);
-        } else {
-          next.add(projectName);
-        }
-        if (next.size === 0) {
-          closeProjectFilterMenu();
-        }
-        return next;
-      });
-    },
-    [closeProjectFilterMenu]
-  );
-
-  const handleProjectFilterButtonClick = useCallback(
-    (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (!isBrowserEnvironment()) return;
-      const buttonRect = event.currentTarget.getBoundingClientRect();
-      const left = buttonRect.left + window.scrollX;
-      const top = buttonRect.bottom + window.scrollY;
-      const isAlreadyOpen = projectFilterMenu.open;
-
-      projectFilterButtonRef.current = event.currentTarget;
-      setProjectFilterMenu({
-        open: !isAlreadyOpen || projectFilterMenu.left !== left || projectFilterMenu.top !== top,
-        left,
-        top,
-      });
-    },
-    [projectFilterMenu.left, projectFilterMenu.open, projectFilterMenu.top]
-  );
-
-  const closeStatusFilterMenu = useCallback(() => {
-    setStatusFilterMenu({ open: false, left: 0, top: 0 });
-  }, []);
-
-  const handleStatusFilterSelect = useCallback(
-    (statusName) => {
-      setSelectedStatusFilters((prev) => {
-        const next = new Set(prev);
-        if (next.has(statusName)) {
-          next.delete(statusName);
-        } else {
-          next.add(statusName);
-        }
-        if (next.size === 0) {
-          closeStatusFilterMenu();
-        }
-        return next;
-      });
-    },
-    [closeStatusFilterMenu]
-  );
-
-  const handleStatusFilterButtonClick = useCallback(
-    (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (!isBrowserEnvironment()) return;
-      const buttonRect = event.currentTarget.getBoundingClientRect();
-      const left = buttonRect.left + window.scrollX;
-      const top = buttonRect.bottom + window.scrollY;
-      const isAlreadyOpen = statusFilterMenu.open;
-
-      statusFilterButtonRef.current = event.currentTarget;
-      setStatusFilterMenu({
-        open: !isAlreadyOpen || statusFilterMenu.left !== left || statusFilterMenu.top !== top,
-        left,
-        top,
-      });
-    },
-    [statusFilterMenu.left, statusFilterMenu.open, statusFilterMenu.top]
-  );
-
-  const closeRecurringFilterMenu = useCallback(() => {
-    setRecurringFilterMenu({ open: false, left: 0, top: 0 });
-  }, []);
-
-  const handleRecurringFilterSelect = useCallback(
-    (recurringValue) => {
-      setSelectedRecurringFilters((prev) => {
-        const next = new Set(prev);
-        if (next.has(recurringValue)) {
-          next.delete(recurringValue);
-        } else {
-          next.add(recurringValue);
-        }
-        if (next.size === 0) {
-          closeRecurringFilterMenu();
-        }
-        return next;
-      });
-    },
-    [closeRecurringFilterMenu]
-  );
-
-  const handleRecurringFilterButtonClick = useCallback(
-    (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (!isBrowserEnvironment()) return;
-      const buttonRect = event.currentTarget.getBoundingClientRect();
-      const left = buttonRect.left + window.scrollX;
-      const top = buttonRect.bottom + window.scrollY;
-      const isAlreadyOpen = recurringFilterMenu.open;
-
-      recurringFilterButtonRef.current = event.currentTarget;
-      setRecurringFilterMenu({
-        open: !isAlreadyOpen || recurringFilterMenu.left !== left || recurringFilterMenu.top !== top,
-        left,
-        top,
-      });
-    },
-    [recurringFilterMenu.left, recurringFilterMenu.open, recurringFilterMenu.top]
-  );
-
-  const closeEstimateFilterMenu = useCallback(() => {
-    setEstimateFilterMenu({ open: false, left: 0, top: 0 });
-  }, []);
-
-  const handleEstimateFilterSelect = useCallback(
-    (estimateValue) => {
-      setSelectedEstimateFilters((prev) => {
-        const next = new Set(prev);
-        if (next.has(estimateValue)) {
-          next.delete(estimateValue);
-        } else {
-          next.add(estimateValue);
-        }
-        if (next.size === 0) {
-          closeEstimateFilterMenu();
-        }
-        return next;
-      });
-    },
-    [closeEstimateFilterMenu]
-  );
-
-  const handleEstimateFilterButtonClick = useCallback(
-    (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (!isBrowserEnvironment()) return;
-      const buttonRect = event.currentTarget.getBoundingClientRect();
-      const left = buttonRect.left + window.scrollX;
-      const top = buttonRect.bottom + window.scrollY;
-      const isAlreadyOpen = estimateFilterMenu.open;
-
-      estimateFilterButtonRef.current = event.currentTarget;
-      setEstimateFilterMenu({
-        open: !isAlreadyOpen || estimateFilterMenu.left !== left || estimateFilterMenu.top !== top,
-        left,
-        top,
-      });
-    },
-    [estimateFilterMenu.left, estimateFilterMenu.open, estimateFilterMenu.top]
-  );
-
   const projectNames = useMemo(() => {
     const names = new Set();
     rows.forEach((row) => {
@@ -1295,6 +732,149 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     });
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [rows]);
+
+  const rowRenderersConfig = useMemo(
+    () => ({
+      totalDays,
+      showRecurring,
+      ROW_H,
+      projectHeaderTotals,
+      fixedColumnConfig,
+      fixedCols,
+      sharedInputStyle,
+      checkboxInputClass,
+      blackDividerStyle,
+      applyRowLabelStyle,
+      applyWeekBorderStyles,
+      getWeekBorderClass,
+      getWidthStyle,
+      getCellHighlightStyle,
+      handleCellMouseDown,
+      handleCellActivate,
+      handleRowClick,
+      handleOverwritePaste,
+      createEmptyDayEntries,
+      parseEstimateLabelToMinutes,
+      formatMinutesToHHmm,
+      syncDayEntriesWithTimeValue,
+      getProjectSelectStyle,
+      getStatusColorStyle,
+      statusNames: STATUS_VALUES,
+      DARK_HEADER_STYLE,
+      ARCHIVE_ROW_STYLE,
+    }),
+    [
+      totalDays,
+      showRecurring,
+      ROW_H,
+      projectHeaderTotals,
+      fixedColumnConfig,
+      fixedCols,
+      sharedInputStyle,
+      checkboxInputClass,
+      blackDividerStyle,
+      applyRowLabelStyle,
+      applyWeekBorderStyles,
+      getWeekBorderClass,
+      getWidthStyle,
+      getCellHighlightStyle,
+      handleCellMouseDown,
+      handleCellActivate,
+      handleRowClick,
+      handleOverwritePaste,
+      createEmptyDayEntries,
+      parseEstimateLabelToMinutes,
+      formatMinutesToHHmm,
+      syncDayEntriesWithTimeValue,
+      getProjectSelectStyle,
+      getStatusColorStyle,
+      STATUS_VALUES,
+      DARK_HEADER_STYLE,
+      ARCHIVE_ROW_STYLE,
+    ]
+  );
+
+  const { renderDataRow } = usePlannerRowRendering({
+    rowRenderersConfig,
+    rowIndexMap,
+    columnIndexByKey,
+    handleCellClick,
+    updateRowValues,
+    isCellActive,
+    isCellInSelection,
+    selectedRowIdSet,
+  });
+
+  const onProjectFilterButtonClick = useCallback(
+    (event) => handleProjectFilterButtonClick(event, projectFilterMenu),
+    [handleProjectFilterButtonClick, projectFilterMenu]
+  );
+  const onStatusFilterButtonClick = useCallback(
+    (event) => handleStatusFilterButtonClick(event, statusFilterMenu),
+    [handleStatusFilterButtonClick, statusFilterMenu]
+  );
+  const onRecurringFilterButtonClick = useCallback(
+    (event) => handleRecurringFilterButtonClick(event, recurringFilterMenu),
+    [handleRecurringFilterButtonClick, recurringFilterMenu]
+  );
+  const onEstimateFilterButtonClick = useCallback(
+    (event) => handleEstimateFilterButtonClick(event, estimateFilterMenu),
+    [handleEstimateFilterButtonClick, estimateFilterMenu]
+  );
+
+  useEffect(() => {
+    clearActiveCellRef.current = clearActiveCell;
+  }, [clearActiveCell]);
+
+  useEffect(() => {
+    if (!isBrowserEnvironment()) return undefined;
+    const handlePointerDownOutside = (event) => {
+      if (!tableContainerRef.current) return;
+      if (!(event.target instanceof Node)) return;
+      if (tableContainerRef.current.contains(event.target)) return;
+      handleCellClear();
+    };
+
+    document.addEventListener('pointerdown', handlePointerDownOutside);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDownOutside);
+    };
+  }, [handleCellClear, tableContainerRef]);
+
+  const renderResizeHandle = useCallback(
+    (columnKey) => (
+      <div
+        className="column-resize-handle"
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: -COLUMN_RESIZE_HANDLE_WIDTH / 2,
+          width: COLUMN_RESIZE_HANDLE_WIDTH,
+          height: '100%',
+          cursor: 'col-resize',
+          zIndex: 20,
+        }}
+        onMouseDown={(event) => handleColumnResizeMouseDown(event, columnKey)}
+        role="separator"
+        aria-orientation="vertical"
+      />
+    ),
+    [handleColumnResizeMouseDown]
+  );
+
+  const columnLetters = useMemo(
+    () =>
+      columnStructure.map((_, idx) => (idx === 0 ? '' : getColumnLabel(idx - 1))),
+    [columnStructure]
+  );
+
+  const columnLetterByKey = useMemo(() => {
+    const map = {};
+    columnStructure.forEach((col, idx) => {
+      map[col.key] = columnLetters[idx];
+    });
+    return map;
+  }, [columnStructure, columnLetters]);
 
   const statusNames = useMemo(() => STATUS_VALUES, []);
   const recurringNames = useMemo(() => RECURRING_VALUES, []);
@@ -1469,43 +1049,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     setAddTasksCount('');
   }, [addTasksCount, activeRowId, highlightedRowId, selectedRowIds, setRows]);
 
-  const rowRenderers = useRowRenderers({
-    totalDays,
-    showRecurring,
-    ROW_H,
-    projectHeaderTotals,
-    fixedColumnConfig,
-    fixedCols,
-    sharedInputStyle,
-    checkboxInputClass,
-    blackDividerStyle,
-    applyRowLabelStyle,
-    applyWeekBorderStyles,
-    getWeekBorderClass,
-    getWidthStyle,
-    getCellHighlightStyle,
-    handleCellMouseDown,
-    handleCellActivate,
-    handleRowClick,
-    handleOverwritePaste,
-    createEmptyDayEntries,
-    parseEstimateLabelToMinutes,
-    formatMinutesToHHmm,
-    syncDayEntriesWithTimeValue,
-    getProjectSelectStyle,
-    getStatusColorStyle,
-    statusNames: STATUS_VALUES,
-    DARK_HEADER_STYLE,
-    ARCHIVE_ROW_STYLE,
-  });
-
-  const renderDataRow = (tableRow, options = {}) => {
-    const context = createRowRenderContext(tableRow, options);
-    const renderer = rowRenderers[context.row.type];
-    return renderer ? renderer(context) : null;
-  };
-
-
   return (
     <div ref={tableContainerRef} className="relative overflow-x-auto p-4 text-[12px] bg-gray-100">
       <NavigationBar
@@ -1568,19 +1111,19 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
             activeFilterColumns={activeFilterColumns}
             projectFilterMenu={projectFilterMenu}
             projectFilterButtonRef={projectFilterButtonRef}
-            handleProjectFilterButtonClick={handleProjectFilterButtonClick}
+            handleProjectFilterButtonClick={onProjectFilterButtonClick}
             selectedProjectFilters={selectedProjectFilters}
             statusFilterMenu={statusFilterMenu}
             statusFilterButtonRef={statusFilterButtonRef}
-            handleStatusFilterButtonClick={handleStatusFilterButtonClick}
+            handleStatusFilterButtonClick={onStatusFilterButtonClick}
             selectedStatusFilters={selectedStatusFilters}
             recurringFilterMenu={recurringFilterMenu}
             recurringFilterButtonRef={recurringFilterButtonRef}
-            handleRecurringFilterButtonClick={handleRecurringFilterButtonClick}
+            handleRecurringFilterButtonClick={onRecurringFilterButtonClick}
             selectedRecurringFilters={selectedRecurringFilters}
             estimateFilterMenu={estimateFilterMenu}
             estimateFilterButtonRef={estimateFilterButtonRef}
-            handleEstimateFilterButtonClick={handleEstimateFilterButtonClick}
+            handleEstimateFilterButtonClick={onEstimateFilterButtonClick}
             selectedEstimateFilters={selectedEstimateFilters}
             toggleFilterColumn={toggleFilterColumn}
             applyRowLabelStyle={applyRowLabelStyle}
