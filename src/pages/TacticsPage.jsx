@@ -6,8 +6,8 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import NavigationBar from './NavigationBar';
-import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from './stagingStorage';
+import NavigationBar from '../components/planner/NavigationBar';
+import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '../lib/stagingStorage';
 
 const DAYS_OF_WEEK = [
   'Sunday',

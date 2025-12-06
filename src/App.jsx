@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import ProjectTimePlannerWireframe from "./ProjectTimePlannerWireframe";
-import StagingPage from "./StagingPage";
-import TacticsPage from "./TacticsPage";
+import ProjectTimePlannerWireframe from "./pages/ProjectTimePlannerWireframe";
+import StagingPage from "./pages/StagingPage";
+import TacticsPage from "./pages/TacticsPage";
 
 const isBrowser = () => typeof window !== "undefined";
 

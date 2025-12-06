@@ -1,17 +1,17 @@
 // Im ready to work
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReactTable, getCoreRowModel } from '@tanstack/react-table';
-import NavigationBar from './NavigationBar';
-import useTimelineRows from './timeline/useTimelineRows';
-import useCellSelection from './hooks/useCellSelection';
-import useRowDragSelection from './hooks/useRowDragSelection';
-import usePlannerFilters from './hooks/usePlannerFilters';
-import usePlannerInteractions from './hooks/usePlannerInteractions';
-import usePlannerRowRendering from './hooks/usePlannerRowRendering';
-import FilterPanel from './FilterPanel';
-import ProjectListicalMenu from './ProjectListicalMenu';
-import TimelineHeader from './TimelineHeader';
-import isBrowserEnvironment from './utils/isBrowserEnvironment';
+import NavigationBar from '../components/planner/NavigationBar';
+import useTimelineRows from '../timeline/useTimelineRows';
+import useCellSelection from '../hooks/planner/useCellSelection';
+import useRowDragSelection from '../hooks/planner/useRowDragSelection';
+import usePlannerFilters from '../hooks/planner/usePlannerFilters';
+import usePlannerInteractions from '../hooks/planner/usePlannerInteractions';
+import usePlannerRowRendering from '../hooks/planner/usePlannerRowRendering';
+import FilterPanel from '../components/planner/FilterPanel';
+import ProjectListicalMenu from '../components/planner/ProjectListicalMenu';
+import TimelineHeader from '../components/planner/TimelineHeader';
+import isBrowserEnvironment from '../utils/isBrowserEnvironment';
 
 const PROTECTED_STATUSES = new Set(['Done', 'Abandoned', 'Blocked', 'On Hold', 'Skipped', 'Special']);
 const TASK_ROW_TYPES = new Set(['projectTask', 'inboxItem']);

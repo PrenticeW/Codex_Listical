@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SquarePlus, Pencil } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import NavigationBar from './NavigationBar';
-import { loadStagingState, saveStagingState } from './stagingStorage';
+import NavigationBar from '../components/planner/NavigationBar';
+import { loadStagingState, saveStagingState } from '../lib/stagingStorage';
 
 const PLAN_TABLE_ROWS = 15;
 const PLAN_TABLE_COLS = 6;

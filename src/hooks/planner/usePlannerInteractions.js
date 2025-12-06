@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import isBrowserEnvironment from '../utils/isBrowserEnvironment';
+import isBrowserEnvironment from '../../utils/isBrowserEnvironment';
 
 export default function usePlannerInteractions({
   columnWidths,

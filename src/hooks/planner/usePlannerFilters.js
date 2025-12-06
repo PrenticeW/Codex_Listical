@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import isBrowserEnvironment from '../utils/isBrowserEnvironment';
+import isBrowserEnvironment from '../../utils/isBrowserEnvironment';
 
 export default function usePlannerFilters() {
   const [activeFilterColumns, setActiveFilterColumns] = useState(() => new Set());
