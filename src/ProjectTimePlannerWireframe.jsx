@@ -597,6 +597,36 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     return totals;
   }, [rows, totalDays]);
 
+  const projectHeaderTotals = useMemo(() => {
+    const totals = {};
+    let activeHeaderId = null;
+
+    rows.forEach((row) => {
+      if (row.type === 'projectHeader') {
+        activeHeaderId = row.id;
+        totals[activeHeaderId] = 0;
+        return;
+      }
+      if (row.type === 'inboxHeader' || row.type === 'archiveHeader') {
+        activeHeaderId = null;
+        return;
+      }
+      if (!activeHeaderId) return;
+      if (!TASK_ROW_TYPES.has(row.type)) return;
+      const status = row.status ?? '';
+      if (status !== 'Scheduled' && status !== 'Done') return;
+      const value = coerceNumber(row.timeValue);
+      if (value == null) return;
+      totals[activeHeaderId] += value;
+    });
+
+    const formattedTotals = {};
+    Object.entries(totals).forEach(([key, total]) => {
+      formattedTotals[key] = formatTotalValue(total ?? 0);
+    });
+    return formattedTotals;
+  }, [rows]);
+
   const { timelineRows } = useTimelineRows({
     dates,
     monthSpans,
@@ -691,36 +721,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     clearActiveCell,
     isCellActive,
   } = interactions;
-
-  const projectHeaderTotals = useMemo(() => {
-    const totals = {};
-    let activeHeaderId = null;
-
-    rows.forEach((row) => {
-      if (row.type === 'projectHeader') {
-        activeHeaderId = row.id;
-        totals[activeHeaderId] = 0;
-        return;
-      }
-      if (row.type === 'inboxHeader' || row.type === 'archiveHeader') {
-        activeHeaderId = null;
-        return;
-      }
-      if (!activeHeaderId) return;
-      if (!TASK_ROW_TYPES.has(row.type)) return;
-      const status = row.status ?? '';
-      if (status !== 'Scheduled' && status !== 'Done') return;
-      const value = coerceNumber(row.timeValue);
-      if (value == null) return;
-      totals[activeHeaderId] += value;
-    });
-
-    const formattedTotals = {};
-    Object.entries(totals).forEach(([key, total]) => {
-      formattedTotals[key] = formatTotalValue(total ?? 0);
-    });
-    return formattedTotals;
-  }, [rows]);
 
   const projectNames = useMemo(() => {
     const names = new Set();
