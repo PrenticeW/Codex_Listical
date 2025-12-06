@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import NavigationBar from '../components/planner/NavigationBar';
 import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '../lib/stagingStorage';
+import SubprojectChipsRows, { buildSubprojectLayout } from '../SubprojectChips';
 
 const DAYS_OF_WEEK = [
   'Sunday',
@@ -960,9 +961,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           id: project.id,
           label,
           color: project.color,
+          planSummary: project.planSummary,
         };
       });
   }, [stagingProjects]);
+  const subprojectLayout = useMemo(
+    () => buildSubprojectLayout(highlightedProjects),
+    [highlightedProjects]
+  );
   const dropdownProjects = useMemo(
     () => [...customProjects, ...highlightedProjects],
     [customProjects, highlightedProjects]
@@ -2165,16 +2171,23 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     {formatDuration(availableColumnTotals[idx] ?? 0)}
                   </td>
                 ))}
-                <td
-                  className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold text-[11px]"
-                  style={{ backgroundColor: '#ffffff' }}
-                >
-                  {formatDuration(totalAvailableMinutes)}
-                </td>
-                {renderExtraColumnCells('summary-available')}
-              </tr>
-            </tbody>
-          </table>
+              <td
+                className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold text-[11px]"
+                style={{ backgroundColor: '#ffffff' }}
+              >
+                {formatDuration(totalAvailableMinutes)}
+              </td>
+              {renderExtraColumnCells('summary-available')}
+            </tr>
+            <SubprojectChipsRows
+              gridTemplateColumns={gridTemplateColumns}
+              dayColumnCount={DAY_COLUMN_COUNT}
+              stagingColumnConfigs={stagingColumnConfigs}
+              projectMetadata={projectMetadata}
+              subprojectLayout={subprojectLayout}
+            />
+          </tbody>
+        </table>
           {renderCellProjectMenu()}
         </div>
       </div>
