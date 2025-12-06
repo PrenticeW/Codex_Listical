@@ -257,6 +257,53 @@ const clonePlanTableEntries = (entries, ensureRows = PLAN_TABLE_ROWS) => {
   return normalized;
 };
 
+const buildProjectPlanSummary = (item) => {
+  if (!item) return { subprojects: [], totalHours: '0.00' };
+  const entries = clonePlanTableEntries(item.planTableEntries);
+  const reasonRowCount = item.planReasonRowCount ?? 1;
+  const outcomeRowCount = item.planOutcomeRowCount ?? 1;
+  const questionRowCount = item.planOutcomeQuestionRowCount ?? 1;
+  const needsQuestionRowCount = item.planNeedsQuestionRowCount ?? 1;
+  const needsPlanRowCount = item.planNeedsPlanRowCount ?? 1;
+  const subprojectRowCount = item.planSubprojectRowCount ?? 1;
+  const outcomeHeadingRow = 2 + reasonRowCount;
+  const outcomePromptStart = outcomeHeadingRow + 1;
+  const outcomePromptEnd = outcomePromptStart + Math.max(outcomeRowCount - 1, 0);
+  const questionPromptStart = outcomePromptEnd + 1;
+  const questionPromptEnd = questionPromptStart + Math.max(questionRowCount - 1, 0);
+  const needsHeadingRow = questionPromptEnd + 1;
+  const needsQuestionStart = needsHeadingRow + 1;
+  const needsQuestionEnd = needsQuestionStart + Math.max(needsQuestionRowCount - 1, 0);
+  const needsPlanStart = needsQuestionEnd + 1;
+  const subprojectsHeadingRow = needsPlanStart + Math.max(needsPlanRowCount, 0);
+  const subprojectsPromptRow = subprojectsHeadingRow + 1;
+  const subprojectStart = subprojectsPromptRow + 1;
+  const subprojects = [];
+  for (let idx = 0; idx < Math.max(subprojectRowCount, 0); idx += 1) {
+    const rowIdx = subprojectStart + idx;
+    const rowValues = entries[rowIdx] ?? Array.from({ length: PLAN_TABLE_COLS }, () => '');
+    subprojects.push({
+      name: (rowValues[2] ?? '').trim(),
+      timeValue: rowValues[4] ?? '0.00',
+    });
+  }
+  const calculateMinutes = (baseIdx, rowCount) =>
+    Array.from({ length: Math.max(rowCount, 0) }, (_, idx) => {
+      const rowIdx = baseIdx + idx;
+      const rowValues = entries[rowIdx] ?? [];
+      return parseTimeValueToMinutes(rowValues[4] ?? '');
+    }).reduce((sum, value) => sum + value, 0);
+  const needsPlanTotalMinutes = calculateMinutes(needsPlanStart, needsPlanRowCount);
+  const subprojectTotalMinutes = calculateMinutes(subprojectStart, subprojectRowCount);
+  const projectTotalMinutes = needsPlanTotalMinutes + subprojectTotalMinutes;
+  return {
+    subprojects,
+    needsPlanTotalMinutes,
+    subprojectTotalMinutes,
+    totalHours: formatMinutesToHHmm(projectTotalMinutes),
+  };
+};
+
 export default function StagingPage({ currentPath = '/staging', onNavigate = () => {} }) {
   const [inputValue, setInputValue] = useState('');
   const [{ shortlist, archived }, setState] = useState(() => loadStagingState());
@@ -305,7 +352,11 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
   }, []);
 
   useEffect(() => {
-    saveStagingState({ shortlist, archived });
+    const enrichedShortlist = shortlist.map((item) => ({
+      ...item,
+      planSummary: buildProjectPlanSummary(item),
+    }));
+    saveStagingState({ shortlist: enrichedShortlist, archived });
   }, [shortlist, archived]);
 
   useEffect(() => {
