@@ -1182,6 +1182,49 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       }),
     [highlightedProjects, projectColumnTotals, visibleColumnCount]
   );
+  const stagingColumnConfigs = useMemo(() => {
+    const columns = [{ id: 'extra-empty', type: 'empty' }];
+    highlightedProjects.forEach((project) => {
+      columns.push({
+        id: `project-${project.id}`,
+        type: 'project',
+        project,
+      });
+    });
+    return columns;
+  }, [highlightedProjects]);
+  const gridTemplateColumns = useMemo(() => {
+    const totalColumns = 1 + DAY_COLUMN_COUNT + stagingColumnConfigs.length;
+    return `repeat(${totalColumns}, minmax(0, 1fr))`;
+  }, [stagingColumnConfigs.length]);
+  const renderExtraColumnCells = useCallback(
+    (rowKey, showHeaderLabel = false) =>
+      stagingColumnConfigs.map((column) => {
+        const baseClass =
+          'border border-[#e5e7eb] px-3 py-2 text-center overflow-visible text-[11px]';
+        if (column.type === 'empty') {
+          return <td key={`${rowKey}-${column.id}`} className={baseClass} />;
+        }
+        const metadata = projectMetadata.get(column.project.id);
+        if (showHeaderLabel) {
+          const label = metadata?.label ?? column.project.label ?? 'Project';
+          const backgroundColor =
+            metadata?.color ?? column.project.color ?? '#d9d9d9';
+          const textColor = metadata?.textColor ?? '#000000';
+          return (
+            <td
+              key={`${rowKey}-${column.id}`}
+              className={`${baseClass} text-[10px] font-semibold uppercase`}
+              style={{ backgroundColor, color: textColor }}
+            >
+              {label}
+            </td>
+          );
+        }
+        return <td key={`${rowKey}-${column.id}`} className={baseClass} />;
+      }),
+    [projectMetadata, stagingColumnConfigs]
+  );
   const renderProjectChip = useCallback(
     (chipId, rowId) => {
       if (!chipId) return null;
@@ -1540,7 +1583,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
             className="w-full border-collapse text-[11px] text-slate-800"
           >
             <tbody>
-              <tr className="grid grid-cols-9 text-sm">
+              <tr className="grid text-sm" style={{ gridTemplateColumns }}>
                 {Array.from({ length: 9 }, (_, index) => {
                   if (index === 0 || index === 8) {
                     return (
@@ -1568,14 +1611,15 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     );
                   }
                   const dayIndex = index - 2;
-                  return (
-                    <td key={`day-${index}`} className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold">
-                      {sequence[dayIndex] ?? ''}
-                    </td>
-                  );
-                })}
+                      return (
+                        <td key={`day-${index}`} className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold">
+                          {sequence[dayIndex] ?? ''}
+                        </td>
+                      );
+                    })}
+                {renderExtraColumnCells('header', true)}
               </tr>
-              <tr className="grid grid-cols-9">
+              <tr className="grid" style={{ gridTemplateColumns }}>
                 <td
                   className="border border-[#e5e7eb] px-3 py-2"
                   data-row-id-anchor="sleep-start"
@@ -1633,14 +1677,15 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                       onContextMenu={
                         hasDay ? (event) => handleCellContextMenu(event, index, rowId) : undefined
                       }
-                    >
-                      {labels}
-                    </td>
-                  );
-                })}
+                  >
+                    {labels}
+                  </td>
+                );
+              })}
+                {renderExtraColumnCells('sleep-start')}
               </tr>
               {hourRows.map((hourValue) => (
-                <tr key={`hour-row-${hourValue}`} className="grid grid-cols-9">
+                <tr key={`hour-row-${hourValue}`} className="grid" style={{ gridTemplateColumns }}>
                   <td
                     className="border border-[#e5e7eb] px-3 py-2 font-semibold"
                     data-row-id-anchor={`hour-${hourValue}`}
@@ -1659,42 +1704,43 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     const isCovered = activeBlock
                       ? isRowWithinBlock(rowId, activeBlock)
                       : false;
-                  const labels = columnBlocks
-                    .filter((block) => block.startRowId === rowId)
-                    .map((block) => renderProjectChip(block.id, rowId));
-                  const cellSelected = isCellSelected(index, rowId);
-                  const cellStyle = {};
-                  if (isCovered) {
-                    cellStyle.backgroundColor = '#d9d9d9';
-                  }
-                  if (cellSelected) {
-                    cellStyle.outlineColor = '#000';
-                    cellStyle.outlineOffset = 0;
-                  }
-                  return (
-                    <td
-                      key={`hour-${hourValue}-${index}`}
-                      className={`relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible ${
-                        cellSelected ? 'outline outline-[2px]' : ''
-                      }`}
-                      style={Object.keys(cellStyle).length ? cellStyle : undefined}
-                      data-row-id={rowId}
-                      data-day-column={index}
-                      data-day={hasDay ? dayLabel : undefined}
-                      onDragOver={hasDay ? handleSleepDragOver : undefined}
-                      onDrop={hasDay ? handleSleepDrop : undefined}
-                      onClick={hasDay ? () => toggleCellSelection(index, rowId) : undefined}
-                      onContextMenu={
-                        hasDay ? (event) => handleCellContextMenu(event, index, rowId) : undefined
-                      }
-                    >
-                      {labels}
-                    </td>
-                  );
-                })}
+                    const labels = columnBlocks
+                      .filter((block) => block.startRowId === rowId)
+                      .map((block) => renderProjectChip(block.id, rowId));
+                    const cellSelected = isCellSelected(index, rowId);
+                    const cellStyle = {};
+                    if (isCovered) {
+                      cellStyle.backgroundColor = '#d9d9d9';
+                    }
+                    if (cellSelected) {
+                      cellStyle.outlineColor = '#000';
+                      cellStyle.outlineOffset = 0;
+                    }
+                    return (
+                      <td
+                        key={`hour-${hourValue}-${index}`}
+                        className={`relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible ${
+                          cellSelected ? 'outline outline-[2px]' : ''
+                        }`}
+                        style={Object.keys(cellStyle).length ? cellStyle : undefined}
+                        data-row-id={rowId}
+                        data-day-column={index}
+                        data-day={hasDay ? dayLabel : undefined}
+                        onDragOver={hasDay ? handleSleepDragOver : undefined}
+                        onDrop={hasDay ? handleSleepDrop : undefined}
+                        onClick={hasDay ? () => toggleCellSelection(index, rowId) : undefined}
+                        onContextMenu={
+                          hasDay ? (event) => handleCellContextMenu(event, index, rowId) : undefined
+                        }
+                      >
+                        {labels}
+                      </td>
+                    );
+                  })}
+                  {renderExtraColumnCells(`hour-${hourValue}`)}
                 </tr>
               ))}
-              <tr className="grid grid-cols-9">
+              <tr className="grid" style={{ gridTemplateColumns }}>
                 <td
                   className="border border-[#e5e7eb] px-3 py-2"
                   data-row-id-anchor="sleep-end"
@@ -1758,9 +1804,10 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     </td>
                   );
                 })}
+                {renderExtraColumnCells('sleep-end')}
               </tr>
               {trailingMinuteRows.map((minutesValue, rowIdx) => (
-                <tr key={`trailing-row-${rowIdx}`} className="grid grid-cols-9">
+                <tr key={`trailing-row-${rowIdx}`} className="grid" style={{ gridTemplateColumns }}>
                   <td
                     className="border border-[#e5e7eb] px-3 py-2 font-semibold"
                     data-row-id-anchor={`trailing-${rowIdx}`}
@@ -1782,49 +1829,50 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     const isCovered = activeBlock
                       ? isRowWithinBlock(rowId, activeBlock)
                       : false;
-                  const labels = columnBlocks
-                    .filter((block) => block.startRowId === rowId)
-                    .map((block) => renderProjectChip(block.id, rowId));
-                  const cellSelected = isCellSelected(index, rowId);
-                  const cellStyle = {};
-                  if (isCovered) {
-                    cellStyle.backgroundColor = '#d9d9d9';
-                  }
-                  if (cellSelected) {
-                    cellStyle.outlineColor = '#000';
-                    cellStyle.outlineOffset = 0;
-                  }
-                  return (
-                    <td
-                      key={`trailing-${rowIdx}-${index}`}
-                      className={`relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible ${
-                        cellSelected ? 'outline outline-[2px]' : ''
-                      }`}
-                      style={Object.keys(cellStyle).length ? cellStyle : undefined}
-                      data-row-id={rowId}
-                      data-day-column={index}
-                      data-day={hasDay ? dayLabel : undefined}
-                      onDragOver={hasDay ? handleSleepDragOver : undefined}
-                      onDrop={hasDay ? handleSleepDrop : undefined}
-                      onClick={hasDay ? () => toggleCellSelection(index, rowId) : undefined}
-                      onContextMenu={
-                        hasDay ? (event) => handleCellContextMenu(event, index, rowId) : undefined
-                      }
-                    >
-                      {labels}
-                    </td>
-                  );
-                })}
+                    const labels = columnBlocks
+                      .filter((block) => block.startRowId === rowId)
+                      .map((block) => renderProjectChip(block.id, rowId));
+                    const cellSelected = isCellSelected(index, rowId);
+                    const cellStyle = {};
+                    if (isCovered) {
+                      cellStyle.backgroundColor = '#d9d9d9';
+                    }
+                    if (cellSelected) {
+                      cellStyle.outlineColor = '#000';
+                      cellStyle.outlineOffset = 0;
+                    }
+                    return (
+                      <td
+                        key={`trailing-${rowIdx}-${index}`}
+                        className={`relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible ${
+                          cellSelected ? 'outline outline-[2px]' : ''
+                        }`}
+                        style={Object.keys(cellStyle).length ? cellStyle : undefined}
+                        data-row-id={rowId}
+                        data-day-column={index}
+                        data-day={hasDay ? dayLabel : undefined}
+                        onDragOver={hasDay ? handleSleepDragOver : undefined}
+                        onDrop={hasDay ? handleSleepDrop : undefined}
+                        onClick={hasDay ? () => toggleCellSelection(index, rowId) : undefined}
+                        onContextMenu={
+                          hasDay ? (event) => handleCellContextMenu(event, index, rowId) : undefined
+                        }
+                      >
+                        {labels}
+                      </td>
+                    );
+                  })}
+                  {renderExtraColumnCells(`trailing-${rowIdx}`)}
                 </tr>
               ))}
               <tr>
                 <td
-                  colSpan={9}
+                  colSpan={1 + DAY_COLUMN_COUNT + stagingColumnConfigs.length}
                   className="px-3 py-2 text-[11px]"
                   style={{ height: '14px', backgroundColor: '#000' }}
                 ></td>
               </tr>
-              <tr className="grid grid-cols-9 text-sm">
+              <tr className="grid text-sm" style={{ gridTemplateColumns }}>
                 <td className="border border-[#e5e7eb]" style={{ backgroundColor: '#000' }}></td>
                 {displayedWeekDays.map((day, idx) => (
                   <td
@@ -1840,15 +1888,16 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                 >
                   Total
                 </td>
+                {renderExtraColumnCells('summary-header')}
               </tr>
               <tr
-                className={`grid grid-cols-9 text-sm cursor-pointer ${
+                className={`grid text-sm cursor-pointer ${
                   selectedSummaryRowId === 'sleep-summary' ? 'outline outline-[2px]' : ''
                 }`}
                 style={
                   selectedSummaryRowId === 'sleep-summary'
-                    ? { outlineColor: '#000', outlineOffset: 0 }
-                    : undefined
+                    ? { gridTemplateColumns, outlineColor: '#000', outlineOffset: 0 }
+                    : { gridTemplateColumns }
                 }
                 tabIndex={0}
                 onClick={() => toggleSummaryRowSelection('sleep-summary')}
@@ -1880,19 +1929,24 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                 <td
                   className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
                   style={{ backgroundColor: '#efefef' }}
-                  >
-                    {formatDuration(totalSleepMinutes)}
-                  </td>
-                </tr>
+                >
+                  {formatDuration(totalSleepMinutes)}
+                </td>
+                {renderExtraColumnCells('summary-sleep')}
+              </tr>
               {projectSummaries.map((summary) => {
                 const rowSelected = selectedSummaryRowId === summary.id;
                 return (
                   <tr
                     key={`project-summary-${summary.id}`}
-                    className={`grid grid-cols-9 text-sm cursor-pointer ${
+                    className={`grid text-sm cursor-pointer ${
                       rowSelected ? 'outline outline-[2px]' : ''
                     }`}
-                    style={rowSelected ? { outlineColor: '#000', outlineOffset: 0 } : undefined}
+                    style={
+                      rowSelected
+                        ? { gridTemplateColumns, outlineColor: '#000', outlineOffset: 0 }
+                        : { gridTemplateColumns }
+                    }
                     tabIndex={0}
                     onClick={() => toggleSummaryRowSelection(summary.id)}
                     onKeyDown={(event) => {
@@ -1927,14 +1981,16 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     >
                       {formatDuration(summary.totalMinutes)}
                     </td>
+                    {renderExtraColumnCells(`summary-${summary.id}`)}
                   </tr>
                 );
               })}
               <tr
-                className={`grid grid-cols-9 text-sm cursor-pointer ${
+                className={`grid text-sm cursor-pointer ${
                   selectedSummaryRowId === 'rest-summary' ? 'outline outline-[2px]' : ''
                 }`}
                 style={{
+                  gridTemplateColumns,
                   backgroundColor: '#666666',
                   color: '#ffffff',
                   fontWeight: 700,
@@ -1972,27 +2028,29 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                 >
                   {formatDuration(totalRestMinutes)}
                 </td>
+                {renderExtraColumnCells('summary-rest')}
               </tr>
               <tr
-                className="grid grid-cols-9"
-                style={{ backgroundColor: '#ffffff', height: '14px' }}
+                className="grid"
+                style={{ gridTemplateColumns, backgroundColor: '#ffffff', height: '14px' }}
               >
-                {Array.from({ length: 9 }, (_, cellIndex) => (
+                {Array.from({ length: 1 + DAY_COLUMN_COUNT }, (_, cellIndex) => (
                   <td
                     key={`spacer-${cellIndex}`}
                     className="px-1"
                     style={{ border: 0, backgroundColor: '#ffffff' }}
                   />
                 ))}
+                {renderExtraColumnCells('summary-spacer')}
               </tr>
               <tr
-                className={`grid grid-cols-9 text-sm cursor-pointer ${
+                className={`grid text-sm cursor-pointer ${
                   selectedSummaryRowId === 'working-summary' ? 'outline outline-[2px]' : ''
                 }`}
                 style={
                   selectedSummaryRowId === 'working-summary'
-                    ? { outlineColor: '#000', outlineOffset: 0 }
-                    : undefined
+                    ? { gridTemplateColumns, outlineColor: '#000', outlineOffset: 0 }
+                    : { gridTemplateColumns }
                 }
                 tabIndex={0}
                 onClick={() => toggleSummaryRowSelection('working-summary')}
@@ -2025,18 +2083,19 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                 <td
                   className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold text-[11px]"
                   style={{ backgroundColor: '#d9ead3' }}
-                >
-                  {formatDuration(totalWorkingMinutes)}
-                </td>
-              </tr>
+                  >
+                    {formatDuration(totalWorkingMinutes)}
+                  </td>
+                  {renderExtraColumnCells('summary-working')}
+                </tr>
               <tr
-                className={`grid grid-cols-9 text-sm cursor-pointer ${
+                className={`grid text-sm cursor-pointer ${
                   selectedSummaryRowId === 'buffer-summary' ? 'outline outline-[2px]' : ''
                 }`}
                 style={
                   selectedSummaryRowId === 'buffer-summary'
-                    ? { outlineColor: '#000', outlineOffset: 0 }
-                    : undefined
+                    ? { gridTemplateColumns, outlineColor: '#000', outlineOffset: 0 }
+                    : { gridTemplateColumns }
                 }
                 tabIndex={0}
                 onClick={() => toggleSummaryRowSelection('buffer-summary')}
@@ -2071,15 +2130,16 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                 >
                   {formatDuration(totalBufferMinutes)}
                 </td>
+                {renderExtraColumnCells('summary-buffer')}
               </tr>
               <tr
-                className={`grid grid-cols-9 text-sm cursor-pointer ${
+                className={`grid text-sm cursor-pointer ${
                   selectedSummaryRowId === 'available-summary' ? 'outline outline-[2px]' : ''
                 }`}
                 style={
                   selectedSummaryRowId === 'available-summary'
-                    ? { outlineColor: '#000', outlineOffset: 0 }
-                    : undefined
+                    ? { gridTemplateColumns, outlineColor: '#000', outlineOffset: 0 }
+                    : { gridTemplateColumns }
                 }
                 tabIndex={0}
                 onClick={() => toggleSummaryRowSelection('available-summary')}
@@ -2111,6 +2171,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                 >
                   {formatDuration(totalAvailableMinutes)}
                 </td>
+                {renderExtraColumnCells('summary-available')}
               </tr>
             </tbody>
           </table>
