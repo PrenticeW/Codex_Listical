@@ -94,6 +94,36 @@ export default function SubprojectChipsRows({
 
   const allowDropOnRow = (event) => {
     event.preventDefault();
+    const rowId = event.currentTarget?.dataset?.rowId;
+    const column = event.target?.dataset?.dayColumn;
+    console.log('[subproject-dnd] drag over', {
+      rowId,
+      column,
+      targetTag: event.target?.tagName,
+      targetRowId: event.target?.dataset?.rowId,
+    });
+  };
+
+  const handleDragEnterRow = (event) => {
+    const rowId = event.currentTarget?.dataset?.rowId;
+    const column = event.target?.dataset?.dayColumn;
+    console.log('[subproject-dnd] drag enter', {
+      rowId,
+      column,
+      targetTag: event.target?.tagName,
+      targetRowId: event.target?.dataset?.rowId,
+    });
+  };
+
+  const handleDropOnRow = (event) => {
+    event.preventDefault();
+    const rowId = event.currentTarget?.dataset?.rowId;
+    const column = event.target?.dataset?.dayColumn;
+    console.log('[subproject-dnd] drop', {
+      rowId,
+      column,
+      dataTypes: event.dataTransfer?.types,
+    });
   };
 
   const renderBlankRow = (key) => (
@@ -102,6 +132,8 @@ export default function SubprojectChipsRows({
       className="grid"
       style={{ gridTemplateColumns }}
       onDragOver={allowDropOnRow}
+      onDragEnter={handleDragEnterRow}
+      onDrop={handleDropOnRow}
       data-row-id={`subproject-gap-${key}`}
     >
       {renderRowLabelCell('', `gap-${key}`)}
@@ -121,6 +153,8 @@ export default function SubprojectChipsRows({
       className="grid"
       style={{ gridTemplateColumns }}
       onDragOver={allowDropOnRow}
+      onDragEnter={handleDragEnterRow}
+      onDrop={handleDropOnRow}
       data-row-id={`subproject-row-${rowIdx}`}
     >
       {renderRowLabelCell('', `sub-${rowIdx}`)}

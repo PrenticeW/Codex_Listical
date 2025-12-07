@@ -36,6 +36,7 @@ const createProjectChipId = () => {
   chipSequence += 1;
   return `chip-${chipSequence}`;
 };
+const logDragDebug = (...args) => console.log('[drag-debug]', ...args);
 
 const TACTICS_STORAGE_KEY = 'tactics-page-settings';
 const getBrowserWindow = () => (typeof window !== 'undefined' ? window : null);
@@ -256,10 +257,48 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const cellMenuRef = useRef(null);
   const [tableRect, setTableRect] = useState(null);
   useEffect(() => {
+    // Ensure we always have a transparent drag image to avoid browser-specific cancellations
+    if (!transparentDragImageRef.current && typeof document !== 'undefined') {
+      const img = document.createElement('div');
+      img.style.width = '1px';
+      img.style.height = '1px';
+      img.style.opacity = '0';
+      img.style.position = 'fixed';
+      img.style.top = '0';
+      img.style.left = '0';
+      document.body.appendChild(img);
+      transparentDragImageRef.current = img;
+    }
+    // Global drag listeners to see if events reach the window (helps debug when drop targets are not firing)
+    let dragOverCount = 0;
+    const handleWindowDragOver = (event) => {
+      dragOverCount += 1;
+      if (dragOverCount > 10) return; // prevent spam
+      logDragDebug('Window dragover', {
+        target: event.target?.tagName,
+        hasDataTransfer: Boolean(event.dataTransfer),
+        types: event.dataTransfer?.types,
+        client: { x: event.clientX, y: event.clientY },
+      });
+    };
+    const handleWindowDrop = (event) => {
+      logDragDebug('Window drop', {
+        target: event.target?.tagName,
+        hasDataTransfer: Boolean(event.dataTransfer),
+        types: event.dataTransfer?.types,
+        client: { x: event.clientX, y: event.clientY },
+      });
+    };
+    window.addEventListener('dragover', handleWindowDragOver);
+    window.addEventListener('drop', handleWindowDrop);
     if (editingChipId && editingInputRef.current) {
       editingInputRef.current.focus();
       editingInputRef.current.select();
     }
+    return () => {
+      window.removeEventListener('dragover', handleWindowDragOver);
+      window.removeEventListener('drop', handleWindowDrop);
+    };
   }, [editingChipId]);
   useEffect(() => {
     if (colorEditorProjectId && colorInputRef.current) {
@@ -511,6 +550,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       if (!rectMap.size) return;
       const ordered = Array.from({ length: DAY_COLUMN_COUNT }, (_, idx) => rectMap.get(idx) ?? null);
       setDayColumnRects(ordered);
+      logDragDebug('Day column rects measured', ordered.map((entry, idx) => ({ idx, ...entry })));
     };
     const scheduleMeasure = () => {
       if (animationFrame != null) return;
@@ -554,21 +594,45 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   }, [displayedWeekDays]);
   const updateDragPreview = useCallback(
     (targetColumnIndex, rowId) => {
-      if (targetColumnIndex == null || Number.isNaN(targetColumnIndex) || !rowId) return;
+      logDragDebug('Update preview request', { targetColumnIndex, rowId });
+      if (targetColumnIndex == null || Number.isNaN(targetColumnIndex) || !rowId) {
+        logDragDebug('Preview skipped: bad input', { targetColumnIndex, rowId });
+        return;
+      }
       const sourceChipId = draggingSleepChipIdRef.current;
-      if (!sourceChipId) return;
+      if (!sourceChipId) {
+        logDragDebug('Preview skipped: no source chip');
+        return;
+      }
       const block = getProjectChipById(sourceChipId);
-      if (!block) return;
+      if (!block) {
+        logDragDebug('Preview skipped: missing block', { sourceChipId });
+        return;
+      }
       const startIdx = rowIndexMap.get(block.startRowId);
       const endIdx = rowIndexMap.get(block.endRowId);
       const targetIdx = rowIndexMap.get(rowId);
-      if (startIdx == null || endIdx == null || targetIdx == null) return;
+      if (startIdx == null || endIdx == null || targetIdx == null) {
+        logDragDebug('Preview skipped: missing row index', {
+          startIdx,
+          endIdx,
+          targetIdx,
+          rowId,
+        });
+        return;
+      }
       const span = Math.abs(endIdx - startIdx);
       const nextEndIdx = Math.min(
         targetIdx + span,
         timelineRowIds.length - 1
       );
       setDragPreview({
+        sourceChipId,
+        targetColumnIndex,
+        startRowId: rowId,
+        endRowId: timelineRowIds[nextEndIdx] ?? rowId,
+      });
+      logDragDebug('Preview updated', {
         sourceChipId,
         targetColumnIndex,
         startRowId: rowId,
@@ -598,7 +662,12 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const handleSleepDragStart = useCallback(
     (event, chipId) => {
       if (!chipId) return;
-      console.log('Drag start called with chipId:', chipId, 'isDragging:', isDragging, 'dragPreview:', dragPreview);
+      logDragDebug('Drag start', {
+        chipId,
+        isDragging,
+        hasPreview: Boolean(dragPreview),
+        client: { x: event.clientX, y: event.clientY },
+      });
       setIsDragging(true);
       event.dataTransfer.setData(SLEEP_DRAG_TYPE, chipId);
       // Some browsers require at least one plain-text payload to initiate drag
@@ -620,6 +689,12 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           const rawOffset = pointerY - metrics.top;
           const normalizedOffset = ((rawOffset % rowHeight) + rowHeight) % rowHeight;
           dragAnchorOffsetRef.current = normalizedOffset;
+          logDragDebug('Anchor offset set', {
+            chipId,
+            rowHeight,
+            pointerY,
+            offset: normalizedOffset,
+          });
         } else {
           dragAnchorOffsetRef.current = 0;
         }
@@ -638,21 +713,23 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const handleSleepDragOver = useCallback(
     (event) => {
       event.preventDefault();
-      console.log(
-        'Cell drag over - rowId:',
-        event.currentTarget.dataset.rowId,
-        'columnIndex:',
-        event.currentTarget.dataset.dayColumn
-      );
+      logDragDebug('Cell drag over', {
+        rowId: event.currentTarget.dataset.rowId,
+        columnIndex: event.currentTarget.dataset.dayColumn,
+      });
       if (!draggingSleepChipIdRef.current) return;
       event.dataTransfer.dropEffect = 'move';
       const rowId = event.currentTarget.dataset.rowId;
       const columnIndexValue = event.currentTarget.dataset.dayColumn;
       if (!rowId || columnIndexValue == null) {
+        logDragDebug('Cell drag over skipped: missing row/column', { rowId, columnIndexValue });
         return;
       }
       const columnIndex = parseInt(columnIndexValue, 10);
-      if (Number.isNaN(columnIndex)) return;
+      if (Number.isNaN(columnIndex)) {
+        logDragDebug('Cell drag over skipped: NaN column', { columnIndexValue });
+        return;
+      }
       updateDragPreview(columnIndex, rowId);
     },
     [updateDragPreview]
@@ -660,6 +737,12 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const applyDragPreview = useCallback(() => {
     if (!dragPreview) return;
     const { sourceChipId, targetColumnIndex, startRowId, endRowId } = dragPreview;
+    logDragDebug('Applying preview', {
+      sourceChipId,
+      targetColumnIndex,
+      startRowId,
+      endRowId,
+    });
     if (targetColumnIndex == null || Number.isNaN(targetColumnIndex)) return;
     const sourceBlock = getProjectChipById(sourceChipId);
     if (!sourceBlock) return;
@@ -684,11 +767,16 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     draggingSleepChipIdRef.current = null;
     setIsDragging(false);
     dragAnchorOffsetRef.current = 0;
+    logDragDebug('Preview applied and cleared');
   }, [dragPreview, getProjectChipById, setProjectChips, setSelectedCell]);
   const handleSleepDrop = useCallback(
     (event) => {
       if (!draggingSleepChipIdRef.current) return;
       event.preventDefault();
+      logDragDebug('Sleep drop on cell', {
+        rowId: event.currentTarget.dataset?.rowId,
+        columnIndex: event.currentTarget.dataset?.dayColumn,
+      });
       applyDragPreview();
     },
     [applyDragPreview]
@@ -697,28 +785,46 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     (event) => {
       if (!draggingSleepChipIdRef.current || !dragPreview) return;
       event.preventDefault();
+      logDragDebug('Table drop', {
+        pointer: { x: event.clientX, y: event.clientY },
+        dragPreview,
+      });
       applyDragPreview();
     },
     [applyDragPreview, dragPreview]
   );
+  const handleRootDragOver = useCallback((event) => {
+    event.preventDefault();
+    logDragDebug('Root dragover', {
+      target: event.target?.tagName,
+      types: event.dataTransfer?.types,
+      client: { x: event.clientX, y: event.clientY },
+    });
+  }, []);
+  const handleRootDrop = useCallback((event) => {
+    event.preventDefault();
+    logDragDebug('Root drop', {
+      target: event.target?.tagName,
+      types: event.dataTransfer?.types,
+      client: { x: event.clientX, y: event.clientY },
+    });
+  }, []);
   const handleTableDragOver = useCallback(
     (event) => {
       event.preventDefault();
-      console.log(
-        'Table drag over - isDragging:',
+      logDragDebug('Table drag over', {
         isDragging,
-        'dayColumnRects length:',
-        dayColumnRects.length,
-        'pointerX:',
-        event.clientX,
-        'pointerY:',
-        event.clientY
-      );
+        dayColumns: dayColumnRects.length,
+        pointer: { x: event.clientX, y: event.clientY },
+      });
       if (!draggingSleepChipIdRef.current) return;
       const pointerY = event.clientY + (window.scrollY || 0);
       const adjustedY = pointerY - (dragAnchorOffsetRef.current || 0);
       const targetRowId = findRowIdByPointerY(adjustedY);
-      if (!targetRowId) return;
+      if (!targetRowId) {
+        logDragDebug('Table drag over: no targetRowId', { adjustedY });
+        return;
+      }
       const pointerX = event.clientX + (window.scrollX || 0);
       let dayIndex = -1;
       for (let idx = 0; idx < dayColumnRects.length; idx += 1) {
@@ -729,7 +835,15 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           break;
         }
       }
-      if (dayIndex < 0 || dayIndex >= displayedWeekDays.length) return;
+      if (dayIndex < 0 || dayIndex >= displayedWeekDays.length) {
+        logDragDebug('Table drag over: day index out of range', { dayIndex });
+        return;
+      }
+      logDragDebug('Table drag mapped to', {
+        targetRowId,
+        dayIndex,
+        pointer: { x: pointerX, y: pointerY },
+      });
       updateDragPreview(dayIndex, targetRowId);
     },
     [dayColumnRects, displayedWeekDays, findRowIdByPointerY, updateDragPreview]
@@ -1304,14 +1418,6 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       const isEditing = editingChipId === block.id;
       const isChipBeingDragged =
         Boolean(dragPreview && dragPreview.sourceChipId === chipId);
-      console.log(
-        'Rendering chip',
-        chipId,
-        'draggable:',
-        !resizingBlockId && !isEditing,
-        'pointerEvents:',
-        isChipBeingDragged ? 'none' : 'auto'
-      );
       return (
         <div
           key={chipId}
@@ -1320,6 +1426,28 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
             height: `${blockHeight}px`,
             zIndex: 10,
             pointerEvents: 'auto',
+          }}
+          draggable={!resizingBlockId && !isEditing}
+          onDragStart={(event) => {
+            if (resizingBlockId) {
+              event.preventDefault();
+              return;
+            }
+            handleSleepDragStart(event, chipId);
+          }}
+          onDrag={(event) => {
+            logDragDebug('Chip drag', {
+              chipId,
+              client: { x: event.clientX, y: event.clientY },
+              dataTypes: event.dataTransfer?.types,
+            });
+          }}
+          onDragEnd={(event) => {
+            logDragDebug('Chip drag end', {
+              chipId,
+              client: { x: event.clientX, y: event.clientY },
+              dataTypes: event.dataTransfer?.types,
+            });
           }}
         >
             <div
@@ -1332,14 +1460,6 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
               color: textColor,
               fontWeight,
               ...(isActive ? { outlineColor: '#000', outlineOffset: 0 } : null),
-            }}
-            draggable={!resizingBlockId && !isEditing}
-            onDragStart={(event) => {
-              if (resizingBlockId) {
-                event.preventDefault();
-                return;
-              }
-              handleSleepDragStart(event, chipId);
             }}
             onClick={(event) => {
               event.stopPropagation();
@@ -1631,7 +1751,11 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   ]);
 
   return (
-    <div className="min-h-screen bg-gray-100 text-slate-800 p-4">
+    <div
+      className="min-h-screen bg-gray-100 text-slate-800 p-4"
+      onDragOver={handleRootDragOver}
+      onDrop={handleRootDrop}
+    >
       <NavigationBar
         currentPath={currentPath}
         onNavigate={onNavigate}
