@@ -37,6 +37,38 @@ const createProjectChipId = () => {
   return `chip-${chipSequence}`;
 };
 
+const TACTICS_STORAGE_KEY = 'tactics-page-settings';
+const getBrowserWindow = () => (typeof window !== 'undefined' ? window : null);
+const loadTacticsSettings = () => {
+  const win = getBrowserWindow();
+  if (!win) return { startHour: '', startMinute: '', incrementMinutes: 60 };
+  try {
+    const raw = win.localStorage.getItem(TACTICS_STORAGE_KEY);
+    if (!raw) return { startHour: '', startMinute: '', incrementMinutes: 60 };
+    const parsed = JSON.parse(raw);
+    return {
+      startHour: typeof parsed?.startHour === 'string' ? parsed.startHour : '',
+      startMinute: typeof parsed?.startMinute === 'string' ? parsed.startMinute : '',
+      incrementMinutes:
+        typeof parsed?.incrementMinutes === 'number' && Number.isFinite(parsed.incrementMinutes)
+          ? parsed.incrementMinutes
+          : 60,
+    };
+  } catch (error) {
+    console.error('Failed to read tactics settings', error);
+    return { startHour: '', startMinute: '', incrementMinutes: 60 };
+  }
+};
+const saveTacticsSettings = (payload) => {
+  const win = getBrowserWindow();
+  if (!win) return;
+  try {
+    win.localStorage.setItem(TACTICS_STORAGE_KEY, JSON.stringify(payload));
+  } catch (error) {
+    console.error('Failed to save tactics settings', error);
+  }
+};
+
 const formatHour12 = (hour, minutes = '00') => {
   const period = hour >= 12 ? 'PM' : 'AM';
   const normalizedHour = hour % 12 === 0 ? 12 : hour % 12;
@@ -96,8 +128,11 @@ const formatDuration = (minutes) => {
 };
 
 export default function TacticsPage({ currentPath = '/tactics', onNavigate = () => {} }) {
+  const initialTacticsSettings = useMemo(() => loadTacticsSettings(), []);
   const [startDay, setStartDay] = useState(DAYS_OF_WEEK[0]);
-  const [incrementMinutes, setIncrementMinutes] = useState(60);
+  const [incrementMinutes, setIncrementMinutes] = useState(
+    initialTacticsSettings.incrementMinutes
+  );
   const hourOptions = useMemo(() => {
     const step = Math.max(1, incrementMinutes);
     const totalSteps = Math.ceil(MINUTES_IN_DAY / step);
@@ -108,7 +143,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       return formatHour12(hour24, minutes);
     });
   }, [incrementMinutes]);
-  const [startHour, setStartHour] = useState('');
+  const [startHour, setStartHour] = useState(initialTacticsSettings.startHour);
   const minuteOptions = useMemo(() => {
     if (!startHour) return [];
     const baseMinutes = parseHour12ToMinutes(startHour);
@@ -122,7 +157,10 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       return formatHour12(hour24, minutes);
     });
   }, [startHour, incrementMinutes]);
-  const [startMinute, setStartMinute] = useState('');
+  const [startMinute, setStartMinute] = useState(initialTacticsSettings.startMinute);
+  useEffect(() => {
+    saveTacticsSettings({ startHour, startMinute, incrementMinutes });
+  }, [startHour, startMinute, incrementMinutes]);
   const hourRows = useMemo(() => {
     if (!startHour || !startMinute) return [];
     const startMinutes = parseHour12ToMinutes(startHour);
@@ -206,8 +244,6 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     (columnIndex) => projectChips.filter((block) => block.columnIndex === columnIndex),
     [projectChips]
   );
-  console.log('Blocks in column 0:', getProjectChipsByColumnIndex(0));
-  console.log('Blocks in column 1:', getProjectChipsByColumnIndex(1));
   const getProjectChipById = useCallback(
     (blockId) => projectChips.find((block) => block.id === blockId) ?? null,
     [projectChips]
@@ -562,7 +598,11 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const handleSleepDragStart = useCallback(
     (event, chipId) => {
       if (!chipId) return;
+      console.log('Drag start called with chipId:', chipId, 'isDragging:', isDragging, 'dragPreview:', dragPreview);
+      setIsDragging(true);
       event.dataTransfer.setData(SLEEP_DRAG_TYPE, chipId);
+      // Some browsers require at least one plain-text payload to initiate drag
+      event.dataTransfer.setData('text/plain', chipId);
       event.dataTransfer.effectAllowed = 'move';
       if (event.dataTransfer.setDragImage) {
         const dragImage = transparentDragImageRef.current;
@@ -570,7 +610,6 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           event.dataTransfer.setDragImage(dragImage, 0, 0);
         }
       }
-      console.log('Dragging chip ID:', chipId);
       draggingSleepChipIdRef.current = chipId;
       const block = getProjectChipById(chipId);
       if (block) {
@@ -593,14 +632,19 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         setSelectedCell(null);
         setSelectedBlockId(chipId);
       }
-      setIsDragging(true);
     },
     [getProjectChipById, rowMetrics, setSelectedCell]
   );
   const handleSleepDragOver = useCallback(
     (event) => {
-      if (!isDragging) return;
       event.preventDefault();
+      console.log(
+        'Cell drag over - rowId:',
+        event.currentTarget.dataset.rowId,
+        'columnIndex:',
+        event.currentTarget.dataset.dayColumn
+      );
+      if (!draggingSleepChipIdRef.current) return;
       event.dataTransfer.dropEffect = 'move';
       const rowId = event.currentTarget.dataset.rowId;
       const columnIndexValue = event.currentTarget.dataset.dayColumn;
@@ -611,7 +655,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       if (Number.isNaN(columnIndex)) return;
       updateDragPreview(columnIndex, rowId);
     },
-    [isDragging, updateDragPreview]
+    [updateDragPreview]
   );
   const applyDragPreview = useCallback(() => {
     if (!dragPreview) return;
@@ -643,24 +687,34 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   }, [dragPreview, getProjectChipById, setProjectChips, setSelectedCell]);
   const handleSleepDrop = useCallback(
     (event) => {
-      if (!isDragging) return;
+      if (!draggingSleepChipIdRef.current) return;
       event.preventDefault();
       applyDragPreview();
     },
-    [applyDragPreview, isDragging]
+    [applyDragPreview]
   );
   const handleTableDrop = useCallback(
     (event) => {
-      if (!isDragging || !dragPreview) return;
+      if (!draggingSleepChipIdRef.current || !dragPreview) return;
       event.preventDefault();
       applyDragPreview();
     },
-    [applyDragPreview, dragPreview, isDragging]
+    [applyDragPreview, dragPreview]
   );
   const handleTableDragOver = useCallback(
     (event) => {
-      if (!isDragging) return;
       event.preventDefault();
+      console.log(
+        'Table drag over - isDragging:',
+        isDragging,
+        'dayColumnRects length:',
+        dayColumnRects.length,
+        'pointerX:',
+        event.clientX,
+        'pointerY:',
+        event.clientY
+      );
+      if (!draggingSleepChipIdRef.current) return;
       const pointerY = event.clientY + (window.scrollY || 0);
       const adjustedY = pointerY - (dragAnchorOffsetRef.current || 0);
       const targetRowId = findRowIdByPointerY(adjustedY);
@@ -678,7 +732,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       if (dayIndex < 0 || dayIndex >= displayedWeekDays.length) return;
       updateDragPreview(dayIndex, targetRowId);
     },
-    [dayColumnRects, displayedWeekDays, findRowIdByPointerY, isDragging, updateDragPreview]
+    [dayColumnRects, displayedWeekDays, findRowIdByPointerY, updateDragPreview]
   );
   const handleResizeMouseDown = useCallback(
     (event, chipId) => {
@@ -1248,21 +1302,32 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         typeof block.projectId === 'string' && block.projectId.startsWith('custom-');
       const normalizedLabel = isCustomProject ? displayLabel.toUpperCase() : displayLabel;
       const isEditing = editingChipId === block.id;
+      const isChipBeingDragged =
+        Boolean(dragPreview && dragPreview.sourceChipId === chipId);
+      console.log(
+        'Rendering chip',
+        chipId,
+        'draggable:',
+        !resizingBlockId && !isEditing,
+        'pointerEvents:',
+        isChipBeingDragged ? 'none' : 'auto'
+      );
       return (
         <div
+          key={chipId}
           className="absolute left-0 top-0 flex w-full justify-center"
           style={{
             height: `${blockHeight}px`,
             zIndex: 10,
+            pointerEvents: 'auto',
           }}
         >
-          <div
-            className={`relative flex h-full w-full cursor-move select-none items-center justify-center rounded border border-transparent px-2 py-1 text-center text-[11px] font-semibold shadow-sm ${
-              isActive ? 'outline outline-[2px]' : ''
-            }`}
-            style={{
-              pointerEvents:
-                dragPreview && dragPreview.sourceChipId === chipId ? 'none' : 'auto',
+            <div
+              className={`relative flex h-full w-full cursor-move select-none items-center justify-center rounded border border-transparent px-2 py-1 text-center text-[11px] font-semibold shadow-sm ${
+                isActive ? 'outline outline-[2px]' : ''
+              }`}
+              style={{
+                pointerEvents: isChipBeingDragged ? 'none' : 'auto',
               backgroundColor,
               color: textColor,
               fontWeight,
@@ -1349,6 +1414,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       handleConfirmLabelEdit,
       handleCancelLabelEdit,
       editingChipIsCustom,
+      isDragging,
       setSelectedCell,
       dragPreview,
     ]
@@ -1871,30 +1937,19 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   {renderExtraColumnCells(`trailing-${rowIdx}`)}
                 </tr>
               ))}
+              <SubprojectChipsRows
+                gridTemplateColumns={gridTemplateColumns}
+                dayColumnCount={DAY_COLUMN_COUNT}
+                stagingColumnConfigs={stagingColumnConfigs}
+                projectMetadata={projectMetadata}
+                subprojectLayout={subprojectLayout}
+              />
               <tr>
                 <td
                   colSpan={1 + DAY_COLUMN_COUNT + stagingColumnConfigs.length}
                   className="px-3 py-2 text-[11px]"
                   style={{ height: '14px', backgroundColor: '#000' }}
                 ></td>
-              </tr>
-              <tr className="grid text-sm" style={{ gridTemplateColumns }}>
-                <td className="border border-[#e5e7eb]" style={{ backgroundColor: '#000' }}></td>
-                {displayedWeekDays.map((day, idx) => (
-                  <td
-                    key={`week-summary-${day}-${idx}`}
-                    className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
-                  >
-                    {day}
-                  </td>
-                ))}
-                <td
-                  className="border border-[#e5e7eb] text-center"
-                  style={{ backgroundColor: '#000', color: '#fff', fontWeight: 700 }}
-                >
-                  Total
-                </td>
-                {renderExtraColumnCells('summary-header')}
               </tr>
               <tr
                 className={`grid text-sm cursor-pointer ${
@@ -2179,13 +2234,6 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
               </td>
               {renderExtraColumnCells('summary-available')}
             </tr>
-            <SubprojectChipsRows
-              gridTemplateColumns={gridTemplateColumns}
-              dayColumnCount={DAY_COLUMN_COUNT}
-              stagingColumnConfigs={stagingColumnConfigs}
-              projectMetadata={projectMetadata}
-              subprojectLayout={subprojectLayout}
-            />
           </tbody>
         </table>
           {renderCellProjectMenu()}

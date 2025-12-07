@@ -16,14 +16,25 @@ export const buildSubprojectLayout = (highlightedProjects) => {
   return { subprojectsByProject, maxRows };
 };
 
-const renderBlankDayCells = (dayColumnCount, prefix) =>
-  Array.from({ length: 1 + dayColumnCount }, (_, idx) => (
+const renderDayCells = (dayColumnCount, prefix) =>
+  Array.from({ length: dayColumnCount }, (_, idx) => (
     <td
       key={`${prefix}-day-${idx}`}
       className="border border-[#e5e7eb] px-3 py-2"
       style={{ minHeight: '32px' }}
+      data-day-column={idx}
     />
   ));
+
+const renderRowLabelCell = (label, rowId) => (
+  <td
+    key={`subproject-label-${rowId}`}
+    className="border border-[#e5e7eb] px-3 py-2 font-semibold"
+    data-row-id-anchor={rowId}
+  >
+    {label}
+  </td>
+);
 
 const renderSubprojectCell = (column, rowIdx, subprojectsByProject, projectMetadata) => {
   if (column.type !== 'project') {
@@ -80,9 +91,21 @@ export default function SubprojectChipsRows({
 }) {
   if (!gridTemplateColumns || !subprojectLayout?.maxRows) return null;
   const { subprojectsByProject, maxRows } = subprojectLayout;
+
+  const allowDropOnRow = (event) => {
+    event.preventDefault();
+  };
+
   const renderBlankRow = (key) => (
-    <tr key={`subproject-gap-${key}`} className="grid" style={{ gridTemplateColumns }}>
-      {renderBlankDayCells(dayColumnCount, `gap-${key}`)}
+    <tr
+      key={`subproject-gap-${key}`}
+      className="grid"
+      style={{ gridTemplateColumns }}
+      onDragOver={allowDropOnRow}
+      data-row-id={`subproject-gap-${key}`}
+    >
+      {renderRowLabelCell('', `gap-${key}`)}
+      {renderDayCells(dayColumnCount, `gap-${key}`)}
       {stagingColumnConfigs.map((column) => (
         <td
           key={`subproject-gap-${key}-${column.id}`}
@@ -93,8 +116,15 @@ export default function SubprojectChipsRows({
   );
 
   const chipRows = Array.from({ length: maxRows }, (_, rowIdx) => (
-    <tr key={`subproject-row-${rowIdx}`} className="grid" style={{ gridTemplateColumns }}>
-      {renderBlankDayCells(dayColumnCount, `sub-${rowIdx}`)}
+    <tr
+      key={`subproject-row-${rowIdx}`}
+      className="grid"
+      style={{ gridTemplateColumns }}
+      onDragOver={allowDropOnRow}
+      data-row-id={`subproject-row-${rowIdx}`}
+    >
+      {renderRowLabelCell('', `sub-${rowIdx}`)}
+      {renderDayCells(dayColumnCount, `sub-${rowIdx}`)}
       {stagingColumnConfigs.map((column) =>
         renderSubprojectCell(column, rowIdx, subprojectsByProject, projectMetadata)
       )}
