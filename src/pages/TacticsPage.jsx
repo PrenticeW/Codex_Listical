@@ -8,7 +8,7 @@ import React, {
 } from 'react';
 import NavigationBar from '../components/planner/NavigationBar';
 import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '../lib/stagingStorage';
-import SubprojectChipsRows, { buildSubprojectLayout } from '../SubprojectChips';
+import { buildSubprojectLayout } from '../SubprojectChips';
 
 const DAYS_OF_WEEK = [
   'Sunday',
@@ -112,11 +112,7 @@ const getBlockDuration = (block, rowIndexMap, timelineRowIds, incrementMinutes) 
       totalMinutes += 60;
       continue;
     }
-    if (
-      rowId === 'sleep-end' ||
-      rowId.startsWith('trailing-') ||
-      rowId.startsWith('sub-')
-    ) {
+    if (rowId === 'sleep-end' || rowId.startsWith('trailing-')) {
       totalMinutes += incrementMinutes;
     }
   }
@@ -440,13 +436,8 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     hourRows.forEach((hourValue) => rows.push(`hour-${hourValue}`));
     rows.push('sleep-end');
     trailingMinuteRows.forEach((_, idx) => rows.push(`trailing-${idx}`));
-    if (subprojectLayout?.maxRows) {
-      for (let idx = 0; idx < subprojectLayout.maxRows; idx += 1) {
-        rows.push(`sub-${idx}`);
-      }
-    }
     return rows;
-  }, [hourRows, trailingMinuteRows, subprojectLayout]);
+  }, [hourRows, trailingMinuteRows]);
   const rowIndexMap = useMemo(
     () => new Map(timelineRowIds.map((rowId, index) => [rowId, index])),
     [timelineRowIds]
@@ -1403,10 +1394,11 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     return columns;
   }, [highlightedProjects]);
   useEffect(() => {
-    if (!subprojectLayout?.subprojectsByProject) return;
+    if (!subprojectLayout?.subprojectsByProject || !timelineRowIds.length) return;
     setProjectChips((prev) => {
       const next = [...prev];
       const expectedIds = new Set();
+      const baseOffset = 2;
       stagingColumnConfigs.forEach((column, idx) => {
         if (column.type !== 'project') return;
         const columnIndex = DAY_COLUMN_COUNT + idx;
@@ -1415,7 +1407,11 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           const chipId = `subproject-${column.project.id}-${subIdx}`;
           expectedIds.add(chipId);
           const label = (subproject.name ?? '').trim() || 'Subproject';
-          const startRowId = `sub-${subIdx}`;
+          const targetRowIdx = Math.min(
+            baseOffset + subIdx,
+            timelineRowIds.length - 1
+          );
+          const startRowId = timelineRowIds[targetRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
           const endRowId = startRowId;
           const existingIndex = next.findIndex((entry) => entry.id === chipId);
           if (existingIndex >= 0) {
@@ -1444,7 +1440,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         (entry) => !entry.id.startsWith('subproject-') || expectedIds.has(entry.id)
       );
     });
-  }, [stagingColumnConfigs, subprojectLayout, setProjectChips]);
+  }, [stagingColumnConfigs, subprojectLayout, timelineRowIds, setProjectChips]);
   const gridTemplateColumns = useMemo(() => {
     const totalColumns = 1 + DAY_COLUMN_COUNT + stagingColumnConfigs.length;
     return `repeat(${totalColumns}, minmax(0, 1fr))`;
@@ -2179,23 +2175,6 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   })}
                 </tr>
               ))}
-              <SubprojectChipsRows
-                gridTemplateColumns={gridTemplateColumns}
-                dayColumnCount={DAY_COLUMN_COUNT}
-                stagingColumnConfigs={stagingColumnConfigs}
-                subprojectLayout={subprojectLayout}
-                projectMetadata={projectMetadata}
-                displayedWeekDays={displayedWeekDays}
-                getProjectChipsByColumnIndex={getProjectChipsByColumnIndex}
-                highlightedBlockId={highlightedBlockId}
-                isRowWithinBlock={isRowWithinBlock}
-                renderProjectChip={renderProjectChip}
-                isCellSelected={isCellSelected}
-                handleSleepDragOver={handleSleepDragOver}
-                handleSleepDrop={handleSleepDrop}
-                toggleCellSelection={toggleCellSelection}
-                handleCellContextMenu={handleCellContextMenu}
-              />
               <tr>
                 <td
                   colSpan={1 + DAY_COLUMN_COUNT + stagingColumnConfigs.length}

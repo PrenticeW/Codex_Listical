@@ -42,10 +42,24 @@ export default function SubprojectChipsRows({
   handleSleepDrop,
   toggleCellSelection,
   handleCellContextMenu,
+  topSpacerRowCount = 2,
 }) {
   if (!gridTemplateColumns || !subprojectLayout?.maxRows) return null;
   const { subprojectsByProject, maxRows } = subprojectLayout;
   const totalColumnCount = dayColumnCount + stagingColumnConfigs.length;
+
+  const renderSpacerRow = (rowIdx) => (
+    <tr key={`subproject-spacer-${rowIdx}`} className="grid" style={{ gridTemplateColumns }}>
+      {renderRowLabelCell('', `sub-spacer-${rowIdx}`)}
+      {Array.from({ length: totalColumnCount }, (_, index) => (
+        <td
+          key={`sub-spacer-${rowIdx}-${index}`}
+          className="border border-[#e5e7eb] px-3 py-2"
+          data-day-column={index}
+        />
+      ))}
+    </tr>
+  );
 
   const chipRows = Array.from({ length: maxRows }, (_, rowIdx) => (
     <tr
@@ -112,6 +126,7 @@ export default function SubprojectChipsRows({
 
   return (
     <>
+      {Array.from({ length: topSpacerRowCount }, (_, idx) => renderSpacerRow(idx))}
       {chipRows}
     </>
   );
