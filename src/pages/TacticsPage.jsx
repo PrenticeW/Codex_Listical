@@ -36,9 +36,20 @@ const createProjectChipId = () => {
   chipSequence += 1;
   return `chip-${chipSequence}`;
 };
+const updateChipSequenceFromList = (chips = []) => {
+  chips.forEach((chip) => {
+    const match = typeof chip?.id === 'string' ? chip.id.match(/chip-(\d+)$/) : null;
+    if (!match) return;
+    const value = parseInt(match[1], 10);
+    if (Number.isFinite(value) && value > chipSequence) {
+      chipSequence = value;
+    }
+  });
+};
 const logDragDebug = (...args) => console.log('[drag-debug]', ...args);
 
 const TACTICS_STORAGE_KEY = 'tactics-page-settings';
+const TACTICS_CHIPS_STORAGE_KEY = 'tactics-chips-state';
 const getBrowserWindow = () => (typeof window !== 'undefined' ? window : null);
 const loadTacticsSettings = () => {
   const win = getBrowserWindow();
@@ -60,6 +71,22 @@ const loadTacticsSettings = () => {
     return { startHour: '', startMinute: '', incrementMinutes: 60 };
   }
 };
+const loadTacticsChipsState = () => {
+  const win = getBrowserWindow();
+  if (!win) return { projectChips: null, customProjects: null };
+  try {
+    const raw = win.localStorage.getItem(TACTICS_CHIPS_STORAGE_KEY);
+    if (!raw) return { projectChips: null, customProjects: null };
+    const parsed = JSON.parse(raw);
+    return {
+      projectChips: Array.isArray(parsed?.projectChips) ? parsed.projectChips : null,
+      customProjects: Array.isArray(parsed?.customProjects) ? parsed.customProjects : null,
+    };
+  } catch (error) {
+    console.error('Failed to read tactics chip state', error);
+    return { projectChips: null, customProjects: null };
+  }
+};
 const saveTacticsSettings = (payload) => {
   const win = getBrowserWindow();
   if (!win) return;
@@ -67,6 +94,15 @@ const saveTacticsSettings = (payload) => {
     win.localStorage.setItem(TACTICS_STORAGE_KEY, JSON.stringify(payload));
   } catch (error) {
     console.error('Failed to save tactics settings', error);
+  }
+};
+const saveTacticsChipsState = (payload) => {
+  const win = getBrowserWindow();
+  if (!win) return;
+  try {
+    win.localStorage.setItem(TACTICS_CHIPS_STORAGE_KEY, JSON.stringify(payload));
+  } catch (error) {
+    console.error('Failed to save tactics chip state', error);
   }
 };
 
@@ -255,7 +291,18 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     [stagingProjects]
   );
   const stagingColumnCount = highlightedProjectsCount + 1;
-  const totalColumnCount = DAY_COLUMN_COUNT + stagingColumnCount;
+  const maxChipColumnIndex = useMemo(
+    () =>
+      projectChips.reduce(
+        (maxValue, chip) =>
+          Number.isFinite(chip?.columnIndex) && chip.columnIndex > maxValue
+            ? chip.columnIndex
+            : maxValue,
+        -1
+      ),
+    [projectChips]
+  );
+  const totalColumnCount = Math.max(DAY_COLUMN_COUNT + stagingColumnCount, maxChipColumnIndex + 1);
   const [selectedSummaryRowId, setSelectedSummaryRowId] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
   const [cellMenu, setCellMenu] = useState(null);
@@ -307,6 +354,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const tableContainerRef = useRef(null);
   const tableElementRef = useRef(null);
   const cellMenuRef = useRef(null);
+  const hasLoadedInitialState = useRef(false);
   const [tableRect, setTableRect] = useState(null);
   useEffect(() => {
     // Ensure we always have a transparent drag image to avoid browser-specific cancellations
@@ -393,11 +441,21 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     };
   }, [setSelectedBlockId]);
   useEffect(() => {
+    if (hasLoadedInitialState.current) return undefined;
+    hasLoadedInitialState.current = true;
     if (typeof window === 'undefined') return undefined;
     const readProjects = () => {
       const state = loadStagingState();
       setStagingProjects(Array.isArray(state?.shortlist) ? state.shortlist : []);
     };
+    const chipState = loadTacticsChipsState();
+    if (chipState.projectChips) {
+      updateChipSequenceFromList(chipState.projectChips);
+      setProjectChips(chipState.projectChips);
+    }
+    if (chipState.customProjects) {
+      setCustomProjects(chipState.customProjects);
+    }
     readProjects();
     const handleStorage = (event) => {
       if (event?.key && event.key !== STAGING_STORAGE_KEY) return;
@@ -415,11 +473,10 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       window.removeEventListener(STAGING_STORAGE_EVENT, handleStorage);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [setSelectedBlockId]);
+  }, [hasLoadedInitialState, setSelectedBlockId]);
   useEffect(() => {
     setProjectChips((prev) => {
-      const columnLimit = totalColumnCount;
-      const nextBlocks = prev.filter((entry) => entry.columnIndex < columnLimit);
+      const nextBlocks = [...prev];
       const trackedColumns = new Set(
         nextBlocks
           .filter((entry) => entry.projectId === 'sleep' && entry.startRowId === 'sleep-start')
@@ -1083,6 +1140,9 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     rowIndexMap,
     timelineRowIds,
   ]);
+  useEffect(() => {
+    saveTacticsChipsState({ projectChips, customProjects });
+  }, [projectChips, customProjects]);
   const handleRemoveSelectedChip = useCallback(() => {
     if (!removableBlockId) return;
     setProjectChips((prev) => prev.filter((block) => block.id !== removableBlockId));
@@ -1335,7 +1395,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const workingColumnTotals = useMemo(() => {
     const totals = Array.from({ length: visibleColumnCount }, () => 0);
     projectColumnTotals.forEach((values, projectId) => {
-      if (projectId === 'sleep' || projectId === 'rest' || projectId === 'buffer') return;
+      if (
+        projectId === 'sleep' ||
+        projectId === 'rest' ||
+        projectId === 'buffer' ||
+        (typeof projectId === 'string' && projectId.startsWith('custom-'))
+      ) {
+        return;
+      }
       if (!Array.isArray(values)) return;
       for (let idx = 0; idx < visibleColumnCount; idx += 1) {
         totals[idx] += values[idx] ?? 0;
@@ -1411,7 +1478,18 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     });
     return columns;
   }, [highlightedProjects]);
+  const extendedStagingColumnConfigs = useMemo(() => {
+    const required = Math.max(0, totalColumnCount - DAY_COLUMN_COUNT);
+    if (required <= stagingColumnConfigs.length) return stagingColumnConfigs;
+    const placeholders = Array.from({ length: required - stagingColumnConfigs.length }, (_, idx) => ({
+      id: `placeholder-${idx}`,
+      type: 'placeholder',
+    }));
+    return [...stagingColumnConfigs, ...placeholders];
+  }, [stagingColumnConfigs, totalColumnCount]);
+  const hasInitializedSubprojects = useRef(false);
   useEffect(() => {
+    if (hasInitializedSubprojects.current) return;
     if (!subprojectLayout?.subprojectsByProject || !timelineRowIds.length) return;
     setProjectChips((prev) => {
       const next = [...prev];
@@ -1446,42 +1524,42 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           currentRowIdx = endRowIdx + 1;
           const existingIndex = next.findIndex((entry) => entry.id === chipId);
           if (existingIndex >= 0) {
-            const existing = next[existingIndex];
-            next[existingIndex] = {
-              ...existing,
-              columnIndex,
-              startRowId,
-              endRowId,
-              projectId: column.project.id,
-              displayLabel: label,
-            };
-          } else {
-            next.push({
-              id: chipId,
-              columnIndex,
-              startRowId,
-              endRowId,
-              projectId: column.project.id,
-              displayLabel: label,
-            });
+            return;
           }
+          next.push({
+            id: chipId,
+            columnIndex,
+            startRowId,
+            endRowId,
+            projectId: column.project.id,
+            displayLabel: label,
+          });
         });
       });
+      if (!expectedIds.size) return next;
       return next.filter(
         (entry) => !entry.id.startsWith('subproject-') || expectedIds.has(entry.id)
       );
     });
-  }, [stagingColumnConfigs, subprojectLayout, timelineRowIds, incrementMinutes, setProjectChips]);
-  const gridTemplateColumns = useMemo(() => {
-    const totalColumns = 1 + DAY_COLUMN_COUNT + stagingColumnConfigs.length;
-    return `repeat(${totalColumns}, minmax(0, 1fr))`;
-  }, [stagingColumnConfigs.length]);
+    hasInitializedSubprojects.current = true;
+  }, [
+    hasInitializedSubprojects,
+    stagingColumnConfigs,
+    subprojectLayout,
+    timelineRowIds,
+    incrementMinutes,
+    setProjectChips,
+  ]);
+  const gridTemplateColumns = useMemo(
+    () => `repeat(${1 + totalColumnCount}, minmax(0, 1fr))`,
+    [totalColumnCount]
+  );
   const renderExtraColumnCells = useCallback(
     (rowKey, showHeaderLabel = false) =>
-      stagingColumnConfigs.map((column) => {
+      extendedStagingColumnConfigs.map((column) => {
         const baseClass =
           'border border-[#e5e7eb] px-3 py-2 text-center overflow-visible text-[11px]';
-        if (column.type === 'empty') {
+        if (column.type === 'empty' || column.type === 'placeholder') {
           return <td key={`${rowKey}-${column.id}`} className={baseClass} />;
         }
         const metadata = projectMetadata.get(column.project.id);
@@ -1502,7 +1580,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         }
         return <td key={`${rowKey}-${column.id}`} className={baseClass} />;
       }),
-    [projectMetadata, stagingColumnConfigs]
+    [extendedStagingColumnConfigs, projectMetadata]
   );
   const renderProjectChip = useCallback(
     (chipId, rowId) => {
@@ -1944,8 +2022,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   const dayLabel = isDayColumn ? displayedWeekDays[index] ?? '' : '';
                   const hasDay = isDayColumn && Boolean(dayLabel);
                   const stagingIdx = index - DAY_COLUMN_COUNT;
-                  const stagingConfig = !isDayColumn ? stagingColumnConfigs[stagingIdx] : null;
-                  const isProjectColumn = !isDayColumn && stagingConfig?.type === 'project';
+                  const stagingConfig =
+                    !isDayColumn && stagingIdx >= 0
+                      ? extendedStagingColumnConfigs[stagingIdx]
+                      : null;
+                  const hasSavedChips =
+                    !isDayColumn && getProjectChipsByColumnIndex(index).length > 0;
+                  const isProjectColumn =
+                    !isDayColumn && (stagingConfig?.type === 'project' || hasSavedChips);
                   const isInteractiveColumn = hasDay || isProjectColumn;
                   const rowId = 'sleep-start';
                   const columnBlocks = isInteractiveColumn
@@ -2009,8 +2093,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     const dayLabel = isDayColumn ? displayedWeekDays[index] ?? '' : '';
                     const hasDay = isDayColumn && Boolean(dayLabel);
                     const stagingIdx = index - DAY_COLUMN_COUNT;
-                    const stagingConfig = !isDayColumn ? stagingColumnConfigs[stagingIdx] : null;
-                    const isProjectColumn = !isDayColumn && stagingConfig?.type === 'project';
+                    const stagingConfig =
+                      !isDayColumn && stagingIdx >= 0
+                        ? extendedStagingColumnConfigs[stagingIdx]
+                        : null;
+                    const hasSavedChips =
+                      !isDayColumn && getProjectChipsByColumnIndex(index).length > 0;
+                    const isProjectColumn =
+                      !isDayColumn && (stagingConfig?.type === 'project' || hasSavedChips);
                     const isInteractiveColumn = hasDay || isProjectColumn;
                     const rowId = `hour-${hourValue}`;
                     const columnBlocks = isInteractiveColumn
@@ -2086,8 +2176,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   const dayLabel = isDayColumn ? displayedWeekDays[index] ?? '' : '';
                   const hasDay = isDayColumn && Boolean(dayLabel);
                   const stagingIdx = index - DAY_COLUMN_COUNT;
-                  const stagingConfig = !isDayColumn ? stagingColumnConfigs[stagingIdx] : null;
-                  const isProjectColumn = !isDayColumn && stagingConfig?.type === 'project';
+                  const stagingConfig =
+                    !isDayColumn && stagingIdx >= 0
+                      ? extendedStagingColumnConfigs[stagingIdx]
+                      : null;
+                  const hasSavedChips =
+                    !isDayColumn && getProjectChipsByColumnIndex(index).length > 0;
+                  const isProjectColumn =
+                    !isDayColumn && (stagingConfig?.type === 'project' || hasSavedChips);
                   const isInteractiveColumn = hasDay || isProjectColumn;
                   const rowId = 'sleep-end';
                   const columnBlocks = isInteractiveColumn
@@ -2154,8 +2250,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     const dayLabel = isDayColumn ? displayedWeekDays[index] ?? '' : '';
                     const hasDay = isDayColumn && Boolean(dayLabel);
                     const stagingIdx = index - DAY_COLUMN_COUNT;
-                    const stagingConfig = !isDayColumn ? stagingColumnConfigs[stagingIdx] : null;
-                    const isProjectColumn = !isDayColumn && stagingConfig?.type === 'project';
+                    const stagingConfig =
+                      !isDayColumn && stagingIdx >= 0
+                        ? extendedStagingColumnConfigs[stagingIdx]
+                        : null;
+                    const hasSavedChips =
+                      !isDayColumn && getProjectChipsByColumnIndex(index).length > 0;
+                    const isProjectColumn =
+                      !isDayColumn && (stagingConfig?.type === 'project' || hasSavedChips);
                     const isInteractiveColumn = hasDay || isProjectColumn;
                     const rowId = `trailing-${rowIdx}`;
                     const columnBlocks = isInteractiveColumn
@@ -2209,7 +2311,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
               ))}
               <tr>
                 <td
-                  colSpan={1 + DAY_COLUMN_COUNT + stagingColumnConfigs.length}
+                  colSpan={1 + totalColumnCount}
                   className="px-3 py-2 text-[11px]"
                   style={{ height: '14px', backgroundColor: '#000' }}
                 ></td>
