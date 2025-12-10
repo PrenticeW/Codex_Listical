@@ -182,6 +182,18 @@ const parseTimeValueToMinutes = (value) => {
   return null;
 };
 
+const dedupeChipsById = (chips = []) => {
+  const seen = new Set();
+  const result = [];
+  chips.forEach((chip) => {
+    const id = chip?.id;
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    result.push(chip);
+  });
+  return result;
+};
+
 export default function TacticsPage({ currentPath = '/tactics', onNavigate = () => {} }) {
   const initialTacticsSettings = useMemo(() => loadTacticsSettings(), []);
   const [startDay, setStartDay] = useState(DAYS_OF_WEEK[0]);
@@ -341,11 +353,11 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   );
   const customSequenceRef = useRef(0);
   const getProjectChipsByColumnIndex = useCallback(
-    (columnIndex) => projectChips.filter((block) => block.columnIndex === columnIndex),
+    (columnIndex) => dedupeChipsById(projectChips.filter((block) => block.columnIndex === columnIndex)),
     [projectChips]
   );
   const getProjectChipById = useCallback(
-    (blockId) => projectChips.find((block) => block.id === blockId) ?? null,
+    (blockId) => dedupeChipsById(projectChips).find((block) => block.id === blockId) ?? null,
     [projectChips]
   );
   const draggingSleepChipIdRef = useRef(null);
@@ -450,8 +462,9 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     };
     const chipState = loadTacticsChipsState();
     if (chipState.projectChips) {
-      updateChipSequenceFromList(chipState.projectChips);
-      setProjectChips(chipState.projectChips);
+      const dedupedChips = dedupeChipsById(chipState.projectChips);
+      updateChipSequenceFromList(dedupedChips);
+      setProjectChips(dedupedChips);
     }
     if (chipState.customProjects) {
       setCustomProjects(chipState.customProjects);
@@ -476,10 +489,10 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   }, [hasLoadedInitialState, setSelectedBlockId]);
   useEffect(() => {
     setProjectChips((prev) => {
-      const nextBlocks = [...prev];
+      const nextBlocks = dedupeChipsById(prev);
       const trackedColumns = new Set(
         nextBlocks
-          .filter((entry) => entry.projectId === 'sleep' && entry.startRowId === 'sleep-start')
+          .filter((entry) => entry.startRowId === 'sleep-start')
           .map((entry) => entry.columnIndex)
       );
       for (let columnIndex = 0; columnIndex < displayedWeekDays.length; columnIndex += 1) {
@@ -1145,7 +1158,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   }, [projectChips, customProjects]);
   const handleRemoveSelectedChip = useCallback(() => {
     if (!removableBlockId) return;
-    setProjectChips((prev) => prev.filter((block) => block.id !== removableBlockId));
+    setProjectChips((prev) => dedupeChipsById(prev).filter((block) => block.id !== removableBlockId));
     setSelectedBlockId((prev) => (prev === removableBlockId ? null : prev));
     closeCellMenu();
   }, [closeCellMenu, removableBlockId, setProjectChips]);
@@ -1550,6 +1563,62 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     incrementMinutes,
     setProjectChips,
   ]);
+  const handleClearAllChips = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        'Clear all chips? This will reset to default sleep blocks and reload subprojects. Custom projects will stay in the dropdown.'
+      );
+      if (!confirmed) return;
+    }
+    const baseChips = buildInitialSleepBlocks(displayedWeekDays);
+    const rebuiltChips = [...baseChips];
+    if (subprojectLayout?.subprojectsByProject && timelineRowIds.length) {
+      const baseOffset = 2;
+      stagingColumnConfigs.forEach((column, idx) => {
+        if (column.type !== 'project') return;
+        const columnIndex = DAY_COLUMN_COUNT + idx;
+        const subprojects = subprojectLayout.subprojectsByProject.get(column.project.id) ?? [];
+        let currentRowIdx = baseOffset;
+        subprojects.forEach((subproject, subIdx) => {
+          const chipId = `subproject-${column.project.id}-${subIdx}`;
+          const label = (subproject.name ?? '').trim() || 'Subproject';
+          const minutes = parseTimeValueToMinutes(subproject.timeValue);
+          const span = Math.max(
+            1,
+            Math.ceil(
+              (Number.isFinite(minutes) ? minutes : incrementMinutes) /
+                Math.max(1, incrementMinutes)
+            )
+          );
+          const startRowIdx = Math.min(currentRowIdx, timelineRowIds.length - 1);
+          const endRowIdx = Math.min(
+            startRowIdx + span - 1,
+            timelineRowIds.length - 1
+          );
+          const startRowId =
+            timelineRowIds[startRowIdx] ??
+            timelineRowIds[timelineRowIds.length - 1];
+          const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
+          currentRowIdx = endRowIdx + 1;
+          rebuiltChips.push({
+            id: chipId,
+            columnIndex,
+            startRowId,
+            endRowId,
+            projectId: column.project.id,
+            displayLabel: label,
+          });
+        });
+      });
+      hasInitializedSubprojects.current = true;
+    } else {
+      hasInitializedSubprojects.current = false;
+    }
+    setProjectChips(rebuiltChips);
+    setSelectedBlockId(null);
+    setSelectedCell(null);
+    setCellMenu(null);
+  }, [displayedWeekDays, incrementMinutes, stagingColumnConfigs, subprojectLayout, timelineRowIds]);
   const gridTemplateColumns = useMemo(
     () => `repeat(${1 + totalColumnCount}, minmax(0, 1fr))`,
     [totalColumnCount]
@@ -1947,6 +2016,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           <ListicalMenu
             incrementMinutes={incrementMinutes}
             onIncrementChange={setIncrementMinutes}
+            onClearAllChips={handleClearAllChips}
           />
         }
       />
@@ -2608,7 +2678,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   );
 }
 
-function ListicalMenu({ incrementMinutes, onIncrementChange }) {
+function ListicalMenu({ incrementMinutes, onIncrementChange, onClearAllChips }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -2643,6 +2713,15 @@ function ListicalMenu({ incrementMinutes, onIncrementChange }) {
               <option value={30}>30 minutes</option>
               <option value={60}>1 hour</option>
             </select>
+          </div>
+          <div className="mt-3">
+            <button
+              type="button"
+              className="w-full rounded border border-[#ef4444] bg-white px-3 py-2 text-xs font-semibold text-[#b91c1c] shadow-sm transition hover:bg-[#fef2f2] hover:shadow-md"
+              onClick={onClearAllChips}
+            >
+              Clear all chips
+            </button>
           </div>
         </div>
       ) : null}
