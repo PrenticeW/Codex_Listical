@@ -13,6 +13,8 @@ export default function useTimelineRows({
   getWeekBorderClass,
   blackDividerStyle,
   formatTotalValue,
+  dailyMinValues,
+  dailyMaxValues,
 }) {
   const rows = useMemo(() => {
     const fixedTimelineStyle = createStyle('#000000', '#ffffff');
@@ -138,6 +140,7 @@ export default function useTimelineRows({
     };
 
     const createBufferRow = (suffix, fillColor, options = {}) => {
+      const values = Array.isArray(options.values) ? options.values : null;
       return {
         id: `buffer-${suffix}`,
         rowLabelStyle: options.rowLabelStyle ?? fixedTimelineStyle,
@@ -163,7 +166,7 @@ export default function useTimelineRows({
           return {
             key: `buffer-${suffix}-${i}`,
             columnKey: `day-${i}`,
-            content: '',
+            content: values ? values[i] ?? '' : '',
             style,
             className: '',
           };
@@ -173,8 +176,16 @@ export default function useTimelineRows({
 
     const rows = [monthsRow, weeksRow, datesRow, weekdaysRow];
     if (showMaxMinRows) {
-      rows.push(createBufferRow(1, '#ead1dc'));
-      rows.push(createBufferRow(2, '#f2e5eb'));
+      rows.push(
+        createBufferRow(1, '#ead1dc', {
+          values: dailyMinValues,
+        })
+      );
+      rows.push(
+        createBufferRow(2, '#f2e5eb', {
+          values: dailyMaxValues,
+        })
+      );
     }
 
     const totalsRow = {
@@ -222,6 +233,8 @@ export default function useTimelineRows({
     getWeekBorderClass,
     blackDividerStyle,
     formatTotalValue,
+    dailyMinValues,
+    dailyMaxValues,
   ]);
 
   return { timelineRows: rows };

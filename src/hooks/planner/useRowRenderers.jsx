@@ -682,6 +682,7 @@ export default function useRowRenderers({
     </tr>
   );
 
+
   const renderInboxHeaderRow = ({
     rowId,
     rowNumber,

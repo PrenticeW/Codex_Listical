@@ -12,6 +12,16 @@ import FilterPanel from '../components/planner/FilterPanel';
 import ProjectListicalMenu from '../components/planner/ProjectListicalMenu';
 import TimelineHeader from '../components/planner/TimelineHeader';
 import isBrowserEnvironment from '../utils/isBrowserEnvironment';
+import { loadTacticsMetrics } from '../lib/tacticsMetricsStorage';
+const DAYS_OF_WEEK = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
 
 const PROTECTED_STATUSES = new Set(['Done', 'Abandoned', 'Blocked', 'On Hold', 'Skipped', 'Special']);
 const TASK_ROW_TYPES = new Set(['projectTask', 'inboxItem']);
@@ -45,6 +55,11 @@ const hasScheduledTimeEntries = (row) => {
 const MIN_COLUMN_WIDTH = 40;
 const COLUMN_RESIZE_HANDLE_WIDTH = 10;
 const createEmptyDayEntries = (count) => Array.from({ length: count }, () => '');
+const createZeroDayEntries = (count) => Array.from({ length: count }, () => '0.00');
+const formatHoursValue = (value) => {
+  if (!Number.isFinite(value)) return '0.00';
+  return value.toFixed(2);
+};
 const isTaskColumnEmpty = (row) => !(row.taskName ?? '').trim();
 const ROW_LABEL_BASE_STYLE = { backgroundColor: '#d9f6e0', color: '#065f46' };
 const applyRowLabelStyle = (style = {}) => ({ ...style, ...ROW_LABEL_BASE_STYLE });
@@ -189,7 +204,41 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   const [selectedSortStatuses, setSelectedSortStatuses] = useState(
     () => new Set(SORTABLE_STATUSES)
   );
+  const [dailyBoundsMap, setDailyBoundsMap] = useState(() => new Map());
   const totalDays = 84;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const readMetrics = () => {
+      const metrics = loadTacticsMetrics();
+      const nextMap = new Map();
+      if (metrics?.dailyBounds) {
+        metrics.dailyBounds.forEach((entry) => {
+          const dayName = entry?.day;
+          if (typeof dayName !== 'string' || !dayName) return;
+          const minHours =
+            typeof entry.dailyMinHours === 'number' && Number.isFinite(entry.dailyMinHours)
+              ? entry.dailyMinHours
+              : 0;
+          const maxHours =
+            typeof entry.dailyMaxHours === 'number' && Number.isFinite(entry.dailyMaxHours)
+              ? entry.dailyMaxHours
+              : 0;
+          nextMap.set(dayName, { minHours, maxHours });
+        });
+      }
+      setDailyBoundsMap(nextMap);
+    };
+    readMetrics();
+    const handleStorage = (event) => {
+      if (event?.key && event.key !== 'tactics-metrics-state') return;
+      readMetrics();
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
 
   const createTaskRow = (base) => ({
     ...base,
@@ -397,7 +446,8 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       !selectedProjectFilters.size &&
       !selectedStatusFilters.size &&
       !selectedRecurringFilters.size &&
-      !selectedEstimateFilters.size
+      !selectedEstimateFilters.size &&
+      showMaxMinRows
     ) {
       return rows;
     }
@@ -521,6 +571,23 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     });
   }, [parseDateInput, startDate, totalDays]);
 
+  const { dailyMinEntries, dailyMaxEntries } = useMemo(() => {
+    const minEntries = createZeroDayEntries(totalDays);
+    const maxEntries = createZeroDayEntries(totalDays);
+    if (!dates.length || !dailyBoundsMap.size) {
+      return { dailyMinEntries: minEntries, dailyMaxEntries: maxEntries };
+    }
+    dates.forEach((date, idx) => {
+      if (!(date instanceof Date)) return;
+      const dayName = DAYS_OF_WEEK[date.getDay()];
+      const bounds = dailyBoundsMap.get(dayName);
+      if (!bounds) return;
+      minEntries[idx] = formatHoursValue(bounds.minHours);
+      maxEntries[idx] = formatHoursValue(bounds.maxHours);
+    });
+    return { dailyMinEntries: minEntries, dailyMaxEntries: maxEntries };
+  }, [dates, dailyBoundsMap, totalDays]);
+
   const foremostWeekRange = useMemo(() => {
     if (!dates.length) return '';
     const start = dates[0];
@@ -638,6 +705,8 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     getWeekBorderClass,
     blackDividerStyle,
     formatTotalValue,
+    dailyMinValues: dailyMinEntries,
+    dailyMaxValues: dailyMaxEntries,
   });
 
   const timelineRowCount = timelineRows.length;

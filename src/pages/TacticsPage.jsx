@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import NavigationBar from '../components/planner/NavigationBar';
 import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '../lib/stagingStorage';
+import { saveTacticsMetrics } from '../lib/tacticsMetricsStorage';
 import { buildSubprojectLayout } from '../SubprojectChips';
 
 const DAYS_OF_WEEK = [
@@ -162,6 +163,14 @@ const formatDuration = (minutes) => {
   const hours = Math.floor(minutes / 60);
   const remaining = Math.abs(minutes % 60);
   return `${hours}:${remaining.toString().padStart(2, '0')}`;
+};
+
+const minutesToHourMinuteDecimal = (minutes) => {
+  if (!Number.isFinite(minutes) || minutes <= 0) return 0;
+  const normalized = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(normalized / 60);
+  const remainingMinutes = normalized % 60;
+  return hours + remainingMinutes / 100;
 };
 
 // Parses a "hours.minutes" style value (e.g. "1.30" meaning 1h 30m) into minutes.
@@ -1480,6 +1489,34 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       }),
     [highlightedProjects, projectColumnTotals, visibleColumnCount]
   );
+  useEffect(() => {
+    const projectWeeklyQuotas = projectSummaries.map((summary) => ({
+      id: summary.id,
+      label: summary.label,
+      weeklyHours: minutesToHourMinuteDecimal(summary.totalMinutes),
+    }));
+    const dailyBounds = displayedWeekDays.map((day, idx) => ({
+      day,
+      dailyMaxHours: minutesToHourMinuteDecimal(availableColumnTotals[idx] ?? 0),
+      dailyMinHours: minutesToHourMinuteDecimal(workingColumnTotals[idx] ?? 0),
+    }));
+    const weeklyTotals = {
+      availableHours: minutesToHourMinuteDecimal(totalAvailableMinutes),
+      workingHours: minutesToHourMinuteDecimal(totalWorkingMinutes),
+    };
+    saveTacticsMetrics({
+      projectWeeklyQuotas,
+      dailyBounds,
+      weeklyTotals,
+    });
+  }, [
+    availableColumnTotals,
+    displayedWeekDays,
+    projectSummaries,
+    totalAvailableMinutes,
+    totalWorkingMinutes,
+    workingColumnTotals,
+  ]);
   const stagingColumnConfigs = useMemo(() => {
     const columns = [{ id: 'extra-empty', type: 'empty' }];
     highlightedProjects.forEach((project) => {
