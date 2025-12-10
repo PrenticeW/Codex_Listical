@@ -112,7 +112,11 @@ const getBlockDuration = (block, rowIndexMap, timelineRowIds, incrementMinutes) 
       totalMinutes += 60;
       continue;
     }
-    if (rowId === 'sleep-end' || rowId.startsWith('trailing-')) {
+    if (
+      rowId === 'sleep-end' ||
+      rowId.startsWith('trailing-') ||
+      rowId.startsWith('sub-')
+    ) {
       totalMinutes += incrementMinutes;
     }
   }
@@ -225,8 +229,19 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const [rowMetrics, setRowMetrics] = useState({});
   const [dragPreview, setDragPreview] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [dayColumnRects, setDayColumnRects] = useState([]);
+  const [columnRects, setColumnRects] = useState([]);
   const [stagingProjects, setStagingProjects] = useState([]);
+  const highlightedProjectsCount = useMemo(
+    () =>
+      stagingProjects.filter((project) => {
+        const colorValue = typeof project?.color === 'string' ? project.color.trim() : '';
+        if (!colorValue) return false;
+        return colorValue.toLowerCase() !== '#f3f4f6';
+      }).length,
+    [stagingProjects]
+  );
+  const stagingColumnCount = highlightedProjectsCount + 1;
+  const totalColumnCount = DAY_COLUMN_COUNT + stagingColumnCount;
   const [selectedSummaryRowId, setSelectedSummaryRowId] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
   const [cellMenu, setCellMenu] = useState(null);
@@ -240,6 +255,29 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const [colorEditorColor, setColorEditorColor] = useState('#c9daf8');
   const colorInputRef = useRef(null);
   const [customProjects, setCustomProjects] = useState([]);
+  const highlightedProjects = useMemo(() => {
+    if (!stagingProjects.length) return [];
+    return stagingProjects
+      .filter((project) => {
+        const colorValue = typeof project?.color === 'string' ? project.color.trim() : '';
+        if (!colorValue) return false;
+        return colorValue.toLowerCase() !== '#f3f4f6';
+      })
+      .map((project) => {
+        const nickname = (project.projectNickname || '').trim();
+        const label = nickname || project.projectName || project.text || 'Project';
+        return {
+          id: project.id,
+          label,
+          color: project.color,
+          planSummary: project.planSummary,
+        };
+      });
+  }, [stagingProjects]);
+  const subprojectLayout = useMemo(
+    () => buildSubprojectLayout(highlightedProjects),
+    [highlightedProjects]
+  );
   const customSequenceRef = useRef(0);
   const getProjectChipsByColumnIndex = useCallback(
     (columnIndex) => projectChips.filter((block) => block.columnIndex === columnIndex),
@@ -366,10 +404,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   }, [setSelectedBlockId]);
   useEffect(() => {
     setProjectChips((prev) => {
-      const columnCount = displayedWeekDays.length;
-      const nextBlocks = prev.filter((entry) => entry.columnIndex < columnCount);
-      const trackedColumns = new Set(nextBlocks.map((entry) => entry.columnIndex));
-      for (let columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
+      const columnLimit = totalColumnCount;
+      const nextBlocks = prev.filter((entry) => entry.columnIndex < columnLimit);
+      const trackedColumns = new Set(
+        nextBlocks
+          .filter((entry) => entry.projectId === 'sleep' && entry.startRowId === 'sleep-start')
+          .map((entry) => entry.columnIndex)
+      );
+      for (let columnIndex = 0; columnIndex < displayedWeekDays.length; columnIndex += 1) {
         if (trackedColumns.has(columnIndex)) continue;
         nextBlocks.push({
           id: `sleep-${columnIndex}`,
@@ -381,7 +423,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       }
       return nextBlocks;
     });
-  }, [displayedWeekDays]);
+  }, [displayedWeekDays, totalColumnCount]);
   useEffect(() => {
     setSelectedBlockId((prev) =>
       prev && projectChips.some((block) => block.id === prev) ? prev : null
@@ -398,8 +440,13 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     hourRows.forEach((hourValue) => rows.push(`hour-${hourValue}`));
     rows.push('sleep-end');
     trailingMinuteRows.forEach((_, idx) => rows.push(`trailing-${idx}`));
+    if (subprojectLayout?.maxRows) {
+      for (let idx = 0; idx < subprojectLayout.maxRows; idx += 1) {
+        rows.push(`sub-${idx}`);
+      }
+    }
     return rows;
-  }, [hourRows, trailingMinuteRows]);
+  }, [hourRows, trailingMinuteRows, subprojectLayout]);
   const rowIndexMap = useMemo(
     () => new Map(timelineRowIds.map((rowId, index) => [rowId, index])),
     [timelineRowIds]
@@ -548,9 +595,9 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         });
       });
       if (!rectMap.size) return;
-      const ordered = Array.from({ length: DAY_COLUMN_COUNT }, (_, idx) => rectMap.get(idx) ?? null);
-      setDayColumnRects(ordered);
-      logDragDebug('Day column rects measured', ordered.map((entry, idx) => ({ idx, ...entry })));
+      const ordered = Array.from({ length: totalColumnCount }, (_, idx) => rectMap.get(idx) ?? null);
+      setColumnRects(ordered);
+      logDragDebug('Column rects measured', ordered.map((entry, idx) => ({ idx, ...entry })));
     };
     const scheduleMeasure = () => {
       if (animationFrame != null) return;
@@ -591,7 +638,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         mutationObserver.disconnect();
       }
     };
-  }, [displayedWeekDays]);
+  }, [displayedWeekDays, totalColumnCount]);
   const updateDragPreview = useCallback(
     (targetColumnIndex, rowId) => {
       logDragDebug('Update preview request', { targetColumnIndex, rowId });
@@ -814,7 +861,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       event.preventDefault();
       logDragDebug('Table drag over', {
         isDragging,
-        dayColumns: dayColumnRects.length,
+        dayColumns: columnRects.length,
         pointer: { x: event.clientX, y: event.clientY },
       });
       if (!draggingSleepChipIdRef.current) return;
@@ -827,16 +874,20 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       }
       const pointerX = event.clientX + (window.scrollX || 0);
       let dayIndex = -1;
-      for (let idx = 0; idx < dayColumnRects.length; idx += 1) {
-        const rect = dayColumnRects[idx];
+      for (let idx = 0; idx < columnRects.length; idx += 1) {
+        const rect = columnRects[idx];
         if (!rect) continue;
         if (pointerX >= rect.left && pointerX <= rect.right) {
           dayIndex = idx;
           break;
         }
       }
-      if (dayIndex < 0 || dayIndex >= displayedWeekDays.length) {
-        logDragDebug('Table drag over: day index out of range', { dayIndex });
+      const isInteractiveColumn =
+        dayIndex >= 0 &&
+        dayIndex < totalColumnCount &&
+        (dayIndex >= DAY_COLUMN_COUNT || Boolean(displayedWeekDays[dayIndex]));
+      if (!isInteractiveColumn) {
+        logDragDebug('Table drag over: column not interactive', { dayIndex });
         return;
       }
       logDragDebug('Table drag mapped to', {
@@ -846,7 +897,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       });
       updateDragPreview(dayIndex, targetRowId);
     },
-    [dayColumnRects, displayedWeekDays, findRowIdByPointerY, updateDragPreview]
+    [columnRects, displayedWeekDays, findRowIdByPointerY, totalColumnCount, updateDragPreview]
   );
   const handleResizeMouseDown = useCallback(
     (event, chipId) => {
@@ -890,8 +941,11 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       event.preventDefault();
       event.stopPropagation();
       if (columnIndex == null || rowId == null) return;
-      const hasDay = Boolean(displayedWeekDays[columnIndex]);
-      if (!hasDay) return;
+      const isInteractiveColumn =
+        columnIndex >= 0 &&
+        columnIndex < totalColumnCount &&
+        (columnIndex >= DAY_COLUMN_COUNT || Boolean(displayedWeekDays[columnIndex]));
+      if (!isInteractiveColumn) return;
       setSelectedCell({ columnIndex, rowId });
       const cellRect = event.currentTarget.getBoundingClientRect();
       const scrollY = typeof window === 'undefined' ? 0 : window.scrollY || 0;
@@ -909,7 +963,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         },
       });
     },
-    [displayedWeekDays]
+    [displayedWeekDays, totalColumnCount]
   );
 
   const cellMenuBlockId = useMemo(() => {
@@ -1080,11 +1134,15 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   }, [cellMenu, closeCellMenu]);
   useEffect(() => {
     if (!cellMenu) return;
-    const hasDay = Boolean(displayedWeekDays[cellMenu.columnIndex]);
-    if (!hasDay) {
+    const isInteractive =
+      cellMenu.columnIndex >= 0 &&
+      cellMenu.columnIndex < totalColumnCount &&
+      (cellMenu.columnIndex >= DAY_COLUMN_COUNT ||
+        Boolean(displayedWeekDays[cellMenu.columnIndex]));
+    if (!isInteractive) {
       closeCellMenu();
     }
-  }, [cellMenu, closeCellMenu, displayedWeekDays]);
+  }, [cellMenu, closeCellMenu, displayedWeekDays, totalColumnCount]);
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.defaultPrevented) return;
@@ -1114,29 +1172,6 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [handleCopySelectedBlock, handlePasteIntoCell]);
-  const highlightedProjects = useMemo(() => {
-    if (!stagingProjects.length) return [];
-    return stagingProjects
-      .filter((project) => {
-        const colorValue = typeof project?.color === 'string' ? project.color.trim() : '';
-        if (!colorValue) return false;
-        return colorValue.toLowerCase() !== '#f3f4f6';
-      })
-      .map((project) => {
-        const nickname = (project.projectNickname || '').trim();
-        const label = nickname || project.projectName || project.text || 'Project';
-        return {
-          id: project.id,
-          label,
-          color: project.color,
-          planSummary: project.planSummary,
-        };
-      });
-  }, [stagingProjects]);
-  const subprojectLayout = useMemo(
-    () => buildSubprojectLayout(highlightedProjects),
-    [highlightedProjects]
-  );
   const dropdownProjects = useMemo(
     () => [...customProjects, ...highlightedProjects],
     [customProjects, highlightedProjects]
@@ -1367,6 +1402,49 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     });
     return columns;
   }, [highlightedProjects]);
+  useEffect(() => {
+    if (!subprojectLayout?.subprojectsByProject) return;
+    setProjectChips((prev) => {
+      const next = [...prev];
+      const expectedIds = new Set();
+      stagingColumnConfigs.forEach((column, idx) => {
+        if (column.type !== 'project') return;
+        const columnIndex = DAY_COLUMN_COUNT + idx;
+        const subprojects = subprojectLayout.subprojectsByProject.get(column.project.id) ?? [];
+        subprojects.forEach((subproject, subIdx) => {
+          const chipId = `subproject-${column.project.id}-${subIdx}`;
+          expectedIds.add(chipId);
+          const label = (subproject.name ?? '').trim() || 'Subproject';
+          const startRowId = `sub-${subIdx}`;
+          const endRowId = startRowId;
+          const existingIndex = next.findIndex((entry) => entry.id === chipId);
+          if (existingIndex >= 0) {
+            const existing = next[existingIndex];
+            next[existingIndex] = {
+              ...existing,
+              columnIndex,
+              startRowId,
+              endRowId,
+              projectId: column.project.id,
+              displayLabel: label,
+            };
+          } else {
+            next.push({
+              id: chipId,
+              columnIndex,
+              startRowId,
+              endRowId,
+              projectId: column.project.id,
+              displayLabel: label,
+            });
+          }
+        });
+      });
+      return next.filter(
+        (entry) => !entry.id.startsWith('subproject-') || expectedIds.has(entry.id)
+      );
+    });
+  }, [stagingColumnConfigs, subprojectLayout, setProjectChips]);
   const gridTemplateColumns = useMemo(() => {
     const totalColumns = 1 + DAY_COLUMN_COUNT + stagingColumnConfigs.length;
     return `repeat(${totalColumns}, minmax(0, 1fr))`;
@@ -1547,7 +1625,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     );
     const columnIndex = dragPreview.targetColumnIndex ?? -1;
     if (columnIndex < 0) return null;
-    const columnRect = dayColumnRects[columnIndex];
+    const columnRect = columnRects[columnIndex];
     if (!columnRect) return null;
     const baseRowIdx = rowIndexMap.get(dragPreview.startRowId);
     if (baseRowIdx == null) return null;
@@ -1574,7 +1652,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         </div>
       </div>
     );
-  }, [dayColumnRects, dragPreview, getBlockHeight, rowIndexMap, rowMetrics, tableRect]);
+  }, [columnRects, dragPreview, getBlockHeight, rowIndexMap, rowMetrics, tableRect]);
   const renderCellProjectMenu = useCallback(() => {
     if (!cellMenu) return null;
     const { position } = cellMenu;
@@ -1833,22 +1911,29 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     ))}
                   </select>
                 </td>
-                {Array.from({ length: DAY_COLUMN_COUNT }, (_, index) => {
-                  const dayLabel = displayedWeekDays[index] ?? '';
-                  const hasDay = Boolean(dayLabel);
-                  const columnBlocks = hasDay ? getProjectChipsByColumnIndex(index) : [];
+                {Array.from({ length: totalColumnCount }, (_, index) => {
+                  const isDayColumn = index < DAY_COLUMN_COUNT;
+                  const dayLabel = isDayColumn ? displayedWeekDays[index] ?? '' : '';
+                  const hasDay = isDayColumn && Boolean(dayLabel);
+                  const stagingIdx = index - DAY_COLUMN_COUNT;
+                  const stagingConfig = !isDayColumn ? stagingColumnConfigs[stagingIdx] : null;
+                  const isProjectColumn = !isDayColumn && stagingConfig?.type === 'project';
+                  const isInteractiveColumn = hasDay || isProjectColumn;
                   const rowId = 'sleep-start';
+                  const columnBlocks = isInteractiveColumn
+                    ? getProjectChipsByColumnIndex(index)
+                    : [];
                   const activeBlock =
-                    highlightedBlockId != null
+                    isInteractiveColumn && highlightedBlockId != null
                       ? columnBlocks.find((block) => block.id === highlightedBlockId)
                       : null;
-                  const isCovered = activeBlock
-                    ? isRowWithinBlock(rowId, activeBlock)
-                    : false;
-                  const labels = columnBlocks
-                    .filter((block) => block.startRowId === rowId)
-                    .map((block) => renderProjectChip(block.id, rowId));
-                  const cellSelected = isCellSelected(index, rowId);
+                  const isCovered = activeBlock ? isRowWithinBlock(rowId, activeBlock) : false;
+                  const labels = isInteractiveColumn
+                    ? columnBlocks
+                        .filter((block) => block.startRowId === rowId)
+                        .map((block) => renderProjectChip(block.id, rowId))
+                    : [];
+                  const cellSelected = isInteractiveColumn && isCellSelected(index, rowId);
                   const cellStyle = {};
                   if (isCovered) {
                     cellStyle.backgroundColor = '#d9d9d9';
@@ -1867,18 +1952,21 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                       data-row-id={rowId}
                       data-day-column={index}
                       data-day={hasDay ? dayLabel : undefined}
-                      onDragOver={hasDay ? handleSleepDragOver : undefined}
-                      onDrop={hasDay ? handleSleepDrop : undefined}
-                      onClick={hasDay ? () => toggleCellSelection(index, rowId) : undefined}
-                      onContextMenu={
-                        hasDay ? (event) => handleCellContextMenu(event, index, rowId) : undefined
+                      onDragOver={isInteractiveColumn ? handleSleepDragOver : undefined}
+                      onDrop={isInteractiveColumn ? handleSleepDrop : undefined}
+                      onClick={
+                        isInteractiveColumn ? () => toggleCellSelection(index, rowId) : undefined
                       }
-                  >
-                    {labels}
-                  </td>
-                );
-              })}
-                {renderExtraColumnCells('sleep-start')}
+                      onContextMenu={
+                        isInteractiveColumn
+                          ? (event) => handleCellContextMenu(event, index, rowId)
+                          : undefined
+                      }
+                    >
+                      {labels}
+                    </td>
+                  );
+                })}
               </tr>
               {hourRows.map((hourValue) => (
                 <tr key={`hour-row-${hourValue}`} className="grid" style={{ gridTemplateColumns }}>
@@ -1888,22 +1976,29 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                   >
                     {formatHour12(hourValue)}
                   </td>
-                  {Array.from({ length: DAY_COLUMN_COUNT }, (_, index) => {
-                    const dayLabel = displayedWeekDays[index] ?? '';
-                    const hasDay = Boolean(dayLabel);
+                  {Array.from({ length: totalColumnCount }, (_, index) => {
+                    const isDayColumn = index < DAY_COLUMN_COUNT;
+                    const dayLabel = isDayColumn ? displayedWeekDays[index] ?? '' : '';
+                    const hasDay = isDayColumn && Boolean(dayLabel);
+                    const stagingIdx = index - DAY_COLUMN_COUNT;
+                    const stagingConfig = !isDayColumn ? stagingColumnConfigs[stagingIdx] : null;
+                    const isProjectColumn = !isDayColumn && stagingConfig?.type === 'project';
+                    const isInteractiveColumn = hasDay || isProjectColumn;
                     const rowId = `hour-${hourValue}`;
-                    const columnBlocks = hasDay ? getProjectChipsByColumnIndex(index) : [];
+                    const columnBlocks = isInteractiveColumn
+                      ? getProjectChipsByColumnIndex(index)
+                      : [];
                     const activeBlock =
-                      highlightedBlockId != null
+                      isInteractiveColumn && highlightedBlockId != null
                         ? columnBlocks.find((block) => block.id === highlightedBlockId)
                         : null;
-                    const isCovered = activeBlock
-                      ? isRowWithinBlock(rowId, activeBlock)
-                      : false;
-                    const labels = columnBlocks
-                      .filter((block) => block.startRowId === rowId)
-                      .map((block) => renderProjectChip(block.id, rowId));
-                    const cellSelected = isCellSelected(index, rowId);
+                    const isCovered = activeBlock ? isRowWithinBlock(rowId, activeBlock) : false;
+                    const labels = isInteractiveColumn
+                      ? columnBlocks
+                          .filter((block) => block.startRowId === rowId)
+                          .map((block) => renderProjectChip(block.id, rowId))
+                      : [];
+                    const cellSelected = isInteractiveColumn && isCellSelected(index, rowId);
                     const cellStyle = {};
                     if (isCovered) {
                       cellStyle.backgroundColor = '#d9d9d9';
@@ -1922,18 +2017,21 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                         data-row-id={rowId}
                         data-day-column={index}
                         data-day={hasDay ? dayLabel : undefined}
-                        onDragOver={hasDay ? handleSleepDragOver : undefined}
-                        onDrop={hasDay ? handleSleepDrop : undefined}
-                        onClick={hasDay ? () => toggleCellSelection(index, rowId) : undefined}
+                        onDragOver={isInteractiveColumn ? handleSleepDragOver : undefined}
+                        onDrop={isInteractiveColumn ? handleSleepDrop : undefined}
+                        onClick={
+                          isInteractiveColumn ? () => toggleCellSelection(index, rowId) : undefined
+                        }
                         onContextMenu={
-                          hasDay ? (event) => handleCellContextMenu(event, index, rowId) : undefined
+                          isInteractiveColumn
+                            ? (event) => handleCellContextMenu(event, index, rowId)
+                            : undefined
                         }
                       >
                         {labels}
                       </td>
                     );
                   })}
-                  {renderExtraColumnCells(`hour-${hourValue}`)}
                 </tr>
               ))}
               <tr className="grid" style={{ gridTemplateColumns }}>
@@ -1955,22 +2053,29 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                     ))}
                   </select>
                 </td>
-                {Array.from({ length: DAY_COLUMN_COUNT }, (_, index) => {
-                  const dayLabel = displayedWeekDays[index] ?? '';
-                  const hasDay = Boolean(dayLabel);
+                {Array.from({ length: totalColumnCount }, (_, index) => {
+                  const isDayColumn = index < DAY_COLUMN_COUNT;
+                  const dayLabel = isDayColumn ? displayedWeekDays[index] ?? '' : '';
+                  const hasDay = isDayColumn && Boolean(dayLabel);
+                  const stagingIdx = index - DAY_COLUMN_COUNT;
+                  const stagingConfig = !isDayColumn ? stagingColumnConfigs[stagingIdx] : null;
+                  const isProjectColumn = !isDayColumn && stagingConfig?.type === 'project';
+                  const isInteractiveColumn = hasDay || isProjectColumn;
                   const rowId = 'sleep-end';
-                  const columnBlocks = hasDay ? getProjectChipsByColumnIndex(index) : [];
+                  const columnBlocks = isInteractiveColumn
+                    ? getProjectChipsByColumnIndex(index)
+                    : [];
                   const activeBlock =
-                    highlightedBlockId != null
+                    isInteractiveColumn && highlightedBlockId != null
                       ? columnBlocks.find((block) => block.id === highlightedBlockId)
                       : null;
-                  const isCovered = activeBlock
-                    ? isRowWithinBlock(rowId, activeBlock)
-                    : false;
-                  const labels = columnBlocks
-                    .filter((block) => block.startRowId === rowId)
-                    .map((block) => renderProjectChip(block.id, rowId));
-                  const cellSelected = isCellSelected(index, rowId);
+                  const isCovered = activeBlock ? isRowWithinBlock(rowId, activeBlock) : false;
+                  const labels = isInteractiveColumn
+                    ? columnBlocks
+                        .filter((block) => block.startRowId === rowId)
+                        .map((block) => renderProjectChip(block.id, rowId))
+                    : [];
+                  const cellSelected = isInteractiveColumn && isCellSelected(index, rowId);
                   const cellStyle = {};
                   if (isCovered) {
                     cellStyle.backgroundColor = '#d9d9d9';
@@ -1989,18 +2094,21 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                       data-row-id={rowId}
                       data-day-column={index}
                       data-day={hasDay ? dayLabel : undefined}
-                      onDragOver={hasDay ? handleSleepDragOver : undefined}
-                      onDrop={hasDay ? handleSleepDrop : undefined}
-                      onClick={hasDay ? () => toggleCellSelection(index, rowId) : undefined}
+                      onDragOver={isInteractiveColumn ? handleSleepDragOver : undefined}
+                      onDrop={isInteractiveColumn ? handleSleepDrop : undefined}
+                      onClick={
+                        isInteractiveColumn ? () => toggleCellSelection(index, rowId) : undefined
+                      }
                       onContextMenu={
-                        hasDay ? (event) => handleCellContextMenu(event, index, rowId) : undefined
+                        isInteractiveColumn
+                          ? (event) => handleCellContextMenu(event, index, rowId)
+                          : undefined
                       }
                     >
                       {labels}
                     </td>
                   );
                 })}
-                {renderExtraColumnCells('sleep-end')}
               </tr>
               {trailingMinuteRows.map((minutesValue, rowIdx) => (
                 <tr key={`trailing-row-${rowIdx}`} className="grid" style={{ gridTemplateColumns }}>
@@ -2013,22 +2121,29 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                       (minutesValue % 60).toString().padStart(2, '0')
                     )}
                   </td>
-                  {Array.from({ length: DAY_COLUMN_COUNT }, (_, index) => {
-                    const dayLabel = displayedWeekDays[index] ?? '';
-                    const hasDay = Boolean(dayLabel);
+                  {Array.from({ length: totalColumnCount }, (_, index) => {
+                    const isDayColumn = index < DAY_COLUMN_COUNT;
+                    const dayLabel = isDayColumn ? displayedWeekDays[index] ?? '' : '';
+                    const hasDay = isDayColumn && Boolean(dayLabel);
+                    const stagingIdx = index - DAY_COLUMN_COUNT;
+                    const stagingConfig = !isDayColumn ? stagingColumnConfigs[stagingIdx] : null;
+                    const isProjectColumn = !isDayColumn && stagingConfig?.type === 'project';
+                    const isInteractiveColumn = hasDay || isProjectColumn;
                     const rowId = `trailing-${rowIdx}`;
-                    const columnBlocks = hasDay ? getProjectChipsByColumnIndex(index) : [];
+                    const columnBlocks = isInteractiveColumn
+                      ? getProjectChipsByColumnIndex(index)
+                      : [];
                     const activeBlock =
-                      highlightedBlockId != null
+                      isInteractiveColumn && highlightedBlockId != null
                         ? columnBlocks.find((block) => block.id === highlightedBlockId)
                         : null;
-                    const isCovered = activeBlock
-                      ? isRowWithinBlock(rowId, activeBlock)
-                      : false;
-                    const labels = columnBlocks
-                      .filter((block) => block.startRowId === rowId)
-                      .map((block) => renderProjectChip(block.id, rowId));
-                    const cellSelected = isCellSelected(index, rowId);
+                    const isCovered = activeBlock ? isRowWithinBlock(rowId, activeBlock) : false;
+                    const labels = isInteractiveColumn
+                      ? columnBlocks
+                          .filter((block) => block.startRowId === rowId)
+                          .map((block) => renderProjectChip(block.id, rowId))
+                      : [];
+                    const cellSelected = isInteractiveColumn && isCellSelected(index, rowId);
                     const cellStyle = {};
                     if (isCovered) {
                       cellStyle.backgroundColor = '#d9d9d9';
@@ -2047,26 +2162,39 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
                         data-row-id={rowId}
                         data-day-column={index}
                         data-day={hasDay ? dayLabel : undefined}
-                        onDragOver={hasDay ? handleSleepDragOver : undefined}
-                        onDrop={hasDay ? handleSleepDrop : undefined}
-                        onClick={hasDay ? () => toggleCellSelection(index, rowId) : undefined}
+                        onDragOver={isInteractiveColumn ? handleSleepDragOver : undefined}
+                        onDrop={isInteractiveColumn ? handleSleepDrop : undefined}
+                        onClick={
+                          isInteractiveColumn ? () => toggleCellSelection(index, rowId) : undefined
+                        }
                         onContextMenu={
-                          hasDay ? (event) => handleCellContextMenu(event, index, rowId) : undefined
+                          isInteractiveColumn
+                            ? (event) => handleCellContextMenu(event, index, rowId)
+                            : undefined
                         }
                       >
                         {labels}
                       </td>
                     );
                   })}
-                  {renderExtraColumnCells(`trailing-${rowIdx}`)}
                 </tr>
               ))}
               <SubprojectChipsRows
                 gridTemplateColumns={gridTemplateColumns}
                 dayColumnCount={DAY_COLUMN_COUNT}
                 stagingColumnConfigs={stagingColumnConfigs}
-                projectMetadata={projectMetadata}
                 subprojectLayout={subprojectLayout}
+                projectMetadata={projectMetadata}
+                displayedWeekDays={displayedWeekDays}
+                getProjectChipsByColumnIndex={getProjectChipsByColumnIndex}
+                highlightedBlockId={highlightedBlockId}
+                isRowWithinBlock={isRowWithinBlock}
+                renderProjectChip={renderProjectChip}
+                isCellSelected={isCellSelected}
+                handleSleepDragOver={handleSleepDragOver}
+                handleSleepDrop={handleSleepDrop}
+                toggleCellSelection={toggleCellSelection}
+                handleCellContextMenu={handleCellContextMenu}
               />
               <tr>
                 <td

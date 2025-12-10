@@ -16,16 +16,6 @@ export const buildSubprojectLayout = (highlightedProjects) => {
   return { subprojectsByProject, maxRows };
 };
 
-const renderDayCells = (dayColumnCount, prefix) =>
-  Array.from({ length: dayColumnCount }, (_, idx) => (
-    <td
-      key={`${prefix}-day-${idx}`}
-      className="border border-[#e5e7eb] px-3 py-2"
-      style={{ minHeight: '32px' }}
-      data-day-column={idx}
-    />
-  ));
-
 const renderRowLabelCell = (label, rowId) => (
   <td
     key={`subproject-label-${rowId}`}
@@ -36,139 +26,92 @@ const renderRowLabelCell = (label, rowId) => (
   </td>
 );
 
-const renderSubprojectCell = (column, rowIdx, subprojectsByProject, projectMetadata) => {
-  if (column.type !== 'project') {
-    return (
-      <td
-        key={`subproject-empty-${column.id}-${rowIdx}`}
-        className="border border-[#e5e7eb] px-3 py-2"
-      />
-    );
-  }
-  const subprojects = subprojectsByProject.get(column.project.id) ?? [];
-  const subproject = subprojects[rowIdx];
-  if (!subproject) {
-    return (
-      <td
-        key={`subproject-empty-${column.id}-${rowIdx}`}
-        className="border border-[#e5e7eb] px-3 py-2"
-      />
-    );
-  }
-  const metadata = projectMetadata.get(column.project.id);
-  const backgroundColor = metadata?.color ?? column.project.color ?? '#d9d9d9';
-  const textColor = metadata?.textColor ?? '#000';
-  const label = (subproject.name ?? '').trim() || 'Subproject';
-  return (
-    <td
-      key={`subproject-${column.id}-${rowIdx}`}
-      className="border border-[#e5e7eb] p-1"
-      style={{ minHeight: '40px' }}
-    >
-      <div
-        className="relative flex h-full w-full items-center justify-center"
-      >
-        <div
-          className="relative flex h-full w-full cursor-default select-none items-center justify-center rounded border border-transparent px-2 py-1 text-center text-[11px] font-semibold shadow-sm"
-          style={{
-            backgroundColor,
-            color: textColor,
-          }}
-        >
-          {label}
-        </div>
-      </div>
-    </td>
-  );
-};
-
 export default function SubprojectChipsRows({
   gridTemplateColumns,
   dayColumnCount,
   stagingColumnConfigs,
   projectMetadata,
   subprojectLayout,
+  displayedWeekDays,
+  getProjectChipsByColumnIndex,
+  highlightedBlockId,
+  isRowWithinBlock,
+  renderProjectChip,
+  isCellSelected,
+  handleSleepDragOver,
+  handleSleepDrop,
+  toggleCellSelection,
+  handleCellContextMenu,
 }) {
   if (!gridTemplateColumns || !subprojectLayout?.maxRows) return null;
   const { subprojectsByProject, maxRows } = subprojectLayout;
-
-  const allowDropOnRow = (event) => {
-    event.preventDefault();
-    const rowId = event.currentTarget?.dataset?.rowId;
-    const column = event.target?.dataset?.dayColumn;
-    console.log('[subproject-dnd] drag over', {
-      rowId,
-      column,
-      targetTag: event.target?.tagName,
-      targetRowId: event.target?.dataset?.rowId,
-    });
-  };
-
-  const handleDragEnterRow = (event) => {
-    const rowId = event.currentTarget?.dataset?.rowId;
-    const column = event.target?.dataset?.dayColumn;
-    console.log('[subproject-dnd] drag enter', {
-      rowId,
-      column,
-      targetTag: event.target?.tagName,
-      targetRowId: event.target?.dataset?.rowId,
-    });
-  };
-
-  const handleDropOnRow = (event) => {
-    event.preventDefault();
-    const rowId = event.currentTarget?.dataset?.rowId;
-    const column = event.target?.dataset?.dayColumn;
-    console.log('[subproject-dnd] drop', {
-      rowId,
-      column,
-      dataTypes: event.dataTransfer?.types,
-    });
-  };
-
-  const renderBlankRow = (key) => (
-    <tr
-      key={`subproject-gap-${key}`}
-      className="grid"
-      style={{ gridTemplateColumns }}
-      onDragOver={allowDropOnRow}
-      onDragEnter={handleDragEnterRow}
-      onDrop={handleDropOnRow}
-      data-row-id={`subproject-gap-${key}`}
-    >
-      {renderRowLabelCell('', `gap-${key}`)}
-      {renderDayCells(dayColumnCount, `gap-${key}`)}
-      {stagingColumnConfigs.map((column) => (
-        <td
-          key={`subproject-gap-${key}-${column.id}`}
-          className="border border-[#e5e7eb] px-3 py-2"
-        />
-      ))}
-    </tr>
-  );
+  const totalColumnCount = dayColumnCount + stagingColumnConfigs.length;
 
   const chipRows = Array.from({ length: maxRows }, (_, rowIdx) => (
     <tr
       key={`subproject-row-${rowIdx}`}
       className="grid"
       style={{ gridTemplateColumns }}
-      onDragOver={allowDropOnRow}
-      onDragEnter={handleDragEnterRow}
-      onDrop={handleDropOnRow}
       data-row-id={`subproject-row-${rowIdx}`}
     >
       {renderRowLabelCell('', `sub-${rowIdx}`)}
-      {renderDayCells(dayColumnCount, `sub-${rowIdx}`)}
-      {stagingColumnConfigs.map((column) =>
-        renderSubprojectCell(column, rowIdx, subprojectsByProject, projectMetadata)
-      )}
+      {Array.from({ length: totalColumnCount }, (_, index) => {
+        const isDayColumn = index < dayColumnCount;
+        const dayLabel = isDayColumn ? displayedWeekDays[index] ?? '' : '';
+        const hasDay = isDayColumn && Boolean(dayLabel);
+        const stagingIdx = index - dayColumnCount;
+        const stagingConfig = !isDayColumn ? stagingColumnConfigs[stagingIdx] : null;
+        const isProjectColumn = !isDayColumn && stagingConfig?.type === 'project';
+        const isInteractiveColumn = hasDay || isProjectColumn;
+        const rowId = `sub-${rowIdx}`;
+        const columnBlocks = isInteractiveColumn
+          ? getProjectChipsByColumnIndex(index)
+          : [];
+        const activeBlock =
+          isInteractiveColumn && highlightedBlockId != null
+            ? columnBlocks.find((block) => block.id === highlightedBlockId)
+            : null;
+        const isCovered = activeBlock ? isRowWithinBlock(rowId, activeBlock) : false;
+        const labels = isInteractiveColumn
+          ? columnBlocks
+              .filter((block) => block.startRowId === rowId)
+              .map((block) => renderProjectChip(block.id, rowId))
+          : [];
+        const cellSelected = isInteractiveColumn && isCellSelected(index, rowId);
+        const cellStyle = {};
+        if (isCovered) {
+          cellStyle.backgroundColor = '#d9d9d9';
+        }
+        if (cellSelected) {
+          cellStyle.outlineColor = '#000';
+          cellStyle.outlineOffset = 0;
+        }
+        return (
+          <td
+            key={`sub-row-${rowIdx}-${index}`}
+            className={`relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible ${
+              cellSelected ? 'outline outline-[2px]' : ''
+            }`}
+            style={Object.keys(cellStyle).length ? cellStyle : undefined}
+            data-row-id={rowId}
+            data-day-column={index}
+            data-day={hasDay ? dayLabel : undefined}
+            onDragOver={isInteractiveColumn ? handleSleepDragOver : undefined}
+            onDrop={isInteractiveColumn ? handleSleepDrop : undefined}
+            onClick={isInteractiveColumn ? () => toggleCellSelection(index, rowId) : undefined}
+            onContextMenu={
+              isInteractiveColumn ? (event) => handleCellContextMenu(event, index, rowId) : undefined
+            }
+          >
+            {labels}
+          </td>
+        );
+      })}
     </tr>
   ));
 
   return (
     <>
-      {renderBlankRow('pre-1')}
-      {renderBlankRow('pre-2')}
       {chipRows}
     </>
   );
