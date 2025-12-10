@@ -128,6 +128,24 @@ const formatDuration = (minutes) => {
   return `${hours}:${remaining.toString().padStart(2, '0')}`;
 };
 
+// Parses a "hours.minutes" style value (e.g. "1.30" meaning 1h 30m) into minutes.
+const parseTimeValueToMinutes = (value) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.round(value));
+  }
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/^\d+(\.\d+)?$/.test(trimmed)) {
+    const [hoursPart, minutesPart = '0'] = trimmed.split('.');
+    const hours = parseInt(hoursPart, 10);
+    const minutes = parseInt(minutesPart.padEnd(2, '0').slice(0, 2), 10);
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+    return Math.max(0, hours * 60 + minutes);
+  }
+  return null;
+};
+
 export default function TacticsPage({ currentPath = '/tactics', onNavigate = () => {} }) {
   const initialTacticsSettings = useMemo(() => loadTacticsSettings(), []);
   const [startDay, setStartDay] = useState(DAYS_OF_WEEK[0]);
@@ -1403,16 +1421,29 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         if (column.type !== 'project') return;
         const columnIndex = DAY_COLUMN_COUNT + idx;
         const subprojects = subprojectLayout.subprojectsByProject.get(column.project.id) ?? [];
+        let currentRowIdx = baseOffset;
         subprojects.forEach((subproject, subIdx) => {
           const chipId = `subproject-${column.project.id}-${subIdx}`;
           expectedIds.add(chipId);
           const label = (subproject.name ?? '').trim() || 'Subproject';
-          const targetRowIdx = Math.min(
-            baseOffset + subIdx,
+          const minutes = parseTimeValueToMinutes(subproject.timeValue);
+          const span = Math.max(
+            1,
+            Math.ceil(
+              (Number.isFinite(minutes) ? minutes : incrementMinutes) /
+                Math.max(1, incrementMinutes)
+            )
+          );
+          const startRowIdx = Math.min(currentRowIdx, timelineRowIds.length - 1);
+          const endRowIdx = Math.min(
+            startRowIdx + span - 1,
             timelineRowIds.length - 1
           );
-          const startRowId = timelineRowIds[targetRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
-          const endRowId = startRowId;
+          const startRowId =
+            timelineRowIds[startRowIdx] ??
+            timelineRowIds[timelineRowIds.length - 1];
+          const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
+          currentRowIdx = endRowIdx + 1;
           const existingIndex = next.findIndex((entry) => entry.id === chipId);
           if (existingIndex >= 0) {
             const existing = next[existingIndex];
@@ -1440,7 +1471,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
         (entry) => !entry.id.startsWith('subproject-') || expectedIds.has(entry.id)
       );
     });
-  }, [stagingColumnConfigs, subprojectLayout, timelineRowIds, setProjectChips]);
+  }, [stagingColumnConfigs, subprojectLayout, timelineRowIds, incrementMinutes, setProjectChips]);
   const gridTemplateColumns = useMemo(() => {
     const totalColumns = 1 + DAY_COLUMN_COUNT + stagingColumnConfigs.length;
     return `repeat(${totalColumns}, minmax(0, 1fr))`;
@@ -1533,6 +1564,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
               backgroundColor,
               color: textColor,
               fontWeight,
+              border: '1px solid #ffffff',
               ...(isActive ? { outlineColor: '#000', outlineOffset: 0 } : null),
             }}
             onClick={(event) => {
