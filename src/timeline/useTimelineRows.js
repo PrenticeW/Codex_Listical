@@ -139,6 +139,8 @@ export default function useTimelineRows({
       })),
     };
 
+    const applyBufferCellStyle = (style, modifier) => (modifier ? modifier(style) : style);
+
     const createBufferRow = (suffix, fillColor, options = {}) => {
       const values = Array.isArray(options.values) ? options.values : null;
       return {
@@ -151,39 +153,48 @@ export default function useTimelineRows({
         fixedCellClassName: options.fixedCellClassName ?? 'border-0 text-white',
         rowLabelContent: String(rowCounter++),
         cells: dates.map((_, i) => {
-          const style = applyWeekBorderStyles(i, {
-            backgroundColor: fillColor,
-            color: '#000000',
-          });
-          if (style.borderLeft === '1px solid #ced3d0') {
-            style.borderLeft = '1px solid transparent';
-          }
-          if (style.borderRight === '1px solid #ced3d0') {
-            style.borderRight = '1px solid transparent';
-          }
-          style.borderTop = '1px solid transparent';
-          style.borderBottom = '1px solid transparent';
-          return {
-            key: `buffer-${suffix}-${i}`,
-            columnKey: `day-${i}`,
-            content: values ? values[i] ?? '' : '',
-            style,
-            className: '',
-          };
-        }),
-      };
+        const baseStyle = applyWeekBorderStyles(i, {
+          backgroundColor: fillColor,
+          color: '#000000',
+        });
+        if (baseStyle.borderLeft === '1px solid #ced3d0') {
+          baseStyle.borderLeft = '1px solid transparent';
+        }
+        if (baseStyle.borderRight === '1px solid #ced3d0') {
+          baseStyle.borderRight = '1px solid transparent';
+        }
+        baseStyle.borderTop = '1px solid transparent';
+        baseStyle.borderBottom = '1px solid transparent';
+        const style = applyBufferCellStyle(baseStyle, options.cellStyleModifier);
+        return {
+          key: `buffer-${suffix}-${i}`,
+          columnKey: `day-${i}`,
+          content: values ? values[i] ?? '' : '',
+          style,
+          className: options.cellClassName ?? '',
+        };
+      }),
     };
+  };
 
+    const centeredItalicModifier = (style) => ({
+      ...style,
+      textAlign: 'center',
+      fontStyle: 'italic',
+      fontSize: '10px',
+    });
     const rows = [monthsRow, weeksRow, datesRow, weekdaysRow];
     if (showMaxMinRows) {
       rows.push(
         createBufferRow(1, '#ead1dc', {
           values: dailyMinValues,
+          cellStyleModifier: centeredItalicModifier,
         })
       );
       rows.push(
         createBufferRow(2, '#f2e5eb', {
           values: dailyMaxValues,
+          cellStyleModifier: centeredItalicModifier,
         })
       );
     }
