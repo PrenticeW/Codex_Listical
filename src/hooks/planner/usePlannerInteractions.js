@@ -326,27 +326,11 @@ export default function usePlannerInteractions({
     [blockClickRef, handleCellActivate, shouldPreserveSelection, table]
   );
 
-  const getCellHighlightStyle = useCallback(
-    (rowId, cellId) => {
-      const style = {};
-      if (isCellActive(rowId, cellId)) {
-        style.backgroundColor = '#fceef3';
-        style.outline = '2px solid #3b82f6';
-        style.outlineOffset = '-2px';
-        style.position = 'relative';
-        style.zIndex = 2;
-      }
-      if (copiedCellHighlight && copiedCellHighlight.rowId === rowId && copiedCellHighlight.cellId === cellId) {
-        style.boxShadow = '0 0 0 2px rgba(59,130,246,0.9)';
-      }
-      if (isCellInSelection(rowId, cellId)) {
-        const selectionShadow = '0 0 0 2px rgba(37,99,235,0.45)';
-        style.boxShadow = style.boxShadow ? `${style.boxShadow}, ${selectionShadow}` : selectionShadow;
-      }
-      return style;
-    },
-    [copiedCellHighlight, isCellActive, isCellInSelection]
-  );
+  // Optimized: Return empty object to prevent re-renders
+  // Cell highlighting is handled via CSS classes in withCellSelectionClass
+  const getCellHighlightStyle = useCallback(() => {
+    return {};
+  }, []);
 
   return {
     tableContainerRef,

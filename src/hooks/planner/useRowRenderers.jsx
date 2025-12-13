@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 
 export default function useRowRenderers({
   totalDays,
@@ -33,41 +33,58 @@ export default function useRowRenderers({
   ARCHIVE_ROW_STYLE,
   officialProjects = [],
 }) {
-  const EstimateOptions = () => (
-    <>
-      <option>-</option>
-      <option key="custom">Custom</option>
-      <option key="m-1" className="estimate-highlight">
-        1 Minute
+  // Memoize estimate options to avoid recreating on every render
+  const estimateOptionElements = useMemo(() => [
+    <option key="-">-</option>,
+    <option key="custom">Custom</option>,
+    <option key="m-1" className="estimate-highlight">
+      1 Minute
+    </option>,
+    ...Array.from({ length: 11 }, (_, i) => (i + 1) * 5).map((m) => (
+      <option key={`m-${m}`} className={m === 5 ? 'estimate-highlight' : undefined}>
+        {m} Minutes
       </option>
-      {Array.from({ length: 11 }, (_, i) => (i + 1) * 5).map((m) => (
-        <option key={`m-${m}`} className={m === 5 ? 'estimate-highlight' : undefined}>
-          {m} Minutes
-        </option>
-      ))}
-      {[1, 2, 3, 4, 5, 6, 7, 8].map((h) => (
-        <option key={`h-${h}`}>{h} Hour{h > 1 ? 's' : ''}</option>
-      ))}
-    </>
-  );
+    )),
+    ...[1, 2, 3, 4, 5, 6, 7, 8].map((h) => (
+      <option key={`h-${h}`}>{h} Hour{h > 1 ? 's' : ''}</option>
+    ))
+  ], []);
 
-  const StatusOptions = () => (
-    <>
-      <option>-</option>
-      {statusNames.map((status) => (
-        <option key={status}>{status}</option>
-      ))}
-    </>
-  );
+  const EstimateOptions = () => <>{estimateOptionElements}</>;
 
-  const ProjectOptions = () => (
-    <>
-      <option>-</option>
-      {projectNames.map((name) => (
-        <option key={name}>{name.toUpperCase()}</option>
-      ))}
-    </>
-  );
+  // Memoize status options
+  const statusOptionElements = useMemo(() => [
+    <option key="-">-</option>,
+    ...statusNames.map((status) => (
+      <option key={status}>{status}</option>
+    ))
+  ], [statusNames]);
+
+  const StatusOptions = () => <>{statusOptionElements}</>;
+
+  // Memoize project options
+  const projectOptionElements = useMemo(() => [
+    <option key="-">-</option>,
+    ...projectNames.map((name) => (
+      <option key={name}>{name.toUpperCase()}</option>
+    ))
+  ], [projectNames]);
+
+  const ProjectOptions = () => <>{projectOptionElements}</>;
+
+  // Memoize subproject lookup to avoid expensive .find() on every render
+  const subprojectsByProject = useMemo(() => {
+    const map = new Map();
+    officialProjects.forEach((p) => {
+      const projectName = p.projectNickname || p.projectName || p.text;
+      const key = (projectName ?? '').trim().toLowerCase();
+      const subprojects = Array.isArray(p.planSummary?.subprojects)
+        ? p.planSummary.subprojects.filter((entry) => Boolean(entry?.name))
+        : [];
+      map.set(key, subprojects);
+    });
+    return map;
+  }, [officialProjects]);
 
   const SubprojectOptions = ({ projectSelection }) => {
     // If no project is selected, show dash only
@@ -75,24 +92,13 @@ export default function useRowRenderers({
       return <option>-</option>;
     }
 
-    // Find the project in officialProjects based on projectSelection
-    // Match the same logic used in projectNames: nickname || projectName || text
     const normalizeProjectKey = (name) => (name ?? '').trim().toLowerCase();
     const selectedProjectKey = normalizeProjectKey(projectSelection);
+    const subprojects = subprojectsByProject.get(selectedProjectKey) || [];
 
-    const project = officialProjects.find((p) => {
-      const projectName = p.projectNickname || p.projectName || p.text;
-      return normalizeProjectKey(projectName) === selectedProjectKey;
-    });
-
-    if (!project || !project.planSummary?.subprojects) {
+    if (subprojects.length === 0) {
       return <option>-</option>;
     }
-
-    // Get subprojects from the project's planSummary
-    const subprojects = Array.isArray(project.planSummary.subprojects)
-      ? project.planSummary.subprojects.filter((entry) => Boolean(entry?.name))
-      : [];
 
     return (
       <>
@@ -529,10 +535,11 @@ export default function useRowRenderers({
           <input
             type="text"
             className={sharedInputStyle}
-            value={row.taskName ?? ''}
+            defaultValue={row.taskName ?? ''}
+            key={`${rowId}-task`}
             onMouseDown={(event) => handleCellMouseDown(event, rowId, 'task')}
             onFocus={() => handleCellActivate(rowId, 'task')}
-            onChange={(event) => updateTaskName(event.target.value)}
+            onBlur={(event) => updateTaskName(event.target.value)}
             onPaste={(event) =>
               handleOverwritePaste(event, (text) => updateTaskName(text))
             }
@@ -645,10 +652,11 @@ export default function useRowRenderers({
             <input
               type="text"
               className={sharedInputStyle}
-              value={dayEntries[i] ?? ''}
+              defaultValue={dayEntries[i] ?? ''}
+              key={`${rowId}-day-${i}`}
               onMouseDown={(event) => handleCellMouseDown(event, rowId, `day-${i}`)}
               onFocus={() => handleCellActivate(rowId, `day-${i}`)}
-              onChange={(event) => updateDayEntry(i, event.target.value)}
+              onBlur={(event) => updateDayEntry(i, event.target.value)}
               onPaste={(event) =>
                 handleOverwritePaste(event, (text) => updateDayEntry(i, text))
               }
@@ -1159,10 +1167,11 @@ export default function useRowRenderers({
           <input
             type="text"
             className={sharedInputStyle}
-            value={row.taskName ?? ''}
+            defaultValue={row.taskName ?? ''}
+            key={`${rowId}-task`}
             onMouseDown={(event) => handleCellMouseDown(event, rowId, 'task')}
             onFocus={() => handleCellActivate(rowId, 'task')}
-            onChange={(event) => updateTaskName(event.target.value)}
+            onBlur={(event) => updateTaskName(event.target.value)}
             onPaste={(event) =>
               handleOverwritePaste(event, (text) => updateTaskName(text))
             }
@@ -1275,10 +1284,11 @@ export default function useRowRenderers({
             <input
               type="text"
               className={sharedInputStyle}
-              value={dayEntries[i] ?? ''}
+              defaultValue={dayEntries[i] ?? ''}
+              key={`${rowId}-day-${i}`}
               onMouseDown={(event) => handleCellMouseDown(event, rowId, `day-${i}`)}
               onFocus={() => handleCellActivate(rowId, `day-${i}`)}
-              onChange={(event) => updateDayEntry(i, event.target.value)}
+              onBlur={(event) => updateDayEntry(i, event.target.value)}
               onPaste={(event) =>
                 handleOverwritePaste(event, (text) => updateDayEntry(i, text))
               }

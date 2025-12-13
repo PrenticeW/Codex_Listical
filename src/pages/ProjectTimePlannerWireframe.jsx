@@ -758,12 +758,22 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   };
   const getWeekBorderClass = (_index, baseClass = '') => baseClass;
 
+  // Debounce expensive calculations to prevent lag accumulation
+  const [debouncedRows, setDebouncedRows] = useState(rows);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedRows(rows);
+    }, 150);
+    return () => clearTimeout(timeoutId);
+  }, [rows]);
+
   const columnTotals = useMemo(() => {
     const totals = {};
     for (let i = 0; i < totalDays; i += 1) {
       totals[`day-${i}`] = 0;
     }
-    rows.forEach((row) => {
+    debouncedRows.forEach((row) => {
       if (!Array.isArray(row.dayEntries)) return;
       row.dayEntries.forEach((value, idx) => {
         if (idx < 0 || idx >= totalDays) return;
@@ -774,13 +784,13 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       });
     });
     return totals;
-  }, [rows, totalDays]);
+  }, [debouncedRows, totalDays]);
 
   const projectHeaderTotals = useMemo(() => {
     const totals = {};
     let activeHeaderId = null;
 
-    rows.forEach((row) => {
+    debouncedRows.forEach((row) => {
       if (row.type === 'projectHeader') {
         activeHeaderId = row.id;
         totals[activeHeaderId] = 0;
@@ -804,7 +814,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       formattedTotals[key] = formatTotalValue(total ?? 0);
     });
     return formattedTotals;
-  }, [rows]);
+  }, [debouncedRows]);
 
   const { timelineRows } = useTimelineRows({
     dates,
