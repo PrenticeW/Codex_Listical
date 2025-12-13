@@ -176,6 +176,8 @@ const formatDateForInput = (date) => {
 };
 
 const SETTINGS_STORAGE_KEY = 'listical-settings';
+const TASK_ROWS_STORAGE_KEY = 'listical-task-rows';
+
 const readStoredSettings = () => {
   if (!isBrowserEnvironment()) return null;
   try {
@@ -192,6 +194,45 @@ const readStoredSettings = () => {
   } catch (error) {
     console.error('Failed to read Listical settings', error);
     return null;
+  }
+};
+
+const readStoredTaskRows = () => {
+  if (!isBrowserEnvironment()) return {};
+  try {
+    const raw = window.localStorage.getItem(TASK_ROWS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
+    return parsed;
+  } catch (error) {
+    console.error('Failed to read task rows', error);
+    return {};
+  }
+};
+
+const saveTaskRows = (rows) => {
+  if (!isBrowserEnvironment()) return;
+  try {
+    // Only save task rows with user interaction
+    const taskRowsData = {};
+    rows.forEach((row) => {
+      if (TASK_ROW_TYPES.has(row.type) && row.hasUserInteraction) {
+        taskRowsData[row.id] = {
+          taskName: row.taskName,
+          projectSelection: row.projectSelection,
+          subprojectSelection: row.subprojectSelection,
+          status: row.status,
+          estimate: row.estimate,
+          timeValue: row.timeValue,
+          recurring: row.recurring,
+          dayEntries: row.dayEntries,
+        };
+      }
+    });
+    window.localStorage.setItem(TASK_ROWS_STORAGE_KEY, JSON.stringify(taskRowsData));
+  } catch (error) {
+    console.error('Failed to save task rows', error);
   }
 };
 
@@ -287,6 +328,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
 
   const buildInitialRows = useCallback(() => {
     const rowsConfig = [];
+    const savedTaskRows = readStoredTaskRows();
 
     // Use official projects from staging storage - only show colored projects
     officialProjects
@@ -297,15 +339,23 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
         const slug = projectName.replace(/\s+/g, '-').toLowerCase();
         rowsConfig.push({ id: `${slug}-header`, type: 'projectHeader', projectName, projectNickname });
         rowsConfig.push({ id: `${slug}-general`, type: 'projectGeneral', projectName, projectNickname });
-        rowsConfig.push(
-          createTaskRow({ id: `${slug}-task`, type: 'projectTask', projectName, projectNickname })
-        );
+
+        const taskId = `${slug}-task`;
+        const baseTaskRow = createTaskRow({ id: taskId, type: 'projectTask', projectName, projectNickname });
+        // Merge with saved data if it exists
+        const savedData = savedTaskRows[taskId];
+        rowsConfig.push(savedData ? { ...baseTaskRow, ...savedData, hasUserInteraction: true } : baseTaskRow);
+
         rowsConfig.push({ id: `${slug}-unscheduled`, type: 'projectUnscheduled', projectName, projectNickname });
       });
 
     rowsConfig.push({ id: 'inbox-header', type: 'inboxHeader' });
     Array.from({ length: 20 }).forEach((_, index) => {
-      rowsConfig.push(createTaskRow({ id: `inbox-item-${index}`, type: 'inboxItem', index }));
+      const inboxId = `inbox-item-${index}`;
+      const baseInboxRow = createTaskRow({ id: inboxId, type: 'inboxItem', index });
+      // Merge with saved data if it exists
+      const savedData = savedTaskRows[inboxId];
+      rowsConfig.push(savedData ? { ...baseInboxRow, ...savedData, hasUserInteraction: true } : baseInboxRow);
     });
     rowsConfig.push({ id: 'archive-header', type: 'archiveHeader' });
 
@@ -326,6 +376,17 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   useEffect(() => {
     setRows(buildInitialRows());
   }, [buildInitialRows]);
+
+  // Save task rows to localStorage when they change
+  useEffect(() => {
+    if (!isBrowserEnvironment()) return;
+    // Use a debounce to avoid saving on every keystroke
+    const timeoutId = setTimeout(() => {
+      saveTaskRows(rows);
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [rows]);
+
   const rowIndexMap = useMemo(() => {
     const map = new Map();
     rows.forEach((row, index) => {
