@@ -514,6 +514,17 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     []
   );
 
+  // Add originalRowNumber to each row to preserve numbering when filters are applied
+  // For now use a fixed offset of 7 for timeline rows (will be calculated dynamically later)
+  const rowsWithNumbers = useMemo(() => {
+    // Estimate timeline rows: header, month row, week row, day row, filter row, max/min rows = ~7 rows
+    const estimatedTimelineOffset = 7;
+    return rows.map((row, index) => ({
+      ...row,
+      originalRowNumber: estimatedTimelineOffset + index + 1,
+    }));
+  }, [rows]);
+
   const filteredRows = useMemo(() => {
     const activeDayFilters = Array.from(activeFilterColumns).filter((key) => key.startsWith('day-'));
     const matchesProjectFilter = (row) => {
@@ -557,9 +568,9 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       !selectedEstimateFilters.size &&
       showMaxMinRows
     ) {
-      return rows;
+      return rowsWithNumbers;
     }
-    return rows.filter((row) => {
+    return rowsWithNumbers.filter((row) => {
       if (!matchesProjectFilter(row)) return false;
       if (!matchesStatusFilter(row)) return false;
       if (!matchesRecurringFilter(row)) return false;
@@ -573,7 +584,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
         return coerceNumber(value) !== null;
       });
     });
-  }, [rows, activeFilterColumns, selectedProjectFilters, selectedStatusFilters, selectedRecurringFilters, selectedEstimateFilters]);
+  }, [rowsWithNumbers, activeFilterColumns, selectedProjectFilters, selectedStatusFilters, selectedRecurringFilters, selectedEstimateFilters]);
 
   const table = useReactTable({
     data: filteredRows,

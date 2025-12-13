@@ -18,7 +18,8 @@ export default function usePlannerRowRendering({
       const row = tableRow?.original ?? {};
       const rowId = row?.id ?? null;
       const tableRowIndex = typeof tableRow?.index === 'number' ? tableRow.index : null;
-      const rowNumber = tableRowIndex != null ? tableRowIndex + 1 : null;
+      // Use originalRowNumber from row data to preserve numbering when filters are applied
+      const rowNumber = row?.originalRowNumber ?? (tableRowIndex != null ? tableRowIndex + 1 : null);
       const isRowSelected = Boolean(rowId && selectedRowIdSet.has(rowId));
       const rowPropsLocal = { ...rowProps };
 

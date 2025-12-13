@@ -161,7 +161,13 @@ export default function useRowRenderers({
     // For colSpan headers (inbox, archive) - simplified layout
     if (config.colSpan) {
       return (
-        <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
+        <tr
+          {...rowPropsLocal}
+          className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}
+          data-row-type="header"
+          data-row-variant={variant}
+          data-header-style="colspan"
+        >
           <td
             {...cellMetadataProps('rowLabel')}
             className={withCellSelectionClass(
@@ -180,6 +186,7 @@ export default function useRowRenderers({
                 preserveSelection: true,
               })
             }
+            data-cell-purpose="row-number"
           >
             {rowNumber}
           </td>
@@ -195,6 +202,8 @@ export default function useRowRenderers({
             }}
             onMouseDown={(event) => handleCellMouseDown(event, rowId, 'header-fixed')}
             {...cellClickProps('header-fixed')}
+            data-cell-purpose="header-label"
+            data-header-label={config.label}
           >
             {config.label}
           </td>
@@ -204,6 +213,7 @@ export default function useRowRenderers({
             style={{ ...baseStyle, ...getCellHighlightStyle(rowId, 'header-span') }}
             onMouseDown={(event) => handleCellMouseDown(event, rowId, 'header-span')}
             {...cellClickProps('header-span')}
+            data-cell-purpose="header-day-span"
           ></td>
         </tr>
       );
@@ -222,7 +232,14 @@ export default function useRowRenderers({
       : null;
 
     return (
-      <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
+      <tr
+        {...rowPropsLocal}
+        className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}
+        data-row-type="header"
+        data-row-variant={variant}
+        data-header-style="project"
+        data-project-name={projectLabel || undefined}
+      >
         <td
           {...cellMetadataProps('rowLabel')}
           className={withCellSelectionClass(
@@ -239,6 +256,7 @@ export default function useRowRenderers({
             })
           }
           onClick={(event) => handleRowClick(event, tableRow.index)}
+          data-cell-purpose="row-number"
         >
           {rowNumber}
         </td>
@@ -254,6 +272,8 @@ export default function useRowRenderers({
           })}
           onMouseDown={(event) => handleCellMouseDown(event, rowId, 'check')}
           {...cellClickProps('check')}
+          data-cell-purpose={config.labelInCheck ? 'header-project-name' : 'header-decoration'}
+          data-display-only="true"
         >
           {config.labelInCheck ? projectLabel : ''}
         </td>
@@ -262,6 +282,8 @@ export default function useRowRenderers({
           style={getWidthStyle('project', { backgroundColor: baseStyle.backgroundColor, ...getCellHighlightStyle(rowId, 'project') })}
           onMouseDown={(event) => handleCellMouseDown(event, rowId, 'project')}
           {...cellClickProps('project')}
+          data-cell-purpose="header-decoration"
+          data-display-only="true"
         ></td>
         {showSubprojects && (
           <td
@@ -269,6 +291,8 @@ export default function useRowRenderers({
             style={getWidthStyle('subprojects', { backgroundColor: baseStyle.backgroundColor, ...getCellHighlightStyle(rowId, 'subprojects') })}
             onMouseDown={(event) => handleCellMouseDown(event, rowId, 'subprojects')}
             {...cellClickProps('subprojects')}
+            data-cell-purpose="header-decoration"
+            data-display-only="true"
           ></td>
         )}
         <td
@@ -276,6 +300,8 @@ export default function useRowRenderers({
           style={getWidthStyle('status', { backgroundColor: baseStyle.backgroundColor, ...getCellHighlightStyle(rowId, 'status') })}
           onMouseDown={(event) => handleCellMouseDown(event, rowId, 'status')}
           {...cellClickProps('status')}
+          data-cell-purpose="header-decoration"
+          data-display-only="true"
         ></td>
         <td
           className={withCellSelectionClass(
@@ -289,6 +315,9 @@ export default function useRowRenderers({
           })}
           onMouseDown={(event) => handleCellMouseDown(event, rowId, 'task')}
           {...cellClickProps('task')}
+          data-cell-purpose={config.labelInTask ? 'header-section-label' : 'header-decoration'}
+          data-header-label={config.labelInTask ? config.label : undefined}
+          data-display-only="true"
         >
           {config.labelInTask ? config.label : ''}
         </td>
@@ -298,6 +327,8 @@ export default function useRowRenderers({
             style={getWidthStyle('recurring', { backgroundColor: baseStyle.backgroundColor, ...getCellHighlightStyle(rowId, 'recurring') })}
             onMouseDown={(event) => handleCellMouseDown(event, rowId, 'recurring')}
             {...cellClickProps('recurring')}
+            data-cell-purpose="header-decoration"
+            data-display-only="true"
           ></td>
         )}
         <td
@@ -312,6 +343,9 @@ export default function useRowRenderers({
           })}
           onMouseDown={(event) => handleCellMouseDown(event, rowId, 'estimate')}
           {...cellClickProps('estimate')}
+          data-cell-purpose={config.showData ? 'header-project-total' : 'header-decoration'}
+          data-total-value={config.showData ? projectRollupValue : undefined}
+          data-display-only="true"
         >
           {config.showData ? projectRollupValue : ''}
         </td>
@@ -328,6 +362,9 @@ export default function useRowRenderers({
           })}
           onMouseDown={(event) => handleCellMouseDown(event, rowId, 'timeValue')}
           {...cellClickProps('timeValue')}
+          data-cell-purpose={config.showData ? 'header-project-quota' : 'header-decoration'}
+          data-quota-value={config.showData ? projectQuota : undefined}
+          data-display-only="true"
         >
           {config.showData ? `of ${projectQuota}` : ''}
         </td>
@@ -344,6 +381,9 @@ export default function useRowRenderers({
               `day-${i}`
             )}
             {...cellClickProps(`day-${i}`)}
+            data-cell-purpose="header-decoration"
+            data-day-index={i}
+            data-display-only="true"
           >
             <input
               type="text"
@@ -429,7 +469,14 @@ export default function useRowRenderers({
     };
 
     return (
-      <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
+      <tr
+        {...rowPropsLocal}
+        className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}
+        data-row-type="task"
+        data-is-inbox-item={isInboxRow || undefined}
+        data-task-status={row.status}
+        data-project={row.projectSelection}
+      >
         <td
           {...cellMetadataProps('rowLabel')}
           className={withCellSelectionClass(
@@ -446,6 +493,7 @@ export default function useRowRenderers({
             })
           }
           onClick={(event) => handleRowClick(event, tableRow.index)}
+          data-cell-purpose="row-number"
         >
           {rowNumber}
         </td>
@@ -453,6 +501,8 @@ export default function useRowRenderers({
           className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0 check-cell`, 'check')}
           style={getWidthStyle('check', getCellHighlightStyle(rowId, 'check'))}
           {...cellClickProps('check')}
+          data-cell-purpose="task-checkbox"
+          data-interactive="true"
         >
           <div className="flex h-full w-full items-center justify-center">
             <input
@@ -468,6 +518,9 @@ export default function useRowRenderers({
           style={getWidthStyle('project', getCellHighlightStyle(rowId, 'project'))}
           className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'project')}
           {...cellClickProps('project')}
+          data-cell-purpose="project-selector"
+          data-interactive="true"
+          data-current-value={row.projectSelection}
         >
           <select
             className={`${sharedInputStyle} uppercase project-pill-select`}
@@ -488,6 +541,9 @@ export default function useRowRenderers({
             style={getWidthStyle('subprojects', getCellHighlightStyle(rowId, 'subprojects'))}
             className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'subprojects')}
             {...cellClickProps('subprojects')}
+            data-cell-purpose="subproject-selector"
+            data-interactive="true"
+            data-current-value={row.subprojectSelection}
           >
             <select
               className={sharedInputStyle}
@@ -507,6 +563,9 @@ export default function useRowRenderers({
           style={getWidthStyle('status', getCellHighlightStyle(rowId, 'status'))}
           className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'status')}
           {...cellClickProps('status')}
+          data-cell-purpose="status-selector"
+          data-interactive="true"
+          data-current-value={row.status}
         >
           <div className="status-pill-container">
             <select
@@ -528,6 +587,8 @@ export default function useRowRenderers({
           style={getWidthStyle('task', getCellHighlightStyle(rowId, 'task'))}
           className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'task')}
           {...cellClickProps('task')}
+          data-cell-purpose="task-name-input"
+          data-interactive="true"
         >
           <input
             type="text"
@@ -547,6 +608,9 @@ export default function useRowRenderers({
             className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'recurring')}
             style={getWidthStyle('recurring', getCellHighlightStyle(rowId, 'recurring'))}
             {...cellClickProps('recurring')}
+            data-cell-purpose="recurring-toggle"
+            data-interactive="true"
+            data-is-recurring={row.recurring === 'Recurring' || undefined}
           >
             <div className="flex h-full w-full items-center justify-center">
               <input
@@ -567,6 +631,9 @@ export default function useRowRenderers({
           style={getWidthStyle('estimate', getCellHighlightStyle(rowId, 'estimate'))}
           className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'estimate')}
           {...cellClickProps('estimate')}
+          data-cell-purpose="estimate-selector"
+          data-interactive="true"
+          data-current-value={row.estimate}
         >
           <select
             className={sharedInputStyle}
@@ -614,6 +681,9 @@ export default function useRowRenderers({
             paddingRight: 8,
           })}
           {...cellClickProps('timeValue')}
+          data-cell-purpose="time-value-input"
+          data-interactive={isCustomEstimate ? 'true' : 'false'}
+          data-is-custom={isCustomEstimate || undefined}
         >
           <input
             type="text"
@@ -640,6 +710,9 @@ export default function useRowRenderers({
               ...getCellHighlightStyle(rowId, `day-${i}`),
             }}
             onMouseDown={(event) => handleCellMouseDown(event, rowId, `day-${i}`)}
+            data-cell-purpose="day-time-entry"
+            data-day-index={i}
+            data-interactive="true"
             className={withCellSelectionClass(
               `${getWeekBorderClass(i, 'border border-[#ced3d0]' + topBorderClass)} p-0`,
               `day-${i}`
