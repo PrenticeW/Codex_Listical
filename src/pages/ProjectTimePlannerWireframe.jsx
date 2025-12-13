@@ -1,6 +1,7 @@
 // Im ready to work
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReactTable, getCoreRowModel } from '@tanstack/react-table';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import NavigationBar from '../components/planner/NavigationBar';
 import useTimelineRows from '../timeline/useTimelineRows';
 import useCellSelection from '../hooks/planner/useCellSelection';
@@ -580,6 +581,15 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     getCoreRowModel: getCoreRowModel(),
   });
   const tableRows = table.getRowModel().rows;
+
+  // Set up row virtualization
+  const scrollContainerRef = useRef(null);
+  const rowVirtualizer = useVirtualizer({
+    count: tableRows.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => ROW_H,
+    overscan: 25, // Render 25 extra rows above/below viewport for smooth scrolling
+  });
 
   const {
     rowRefs,
@@ -1294,77 +1304,107 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
         }
       />
 
-      <table className="table-fixed border-collapse w-full text-[12px] border border-[#ced3d0] shadow-sm bg-white">
-        <thead>
-          <tr className={`h-[${ROW_H}px] text-xs`}>
-          {columnStructure.map((col, idx) => {
-            const headerBackground = '#d9f6e0';
-            const headerText = '#065f46';
-            return (
-              <th
-                key={`col-letter-${col.key}`}
-                style={getWidthStyle(col.key, {
-                  backgroundColor: headerBackground,
-                  color: headerText,
-                  position: 'relative',
-                })}
-                className="border border-[#ced3d0]"
-              >
-                {columnLetters[idx]}
-                {renderResizeHandle(col.key)}
-              </th>
-            );
-          })}
-          </tr>
-          <TimelineHeader
-            timelineRows={timelineRows}
-            columnStructure={columnStructure}
-            columnLetters={columnLetters}
-            columnLetterByKey={columnLetterByKey}
-            filterBlockedLetters={filterBlockedLetters}
-            getWidthStyle={getWidthStyle}
-            fixedCols={fixedCols}
-            ROW_H={ROW_H}
-            activeFilterColumns={activeFilterColumns}
-            projectFilterMenu={projectFilterMenu}
-            projectFilterButtonRef={projectFilterButtonRef}
-            handleProjectFilterButtonClick={onProjectFilterButtonClick}
-            selectedProjectFilters={selectedProjectFilters}
-            statusFilterMenu={statusFilterMenu}
-            statusFilterButtonRef={statusFilterButtonRef}
-            handleStatusFilterButtonClick={onStatusFilterButtonClick}
-            selectedStatusFilters={selectedStatusFilters}
-            recurringFilterMenu={recurringFilterMenu}
-            recurringFilterButtonRef={recurringFilterButtonRef}
-            handleRecurringFilterButtonClick={onRecurringFilterButtonClick}
-            selectedRecurringFilters={selectedRecurringFilters}
-            estimateFilterMenu={estimateFilterMenu}
-            estimateFilterButtonRef={estimateFilterButtonRef}
-            handleEstimateFilterButtonClick={onEstimateFilterButtonClick}
-            selectedEstimateFilters={selectedEstimateFilters}
-            toggleFilterColumn={toggleFilterColumn}
-            applyRowLabelStyle={applyRowLabelStyle}
-          />
-        </thead>
+      <div style={{ maxHeight: 'calc(100vh - 250px)', overflow: 'auto' }} ref={scrollContainerRef}>
+        <table className="table-fixed border-collapse w-full text-[12px] border border-[#ced3d0] shadow-sm bg-white">
+          <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+            <tr className={`h-[${ROW_H}px] text-xs`}>
+            {columnStructure.map((col, idx) => {
+              const headerBackground = '#d9f6e0';
+              const headerText = '#065f46';
+              return (
+                <th
+                  key={`col-letter-${col.key}`}
+                  style={getWidthStyle(col.key, {
+                    backgroundColor: headerBackground,
+                    color: headerText,
+                    position: 'relative',
+                  })}
+                  className="border border-[#ced3d0]"
+                >
+                  {columnLetters[idx]}
+                  {renderResizeHandle(col.key)}
+                </th>
+              );
+            })}
+            </tr>
+            <TimelineHeader
+              timelineRows={timelineRows}
+              columnStructure={columnStructure}
+              columnLetters={columnLetters}
+              columnLetterByKey={columnLetterByKey}
+              filterBlockedLetters={filterBlockedLetters}
+              getWidthStyle={getWidthStyle}
+              fixedCols={fixedCols}
+              ROW_H={ROW_H}
+              activeFilterColumns={activeFilterColumns}
+              projectFilterMenu={projectFilterMenu}
+              projectFilterButtonRef={projectFilterButtonRef}
+              handleProjectFilterButtonClick={onProjectFilterButtonClick}
+              selectedProjectFilters={selectedProjectFilters}
+              statusFilterMenu={statusFilterMenu}
+              statusFilterButtonRef={statusFilterButtonRef}
+              handleStatusFilterButtonClick={onStatusFilterButtonClick}
+              selectedStatusFilters={selectedStatusFilters}
+              recurringFilterMenu={recurringFilterMenu}
+              recurringFilterButtonRef={recurringFilterButtonRef}
+              handleRecurringFilterButtonClick={onRecurringFilterButtonClick}
+              selectedRecurringFilters={selectedRecurringFilters}
+              estimateFilterMenu={estimateFilterMenu}
+              estimateFilterButtonRef={estimateFilterButtonRef}
+              handleEstimateFilterButtonClick={onEstimateFilterButtonClick}
+              selectedEstimateFilters={selectedEstimateFilters}
+              toggleFilterColumn={toggleFilterColumn}
+              applyRowLabelStyle={applyRowLabelStyle}
+            />
+          </thead>
 
-        <tbody>
-          {tableRows.map((tableRow, index) => {
-            const originalRow = tableRow.original;
-            const previousRow = index > 0 ? tableRows[index - 1].original : null;
-            const rowProps = {
-              onMouseDown: (event) => handleRowMouseDown(event, index, originalRow.id),
-            };
-            const renderedRow = renderDataRow(tableRow, {
-              previousRowOriginal: previousRow,
-              rowProps,
-              isActive:
-                activeRowId === originalRow.id || highlightedRowId === originalRow.id,
-            });
-            if (!renderedRow) return null;
-            return React.cloneElement(renderedRow, { key: originalRow.id });
-          })}
-        </tbody>
-      </table>
+          <tbody>
+            {/* Spacer row before visible items */}
+            {rowVirtualizer.getVirtualItems().length > 0 && rowVirtualizer.getVirtualItems()[0].index > 0 && (
+              <tr style={{ height: `${rowVirtualizer.getVirtualItems()[0].start}px` }}>
+                <td colSpan={columnStructure.length} style={{ padding: 0, border: 'none' }} />
+              </tr>
+            )}
+
+            {/* Render only visible rows */}
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const index = virtualRow.index;
+              const tableRow = tableRows[index];
+              if (!tableRow) return null;
+
+              const originalRow = tableRow.original;
+              const previousRow = index > 0 ? tableRows[index - 1].original : null;
+              const rowProps = {
+                onMouseDown: (event) => handleRowMouseDown(event, index, originalRow.id),
+                'data-index': index,
+              };
+              const renderedRow = renderDataRow(tableRow, {
+                previousRowOriginal: previousRow,
+                rowProps,
+                isActive:
+                  activeRowId === originalRow.id || highlightedRowId === originalRow.id,
+              });
+              if (!renderedRow) return null;
+              return React.cloneElement(renderedRow, {
+                key: originalRow.id,
+                'data-index': index,
+              });
+            })}
+
+            {/* Spacer row after visible items */}
+            {rowVirtualizer.getVirtualItems().length > 0 && (
+              <tr style={{
+                height: `${
+                  rowVirtualizer.getTotalSize() -
+                  (rowVirtualizer.getVirtualItems()[rowVirtualizer.getVirtualItems().length - 1]?.end || 0)
+                }px`
+              }}>
+                <td colSpan={columnStructure.length} style={{ padding: 0, border: 'none' }} />
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
       <FilterPanel
         projectFilterMenu={projectFilterMenu}
         projectFilterMenuRef={projectFilterMenuRef}
