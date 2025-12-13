@@ -13,6 +13,7 @@ import ProjectListicalMenu from '../components/planner/ProjectListicalMenu';
 import TimelineHeader from '../components/planner/TimelineHeader';
 import isBrowserEnvironment from '../utils/isBrowserEnvironment';
 import { loadTacticsMetrics } from '../lib/tacticsMetricsStorage';
+import { loadStagingState, STAGING_STORAGE_EVENT } from '../lib/stagingStorage';
 const DAYS_OF_WEEK = [
   'Sunday',
   'Monday',
@@ -205,13 +206,18 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     () => new Set(SORTABLE_STATUSES)
   );
   const [dailyBoundsMap, setDailyBoundsMap] = useState(() => new Map());
+  const [officialProjects, setOfficialProjects] = useState(() => {
+    const stagingState = loadStagingState();
+    return stagingState?.shortlist ?? [];
+  });
+  const [projectWeeklyQuotas, setProjectWeeklyQuotas] = useState(() => new Map());
   const totalDays = 84;
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const readMetrics = () => {
       const metrics = loadTacticsMetrics();
-      const nextMap = new Map();
+      const nextBoundsMap = new Map();
       if (metrics?.dailyBounds) {
         metrics.dailyBounds.forEach((entry) => {
           const dayName = entry?.day;
@@ -224,10 +230,20 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
             typeof entry.dailyMaxHours === 'number' && Number.isFinite(entry.dailyMaxHours)
               ? entry.dailyMaxHours
               : 0;
-          nextMap.set(dayName, { minHours, maxHours });
+          nextBoundsMap.set(dayName, { minHours, maxHours });
         });
       }
-      setDailyBoundsMap(nextMap);
+      setDailyBoundsMap(nextBoundsMap);
+
+      const nextQuotasMap = new Map();
+      if (metrics?.projectWeeklyQuotas && Array.isArray(metrics.projectWeeklyQuotas)) {
+        metrics.projectWeeklyQuotas.forEach((quota) => {
+          if (quota?.label && quota?.weeklyHours) {
+            nextQuotasMap.set(quota.label, quota.weeklyHours);
+          }
+        });
+      }
+      setProjectWeeklyQuotas(nextQuotasMap);
     };
     readMetrics();
     const handleStorage = (event) => {
@@ -237,6 +253,23 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     window.addEventListener('storage', handleStorage);
     return () => {
       window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleStagingUpdate = () => {
+      const stagingState = loadStagingState();
+      setOfficialProjects(stagingState?.shortlist ?? []);
+    };
+    window.addEventListener(STAGING_STORAGE_EVENT, handleStagingUpdate);
+    window.addEventListener('storage', (event) => {
+      if (event?.key === 'staging-shortlist') {
+        handleStagingUpdate();
+      }
+    });
+    return () => {
+      window.removeEventListener(STAGING_STORAGE_EVENT, handleStagingUpdate);
     };
   }, []);
 
@@ -250,19 +283,23 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     hasUserInteraction: false,
   });
 
-  const buildInitialRows = () => {
-    const projects = ['Project A', 'Project B', 'Project C'];
+  const buildInitialRows = useCallback(() => {
     const rowsConfig = [];
 
-    projects.forEach((project) => {
-      const slug = project.replace(/\s+/g, '-').toLowerCase();
-      rowsConfig.push({ id: `${slug}-header`, type: 'projectHeader', projectName: project });
-      rowsConfig.push({ id: `${slug}-general`, type: 'projectGeneral', projectName: project });
-      rowsConfig.push(
-        createTaskRow({ id: `${slug}-task`, type: 'projectTask', projectName: project })
-      );
-      rowsConfig.push({ id: `${slug}-unscheduled`, type: 'projectUnscheduled', projectName: project });
-    });
+    // Use official projects from staging storage - only show colored projects
+    officialProjects
+      .filter((project) => project.color && project.color !== null)
+      .forEach((project) => {
+        const projectName = project.projectName || project.text;
+        const projectNickname = project.projectNickname;
+        const slug = projectName.replace(/\s+/g, '-').toLowerCase();
+        rowsConfig.push({ id: `${slug}-header`, type: 'projectHeader', projectName, projectNickname });
+        rowsConfig.push({ id: `${slug}-general`, type: 'projectGeneral', projectName, projectNickname });
+        rowsConfig.push(
+          createTaskRow({ id: `${slug}-task`, type: 'projectTask', projectName, projectNickname })
+        );
+        rowsConfig.push({ id: `${slug}-unscheduled`, type: 'projectUnscheduled', projectName, projectNickname });
+      });
 
     rowsConfig.push({ id: 'inbox-header', type: 'inboxHeader' });
     Array.from({ length: 20 }).forEach((_, index) => {
@@ -271,7 +308,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     rowsConfig.push({ id: 'archive-header', type: 'archiveHeader' });
 
     return rowsConfig;
-  };
+  }, [officialProjects, totalDays]);
 
   // Rows are stateful so their order can be updated (e.g., by drag-and-drop).
   // A simulated mouse drag updates this array directly so TanStack Table sees the new ordering.
@@ -282,6 +319,11 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   const clearSelectionRef = useRef(() => {});
   const clearActiveCellRef = useRef(() => {});
   const selectedRowIdSet = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
+
+  // Rebuild rows when official projects change
+  useEffect(() => {
+    setRows(buildInitialRows());
+  }, [buildInitialRows]);
   const rowIndexMap = useMemo(() => {
     const map = new Map();
     rows.forEach((row, index) => {
@@ -792,15 +834,13 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   } = interactions;
 
   const projectNames = useMemo(() => {
-    const names = new Set();
-    rows.forEach((row) => {
-      if (row.projectName) names.add(row.projectName);
-      if (row.projectSelection && row.projectSelection !== '-') {
-        names.add(row.projectSelection);
-      }
-    });
-    return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [rows]);
+    // Use official projects from staging - only colored projects
+    // Use nickname if available, otherwise fall back to projectName or text
+    return officialProjects
+      .filter((project) => project.color && project.color !== null)
+      .map((project) => project.projectNickname || project.projectName || project.text)
+      .sort((a, b) => a.localeCompare(b));
+  }, [officialProjects]);
 
   const rowRenderersConfig = useMemo(
     () => ({
@@ -808,6 +848,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       showRecurring,
       ROW_H,
       projectHeaderTotals,
+      projectWeeklyQuotas,
       fixedColumnConfig,
       fixedCols,
       sharedInputStyle,
@@ -829,6 +870,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       getProjectSelectStyle,
       getStatusColorStyle,
       statusNames: STATUS_VALUES,
+      projectNames,
       DARK_HEADER_STYLE,
       ARCHIVE_ROW_STYLE,
     }),
@@ -837,6 +879,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       showRecurring,
       ROW_H,
       projectHeaderTotals,
+      projectWeeklyQuotas,
       fixedColumnConfig,
       fixedCols,
       sharedInputStyle,
@@ -858,6 +901,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       getProjectSelectStyle,
       getStatusColorStyle,
       STATUS_VALUES,
+      projectNames,
       DARK_HEADER_STYLE,
       ARCHIVE_ROW_STYLE,
     ]

@@ -5,6 +5,7 @@ export default function useRowRenderers({
   showRecurring,
   ROW_H,
   projectHeaderTotals,
+  projectWeeklyQuotas,
   fixedColumnConfig,
   fixedCols,
   sharedInputStyle,
@@ -26,6 +27,7 @@ export default function useRowRenderers({
   getProjectSelectStyle,
   getStatusColorStyle,
   statusNames,
+  projectNames,
   DARK_HEADER_STYLE,
   ARCHIVE_ROW_STYLE,
 }) {
@@ -56,6 +58,15 @@ export default function useRowRenderers({
     </>
   );
 
+  const ProjectOptions = () => (
+    <>
+      <option>-</option>
+      {projectNames.map((name) => (
+        <option key={name}>{name.toUpperCase()}</option>
+      ))}
+    </>
+  );
+
   const renderProjectHeaderRow = ({
     row,
     rowId,
@@ -68,6 +79,15 @@ export default function useRowRenderers({
     tableRow,
   }) => {
     const projectRollupValue = projectHeaderTotals[rowId] ?? '0.00';
+    // Match the label format used by Tactics page: nickname || projectName
+    const projectLabel = row.projectNickname || row.projectName;
+    const rawQuota = projectWeeklyQuotas?.get(projectLabel) ?? '0.00';
+    // Format quota to ensure #.## format (e.g., 4 -> 4.00)
+    const projectQuota = typeof rawQuota === 'number'
+      ? rawQuota.toFixed(2)
+      : typeof rawQuota === 'string' && rawQuota.includes('.')
+        ? parseFloat(rawQuota).toFixed(2)
+        : rawQuota;
     return (
       <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
         <td
@@ -154,7 +174,7 @@ export default function useRowRenderers({
           onMouseDown={(event) => handleCellMouseDown(event, rowId, 'timeValue')}
           {...cellClickProps('timeValue')}
         >
-          of 0.00
+          of {projectQuota}
         </td>
         {Array.from({ length: totalDays }).map((_, i) => (
           <td
@@ -404,10 +424,7 @@ export default function useRowRenderers({
             onMouseDown={(event) => handleCellMouseDown(event, rowId, 'project')}
             onFocus={() => handleCellActivate(rowId, 'project')}
           >
-            <option>-</option>
-            <option>PROJECT A</option>
-            <option>PROJECT B</option>
-            <option>PROJECT C</option>
+            <ProjectOptions />
           </select>
         </td>
         <td
@@ -1009,10 +1026,7 @@ export default function useRowRenderers({
             onMouseDown={(event) => handleCellMouseDown(event, rowId, 'project')}
             onFocus={() => handleCellActivate(rowId, 'project')}
           >
-            <option>-</option>
-            <option>PROJECT A</option>
-            <option>PROJECT B</option>
-            <option>PROJECT C</option>
+            <ProjectOptions />
           </select>
         </td>
         <td
