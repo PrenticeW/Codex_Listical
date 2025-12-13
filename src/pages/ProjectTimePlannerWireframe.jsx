@@ -64,7 +64,6 @@ const formatHoursValue = (value) => {
 const isTaskColumnEmpty = (row) => !(row.taskName ?? '').trim();
 const ROW_LABEL_BASE_STYLE = { backgroundColor: '#d9f6e0', color: '#065f46' };
 const applyRowLabelStyle = (style = {}) => ({ ...style, ...ROW_LABEL_BASE_STYLE });
-const FILTER_BLOCKED_LETTERS = new Set(['A', 'D', 'F']);
 const coerceNumber = (value) => {
   if (value == null) return null;
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -124,6 +123,7 @@ const COL_W = {
   rowLabel: 36,
   check: 24,
   project: 120,
+  subprojects: 150,
   status: 120,
   task: 240,
   recurring: 80,
@@ -187,6 +187,7 @@ const readStoredSettings = () => {
       columnWidths: typeof parsed.columnWidths === 'object' && parsed.columnWidths ? parsed.columnWidths : {},
       startDate: typeof parsed.startDate === 'string' ? parsed.startDate : '',
       showRecurring: typeof parsed.showRecurring === 'boolean' ? parsed.showRecurring : true,
+      showSubprojects: typeof parsed.showSubprojects === 'boolean' ? parsed.showSubprojects : true,
     };
   } catch (error) {
     console.error('Failed to read Listical settings', error);
@@ -198,6 +199,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   const storedSettings = readStoredSettings();
   const defaultStartDate = useMemo(() => formatDateForInput(new Date()), []);
   const [showRecurring, setShowRecurring] = useState(storedSettings?.showRecurring ?? true);
+  const [showSubprojects, setShowSubprojects] = useState(storedSettings?.showSubprojects ?? true);
   const [startDate, setStartDate] = useState(storedSettings?.startDate ?? defaultStartDate);
   const [showMaxMinRows, setShowMaxMinRows] = useState(true);
   const [isListicalMenuOpen, setIsListicalMenuOpen] = useState(false);
@@ -391,6 +393,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
         setStartDate(parsed.startDate);
       }
       setShowRecurring(parsed.showRecurring ?? true);
+      setShowSubprojects(parsed.showSubprojects ?? true);
     }
     setSettingsLoaded(true);
   }, [settingsLoaded]);
@@ -403,12 +406,13 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
         columnWidths,
         startDate,
         showRecurring,
+        showSubprojects,
       };
       window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
     } catch (error) {
       console.error('Failed to save Listical settings', error);
     }
-  }, [columnWidths, settingsLoaded, startDate, showRecurring]);
+  }, [columnWidths, settingsLoaded, startDate, showRecurring, showSubprojects]);
   const updateRowValues = useCallback(
     (rowIndex, updater, options = {}) => {
       const { markInteraction = false } = options ?? {};
@@ -547,9 +551,14 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     const config = [
       { key: 'check', label: '✓', width: COL_W.check, className: 'text-center' },
       { key: 'project', label: 'Project', width: COL_W.project },
-      { key: 'status', label: 'Status', width: COL_W.status },
-      { key: 'task', label: 'Task', width: COL_W.task },
     ];
+
+    if (showSubprojects) {
+      config.push({ key: 'subprojects', label: 'Subprojects', width: COL_W.subprojects });
+    }
+
+    config.push({ key: 'status', label: 'Status', width: COL_W.status });
+    config.push({ key: 'task', label: 'Task', width: COL_W.task });
 
     if (showRecurring) {
       config.push({ key: 'recurring', label: 'Recurring', width: COL_W.recurring, className: 'text-center' });
@@ -559,7 +568,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     config.push({ key: 'timeValue', label: 'Time Value', width: COL_W.timeValue });
 
     return config;
-  }, [showRecurring]);
+  }, [showRecurring, showSubprojects]);
 
   const fixedColumnWidthMap = useMemo(() => {
     const widthMap = { rowLabel: COL_W.rowLabel };
@@ -846,6 +855,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     () => ({
       totalDays,
       showRecurring,
+      showSubprojects,
       ROW_H,
       projectHeaderTotals,
       projectWeeklyQuotas,
@@ -873,10 +883,12 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       projectNames,
       DARK_HEADER_STYLE,
       ARCHIVE_ROW_STYLE,
+      officialProjects,
     }),
     [
       totalDays,
       showRecurring,
+      showSubprojects,
       ROW_H,
       projectHeaderTotals,
       projectWeeklyQuotas,
@@ -904,6 +916,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       projectNames,
       DARK_HEADER_STYLE,
       ARCHIVE_ROW_STYLE,
+      officialProjects,
     ]
   );
 
@@ -988,6 +1001,23 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     });
     return map;
   }, [columnStructure, columnLetters]);
+
+  const filterBlockedLetters = useMemo(() => {
+    // Always block 'check' column (always at position A)
+    const blocked = new Set([columnLetterByKey.check]);
+
+    // Block 'task' column (position varies based on showSubprojects)
+    if (columnLetterByKey.task) {
+      blocked.add(columnLetterByKey.task);
+    }
+
+    // Block 'estimate' column (position varies based on both showSubprojects and showRecurring)
+    if (columnLetterByKey.estimate) {
+      blocked.add(columnLetterByKey.estimate);
+    }
+
+    return blocked;
+  }, [columnLetterByKey]);
 
   const statusNames = useMemo(() => STATUS_VALUES, []);
   const recurringNames = useMemo(() => RECURRING_VALUES, []);
@@ -1174,6 +1204,8 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
             onClose={() => setIsListicalMenuOpen(false)}
             showRecurring={showRecurring}
             onToggleShowRecurring={() => setShowRecurring((prev) => !prev)}
+            showSubprojects={showSubprojects}
+            onToggleShowSubprojects={() => setShowSubprojects((prev) => !prev)}
             showMaxMinRows={showMaxMinRows}
             onToggleShowMaxMinRows={() => setShowMaxMinRows((prev) => !prev)}
             addTasksCount={addTasksCount}
@@ -1218,6 +1250,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
             columnStructure={columnStructure}
             columnLetters={columnLetters}
             columnLetterByKey={columnLetterByKey}
+            filterBlockedLetters={filterBlockedLetters}
             getWidthStyle={getWidthStyle}
             fixedCols={fixedCols}
             ROW_H={ROW_H}

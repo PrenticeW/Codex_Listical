@@ -6,6 +6,8 @@ export default function ProjectListicalMenu({
   onClose,
   showRecurring,
   onToggleShowRecurring,
+  showSubprojects,
+  onToggleShowSubprojects,
   showMaxMinRows,
   onToggleShowMaxMinRows,
   addTasksCount,
@@ -68,6 +70,15 @@ export default function ProjectListicalMenu({
                 onChange={onToggleShowRecurring}
               />
               Show Recurring
+            </label>
+            <label className="flex items-center gap-2 font-semibold">
+              <input
+                type="checkbox"
+                className={checkboxInputClass}
+                checked={showSubprojects}
+                onChange={onToggleShowSubprojects}
+              />
+              Show Subprojects
             </label>
             <label className="flex items-center gap-2 font-semibold">
               <input

@@ -3,6 +3,7 @@ import React from 'react';
 export default function useRowRenderers({
   totalDays,
   showRecurring,
+  showSubprojects,
   ROW_H,
   projectHeaderTotals,
   projectWeeklyQuotas,
@@ -30,6 +31,7 @@ export default function useRowRenderers({
   projectNames,
   DARK_HEADER_STYLE,
   ARCHIVE_ROW_STYLE,
+  officialProjects = [],
 }) {
   const EstimateOptions = () => (
     <>
@@ -66,6 +68,41 @@ export default function useRowRenderers({
       ))}
     </>
   );
+
+  const SubprojectOptions = ({ projectSelection }) => {
+    // If no project is selected, show dash only
+    if (!projectSelection || projectSelection === '-') {
+      return <option>-</option>;
+    }
+
+    // Find the project in officialProjects based on projectSelection
+    // Match the same logic used in projectNames: nickname || projectName || text
+    const normalizeProjectKey = (name) => (name ?? '').trim().toLowerCase();
+    const selectedProjectKey = normalizeProjectKey(projectSelection);
+
+    const project = officialProjects.find((p) => {
+      const projectName = p.projectNickname || p.projectName || p.text;
+      return normalizeProjectKey(projectName) === selectedProjectKey;
+    });
+
+    if (!project || !project.planSummary?.subprojects) {
+      return <option>-</option>;
+    }
+
+    // Get subprojects from the project's planSummary
+    const subprojects = Array.isArray(project.planSummary.subprojects)
+      ? project.planSummary.subprojects.filter((entry) => Boolean(entry?.name))
+      : [];
+
+    return (
+      <>
+        <option>-</option>
+        {subprojects.map((subproject, index) => (
+          <option key={`${subproject.name}-${index}`}>{subproject.name}</option>
+        ))}
+      </>
+    );
+  };
 
   const renderProjectHeaderRow = ({
     row,
@@ -129,6 +166,14 @@ export default function useRowRenderers({
           onMouseDown={(event) => handleCellMouseDown(event, rowId, 'project')}
           {...cellClickProps('project')}
         ></td>
+        {showSubprojects && (
+          <td
+            className={withCellSelectionClass('bg-[#d5a6bd]', 'subprojects')}
+            style={getWidthStyle('subprojects', getCellHighlightStyle(rowId, 'subprojects'))}
+            onMouseDown={(event) => handleCellMouseDown(event, rowId, 'subprojects')}
+            {...cellClickProps('subprojects')}
+          ></td>
+        )}
         <td
           className={withCellSelectionClass('bg-[#d5a6bd]', 'status')}
           style={getWidthStyle('status', getCellHighlightStyle(rowId, 'status'))}
@@ -250,6 +295,14 @@ export default function useRowRenderers({
         onMouseDown={(event) => handleCellMouseDown(event, rowId, 'project')}
         {...cellClickProps('project')}
       ></td>
+      {showSubprojects && (
+        <td
+          className={withCellSelectionClass('bg-[#f2e5eb]', 'subprojects')}
+          style={getWidthStyle('subprojects', getCellHighlightStyle(rowId, 'subprojects'))}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'subprojects')}
+          {...cellClickProps('subprojects')}
+        ></td>
+      )}
       <td
         className={withCellSelectionClass('bg-[#f2e5eb]', 'status')}
         style={getWidthStyle('status', getCellHighlightStyle(rowId, 'status'))}
@@ -427,6 +480,26 @@ export default function useRowRenderers({
             <ProjectOptions />
           </select>
         </td>
+        {showSubprojects && (
+          <td
+            style={getWidthStyle('subprojects', getCellHighlightStyle(rowId, 'subprojects'))}
+            className={withCellSelectionClass('border border-[#ced3d0] p-0', 'subprojects')}
+            {...cellClickProps('subprojects')}
+          >
+            <select
+              className={sharedInputStyle}
+              value={row.subprojectSelection ?? '-'}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                commitRowUpdate({ subprojectSelection: nextValue }, { markInteraction: true });
+              }}
+              onMouseDown={(event) => handleCellMouseDown(event, rowId, 'subprojects')}
+              onFocus={() => handleCellActivate(rowId, 'subprojects')}
+            >
+              <SubprojectOptions projectSelection={row.projectSelection} />
+            </select>
+          </td>
+        )}
         <td
           style={getWidthStyle('status', getCellHighlightStyle(rowId, 'status'))}
           className={withCellSelectionClass('border border-[#ced3d0] p-0', 'status')}
@@ -629,6 +702,14 @@ export default function useRowRenderers({
         onMouseDown={(event) => handleCellMouseDown(event, rowId, 'project')}
         {...cellClickProps('project')}
       ></td>
+      {showSubprojects && (
+        <td
+          className={withCellSelectionClass('bg-[#f2e5eb]', 'subprojects')}
+          style={getWidthStyle('subprojects', getCellHighlightStyle(rowId, 'subprojects'))}
+          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'subprojects')}
+          {...cellClickProps('subprojects')}
+        ></td>
+      )}
       <td
         className={withCellSelectionClass('bg-[#f2e5eb]', 'status')}
         style={getWidthStyle('status', getCellHighlightStyle(rowId, 'status'))}
@@ -1029,6 +1110,26 @@ export default function useRowRenderers({
             <ProjectOptions />
           </select>
         </td>
+        {showSubprojects && (
+          <td
+            style={getWidthStyle('subprojects', getCellHighlightStyle(rowId, 'subprojects'))}
+            className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'subprojects')}
+            {...cellClickProps('subprojects')}
+          >
+            <select
+              className={sharedInputStyle}
+              value={row.subprojectSelection ?? '-'}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                commitRowUpdate({ subprojectSelection: nextValue }, { markInteraction: true });
+              }}
+              onMouseDown={(event) => handleCellMouseDown(event, rowId, 'subprojects')}
+              onFocus={() => handleCellActivate(rowId, 'subprojects')}
+            >
+              <SubprojectOptions projectSelection={row.projectSelection} />
+            </select>
+          </td>
+        )}
         <td
           style={getWidthStyle('status', getCellHighlightStyle(rowId, 'status'))}
           className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'status')}

@@ -1,13 +1,12 @@
 import React, { useMemo } from 'react';
 import { ListFilter } from 'lucide-react';
 
-const FILTER_BLOCKED_LETTERS = new Set(['A', 'D', 'F']);
-
 export default function TimelineHeader({
   timelineRows,
   columnStructure,
   columnLetters,
   columnLetterByKey,
+  filterBlockedLetters,
   getWidthStyle,
   fixedCols,
   ROW_H,
@@ -43,7 +42,7 @@ export default function TimelineHeader({
   const renderContentWithFilterButton = (content, columnKey = null, rowIsFilter = false) => {
     if (!rowIsFilter || !columnKey || columnKey === 'rowLabel') return content;
     const columnLetter = letterByKey[columnKey];
-    if (columnLetter && FILTER_BLOCKED_LETTERS.has(columnLetter)) return content;
+    if (columnLetter && filterBlockedLetters && filterBlockedLetters.has(columnLetter)) return content;
     const isProjectFilterButton = columnKey === 'project';
     const isStatusFilterButton = columnKey === 'status';
     const isRecurringFilterButton = columnKey === 'recurring';
