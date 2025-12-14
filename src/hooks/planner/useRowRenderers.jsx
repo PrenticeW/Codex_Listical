@@ -299,9 +299,14 @@ export default function useRowRenderers({
           {...cellMetadataProps('rowLabel')}
           className={`text-center ${config.showData ? 'font-semibold' : ''} border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`}
           style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(rowId, 'rowLabel')))}
+          onMouseDown={(event) => {
+            console.log('[ROW NUMBER CELL mousedown]');
+          }}
+          onMouseUp={(event) => {
+            console.log('[ROW NUMBER CELL mouseup]');
+          }}
           onClick={(event) => {
             console.log('[ROW NUMBER CLICK] Row number clicked, index:', tableRow.index);
-            event.stopPropagation();
             handleRowClick(event, tableRow.index);
           }}
           data-cell-purpose="row-number"
@@ -544,7 +549,6 @@ export default function useRowRenderers({
           style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(rowId, 'rowLabel')))}
           onClick={(event) => {
             console.log('[ROW NUMBER CLICK] Row number clicked, index:', tableRow.index);
-            event.stopPropagation();
             handleRowClick(event, tableRow.index);
           }}
           data-cell-purpose="row-number"

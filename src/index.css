@@ -66,6 +66,67 @@ tr[data-drop-target="true"] {
   box-shadow: 0 -2px 8px rgba(37, 99, 235, 0.6) !important;
 }
 
+/* Google Sheets-style drag badge */
+.drag-badge {
+  font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.drag-badge-stack {
+  position: relative;
+  width: 48px;
+  height: 48px;
+}
+
+.drag-badge-layer {
+  position: absolute;
+  background: white;
+  border: 2px solid #dadce0;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  font-size: 14px;
+  color: #202124;
+}
+
+/* Layer 3 - bottom/back layer */
+.drag-badge-layer-3 {
+  width: 44px;
+  height: 36px;
+  top: 10px;
+  left: 6px;
+  opacity: 0.5;
+  transform: rotate(-2deg);
+}
+
+/* Layer 2 - middle layer */
+.drag-badge-layer-2 {
+  width: 46px;
+  height: 38px;
+  top: 6px;
+  left: 3px;
+  opacity: 0.7;
+  transform: rotate(-1deg);
+}
+
+/* Layer 1 - front/top layer with count */
+.drag-badge-layer-1 {
+  width: 48px;
+  height: 40px;
+  top: 2px;
+  left: 0;
+  background: white;
+}
+
+.drag-badge-count {
+  font-weight: 600;
+  font-size: 15px;
+  color: #5f6368;
+  user-select: none;
+}
+
 /* Highlight specific estimate options in dropdowns */
 option.estimate-highlight {
   color: #08ad2d !important;

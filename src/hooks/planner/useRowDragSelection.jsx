@@ -17,6 +17,7 @@ export default function useRowDragSelection({
   const [activeRowId, setActiveRowId] = useState(null);
   const [dragIndex, setDragIndex] = useState(null);
   const [hoverIndex, setHoverIndex] = useState(null);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
   const dragIndexRef = useRef(dragIndex);
   const hoverIndexRef = useRef(hoverIndex);
@@ -73,6 +74,7 @@ export default function useRowDragSelection({
       updateDragIndex(null);
       updateHoverIndex(null);
       setActiveRowId(null);
+      setMousePosition({ x: 0, y: 0 });
       if (!preserveCellSelection) {
         handleCellClear({ clearRowSelection: false });
       }
@@ -172,14 +174,20 @@ export default function useRowDragSelection({
 
   const handleRowMouseDown = useCallback(
     (event, rowIndex, rowId) => {
+      console.log('[handleRowMouseDown] called, rowIndex:', rowIndex, 'rowId:', rowId);
       if (event.button !== 0) return;
       if (event.target instanceof Element) {
         const interactive = event.target.closest('input, select, textarea, button, a');
-        if (interactive) return;
+        if (interactive) {
+          console.log('[handleRowMouseDown] interactive element, ignoring');
+          return;
+        }
       }
       event.stopPropagation();
-      event.preventDefault();
+      // Don't preventDefault here - it prevents the onClick event from firing!
+      // We'll call preventDefault in handleMouseMove when drag actually starts
       updatePointerModifierState(event);
+      console.log('[handleRowMouseDown] modifiers saved:', pointerModifierRef.current);
       pendingRowClickModifierRef.current = {
         meta: pointerModifierRef.current.meta,
         shift: pointerModifierRef.current.shift,
@@ -205,6 +213,9 @@ export default function useRowDragSelection({
       let selectionCommitted = rowIsSelected;
       const handleMouseMove = (moveEvent) => {
         moveEvent.preventDefault();
+        // Update mouse position for drag badge
+        setMousePosition({ x: moveEvent.clientX, y: moveEvent.clientY });
+
         if (dragStartPointRef.current) {
           const dx = moveEvent.clientX - dragStartPointRef.current.x;
           const dy = moveEvent.clientY - dragStartPointRef.current.y;
@@ -234,28 +245,78 @@ export default function useRowDragSelection({
       };
 
       const handleMouseUp = (upEvent) => {
+        console.log('[handleMouseUp] dragThresholdCrossed:', dragThresholdCrossedRef.current);
         upEvent.preventDefault();
+
         blockClickRef.current = dragThresholdCrossedRef.current;
 
         // Remove event listeners immediately
         detachDragListeners();
 
-        // If drag threshold wasn't crossed, treat as a click to select the row
+        // If drag threshold wasn't crossed, treat as a click and handle selection here
         if (!dragThresholdCrossedRef.current) {
+          console.log('[handleMouseUp] No drag, handling selection');
+
+          // Get modifier keys from the saved refs
+          const isMeta = pendingRowClickModifierRef.current.meta;
+          const isShift = pendingRowClickModifierRef.current.shift;
+
+          console.log('[handleMouseUp] modifiers - isMeta:', isMeta, 'isShift:', isShift);
+
+          // Clear cell selection
           handleCellClear({ clearRowSelection: false });
-          setSelectedRowIds(selectionForDrag);
-          // Look up current index for consistency
+
+          // Handle row selection with modifier key logic
           const currentRows = table.getRowModel().rows;
           const currentRowIndex = currentRows.findIndex((r) => r.original.id === rowId);
-          setLastSelectedRowIndex(currentRowIndex !== -1 ? currentRowIndex : rowIndex);
+
+          setSelectedRowIds((prev) => {
+            if (isShift) {
+              const anchorIndex = lastSelectedRowIndex ?? currentRowIndex;
+              const start = Math.min(anchorIndex, currentRowIndex);
+              const end = Math.max(anchorIndex, currentRowIndex);
+              const rangeIds = currentRows.slice(start, end + 1).map((row) => row.original.id);
+              console.log('[handleMouseUp] Shift selection, range:', rangeIds);
+              return rangeIds;
+            }
+            if (isMeta) {
+              const nextSet = new Set(prev);
+              if (nextSet.has(rowId)) nextSet.delete(rowId);
+              else nextSet.add(rowId);
+              const result = Array.from(nextSet);
+              console.log('[handleMouseUp] Meta selection, result:', result);
+              return result;
+            }
+            if (prev.length === 1 && prev[0] === rowId) {
+              console.log('[handleMouseUp] Deselecting single row');
+              return [];
+            }
+            console.log('[handleMouseUp] Single selection:', [rowId]);
+            return [rowId];
+          });
+          setLastSelectedRowIndex(currentRowIndex);
+
+          // Clean up drag state
+          updateDragIndex(null);
+          updateHoverIndex(null);
+          setActiveRowId(null);
+          setMousePosition({ x: 0, y: 0 });
+          dragStartPointRef.current = null;
+          dragSelectionRef.current = [];
         } else {
+          console.log('[handleMouseUp] Drag detected, finalizing reorder');
           // Otherwise, finalize the drag/drop
           const target = hoverIndexRef.current ?? dragIndexRef.current ?? rowIndex + 1;
           finalizeRowReorder(target);
         }
 
+        // Clean up modifier refs
+        pointerModifierRef.current = { meta: false, shift: false };
+        pendingRowClickModifierRef.current = { meta: false, shift: false };
+
         setTimeout(() => {
           blockClickRef.current = false;
+          console.log('[handleMouseUp] blockClickRef cleared');
         }, 0);
       };
 
@@ -272,6 +333,7 @@ export default function useRowDragSelection({
       setLastSelectedRowIndex,
       setSelectedRowIds,
       table,
+      lastSelectedRowIndex,
       updateDragIndex,
       updateHoverFromClientY,
       updateHoverIndex,
@@ -281,10 +343,17 @@ export default function useRowDragSelection({
 
   const handleRowClick = useCallback(
     (event, rowIndex) => {
-      if (blockClickRef.current) return;
+      console.log('[handleRowClick] called, blockClickRef:', blockClickRef.current, 'rowIndex:', rowIndex);
+      if (blockClickRef.current) {
+        console.log('[handleRowClick] blocked by blockClickRef');
+        return;
+      }
       const currentRows = table.getRowModel().rows;
       const targetRow = currentRows[rowIndex];
-      if (!targetRow) return;
+      if (!targetRow) {
+        console.log('[handleRowClick] no target row found');
+        return;
+      }
       const rowId = targetRow.original.id;
       const pointerMeta = pointerModifierRef.current.meta;
       const pointerShift = pointerModifierRef.current.shift;
@@ -293,6 +362,8 @@ export default function useRowDragSelection({
       const isMeta =
         event.metaKey || event.ctrlKey || pendingMeta || pointerMeta;
       const isShift = event.shiftKey || pendingShift || pointerShift;
+
+      console.log('[handleRowClick] modifiers - isMeta:', isMeta, 'isShift:', isShift);
 
       // Clear cell selection when clicking row number
       handleCellClear({ clearRowSelection: false });
@@ -303,17 +374,22 @@ export default function useRowDragSelection({
           const start = Math.min(anchorIndex, rowIndex);
           const end = Math.max(anchorIndex, rowIndex);
           const rangeIds = currentRows.slice(start, end + 1).map((row) => row.original.id);
+          console.log('[handleRowClick] Shift selection, range:', rangeIds);
           return rangeIds;
         }
         if (isMeta) {
           const nextSet = new Set(prev);
           if (nextSet.has(rowId)) nextSet.delete(rowId);
           else nextSet.add(rowId);
-          return Array.from(nextSet);
+          const result = Array.from(nextSet);
+          console.log('[handleRowClick] Meta selection, result:', result);
+          return result;
         }
         if (prev.length === 1 && prev[0] === rowId) {
+          console.log('[handleRowClick] Deselecting single row');
           return [];
         }
+        console.log('[handleRowClick] Single selection:', [rowId]);
         return [rowId];
       });
       setLastSelectedRowIndex(rowIndex);
@@ -336,5 +412,7 @@ export default function useRowDragSelection({
     shouldPreserveSelection,
     setHighlightedRowId,
     pointerModifierRef,
+    mousePosition,
+    isDragging: dragIndex !== null,
   };
 }

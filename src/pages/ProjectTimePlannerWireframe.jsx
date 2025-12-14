@@ -12,6 +12,7 @@ import usePlannerRowRendering from '../hooks/planner/usePlannerRowRendering';
 import FilterPanel from '../components/planner/FilterPanel';
 import ProjectListicalMenu from '../components/planner/ProjectListicalMenu';
 import TimelineHeader from '../components/planner/TimelineHeader';
+import DragBadge from '../components/DragBadge';
 import isBrowserEnvironment from '../utils/isBrowserEnvironment';
 import { loadTacticsMetrics } from '../lib/tacticsMetricsStorage';
 import { loadStagingState, STAGING_STORAGE_EVENT } from '../lib/stagingStorage';
@@ -427,6 +428,8 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     updatePointerModifierState,
     shouldPreserveSelection,
     pointerModifierRef,
+    mousePosition,
+    isDragging,
   } = useRowDragSelection({
     table,
     setRows,
@@ -1114,6 +1117,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
 
   return (
     <div ref={tableContainerRef} className="relative overflow-x-auto p-4 text-[12px] bg-gray-100">
+      <DragBadge isDragging={isDragging} count={selectedRowIds.length} mousePosition={mousePosition} />
       <NavigationBar
         currentPath={currentPath}
         onNavigate={onNavigate}

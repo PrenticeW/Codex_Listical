@@ -33,7 +33,8 @@ export default function usePlannerRowRendering({
       }
 
       // Add drag state styling
-      if (tableRowIndex === dragIndex) {
+      // Apply dragging state to all selected rows during drag
+      if (dragIndex !== null && isRowSelected) {
         rowPropsLocal['data-dragging'] = 'true';
       }
       if (tableRowIndex === hoverIndex && dragIndex !== null && hoverIndex !== null) {
