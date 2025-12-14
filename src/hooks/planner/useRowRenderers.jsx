@@ -1,5 +1,59 @@
 import React, { useMemo } from 'react';
 
+// ============================================================
+// CONSTANTS
+// ============================================================
+const BORDER_CLASSES = {
+  standard: 'border border-[#ced3d0]',
+  noBorder: 'border-0',
+};
+
+const CELL_ALIGNMENT = {
+  center: { textAlign: 'center' },
+  right: { textAlign: 'right' },
+  left: { textAlign: 'left' },
+};
+
+const FONT_WEIGHTS = {
+  semibold: { fontWeight: 600 },
+  bold: { fontWeight: 800 },
+};
+
+// ============================================================
+// UTILITY FUNCTIONS
+// ============================================================
+
+/**
+ * Builds border class string with optional top border removal
+ */
+const buildBorderClass = (removeTopBorder = false) => {
+  const topBorderClass = removeTopBorder ? ' border-t-0' : '';
+  return `${BORDER_CLASSES.standard}${topBorderClass}`;
+};
+
+/**
+ * Builds cell style with common patterns
+ */
+const buildCellStyle = (baseStyle, highlightStyle, extraStyles = {}) => {
+  return {
+    ...baseStyle,
+    ...highlightStyle,
+    ...extraStyles,
+  };
+};
+
+/**
+ * Merges row-specific props with base props
+ */
+const mergeRowProps = (baseProps, className, rowType, extraAttrs = {}) => {
+  return {
+    ...baseProps,
+    className,
+    'data-row-type': rowType,
+    ...extraAttrs,
+  };
+};
+
 export default function useRowRenderers({
   totalDays,
   showRecurring,
@@ -144,17 +198,18 @@ export default function useRowRenderers({
   // ============================================================
   // UNIFIED HEADER ROW RENDERER - Handles all 5 header types
   // ============================================================
-  const renderUnifiedHeaderRow = (variant) => ({
-    row,
-    rowId,
-    rowNumber,
-    isRowSelected,
-    rowPropsLocal,
-    cellMetadataProps,
-    withCellSelectionClass,
-    cellClickProps,
-    tableRow,
-  }) => {
+  const renderUnifiedHeaderRow = (variant) => {
+    const HeaderRowComponent = React.memo(({
+      row,
+      rowId,
+      rowNumber,
+      isRowSelected,
+      rowPropsLocal,
+      cellMetadataProps,
+      withCellSelectionClass,
+      cellClickProps,
+      tableRow,
+    }) => {
     const config = HEADER_ROW_CONFIGS[variant];
     const baseStyle = config.style || { backgroundColor: config.bgColor };
 
@@ -401,6 +456,18 @@ export default function useRowRenderers({
         ))}
       </tr>
     );
+    }, (prevProps, nextProps) => {
+      // Custom comparison: only re-render if relevant props changed
+      return (
+        prevProps.rowId === nextProps.rowId &&
+        prevProps.rowNumber === nextProps.rowNumber &&
+        prevProps.isRowSelected === nextProps.isRowSelected &&
+        prevProps.row === nextProps.row &&
+        JSON.stringify(prevProps.rowPropsLocal) === JSON.stringify(nextProps.rowPropsLocal)
+      );
+    });
+
+    return (props) => <HeaderRowComponent {...props} />;
   };
 
   // ============================================================
@@ -410,7 +477,8 @@ export default function useRowRenderers({
   // ============================================================
   // UNIFIED TASK ROW RENDERER - Handles both projectTask and inboxItem
   // ============================================================
-  const renderUnifiedTaskRow = ({ row,
+  const TaskRowComponent = React.memo(({
+    row,
     rowId,
     rowNumber,
     isRowSelected,
@@ -426,7 +494,7 @@ export default function useRowRenderers({
     const dayEntries = Array.isArray(row.dayEntries) ? row.dayEntries : [];
     const isCustomEstimate = row.estimate === 'Custom';
     const isInboxRow = previousRow && previousRow.type === 'inboxHeader';
-    const topBorderClass = isInboxRow ? ' border-t-0' : '';
+    const borderClass = buildBorderClass(isInboxRow);
 
     const updateTaskName = (value) => {
       commitRowUpdate({ taskName: value }, { markInteraction: true });
@@ -480,7 +548,7 @@ export default function useRowRenderers({
         <td
           {...cellMetadataProps('rowLabel')}
           className={withCellSelectionClass(
-            `text-center align-middle border border-[#ced3d0]${topBorderClass}${isRowSelected ? ' selected-cell' : ''}`,
+            `text-center align-middle ${borderClass}${isRowSelected ? ' selected-cell' : ''}`,
             'rowLabel'
           )}
           style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(rowId, 'rowLabel')))}
@@ -498,7 +566,7 @@ export default function useRowRenderers({
           {rowNumber}
         </td>
         <td
-          className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0 check-cell`, 'check')}
+          className={withCellSelectionClass(`${borderClass} p-0 check-cell`, 'check')}
           style={getWidthStyle('check', getCellHighlightStyle(rowId, 'check'))}
           {...cellClickProps('check')}
           data-cell-purpose="task-checkbox"
@@ -516,7 +584,7 @@ export default function useRowRenderers({
         </td>
         <td
           style={getWidthStyle('project', getCellHighlightStyle(rowId, 'project'))}
-          className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'project')}
+          className={withCellSelectionClass(`${borderClass} p-0`, 'project')}
           {...cellClickProps('project')}
           data-cell-purpose="project-selector"
           data-interactive="true"
@@ -539,7 +607,7 @@ export default function useRowRenderers({
         {showSubprojects && (
           <td
             style={getWidthStyle('subprojects', getCellHighlightStyle(rowId, 'subprojects'))}
-            className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'subprojects')}
+            className={withCellSelectionClass(`${borderClass} p-0`, 'subprojects')}
             {...cellClickProps('subprojects')}
             data-cell-purpose="subproject-selector"
             data-interactive="true"
@@ -561,7 +629,7 @@ export default function useRowRenderers({
         )}
         <td
           style={getWidthStyle('status', getCellHighlightStyle(rowId, 'status'))}
-          className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'status')}
+          className={withCellSelectionClass(`${borderClass} p-0`, 'status')}
           {...cellClickProps('status')}
           data-cell-purpose="status-selector"
           data-interactive="true"
@@ -585,7 +653,7 @@ export default function useRowRenderers({
         </td>
         <td
           style={getWidthStyle('task', getCellHighlightStyle(rowId, 'task'))}
-          className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'task')}
+          className={withCellSelectionClass(`${borderClass} p-0`, 'task')}
           {...cellClickProps('task')}
           data-cell-purpose="task-name-input"
           data-interactive="true"
@@ -605,7 +673,7 @@ export default function useRowRenderers({
         </td>
         {showRecurring && (
           <td
-            className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'recurring')}
+            className={withCellSelectionClass(`${borderClass} p-0`, 'recurring')}
             style={getWidthStyle('recurring', getCellHighlightStyle(rowId, 'recurring'))}
             {...cellClickProps('recurring')}
             data-cell-purpose="recurring-toggle"
@@ -629,7 +697,7 @@ export default function useRowRenderers({
         )}
         <td
           style={getWidthStyle('estimate', getCellHighlightStyle(rowId, 'estimate'))}
-          className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'estimate')}
+          className={withCellSelectionClass(`${borderClass} p-0`, 'estimate')}
           {...cellClickProps('estimate')}
           data-cell-purpose="estimate-selector"
           data-interactive="true"
@@ -673,13 +741,12 @@ export default function useRowRenderers({
           </select>
         </td>
         <td
-          className={withCellSelectionClass(`border border-[#ced3d0]${topBorderClass} p-0`, 'timeValue')}
-          style={getWidthStyle('timeValue', {
-            ...blackDividerStyle,
-            ...getCellHighlightStyle(rowId, 'timeValue'),
-            textAlign: 'right',
-            paddingRight: 8,
-          })}
+          className={withCellSelectionClass(`${borderClass} p-0`, 'timeValue')}
+          style={getWidthStyle('timeValue', buildCellStyle(
+            blackDividerStyle,
+            getCellHighlightStyle(rowId, 'timeValue'),
+            { ...CELL_ALIGNMENT.right, paddingRight: 8 }
+          ))}
           {...cellClickProps('timeValue')}
           data-cell-purpose="time-value-input"
           data-interactive={isCustomEstimate ? 'true' : 'false'}
@@ -714,7 +781,7 @@ export default function useRowRenderers({
             data-day-index={i}
             data-interactive="true"
             className={withCellSelectionClass(
-              `${getWeekBorderClass(i, 'border border-[#ced3d0]' + topBorderClass)} p-0`,
+              `${getWeekBorderClass(i, borderClass)} p-0`,
               `day-${i}`
             )}
             {...cellClickProps(`day-${i}`)}
@@ -736,13 +803,25 @@ export default function useRowRenderers({
         ))}
       </tr>
     );
-  };
+  }, (prevProps, nextProps) => {
+    // Custom comparison: only re-render if relevant props changed
+    return (
+      prevProps.rowId === nextProps.rowId &&
+      prevProps.rowNumber === nextProps.rowNumber &&
+      prevProps.isRowSelected === nextProps.isRowSelected &&
+      prevProps.row === nextProps.row &&
+      prevProps.previousRow === nextProps.previousRow &&
+      JSON.stringify(prevProps.rowPropsLocal) === JSON.stringify(nextProps.rowPropsLocal)
+    );
+  });
+
+  const renderUnifiedTaskRow = (props) => <TaskRowComponent {...props} />;
 
   // ============================================================
   // OLD TASK RENDERERS REMOVED - Now using renderUnifiedTaskRow
   // ============================================================
 
-  const renderArchiveRow = ({
+  const ArchiveRowComponent = React.memo(({
     row,
     rowId,
     rowNumber,
@@ -754,22 +833,20 @@ export default function useRowRenderers({
     previousRow,
     tableRow,
   }) => {
-    const topBorderClass =
-      previousRow && (previousRow.type === 'archiveHeader' || previousRow.type === 'archiveRow')
-        ? ' border-t-0'
-        : '';
+    const isArchiveSection = previousRow && (previousRow.type === 'archiveHeader' || previousRow.type === 'archiveRow');
+    const borderClass = buildBorderClass(isArchiveSection);
     return (
       <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
         <td
           {...cellMetadataProps('rowLabel')}
           className={withCellSelectionClass(
-            `text-center align-middle border border-[#ced3d0]${topBorderClass}${isRowSelected ? ' selected-cell' : ''}`,
+            `text-center align-middle ${borderClass}${isRowSelected ? ' selected-cell' : ''}`,
             'rowLabel'
           )}
-          style={getWidthStyle('rowLabel', applyRowLabelStyle({
-            ...ARCHIVE_ROW_STYLE,
-            ...getCellHighlightStyle(rowId, 'rowLabel'),
-          }))}
+          style={getWidthStyle('rowLabel', applyRowLabelStyle(buildCellStyle(
+            ARCHIVE_ROW_STYLE,
+            getCellHighlightStyle(rowId, 'rowLabel')
+          )))}
           tabIndex={0}
           onMouseDown={(event) => handleCellMouseDown(event, rowId, 'rowLabel', { highlightRow: true })}
           onFocus={() =>
@@ -798,24 +875,26 @@ export default function useRowRenderers({
                 : {};
           const alignmentStyle =
             key === 'estimate'
-              ? { textAlign: 'right', fontWeight: 800 }
+              ? { ...CELL_ALIGNMENT.right, ...FONT_WEIGHTS.bold }
               : key === 'timeValue'
-                ? { textAlign: 'left' }
+                ? CELL_ALIGNMENT.left
                 : {};
           return (
             <td
               key={`${rowId}-${key}`}
               className={withCellSelectionClass(
-                `border border-[#ced3d0]${topBorderClass} ${className ?? ''} font-semibold px-2`,
+                `${borderClass} ${className ?? ''} font-semibold px-2`,
                 key
               )}
-              style={getWidthStyle(key, {
-                ...ARCHIVE_ROW_STYLE,
-                ...(key === 'timeValue' ? blackDividerStyle : {}),
-                ...getCellHighlightStyle(rowId, key),
-                ...extraStyles,
-                ...alignmentStyle,
-              })}
+              style={getWidthStyle(key, buildCellStyle(
+                ARCHIVE_ROW_STYLE,
+                getCellHighlightStyle(rowId, key),
+                {
+                  ...(key === 'timeValue' ? blackDividerStyle : {}),
+                  ...extraStyles,
+                  ...alignmentStyle,
+                }
+              ))}
               onMouseDown={(event) => handleCellMouseDown(event, rowId, key)}
               {...cellClickProps(key)}
             >
@@ -827,20 +906,32 @@ export default function useRowRenderers({
           <td
             key={`${rowId}-archive-${i}`}
             className={withCellSelectionClass(
-              `${getWeekBorderClass(i, 'border border-[#ced3d0]' + topBorderClass)} p-0`,
+              `${getWeekBorderClass(i, borderClass)} p-0`,
               `day-${i}`
             )}
-            style={applyWeekBorderStyles(i, getWidthStyle(`day-${i}`, {
-              backgroundColor: '#ffffff',
-              ...getCellHighlightStyle(rowId, `day-${i}`),
-            }))}
+            style={applyWeekBorderStyles(i, getWidthStyle(`day-${i}`, buildCellStyle(
+              { backgroundColor: '#ffffff' },
+              getCellHighlightStyle(rowId, `day-${i}`)
+            )))}
             onMouseDown={(event) => handleCellMouseDown(event, rowId, `day-${i}`)}
             {...cellClickProps(`day-${i}`)}
           ></td>
         ))}
       </tr>
     );
-  };
+  }, (prevProps, nextProps) => {
+    // Custom comparison: only re-render if relevant props changed
+    return (
+      prevProps.rowId === nextProps.rowId &&
+      prevProps.rowNumber === nextProps.rowNumber &&
+      prevProps.isRowSelected === nextProps.isRowSelected &&
+      prevProps.row === nextProps.row &&
+      prevProps.previousRow === nextProps.previousRow &&
+      JSON.stringify(prevProps.rowPropsLocal) === JSON.stringify(nextProps.rowPropsLocal)
+    );
+  });
+
+  const renderArchiveRow = (props) => <ArchiveRowComponent {...props} />;
 
   return {
     // Use unified header renderer for all 5 header types

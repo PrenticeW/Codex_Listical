@@ -1,9 +1,7 @@
-import React, { useEffect } from 'react';
+import React from 'react';
+import useClickOutside from '../../hooks/useClickOutside';
 
-const isBrowserEnvironment = () =>
-  typeof window !== 'undefined' && typeof document !== 'undefined';
-
-export default function FilterPanel({
+const FilterPanel = React.memo(function FilterPanel({
   projectFilterMenu,
   projectFilterMenuRef,
   projectFilterButtonRef,
@@ -33,93 +31,34 @@ export default function FilterPanel({
   handleEstimateFilterSelect,
   closeEstimateFilterMenu,
 }) {
-  useEffect(() => {
-    if (!projectFilterMenu.open || !isBrowserEnvironment()) return undefined;
-    const handleClickOutside = (event) => {
-      const menuNode = projectFilterMenuRef.current;
-      const buttonNode = projectFilterButtonRef.current;
-      if (menuNode && menuNode.contains(event.target)) return;
-      if (buttonNode && buttonNode.contains(event.target)) return;
-      closeProjectFilterMenu();
-    };
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        closeProjectFilterMenu();
-      }
-    };
-    window.addEventListener('mousedown', handleClickOutside, true);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('mousedown', handleClickOutside, true);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [projectFilterMenu.open, projectFilterMenuRef, projectFilterButtonRef, closeProjectFilterMenu]);
+  // Handle click-outside and escape key for all filter menus
+  useClickOutside({
+    isOpen: projectFilterMenu.open,
+    menuRef: projectFilterMenuRef,
+    buttonRef: projectFilterButtonRef,
+    onClose: closeProjectFilterMenu,
+  });
 
-  useEffect(() => {
-    if (!statusFilterMenu.open || !isBrowserEnvironment()) return undefined;
-    const handleClickOutside = (event) => {
-      const menuNode = statusFilterMenuRef.current;
-      const buttonNode = statusFilterButtonRef.current;
-      if (menuNode && menuNode.contains(event.target)) return;
-      if (buttonNode && buttonNode.contains(event.target)) return;
-      closeStatusFilterMenu();
-    };
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        closeStatusFilterMenu();
-      }
-    };
-    window.addEventListener('mousedown', handleClickOutside, true);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('mousedown', handleClickOutside, true);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [statusFilterMenu.open, statusFilterMenuRef, statusFilterButtonRef, closeStatusFilterMenu]);
+  useClickOutside({
+    isOpen: statusFilterMenu.open,
+    menuRef: statusFilterMenuRef,
+    buttonRef: statusFilterButtonRef,
+    onClose: closeStatusFilterMenu,
+  });
 
-  useEffect(() => {
-    if (!recurringFilterMenu.open || !isBrowserEnvironment()) return undefined;
-    const handleClickOutside = (event) => {
-      const menuNode = recurringFilterMenuRef.current;
-      const buttonNode = recurringFilterButtonRef.current;
-      if (menuNode && menuNode.contains(event.target)) return;
-      if (buttonNode && buttonNode.contains(event.target)) return;
-      closeRecurringFilterMenu();
-    };
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        closeRecurringFilterMenu();
-      }
-    };
-    window.addEventListener('mousedown', handleClickOutside, true);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('mousedown', handleClickOutside, true);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [recurringFilterMenu.open, recurringFilterMenuRef, recurringFilterButtonRef, closeRecurringFilterMenu]);
+  useClickOutside({
+    isOpen: recurringFilterMenu.open,
+    menuRef: recurringFilterMenuRef,
+    buttonRef: recurringFilterButtonRef,
+    onClose: closeRecurringFilterMenu,
+  });
 
-  useEffect(() => {
-    if (!estimateFilterMenu.open || !isBrowserEnvironment()) return undefined;
-    const handleClickOutside = (event) => {
-      const menuNode = estimateFilterMenuRef.current;
-      const buttonNode = estimateFilterButtonRef.current;
-      if (menuNode && menuNode.contains(event.target)) return;
-      if (buttonNode && buttonNode.contains(event.target)) return;
-      closeEstimateFilterMenu();
-    };
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        closeEstimateFilterMenu();
-      }
-    };
-    window.addEventListener('mousedown', handleClickOutside, true);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('mousedown', handleClickOutside, true);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [estimateFilterMenu.open, estimateFilterMenuRef, estimateFilterButtonRef, closeEstimateFilterMenu]);
+  useClickOutside({
+    isOpen: estimateFilterMenu.open,
+    menuRef: estimateFilterMenuRef,
+    buttonRef: estimateFilterButtonRef,
+    onClose: closeEstimateFilterMenu,
+  });
 
   return (
     <>
@@ -225,4 +164,6 @@ export default function FilterPanel({
       )}
     </>
   );
-}
+});
+
+export default FilterPanel;

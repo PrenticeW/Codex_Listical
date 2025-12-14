@@ -15,227 +15,45 @@ import TimelineHeader from '../components/planner/TimelineHeader';
 import isBrowserEnvironment from '../utils/isBrowserEnvironment';
 import { loadTacticsMetrics } from '../lib/tacticsMetricsStorage';
 import { loadStagingState, STAGING_STORAGE_EVENT } from '../lib/stagingStorage';
-const DAYS_OF_WEEK = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-];
-
-const PROTECTED_STATUSES = new Set(['Done', 'Abandoned', 'Blocked', 'On Hold', 'Skipped', 'Special']);
-const TASK_ROW_TYPES = new Set(['projectTask', 'inboxItem']);
-const FILTERABLE_ROW_TYPES = new Set([
-  'projectTask',
-  'inboxItem',
-  'projectHeader',
-  'projectGeneral',
-  'projectUnscheduled',
-]);
-const STATUS_VALUES = ['Not Scheduled', 'Scheduled', 'Done', 'Blocked', 'On Hold', 'Abandoned'];
-const RECURRING_VALUES = ['Recurring', 'Not Recurring'];
-const ESTIMATE_VALUES = [
-  '-',
-  'Custom',
-  '1 Minute',
-  ...Array.from({ length: 11 }, (_, i) => `${(i + 1) * 5} Minutes`),
-  ...[1, 2, 3, 4, 5, 6, 7, 8].map((h) => `${h} Hour${h > 1 ? 's' : ''}`),
-];
-
-const isProtectedStatus = (status) => {
-  if (!status || status === '-') return false;
-  return PROTECTED_STATUSES.has(status);
-};
-
-const hasScheduledTimeEntries = (row) => {
-  if (!Array.isArray(row.dayEntries)) return false;
-  return row.dayEntries.some((value) => (value ?? '').trim() !== '');
-};
-
-const MIN_COLUMN_WIDTH = 40;
-const COLUMN_RESIZE_HANDLE_WIDTH = 10;
-const createEmptyDayEntries = (count) => Array.from({ length: count }, () => '');
-const createZeroDayEntries = (count) => Array.from({ length: count }, () => '0.00');
-const formatHoursValue = (value) => {
-  if (!Number.isFinite(value)) return '0.00';
-  return value.toFixed(2);
-};
-const isTaskColumnEmpty = (row) => !(row.taskName ?? '').trim();
-const ROW_LABEL_BASE_STYLE = { backgroundColor: '#d9f6e0', color: '#065f46' };
-const applyRowLabelStyle = (style = {}) => ({ ...style, ...ROW_LABEL_BASE_STYLE });
-const coerceNumber = (value) => {
-  if (value == null) return null;
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value === 'string') {
-    const normalized = value.trim().replace(',', '.');
-    if (!normalized) return null;
-    const parsed = parseFloat(normalized);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-};
-const formatTotalValue = (value) => {
-  if (value == null) return '0.00';
-  return value.toFixed(2);
-};
-
-const normalizeTimeEntryValue = (value) => (typeof value === 'string' ? value.trim() : '');
-const syncDayEntriesWithTimeValue = (dayEntries, nextTimeValue, prevTimeValue) => {
-  if (!Array.isArray(dayEntries)) return dayEntries;
-  const prev = normalizeTimeEntryValue(prevTimeValue);
-  if (!prev) return dayEntries;
-  const nextRaw = nextTimeValue ?? '';
-  const next = normalizeTimeEntryValue(nextRaw);
-  if (next === prev) return dayEntries;
-
-  let changed = false;
-  const updatedEntries = dayEntries.map((entry) => {
-    if (normalizeTimeEntryValue(entry) === prev) {
-      changed = true;
-      return nextRaw;
-    }
-    return entry;
-  });
-
-  return changed ? updatedEntries : dayEntries;
-};
-
-const parseEstimateLabelToMinutes = (label) => {
-  if (!label || label === '-' || label === 'Custom') return null;
-  const minuteMatch = label.match(/^(\d+)\s+Minute/);
-  if (minuteMatch) {
-    return parseInt(minuteMatch[1], 10);
-  }
-  const hourMatch = label.match(/^(\d+)\s+Hour/);
-  if (hourMatch) {
-    return parseInt(hourMatch[1], 10) * 60;
-  }
-  return null;
-};
-
-const formatMinutesToHHmm = (minutes) => {
-  const hrs = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${hrs}.${mins.toString().padStart(2, '0')}`;
-};
-const COL_W = {
-  rowLabel: 36,
-  check: 24,
-  project: 120,
-  subprojects: 150,
-  status: 120,
-  task: 240,
-  recurring: 80,
-  estimate: 100,
-  timeValue: 80,
-  day: 60,
-};
-const ROW_H = 26;
-const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Abandoned', 'Blocked', 'On Hold'];
-const SORT_INBOX_TARGET_MAP = {
-  Done: 'general',
-  Scheduled: 'general',
-  'Not Scheduled': 'unscheduled',
-  Abandoned: 'unscheduled',
-  Blocked: 'unscheduled',
-  'On Hold': 'unscheduled',
-};
-const normalizeProjectKey = (name) => (name ?? '').trim().toLowerCase();
-
-const STATUS_COLOR_MAP = {
-  'Not Scheduled': { bg: '#e5e5e5', text: '#000000' },
-  Scheduled: { bg: '#ffe5a0', text: '#473821' },
-  Done: { bg: '#c9e9c0', text: '#276436' },
-  Abandoned: { bg: '#e8d9f3', text: '#5a3b74' },
-  Blocked: { bg: '#f3c4c4', text: '#9c2f2f' },
-  'On Hold': { bg: '#505050', text: '#ffffff' },
-  Special: { bg: '#cce3ff', text: '#3a70b7' },
-};
-
-const getStatusColorStyle = (status) => {
-  const colors = STATUS_COLOR_MAP[status] || { bg: '#ffffff', text: '#000000' };
-  return { backgroundColor: colors.bg, color: colors.text };
-};
-
-const getProjectSelectStyle = (value) => {
-  const isDash = !value || value === '-';
-  return {
-    backgroundColor: isDash ? '#ffffff' : '#e5e5e5',
-    color: '#000000',
-  };
-};
-
-const DARK_HEADER_STYLE = { backgroundColor: '#000000', color: '#ffffff' };
-const ARCHIVE_ROW_STYLE = { backgroundColor: '#d9f6e0', color: '#000000' };
-const formatDateForInput = (date) => {
-  const year = date.getFullYear().toString().padStart(4, '0');
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const day = date.getDate().toString().padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const SETTINGS_STORAGE_KEY = 'listical-settings';
-const TASK_ROWS_STORAGE_KEY = 'listical-task-rows';
-
-const readStoredSettings = () => {
-  if (!isBrowserEnvironment()) return null;
-  try {
-    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return null;
-    return {
-      columnWidths: typeof parsed.columnWidths === 'object' && parsed.columnWidths ? parsed.columnWidths : {},
-      startDate: typeof parsed.startDate === 'string' ? parsed.startDate : '',
-      showRecurring: typeof parsed.showRecurring === 'boolean' ? parsed.showRecurring : true,
-      showSubprojects: typeof parsed.showSubprojects === 'boolean' ? parsed.showSubprojects : true,
-    };
-  } catch (error) {
-    console.error('Failed to read Listical settings', error);
-    return null;
-  }
-};
-
-const readStoredTaskRows = () => {
-  if (!isBrowserEnvironment()) return {};
-  try {
-    const raw = window.localStorage.getItem(TASK_ROWS_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return {};
-    return parsed;
-  } catch (error) {
-    console.error('Failed to read task rows', error);
-    return {};
-  }
-};
-
-const saveTaskRows = (rows) => {
-  if (!isBrowserEnvironment()) return;
-  try {
-    // Only save task rows with user interaction
-    const taskRowsData = {};
-    rows.forEach((row) => {
-      if (TASK_ROW_TYPES.has(row.type) && row.hasUserInteraction) {
-        taskRowsData[row.id] = {
-          taskName: row.taskName,
-          projectSelection: row.projectSelection,
-          subprojectSelection: row.subprojectSelection,
-          status: row.status,
-          estimate: row.estimate,
-          timeValue: row.timeValue,
-          recurring: row.recurring,
-          dayEntries: row.dayEntries,
-        };
-      }
-    });
-    window.localStorage.setItem(TASK_ROWS_STORAGE_KEY, JSON.stringify(taskRowsData));
-  } catch (error) {
-    console.error('Failed to save task rows', error);
-  }
-};
+import {
+  DAYS_OF_WEEK,
+  TASK_ROW_TYPES,
+  FILTERABLE_ROW_TYPES,
+  STATUS_VALUES,
+  RECURRING_VALUES,
+  ESTIMATE_VALUES,
+  SORTABLE_STATUSES,
+  SORT_INBOX_TARGET_MAP,
+  COL_W,
+  ROW_H,
+  MIN_COLUMN_WIDTH,
+  COLUMN_RESIZE_HANDLE_WIDTH,
+  DARK_HEADER_STYLE,
+  ARCHIVE_ROW_STYLE,
+} from '../constants/plannerConstants';
+import {
+  formatHoursValue,
+  formatTotalValue,
+  formatMinutesToHHmm,
+  formatDateForInput,
+  parseEstimateLabelToMinutes,
+} from '../utils/plannerFormatters';
+import {
+  coerceNumber,
+  syncDayEntriesWithTimeValue,
+  isProtectedStatus,
+  hasScheduledTimeEntries,
+  isTaskColumnEmpty,
+  createEmptyDayEntries,
+  createZeroDayEntries,
+} from '../utils/rowDataTransformers';
+import { readStoredSettings, readStoredTaskRows, saveSettings, saveTaskRows } from '../utils/plannerStorage';
+import {
+  getStatusColorStyle,
+  getProjectSelectStyle,
+  applyRowLabelStyle,
+  normalizeProjectKey,
+} from '../utils/plannerStyles';
 
 export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavigate = () => {} }) {
   const storedSettings = readStoredSettings();
@@ -463,17 +281,13 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   useEffect(() => {
     if (!isBrowserEnvironment()) return;
     if (!settingsLoaded) return;
-    try {
-      const payload = {
-        columnWidths,
-        startDate,
-        showRecurring,
-        showSubprojects,
-      };
-      window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
-    } catch (error) {
-      console.error('Failed to save Listical settings', error);
-    }
+    const payload = {
+      columnWidths,
+      startDate,
+      showRecurring,
+      showSubprojects,
+    };
+    saveSettings(payload);
   }, [columnWidths, settingsLoaded, startDate, showRecurring, showSubprojects]);
   const updateRowValues = useCallback(
     (rowIndex, updater, options = {}) => {
@@ -789,53 +603,65 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     return () => clearTimeout(timeoutId);
   }, [rows]);
 
-  const columnTotals = useMemo(() => {
-    const totals = {};
+  // Combined calculation: columnTotals and projectHeaderTotals in a single pass
+  const { columnTotals, projectHeaderTotals } = useMemo(() => {
+    // Initialize column totals for all days
+    const colTotals = {};
     for (let i = 0; i < totalDays; i += 1) {
-      totals[`day-${i}`] = 0;
+      colTotals[`day-${i}`] = 0;
     }
-    debouncedRows.forEach((row) => {
-      if (!Array.isArray(row.dayEntries)) return;
-      row.dayEntries.forEach((value, idx) => {
-        if (idx < 0 || idx >= totalDays) return;
-        const normalizedValue = coerceNumber(value);
-        if (normalizedValue == null) return;
-        const key = `day-${idx}`;
-        totals[key] = (totals[key] ?? 0) + normalizedValue;
-      });
-    });
-    return totals;
-  }, [debouncedRows, totalDays]);
 
-  const projectHeaderTotals = useMemo(() => {
-    const totals = {};
+    // Initialize project header totals tracking
+    const projTotals = {};
     let activeHeaderId = null;
 
+    // Single pass through all rows
     debouncedRows.forEach((row) => {
+      // Track which project header we're under
       if (row.type === 'projectHeader') {
         activeHeaderId = row.id;
-        totals[activeHeaderId] = 0;
+        projTotals[activeHeaderId] = 0;
         return;
       }
       if (row.type === 'inboxHeader' || row.type === 'archiveHeader') {
         activeHeaderId = null;
         return;
       }
-      if (!activeHeaderId) return;
-      if (!TASK_ROW_TYPES.has(row.type)) return;
-      const status = row.status ?? '';
-      if (status !== 'Scheduled' && status !== 'Done') return;
-      const value = coerceNumber(row.timeValue);
-      if (value == null) return;
-      totals[activeHeaderId] += value;
+
+      // Calculate column totals (sum of all day entries)
+      if (Array.isArray(row.dayEntries)) {
+        row.dayEntries.forEach((value, idx) => {
+          if (idx < 0 || idx >= totalDays) return;
+          const normalizedValue = coerceNumber(value);
+          if (normalizedValue == null) return;
+          const key = `day-${idx}`;
+          colTotals[key] = (colTotals[key] ?? 0) + normalizedValue;
+        });
+      }
+
+      // Calculate project header totals (sum of timeValue for scheduled/done tasks)
+      if (activeHeaderId && TASK_ROW_TYPES.has(row.type)) {
+        const status = row.status ?? '';
+        if (status === 'Scheduled' || status === 'Done') {
+          const value = coerceNumber(row.timeValue);
+          if (value != null) {
+            projTotals[activeHeaderId] += value;
+          }
+        }
+      }
     });
 
-    const formattedTotals = {};
-    Object.entries(totals).forEach(([key, total]) => {
-      formattedTotals[key] = formatTotalValue(total ?? 0);
+    // Format project totals
+    const formattedProjTotals = {};
+    Object.entries(projTotals).forEach(([key, total]) => {
+      formattedProjTotals[key] = formatTotalValue(total ?? 0);
     });
-    return formattedTotals;
-  }, [debouncedRows]);
+
+    return {
+      columnTotals: colTotals,
+      projectHeaderTotals: formattedProjTotals,
+    };
+  }, [debouncedRows, totalDays]);
 
   const { timelineRows } = useTimelineRows({
     dates,
