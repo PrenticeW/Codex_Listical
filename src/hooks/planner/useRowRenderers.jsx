@@ -297,20 +297,13 @@ export default function useRowRenderers({
       >
         <td
           {...cellMetadataProps('rowLabel')}
-          className={withCellSelectionClass(
-            `text-center ${config.showData ? 'font-semibold' : ''} border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`,
-            'rowLabel'
-          )}
+          className={`text-center ${config.showData ? 'font-semibold' : ''} border border-[#ced3d0]${isRowSelected ? ' selected-cell' : ''}`}
           style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(rowId, 'rowLabel')))}
-          tabIndex={0}
-          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'rowLabel', { highlightRow: true })}
-          onFocus={() =>
-            handleCellActivate(rowId, 'rowLabel', {
-              highlightRow: true,
-              preserveSelection: true,
-            })
-          }
-          onClick={(event) => handleRowClick(event, tableRow.index)}
+          onClick={(event) => {
+            console.log('[ROW NUMBER CLICK] Row number clicked, index:', tableRow.index);
+            event.stopPropagation();
+            handleRowClick(event, tableRow.index);
+          }}
           data-cell-purpose="row-number"
         >
           {rowNumber}
@@ -547,20 +540,13 @@ export default function useRowRenderers({
       >
         <td
           {...cellMetadataProps('rowLabel')}
-          className={withCellSelectionClass(
-            `text-center align-middle ${borderClass}${isRowSelected ? ' selected-cell' : ''}`,
-            'rowLabel'
-          )}
+          className={`text-center align-middle ${borderClass}${isRowSelected ? ' selected-cell' : ''}`}
           style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(rowId, 'rowLabel')))}
-          tabIndex={0}
-          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'rowLabel', { highlightRow: true })}
-          onFocus={() =>
-            handleCellActivate(rowId, 'rowLabel', {
-              highlightRow: true,
-              preserveSelection: true,
-            })
-          }
-          onClick={(event) => handleRowClick(event, tableRow.index)}
+          onClick={(event) => {
+            console.log('[ROW NUMBER CLICK] Row number clicked, index:', tableRow.index);
+            event.stopPropagation();
+            handleRowClick(event, tableRow.index);
+          }}
           data-cell-purpose="row-number"
         >
           {rowNumber}
@@ -839,23 +825,16 @@ export default function useRowRenderers({
       <tr {...rowPropsLocal} className={`h-[${ROW_H}px]${isRowSelected ? ' selected-row' : ''}`}>
         <td
           {...cellMetadataProps('rowLabel')}
-          className={withCellSelectionClass(
-            `text-center align-middle ${borderClass}${isRowSelected ? ' selected-cell' : ''}`,
-            'rowLabel'
-          )}
+          className={`text-center align-middle ${borderClass}${isRowSelected ? ' selected-cell' : ''}`}
           style={getWidthStyle('rowLabel', applyRowLabelStyle(buildCellStyle(
             ARCHIVE_ROW_STYLE,
             getCellHighlightStyle(rowId, 'rowLabel')
           )))}
           tabIndex={0}
-          onMouseDown={(event) => handleCellMouseDown(event, rowId, 'rowLabel', { highlightRow: true })}
-          onFocus={() =>
-            handleCellActivate(rowId, 'rowLabel', {
-              highlightRow: true,
-              preserveSelection: true,
-            })
-          }
-          onClick={(event) => handleRowClick(event, tableRow.index)}
+          onClick={(event) => {
+            event.preventDefault();
+            handleRowClick(event, tableRow.index);
+          }}
         >
           {rowNumber}
         </td>

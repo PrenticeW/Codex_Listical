@@ -10,6 +10,8 @@ export default function usePlannerRowRendering({
   isCellActive,
   isCellInSelection,
   selectedRowIdSet,
+  dragIndex = null,
+  hoverIndex = null,
 }) {
   const rowRenderers = useRowRenderers(rowRenderersConfig);
 
@@ -28,6 +30,14 @@ export default function usePlannerRowRendering({
       }
       if (rowId) {
         rowPropsLocal['data-row-id'] = rowId;
+      }
+
+      // Add drag state styling
+      if (tableRowIndex === dragIndex) {
+        rowPropsLocal['data-dragging'] = 'true';
+      }
+      if (tableRowIndex === hoverIndex && dragIndex !== null && hoverIndex !== null) {
+        rowPropsLocal['data-drop-target'] = 'true';
       }
 
       const cellMetadataProps = (columnKey) => {
@@ -99,6 +109,8 @@ export default function usePlannerRowRendering({
       rowIndexMap,
       selectedRowIdSet,
       updateRowValues,
+      dragIndex,
+      hoverIndex,
     ]
   );
 

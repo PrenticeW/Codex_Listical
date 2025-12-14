@@ -847,6 +847,8 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     isCellActive,
     isCellInSelection,
     selectedRowIdSet,
+    dragIndex,
+    hoverIndex,
   });
 
   const onProjectFilterButtonClick = useCallback(
@@ -1212,6 +1214,13 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
               const originalRow = tableRow.original;
               const previousRow = index > 0 ? tableRows[index - 1].original : null;
               const rowProps = {
+                ref: (el) => {
+                  if (el) {
+                    rowRefs.current.set(originalRow.id, el);
+                  } else {
+                    rowRefs.current.delete(originalRow.id);
+                  }
+                },
                 onMouseDown: (event) => handleRowMouseDown(event, index, originalRow.id),
                 'data-index': index,
               };
@@ -1222,10 +1231,13 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
                   activeRowId === originalRow.id || highlightedRowId === originalRow.id,
               });
               if (!renderedRow) return null;
-              return React.cloneElement(renderedRow, {
+              // Merge existing props with new ones to preserve drag state attributes
+              const mergedProps = {
+                ...renderedRow.props,
                 key: originalRow.id,
                 'data-index': index,
-              });
+              };
+              return React.cloneElement(renderedRow, mergedProps);
             })}
 
             {/* Spacer row after visible items */}

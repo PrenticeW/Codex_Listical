@@ -140,8 +140,11 @@ export default function useRowDragSelection({
         const movingRows = [];
         const remainingRows = [];
         prev.forEach((row) => {
-          if (selectionSet.has(row.id)) movingRows.push(row);
-          else remainingRows.push(row);
+          if (selectionSet.has(row.id)) {
+            movingRows.push(row);
+          } else {
+            remainingRows.push(row);
+          }
         });
         if (!movingRows.length) return prev;
         let selectedBeforeTarget = 0;
@@ -187,9 +190,7 @@ export default function useRowDragSelection({
         selectionForDrag = [rowId];
       }
       dragSelectionRef.current = [...selectionForDrag];
-      updateDragIndex(rowIndex);
-      updateHoverIndex(rowIndex + 1);
-      updateHoverFromClientY(event.clientY);
+      // Don't set drag/hover index until threshold is crossed
       setActiveRowId(rowId);
       setHighlightedRowId(null);
       dragStartPointRef.current = { x: event.clientX, y: event.clientY };
@@ -211,11 +212,21 @@ export default function useRowDragSelection({
           if (!dragThresholdCrossedRef.current) {
             if (distance <= 5) return;
             dragThresholdCrossedRef.current = true;
+            // Look up the CURRENT index of the dragged row
+            // This is critical because after a previous reorder, the rowIndex parameter may be stale
+            const currentRows = table.getRowModel().rows;
+            const currentRowIndex = currentRows.findIndex((r) => r.original.id === rowId);
+            if (currentRowIndex === -1) {
+              return;
+            }
+            // Now that drag started, set the drag and hover indices using CURRENT index
+            updateDragIndex(currentRowIndex);
+            updateHoverIndex(currentRowIndex + 1);
             handleCellClear({ clearRowSelection: false });
             if (!selectionCommitted) {
               selectionCommitted = true;
               setSelectedRowIds(selectionForDrag);
-              setLastSelectedRowIndex(rowIndex);
+              setLastSelectedRowIndex(currentRowIndex);
             }
           }
         }
@@ -225,8 +236,24 @@ export default function useRowDragSelection({
       const handleMouseUp = (upEvent) => {
         upEvent.preventDefault();
         blockClickRef.current = dragThresholdCrossedRef.current;
-        const target = hoverIndexRef.current ?? dragIndexRef.current ?? rowIndex + 1;
-        finalizeRowReorder(target);
+
+        // Remove event listeners immediately
+        detachDragListeners();
+
+        // If drag threshold wasn't crossed, treat as a click to select the row
+        if (!dragThresholdCrossedRef.current) {
+          handleCellClear({ clearRowSelection: false });
+          setSelectedRowIds(selectionForDrag);
+          // Look up current index for consistency
+          const currentRows = table.getRowModel().rows;
+          const currentRowIndex = currentRows.findIndex((r) => r.original.id === rowId);
+          setLastSelectedRowIndex(currentRowIndex !== -1 ? currentRowIndex : rowIndex);
+        } else {
+          // Otherwise, finalize the drag/drop
+          const target = hoverIndexRef.current ?? dragIndexRef.current ?? rowIndex + 1;
+          finalizeRowReorder(target);
+        }
+
         setTimeout(() => {
           blockClickRef.current = false;
         }, 0);
@@ -237,12 +264,14 @@ export default function useRowDragSelection({
       window.addEventListener('mouseup', handleMouseUp);
     },
     [
+      detachDragListeners,
       finalizeRowReorder,
       handleCellClear,
       selectedRowIdSet,
       selectedRowIds,
       setLastSelectedRowIndex,
       setSelectedRowIds,
+      table,
       updateDragIndex,
       updateHoverFromClientY,
       updateHoverIndex,
@@ -264,6 +293,10 @@ export default function useRowDragSelection({
       const isMeta =
         event.metaKey || event.ctrlKey || pendingMeta || pointerMeta;
       const isShift = event.shiftKey || pendingShift || pointerShift;
+
+      // Clear cell selection when clicking row number
+      handleCellClear({ clearRowSelection: false });
+
       setSelectedRowIds((prev) => {
         if (isShift) {
           const anchorIndex = lastSelectedRowIndex ?? rowIndex;
@@ -287,7 +320,7 @@ export default function useRowDragSelection({
       pointerModifierRef.current = { meta: false, shift: false };
       pendingRowClickModifierRef.current = { meta: false, shift: false };
     },
-    [setLastSelectedRowIndex, setSelectedRowIds, table, lastSelectedRowIndex]
+    [setLastSelectedRowIndex, setSelectedRowIds, table, lastSelectedRowIndex, handleCellClear]
   );
 
   return {

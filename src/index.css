@@ -23,6 +23,49 @@ table td.active-cell {
   transition: box-shadow 0.15s ease;
 }
 
+/* Row selection styling - Google Sheets style */
+tr.selected-row {
+  background-color: #e8f0fe !important;
+  user-select: none !important;
+  cursor: grab !important;
+}
+
+tr.selected-row:active {
+  cursor: grabbing !important;
+}
+
+tr.selected-row td {
+  background-color: #e8f0fe !important;
+  user-select: none !important;
+}
+
+/* Row number cell when row is selected */
+tr.selected-row td.selected-cell {
+  background-color: #d3e3fd !important;
+  font-weight: 700 !important;
+  cursor: grab !important;
+}
+
+tr.selected-row td.selected-cell:active {
+  cursor: grabbing !important;
+}
+
+/* Drag and drop visual feedback */
+tr[data-dragging="true"] {
+  opacity: 0.5 !important;
+  background-color: #f3f4f6 !important;
+  user-select: none !important;
+}
+
+tr[data-dragging="true"] td {
+  user-select: none !important;
+}
+
+tr[data-drop-target="true"] {
+  border-top: 4px solid #2563eb !important;
+  box-shadow: 0 -2px 8px rgba(37, 99, 235, 0.6) !important;
+}
+
 /* Highlight specific estimate options in dropdowns */
 option.estimate-highlight {
   color: #08ad2d !important;
