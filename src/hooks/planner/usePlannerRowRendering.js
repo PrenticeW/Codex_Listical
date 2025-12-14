@@ -16,7 +16,7 @@ export default function usePlannerRowRendering({
   const rowRenderers = useRowRenderers(rowRenderersConfig);
 
   const createRowRenderContext = useCallback(
-    (tableRow, { previousRowOriginal = null, rowProps = {}, isActive = false } = {}) => {
+    (tableRow, { previousRowOriginal = null, rowProps = {}, isActive = false, handleRowMouseDown = null } = {}) => {
       const row = tableRow?.original ?? {};
       const rowId = row?.id ?? null;
       const tableRowIndex = typeof tableRow?.index === 'number' ? tableRow.index : null;
@@ -57,6 +57,14 @@ export default function usePlannerRowRendering({
 
       const cellClickProps = (columnKey) => {
         if (tableRowIndex == null) return {};
+
+        // Don't add onClick handler to cells with interactive elements
+        // This allows select dropdowns, inputs, checkboxes, etc. to receive clicks normally
+        const interactiveCells = ['check', 'project', 'subprojects', 'status', 'task', 'recurring', 'estimate', 'timeValue'];
+        if (interactiveCells.includes(columnKey)) {
+          return {};
+        }
+
         return {
           onClick: () => handleCellClick(tableRowIndex, columnKey),
         };
@@ -100,6 +108,7 @@ export default function usePlannerRowRendering({
         previousRow: previousRowOriginal,
         commitRowUpdate,
         ensureInteractionMarked,
+        handleRowMouseDown,
       };
     },
     [

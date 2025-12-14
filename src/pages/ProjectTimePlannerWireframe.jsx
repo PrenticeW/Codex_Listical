@@ -136,6 +136,56 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     };
   }, []);
 
+  // Prevent unwanted scroll-to-top on focus
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    let scrollPositionBeforeFocus = { top: 0, left: 0 };
+
+    const captureScrollPosition = () => {
+      const scrollContainer = document.querySelector('[style*="overflow: auto"]');
+      if (scrollContainer) {
+        scrollPositionBeforeFocus = {
+          top: scrollContainer.scrollTop,
+          left: scrollContainer.scrollLeft,
+        };
+      }
+    };
+
+    const preventScrollToTop = (event) => {
+      const scrollContainer = document.querySelector('[style*="overflow: auto"]');
+      if (!scrollContainer) return;
+
+      // Check if the focused element is within our table
+      const isTableElement = event.target?.closest('table');
+      if (!isTableElement) return;
+
+      // Only restore scroll if it changed significantly
+      requestAnimationFrame(() => {
+        const currentScrollTop = scrollContainer.scrollTop;
+        const scrollDiff = Math.abs(currentScrollTop - scrollPositionBeforeFocus.top);
+
+        // If scroll changed by more than 50px, restore it
+        if (scrollDiff > 50) {
+          scrollContainer.scrollTop = scrollPositionBeforeFocus.top;
+          scrollContainer.scrollLeft = scrollPositionBeforeFocus.left;
+        }
+      });
+    };
+
+    // Capture position before focus happens
+    document.addEventListener('mousedown', captureScrollPosition, true);
+    document.addEventListener('dblclick', captureScrollPosition, true);
+    // Prevent scroll-to-top after focus
+    document.addEventListener('focusin', preventScrollToTop, true);
+
+    return () => {
+      document.removeEventListener('mousedown', captureScrollPosition, true);
+      document.removeEventListener('dblclick', captureScrollPosition, true);
+      document.removeEventListener('focusin', preventScrollToTop, true);
+    };
+  }, []);
+
   const createTaskRow = (base) => ({
     ...base,
     dayEntries: createEmptyDayEntries(totalDays),
@@ -1225,7 +1275,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
                     rowRefs.current.delete(originalRow.id);
                   }
                 },
-                onMouseDown: (event) => handleRowMouseDown(event, index, originalRow.id),
                 'data-index': index,
               };
               const renderedRow = renderDataRow(tableRow, {
@@ -1233,6 +1282,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
                 rowProps,
                 isActive:
                   activeRowId === originalRow.id || highlightedRowId === originalRow.id,
+                handleRowMouseDown: (event) => handleRowMouseDown(event, index, originalRow.id),
               });
               if (!renderedRow) return null;
               // Merge existing props with new ones to preserve drag state attributes

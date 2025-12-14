@@ -255,6 +255,7 @@ export default function usePlannerInteractions({
       const isInteractive =
         event.target instanceof Element &&
         Boolean(event.target.closest('input, select, textarea, button, a'));
+      // Only preventDefault for non-interactive elements to prevent unwanted scrolling
       if (!isInteractive) {
         event.preventDefault();
       }

@@ -36,7 +36,16 @@ tr.selected-row:active {
 
 tr.selected-row td {
   background-color: #e8f0fe !important;
-  user-select: none !important;
+}
+
+/* Allow interaction with inputs, selects, and textareas in selected rows */
+tr.selected-row td input,
+tr.selected-row td select,
+tr.selected-row td textarea,
+tr.selected-row td button {
+  user-select: auto !important;
+  pointer-events: auto !important;
+  cursor: auto !important;
 }
 
 /* Row number cell when row is selected */
@@ -172,4 +181,9 @@ option.estimate-highlight {
   outline: none;
   border-color: #2563eb;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+
+/* Prevent aggressive scroll-into-view on focus */
+input, select, textarea {
+  scroll-margin: 100px;
 }

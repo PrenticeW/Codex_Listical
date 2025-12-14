@@ -59,8 +59,12 @@ export default function useRowDragSelection({
   const detachDragListeners = useCallback(() => {
     if (!isBrowserEnvironment()) return;
     const { move, up } = dragListenersRef.current;
-    if (move) window.removeEventListener('mousemove', move);
-    if (up) window.removeEventListener('mouseup', up);
+    if (move) {
+      window.removeEventListener('mousemove', move);
+    }
+    if (up) {
+      window.removeEventListener('mouseup', up);
+    }
     dragListenersRef.current = { move: null, up: null };
     if (originalUserSelectRef.current !== null) {
       document.body.style.userSelect = originalUserSelectRef.current;
@@ -174,15 +178,8 @@ export default function useRowDragSelection({
 
   const handleRowMouseDown = useCallback(
     (event, rowIndex, rowId) => {
-      console.log('[handleRowMouseDown] called, rowIndex:', rowIndex, 'rowId:', rowId);
       if (event.button !== 0) return;
-      if (event.target instanceof Element) {
-        const interactive = event.target.closest('input, select, textarea, button, a');
-        if (interactive) {
-          console.log('[handleRowMouseDown] interactive element, ignoring');
-          return;
-        }
-      }
+      // Only stopPropagation if we're handling this event
       event.stopPropagation();
       // Don't preventDefault here - it prevents the onClick event from firing!
       // We'll call preventDefault in handleMouseMove when drag actually starts
@@ -246,7 +243,12 @@ export default function useRowDragSelection({
 
       const handleMouseUp = (upEvent) => {
         console.log('[handleMouseUp] dragThresholdCrossed:', dragThresholdCrossedRef.current);
-        upEvent.preventDefault();
+
+        // Only preventDefault if we actually crossed the drag threshold
+        // This allows clicks on interactive elements (selects, inputs) to work normally
+        if (dragThresholdCrossedRef.current) {
+          upEvent.preventDefault();
+        }
 
         blockClickRef.current = dragThresholdCrossedRef.current;
 
