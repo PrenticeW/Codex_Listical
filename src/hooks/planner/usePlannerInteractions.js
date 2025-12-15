@@ -139,9 +139,66 @@ export default function usePlannerInteractions({
   useEffect(() => {
     if (!isBrowserEnvironment()) return undefined;
     const handleKeyDown = (event) => {
+      const key = event.key?.toLowerCase();
+
+      // Handle Delete/Backspace for cell clearing
+      if (key === 'delete' || key === 'backspace') {
+        // Don't interfere if user is actively editing an input/textarea/select
+        const activeElement = document.activeElement;
+        const isEditableElement =
+          activeElement &&
+          (activeElement.tagName === 'INPUT' ||
+            activeElement.tagName === 'TEXTAREA' ||
+            activeElement.tagName === 'SELECT' ||
+            activeElement.isContentEditable);
+
+        // If we're in an editable element, allow normal delete behavior
+        if (isEditableElement) return;
+
+        // Only proceed if we have an active cell
+        if (!activeCell) return;
+
+        event.preventDefault();
+
+        // Find the active cell element
+        if (!tableContainerRef.current) return;
+        const selector = `[data-row-id="${activeCell.rowId}"][data-column-key="${activeCell.cellId}"]`;
+        const cellElement = tableContainerRef.current.querySelector(selector);
+        if (!cellElement) return;
+
+        // Find the form element within the cell
+        const formElement = cellElement.querySelector('input, textarea, select');
+        if (!formElement) return;
+
+        // Clear the value based on element type
+        if (formElement.tagName === 'SELECT') {
+          // For select elements, set to first option (usually "-" or empty)
+          const selectEl = formElement;
+          if (selectEl.options.length > 0) {
+            selectEl.selectedIndex = 0;
+            // Trigger change event to update the underlying data
+            const changeEvent = new Event('change', { bubbles: true });
+            selectEl.dispatchEvent(changeEvent);
+          }
+        } else if (formElement.type === 'checkbox') {
+          // For checkboxes, uncheck them
+          formElement.checked = false;
+          const changeEvent = new Event('change', { bubbles: true });
+          formElement.dispatchEvent(changeEvent);
+        } else {
+          // For input/textarea, clear the value
+          formElement.value = '';
+          formElement.focus();
+          // Trigger blur to save the empty value
+          const blurEvent = new Event('blur', { bubbles: true });
+          formElement.dispatchEvent(blurEvent);
+        }
+        return;
+      }
+
+      // Handle Copy/Paste (Cmd/Ctrl + C/V)
       if (!(event.metaKey || event.ctrlKey)) return;
       if (event.altKey || event.shiftKey) return;
-      const key = event.key?.toLowerCase();
       if (key !== 'c' && key !== 'v') return;
       const selection = window.getSelection ? window.getSelection() : null;
       const hasDocumentSelection = Boolean(selection && !selection.isCollapsed);
