@@ -183,7 +183,7 @@ option.estimate-highlight {
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
 }
 
-/* Prevent aggressive scroll-into-view on focus */
-input, select, textarea {
-  scroll-margin: 100px;
+/* Force select dropdowns to not trigger scroll */
+table td {
+  overflow: visible !important;
 }

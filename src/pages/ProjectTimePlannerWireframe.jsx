@@ -257,6 +257,53 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     return () => clearTimeout(timeoutId);
   }, [rows]);
 
+  // Prevent select elements from scrolling when clicked
+  useEffect(() => {
+    if (!isBrowserEnvironment()) return;
+
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    // Track scroll position and prevent unwanted scrolling
+    let savedScrollTop = container.scrollTop;
+    let isSelectInteraction = false;
+
+    // Listen for mousedown on select elements
+    const handleSelectMouseDown = (e) => {
+      if (e.target.tagName === 'SELECT') {
+        isSelectInteraction = true;
+        savedScrollTop = container.scrollTop;
+      }
+    };
+
+    // Listen for scroll events and restore position if it's a select interaction
+    const handleScroll = (e) => {
+      if (isSelectInteraction) {
+        e.preventDefault();
+        e.stopPropagation();
+        container.scrollTop = savedScrollTop;
+      }
+    };
+
+    // Clear the lock after a short delay
+    const handleSelectChange = () => {
+      setTimeout(() => {
+        isSelectInteraction = false;
+      }, 50);
+    };
+
+    // Add event listeners
+    container.addEventListener('mousedown', handleSelectMouseDown, true);
+    container.addEventListener('scroll', handleScroll, true);
+    container.addEventListener('change', handleSelectChange, true);
+
+    return () => {
+      container.removeEventListener('mousedown', handleSelectMouseDown, true);
+      container.removeEventListener('scroll', handleScroll, true);
+      container.removeEventListener('change', handleSelectChange, true);
+    };
+  }, []);
+
   const rowIndexMap = useMemo(() => {
     const map = new Map();
     rows.forEach((row, index) => {
@@ -1197,7 +1244,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
         }
       />
 
-      <div style={{ maxHeight: 'calc(100vh - 250px)', overflow: 'auto' }} ref={scrollContainerRef}>
+      <div style={{ maxHeight: 'calc(100vh - 250px)', overflow: 'auto' }} ref={scrollContainerRef} data-virtual-scroll-container>
         <table className="table-fixed border-collapse w-full text-[12px] border border-[#ced3d0] shadow-sm bg-white">
           <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
             <tr className={`h-[${ROW_H}px] text-xs`}>

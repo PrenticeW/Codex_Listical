@@ -571,7 +571,6 @@ export default function useRowRenderers({
             value={row.projectSelection ?? '-'}
             tabIndex={0}
             onChange={(event) => {
-              console.log('[SELECT onChange] Value changed to:', event.target.value);
               const nextValue = event.target.value;
               commitRowUpdate({ projectSelection: nextValue }, { markInteraction: true });
             }}
