@@ -39,6 +39,11 @@ export default function usePlannerInteractions({
 
   const handleCellActivate = useCallback(
     (rowId, cellId, { highlightRow = false, preserveSelection = false } = {}) => {
+      // Check if this cell is already active - if so, skip to avoid re-render
+      if (activeCell && activeCell.rowId === rowId && activeCell.cellId === cellId) {
+        return;
+      }
+
       const preserveRowSelection = preserveSelection || shouldPreserveSelection();
       setActiveCell({ rowId, cellId });
       if (highlightRow) {
@@ -52,6 +57,7 @@ export default function usePlannerInteractions({
       }
     },
     [
+      activeCell,
       selectedRowIds,
       shouldPreserveSelection,
       setHighlightedRowId,

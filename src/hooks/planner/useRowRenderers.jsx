@@ -553,6 +553,8 @@ export default function useRowRenderers({
               type="checkbox"
               className={checkboxInputClass}
               tabIndex={0}
+              onClick={(e) => e.stopPropagation()}
+              onFocus={() => handleCellActivate(rowId, 'check')}
               onChange={ensureInteractionMarked}
             />
           </div>
@@ -570,6 +572,7 @@ export default function useRowRenderers({
             style={getProjectSelectStyle(row.projectSelection)}
             value={row.projectSelection ?? '-'}
             tabIndex={0}
+            onMouseDown={() => handleCellActivate(rowId, 'project')}
             onChange={(event) => {
               const nextValue = event.target.value;
               commitRowUpdate({ projectSelection: nextValue }, { markInteraction: true });
@@ -591,6 +594,7 @@ export default function useRowRenderers({
               className={sharedInputStyle}
               value={row.subprojectSelection ?? '-'}
               tabIndex={0}
+              onMouseDown={() => handleCellActivate(rowId, 'subprojects')}
               onChange={(event) => {
                 const nextValue = event.target.value;
                 commitRowUpdate({ subprojectSelection: nextValue }, { markInteraction: true });
@@ -614,6 +618,7 @@ export default function useRowRenderers({
               style={getStatusColorStyle(row.status)}
               value={row.status ?? '-'}
               tabIndex={0}
+              onMouseDown={() => handleCellActivate(rowId, 'status')}
               onChange={(event) => {
                 const nextValue = event.target.value;
                 commitRowUpdate({ status: nextValue }, { markInteraction: true });
@@ -636,6 +641,8 @@ export default function useRowRenderers({
             defaultValue={row.taskName ?? ''}
             key={`${rowId}-task`}
             tabIndex={0}
+            onClick={(e) => e.stopPropagation()}
+            onFocus={() => handleCellActivate(rowId, 'task')}
             onBlur={(event) => updateTaskName(event.target.value)}
             onPaste={(event) =>
               handleOverwritePaste(event, (text) => updateTaskName(text))
@@ -657,6 +664,8 @@ export default function useRowRenderers({
                 className={checkboxInputClass}
                 checked={row.recurring === 'Recurring'}
                 tabIndex={0}
+                onClick={(e) => e.stopPropagation()}
+                onFocus={() => handleCellActivate(rowId, 'recurring')}
                 onChange={(event) => {
                   const nextValue = event.target.checked ? 'Recurring' : 'Not Recurring';
                   commitRowUpdate({ recurring: nextValue }, { markInteraction: true });
@@ -677,6 +686,7 @@ export default function useRowRenderers({
             className={sharedInputStyle}
             value={row.estimate ?? '-'}
             tabIndex={0}
+            onMouseDown={() => handleCellActivate(rowId, 'estimate')}
             onChange={(event) => {
               const nextValue = event.target.value;
               commitRowUpdate(
@@ -725,6 +735,8 @@ export default function useRowRenderers({
             type="text"
             className={`${sharedInputStyle} text-right pr-2`}
             value={row.timeValue ?? '0.00'}
+            onClick={(e) => e.stopPropagation()}
+            onFocus={() => handleCellActivate(rowId, 'timeValue')}
             onChange={(event) => {
               if (!isCustomEstimate) return;
               updateTimeValue(event.target.value);
@@ -752,11 +764,12 @@ export default function useRowRenderers({
             )}
             {...cellClickProps(`day-${i}`)}
           >
-            <input 
+            <input
               type="text"
               className={sharedInputStyle}
               defaultValue={dayEntries[i] ?? ''}
               key={`${rowId}-day-${i}`}
+              onClick={(e) => e.stopPropagation()}
               onFocus={() => handleCellActivate(rowId, `day-${i}`)}
               onBlur={(event) => updateDayEntry(i, event.target.value)}
               onPaste={(event) =>

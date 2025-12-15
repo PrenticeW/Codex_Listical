@@ -23,6 +23,20 @@ table td.active-cell {
   transition: box-shadow 0.15s ease;
 }
 
+/* Cell range selection highlighting */
+table td.selected-cell {
+  background-color: #d3e3fd !important;
+  position: relative;
+  z-index: 1;
+}
+
+/* Dropdown positioning - hint to browser to show options below */
+table td select {
+  /* Add scroll margin to prevent dropdown from being clipped */
+  scroll-margin-top: 100px;
+  scroll-margin-bottom: 100px;
+}
+
 /* Row selection styling - Google Sheets style */
 tr.selected-row {
   background-color: #e8f0fe !important;

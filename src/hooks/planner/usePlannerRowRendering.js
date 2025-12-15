@@ -58,13 +58,8 @@ export default function usePlannerRowRendering({
       const cellClickProps = (columnKey) => {
         if (tableRowIndex == null) return {};
 
-        // Don't add onClick handler to cells with interactive elements
-        // This allows select dropdowns, inputs, checkboxes, etc. to receive clicks normally
-        const interactiveCells = ['check', 'project', 'subprojects', 'status', 'task', 'recurring', 'estimate', 'timeValue'];
-        if (interactiveCells.includes(columnKey)) {
-          return {};
-        }
-
+        // Add onClick handler to all cells for highlighting
+        // Interactive elements should stop propagation to prevent interference
         return {
           onClick: () => handleCellClick(tableRowIndex, columnKey),
         };
