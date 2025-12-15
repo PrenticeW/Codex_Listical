@@ -60,7 +60,9 @@ export default function usePlannerRowRendering({
 
         // Add onClick handler to all cells for highlighting
         // Interactive elements should stop propagation to prevent interference
+        // Also include metadata props for copy/paste functionality
         return {
+          ...cellMetadataProps(columnKey),
           onClick: () => handleCellClick(tableRowIndex, columnKey),
         };
       };

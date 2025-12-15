@@ -754,6 +754,7 @@ export default function useRowRenderers({
             style={{
               ...applyWeekBorderStyles(i, getWidthStyle(`day-${i}`)),
               ...getCellHighlightStyle(rowId, `day-${i}`),
+              paddingRight: 8,
             }}
             data-cell-purpose="day-time-entry"
             data-day-index={i}
@@ -766,7 +767,7 @@ export default function useRowRenderers({
           >
             <input
               type="text"
-              className={sharedInputStyle}
+              className={`${sharedInputStyle} text-right pr-2`}
               defaultValue={dayEntries[i] ?? ''}
               key={`${rowId}-day-${i}`}
               onClick={(e) => e.stopPropagation()}

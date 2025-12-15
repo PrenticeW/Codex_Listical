@@ -10,6 +10,7 @@ export default function usePlannerInteractions({
   getCellDescriptorKey,
   getRangeSelectionKeys,
   cellSelectionAnchorRef,
+  selectedCellKeys,
   setSelectedCellKeys,
   setSelectionAnchor,
   setSelectionFocus,
@@ -17,6 +18,7 @@ export default function usePlannerInteractions({
   selectedRowIds,
   setSelectedRowIds,
   setLastSelectedRowIndex,
+  highlightedRowId,
   setHighlightedRowId,
   shouldPreserveSelection,
   blockClickRef,
@@ -160,15 +162,34 @@ export default function usePlannerInteractions({
       if (shouldDeferToNativeCopy || shouldDeferToNativePaste) return;
 
       if (key === 'c') {
-        if (!activeCell) return;
-        event.preventDefault();
-        copyCellContents(activeCell);
-        const isDifferentCell =
-          copiedCell?.rowId !== activeCell.rowId || copiedCell?.cellId !== activeCell.cellId;
-        if (isDifferentCell) {
-          setCopiedCell(activeCell);
+        // Priority: activeCell > first selected cell > highlightedRowId
+        let cellToCopy = activeCell;
+
+        if (!cellToCopy && selectedCellKeys.size > 0) {
+          // Get the first selected cell
+          const firstKey = Array.from(selectedCellKeys)[0];
+          if (firstKey) {
+            const [rowId, cellId] = firstKey.split('|');
+            if (rowId && cellId) {
+              cellToCopy = { rowId, cellId };
+            }
+          }
         }
-        setCopiedCellHighlight(activeCell);
+
+        if (!cellToCopy && highlightedRowId) {
+          cellToCopy = { rowId: highlightedRowId, cellId: 'task' };
+        }
+
+        if (!cellToCopy) return;
+
+        event.preventDefault();
+        copyCellContents(cellToCopy);
+        const isDifferentCell =
+          copiedCell?.rowId !== cellToCopy.rowId || copiedCell?.cellId !== cellToCopy.cellId;
+        if (isDifferentCell) {
+          setCopiedCell(cellToCopy);
+        }
+        setCopiedCellHighlight(cellToCopy);
         if (copiedCellHighlightTimeoutRef.current) {
           clearTimeout(copiedCellHighlightTimeoutRef.current);
         }
@@ -179,23 +200,75 @@ export default function usePlannerInteractions({
         return;
       }
 
-      if (!copiedCell) return;
+      // Priority: activeCell > first selected cell > highlightedRowId
+      let cellToPaste = activeCell;
+
+      if (!cellToPaste && selectedCellKeys.size > 0) {
+        // Get the first selected cell
+        const firstKey = Array.from(selectedCellKeys)[0];
+        if (firstKey) {
+          const [rowId, cellId] = firstKey.split('|');
+          if (rowId && cellId) {
+            cellToPaste = { rowId, cellId };
+          }
+        }
+      }
+
+      if (!cellToPaste && highlightedRowId) {
+        cellToPaste = { rowId: highlightedRowId, cellId: copiedCell?.cellId || 'task' };
+      }
+
+      if (!copiedCell || !cellToPaste) return;
+
       event.preventDefault();
+
+      // Don't paste into the same cell
       if (
-        activeCell &&
-        activeCell.rowId === copiedCell.rowId &&
-        activeCell.cellId === copiedCell.cellId
+        cellToPaste.rowId === copiedCell.rowId &&
+        cellToPaste.cellId === copiedCell.cellId
       ) {
         return;
       }
-      handleCellActivate(copiedCell.rowId, copiedCell.cellId);
+
+      // Get the content from the copied cell
+      const copiedText = copyCellContents(copiedCell, { includeClipboard: false });
+      if (!copiedText) return;
+
+      // Find the target cell element and paste the content
+      if (!tableContainerRef.current) return;
+      const selector = `[data-row-id="${cellToPaste.rowId}"][data-column-key="${cellToPaste.cellId}"]`;
+      const targetCellElement = tableContainerRef.current.querySelector(selector);
+      if (!targetCellElement) return;
+
+      const formElement = targetCellElement.querySelector('input, textarea, select');
+      if (formElement) {
+        if (formElement.tagName === 'SELECT') {
+          // For select elements, find the option that matches the text
+          const selectEl = formElement;
+          const options = Array.from(selectEl.options);
+          const matchingOption = options.find(opt => opt.text === copiedText || opt.value === copiedText);
+          if (matchingOption) {
+            selectEl.value = matchingOption.value;
+            // Trigger change event to update the underlying data
+            const changeEvent = new Event('change', { bubbles: true });
+            selectEl.dispatchEvent(changeEvent);
+          }
+        } else {
+          // For input/textarea, set the value and trigger events
+          formElement.value = copiedText;
+          formElement.focus();
+          // Trigger blur to save the value
+          const blurEvent = new Event('blur', { bubbles: true });
+          formElement.dispatchEvent(blurEvent);
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [activeCell, copyCellContents, copiedCell, handleCellActivate]);
+  }, [activeCell, copyCellContents, copiedCell, handleCellActivate, highlightedRowId, selectedCellKeys]);
 
   useEffect(
     () => () => {
