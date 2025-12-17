@@ -6,6 +6,7 @@ export default function usePlannerRowRendering({
   rowIndexMap,
   columnIndexByKey,
   handleCellClick,
+  handleCellMouseDown,
   updateRowValues,
   isCellActive,
   isCellInSelection,
@@ -56,14 +57,33 @@ export default function usePlannerRowRendering({
       };
 
       const cellClickProps = (columnKey) => {
-        if (tableRowIndex == null) return {};
+        if (tableRowIndex == null || !rowId) return {};
 
-        // Add onClick handler to all cells for highlighting
-        // Interactive elements should stop propagation to prevent interference
-        // Also include metadata props for copy/paste functionality
+        // Add onClick and onMouseDown handlers to all cells
+        // onMouseDown enables shift-select and cmd-select for multi-cell selection
         return {
           ...cellMetadataProps(columnKey),
           onClick: () => handleCellClick(tableRowIndex, columnKey),
+          onMouseDown: (event) => {
+            const target = event.target;
+            const hasModifierKey = event.shiftKey || event.metaKey || event.ctrlKey;
+
+            // For select elements - never intercept, always let them open
+            const isSelect = target instanceof HTMLSelectElement || target.closest('select');
+            if (isSelect) {
+              return;
+            }
+
+            // For inputs with modifier keys: prevent default to enable multi-select
+            // For inputs without modifiers: don't prevent default, let them focus normally
+            const isInput = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+            if (isInput && hasModifierKey) {
+              event.preventDefault();
+            }
+
+            // Always call the handler to track cell selection and anchor
+            handleCellMouseDown(event, rowId, columnKey);
+          },
         };
       };
 
@@ -111,6 +131,7 @@ export default function usePlannerRowRendering({
     [
       columnIndexByKey,
       handleCellClick,
+      handleCellMouseDown,
       isCellActive,
       isCellInSelection,
       rowIndexMap,

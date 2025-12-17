@@ -946,6 +946,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     rowIndexMap,
     columnIndexByKey,
     handleCellClick,
+    handleCellMouseDown,
     updateRowValues,
     isCellActive,
     isCellInSelection,

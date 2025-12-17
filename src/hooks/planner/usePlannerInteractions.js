@@ -408,14 +408,18 @@ export default function usePlannerInteractions({
       const isMeta = pointerModifierRef.current.meta;
       const descriptorKey = getCellDescriptorKey(rowId, cellId);
       if (descriptor.columnIndex != null || descriptor.rowIndex != null) {
-        if (isShift && anchorExists) {
+        if (isShift) {
+          // Shift-click: create range selection
+          // If no anchor exists, use the current descriptor as both anchor and focus
+          const anchor = anchorExists ? cellSelectionAnchorRef.current : descriptor;
+          if (!anchorExists) {
+            setSelectionAnchor(descriptor);
+          }
           setSelectionFocus(descriptor);
-          const rangeKeys = getRangeSelectionKeys(
-            cellSelectionAnchorRef.current,
-            descriptor
-          );
+          const rangeKeys = getRangeSelectionKeys(anchor, descriptor);
           setSelectedCellKeys(rangeKeys);
         } else {
+          // Normal click or Cmd/Ctrl-click
           setSelectionAnchor(descriptor);
           setSelectionFocus(descriptor);
           if (isMeta) {

@@ -459,7 +459,7 @@ export default function useRowRenderers({
   // ============================================================
   // UNIFIED TASK ROW RENDERER - Handles both projectTask and inboxItem
   // ============================================================
-  const TaskRowComponent = React.memo(({
+  const TaskRowComponent = ({
     row,
     rowId,
     rowNumber,
@@ -782,17 +782,7 @@ export default function useRowRenderers({
         ))}
       </tr>
     );
-  }, (prevProps, nextProps) => {
-    // Custom comparison: only re-render if relevant props changed
-    return (
-      prevProps.rowId === nextProps.rowId &&
-      prevProps.rowNumber === nextProps.rowNumber &&
-      prevProps.isRowSelected === nextProps.isRowSelected &&
-      prevProps.row === nextProps.row &&
-      prevProps.previousRow === nextProps.previousRow &&
-      JSON.stringify(prevProps.rowPropsLocal) === JSON.stringify(nextProps.rowPropsLocal)
-    );
-  });
+  };
 
   const renderUnifiedTaskRow = (props) => <TaskRowComponent {...props} />;
 
