@@ -1459,7 +1459,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
             ...row,
             dayEntries: createEmptyDayEntries(totalDays),
             status: 'Not Scheduled',
-            timeValue: '0.00',
+            // Keep estimate and timeValue (they remain linked)
           };
         }
         return row;
