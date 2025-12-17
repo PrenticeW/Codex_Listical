@@ -1255,8 +1255,31 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     const projectGroupIds = [];
 
     setRows((prevRows) => {
-      // Step 1: Insert archive week row with totals
-      let nextRows = insertArchiveRow(prevRows, projectHeaderTotals, archiveWeekId);
+      // Calculate archive-specific project totals (only Done/Abandoned tasks)
+      const archiveProjectTotals = {};
+      let currentProjectHeaderId = null;
+
+      prevRows.forEach((row) => {
+        if (row.type === 'projectHeader') {
+          currentProjectHeaderId = row.id;
+          archiveProjectTotals[currentProjectHeaderId] = 0;
+        }
+
+        if (row.type === 'projectTask' && currentProjectHeaderId && (row.status === 'Done' || row.status === 'Abandoned')) {
+          const timeValue = parseFloat(row.timeValue);
+          if (!isNaN(timeValue)) {
+            archiveProjectTotals[currentProjectHeaderId] += timeValue;
+          }
+        }
+      });
+
+      // Convert totals to fixed decimal strings
+      Object.keys(archiveProjectTotals).forEach((key) => {
+        archiveProjectTotals[key] = archiveProjectTotals[key].toFixed(2);
+      });
+
+      // Step 1: Insert archive week row with archive-specific totals
+      let nextRows = insertArchiveRow(prevRows, archiveProjectTotals, archiveWeekId);
 
       // Step 2: Copy project structure (headers, general, unscheduled)
       const archiveHeaderIndex = nextRows.findIndex((row) => row.type === 'archiveHeader');
@@ -1291,8 +1314,8 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
             type: row.type === 'projectHeader' ? 'archivedProjectHeader' :
                   row.type === 'projectGeneral' ? 'archivedProjectGeneral' :
                   'archivedProjectUnscheduled',
-            // Preserve project totals for archived project headers
-            archivedTotal: row.type === 'projectHeader' ? projectHeaderTotals[row.id] : undefined,
+            // Preserve archive-specific project totals (only Done/Abandoned tasks)
+            archivedTotal: row.type === 'projectHeader' ? archiveProjectTotals[row.id] : undefined,
             // Add grouping metadata
             // Project headers belong to the week, subproject rows belong to the project
             parentGroupId: row.type === 'projectHeader' ? archiveWeekId : projectGroupIdForHeaders,
