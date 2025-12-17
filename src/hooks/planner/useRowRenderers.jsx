@@ -351,11 +351,16 @@ export default function useRowRenderers({
         >
           {config.labelInCheck && row.isGroupHeader && row.groupId ? (
             <span
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+              }}
               onClick={(e) => {
                 e.stopPropagation();
+                e.preventDefault();
                 toggleGroupCollapse(row.groupId);
               }}
-              style={{ cursor: 'pointer', userSelect: 'none' }}
+              style={{ cursor: 'pointer', userSelect: 'none', display: 'inline-block' }}
             >
               {expandIcon} {projectLabel}
             </span>
@@ -873,11 +878,16 @@ export default function useRowRenderers({
               if (row.isGroupHeader && row.groupId) {
                 return (
                   <span
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                    }}
                     onClick={(e) => {
                       e.stopPropagation();
+                      e.preventDefault();
                       toggleGroupCollapse(row.groupId);
                     }}
-                    style={{ cursor: 'pointer', userSelect: 'none' }}
+                    style={{ cursor: 'pointer', userSelect: 'none', display: 'inline-block' }}
                   >
                     {expandIcon} {row.archiveWeekLabel ?? ''}
                   </span>

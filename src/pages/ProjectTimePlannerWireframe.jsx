@@ -492,26 +492,56 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       return false; // Hide non-task rows when filtering by estimate since they lack that control.
     };
 
-    // Apply grouping/collapsing filter
+    // Apply grouping/collapsing filter with two-level hierarchy support
     const applyGroupingFilter = (rows) => {
       const result = [];
       const collapsedGroupsSet = collapsedGroups;
+      let currentWeekGroupId = null;
+      let isWeekCollapsed = false;
 
       for (const row of rows) {
-        // Always show the row if it's a group header
-        if (row.isGroupHeader) {
+        // Track the current week group (archive week rows)
+        if (row.type === 'archiveRow' && row.groupId) {
+          currentWeekGroupId = row.groupId;
+          isWeekCollapsed = collapsedGroupsSet.has(row.groupId);
+          result.push(row); // Always show week header
+          continue;
+        }
+
+        // If we're inside a collapsed week, skip all rows except the week header itself
+        if (currentWeekGroupId && isWeekCollapsed) {
+          // Reset when we exit the archive section
+          if (row.type !== 'archivedProjectHeader' &&
+              row.type !== 'archivedProjectGeneral' &&
+              row.type !== 'archivedProjectUnscheduled' &&
+              row.type !== 'projectTask') {
+            currentWeekGroupId = null;
+            isWeekCollapsed = false;
+            result.push(row);
+          }
+          continue;
+        }
+
+        // Reset week tracking when exiting archive
+        if (row.type !== 'archiveRow' &&
+            row.type !== 'archivedProjectHeader' &&
+            row.type !== 'archivedProjectGeneral' &&
+            row.type !== 'archivedProjectUnscheduled' &&
+            !row.parentGroupId) {
+          currentWeekGroupId = null;
+          isWeekCollapsed = false;
+        }
+
+        // Handle project-level grouping (inside an expanded week)
+        if (row.isGroupHeader && row.groupId) {
+          // This is a project header - always show it
           result.push(row);
           continue;
         }
 
-        // If row has a parentGroupId, check if that group is collapsed
+        // If row has a groupId (it's a project header child), check if project is collapsed
         if (row.parentGroupId && collapsedGroupsSet.has(row.parentGroupId)) {
-          continue; // Skip this row, its parent group is collapsed
-        }
-
-        // If row has a groupId (it's within a group), check if it's collapsed
-        if (row.groupId && collapsedGroupsSet.has(row.groupId)) {
-          continue; // Skip this row, it's in a collapsed group
+          continue; // Skip this row, its project is collapsed
         }
 
         result.push(row);
@@ -1221,8 +1251,8 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     // Create a unique ID for this archive week
     const archiveWeekId = `archive-week-${Date.now()}`;
 
-    // Collapse this archive week by default
-    setCollapsedGroups((prev) => new Set(prev).add(archiveWeekId));
+    // Track project group IDs to collapse them by default
+    const projectGroupIds = [];
 
     setRows((prevRows) => {
       // Step 1: Insert archive week row with totals
@@ -1251,6 +1281,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
           // Create a unique group ID for each project
           if (row.type === 'projectHeader') {
             projectGroupIdForHeaders = `${archiveWeekId}-project-${row.id}`;
+            projectGroupIds.push(projectGroupIdForHeaders);
           }
 
           // Create archived version of this row
@@ -1263,7 +1294,8 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
             // Preserve project totals for archived project headers
             archivedTotal: row.type === 'projectHeader' ? projectHeaderTotals[row.id] : undefined,
             // Add grouping metadata
-            parentGroupId: archiveWeekId,
+            // Project headers belong to the week, subproject rows belong to the project
+            parentGroupId: row.type === 'projectHeader' ? archiveWeekId : projectGroupIdForHeaders,
             groupId: row.type === 'projectHeader' ? projectGroupIdForHeaders : undefined,
             isGroupHeader: row.type === 'projectHeader',
           };
@@ -1356,6 +1388,14 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       });
 
       return finalRows;
+    });
+
+    // Collapse the archive week and all project groups by default
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      next.add(archiveWeekId);
+      projectGroupIds.forEach((groupId) => next.add(groupId));
+      return next;
     });
   }, [insertArchiveRow, projectHeaderTotals]);
 
