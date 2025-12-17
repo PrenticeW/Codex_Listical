@@ -11,6 +11,7 @@ export default function usePlannerRowRendering({
   isCellActive,
   isCellInSelection,
   selectedRowIdSet,
+  selectedCellKeys,
   dragIndex = null,
   hoverIndex = null,
 }) {
@@ -74,14 +75,26 @@ export default function usePlannerRowRendering({
               return;
             }
 
-            // For inputs with modifier keys: prevent default to enable multi-select
-            // For inputs without modifiers: don't prevent default, let them focus normally
+            // For inputs and textareas
             const isInput = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
-            if (isInput && hasModifierKey) {
-              event.preventDefault();
+            if (isInput) {
+              // Check if this cell is already active and is the only one selected
+              const isAlreadyActive = isCellActive(rowId, columnKey);
+              const cellKey = `${rowId}|${columnKey}`;
+              const isSingleCellSelected = selectedCellKeys.size === 1 && selectedCellKeys.has(cellKey);
+
+              // If cell is already active and is the only selected cell, allow normal editing
+              if (isAlreadyActive && isSingleCellSelected && !hasModifierKey) {
+                return;
+              }
+
+              // For modifier keys, prevent default to enable multi-select without focusing
+              if (hasModifierKey) {
+                event.preventDefault();
+              }
             }
 
-            // Always call the handler to track cell selection and anchor
+            // Call the handler to track cell selection and anchor
             handleCellMouseDown(event, rowId, columnKey);
           },
         };
@@ -136,6 +149,7 @@ export default function usePlannerRowRendering({
       isCellInSelection,
       rowIndexMap,
       selectedRowIdSet,
+      selectedCellKeys,
       updateRowValues,
       dragIndex,
       hoverIndex,

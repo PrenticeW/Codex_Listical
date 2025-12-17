@@ -155,43 +155,52 @@ export default function usePlannerInteractions({
         // If we're in an editable element, allow normal delete behavior
         if (isEditableElement) return;
 
-        // Only proceed if we have an active cell
-        if (!activeCell) return;
+        // Only proceed if we have selected cells or an active cell
+        if (!activeCell && selectedCellKeys.size === 0) return;
 
         event.preventDefault();
 
-        // Find the active cell element
         if (!tableContainerRef.current) return;
-        const selector = `[data-row-id="${activeCell.rowId}"][data-column-key="${activeCell.cellId}"]`;
-        const cellElement = tableContainerRef.current.querySelector(selector);
-        if (!cellElement) return;
 
-        // Find the form element within the cell
-        const formElement = cellElement.querySelector('input, textarea, select');
-        if (!formElement) return;
+        // Helper function to clear a cell
+        const clearCell = (cellRowId, cellColumnKey) => {
+          const selector = `[data-row-id="${cellRowId}"][data-column-key="${cellColumnKey}"]`;
+          const cellElement = tableContainerRef.current.querySelector(selector);
+          if (!cellElement) return;
 
-        // Clear the value based on element type
-        if (formElement.tagName === 'SELECT') {
-          // For select elements, set to first option (usually "-" or empty)
-          const selectEl = formElement;
-          if (selectEl.options.length > 0) {
-            selectEl.selectedIndex = 0;
-            // Trigger change event to update the underlying data
+          const formElement = cellElement.querySelector('input, textarea, select');
+          if (!formElement) return;
+
+          // Clear the value based on element type
+          if (formElement.tagName === 'SELECT') {
+            const selectEl = formElement;
+            if (selectEl.options.length > 0) {
+              selectEl.selectedIndex = 0;
+              const changeEvent = new Event('change', { bubbles: true });
+              selectEl.dispatchEvent(changeEvent);
+            }
+          } else if (formElement.type === 'checkbox') {
+            formElement.checked = false;
             const changeEvent = new Event('change', { bubbles: true });
-            selectEl.dispatchEvent(changeEvent);
+            formElement.dispatchEvent(changeEvent);
+          } else {
+            formElement.value = '';
+            const blurEvent = new Event('blur', { bubbles: true });
+            formElement.dispatchEvent(blurEvent);
           }
-        } else if (formElement.type === 'checkbox') {
-          // For checkboxes, uncheck them
-          formElement.checked = false;
-          const changeEvent = new Event('change', { bubbles: true });
-          formElement.dispatchEvent(changeEvent);
-        } else {
-          // For input/textarea, clear the value
-          formElement.value = '';
-          formElement.focus();
-          // Trigger blur to save the empty value
-          const blurEvent = new Event('blur', { bubbles: true });
-          formElement.dispatchEvent(blurEvent);
+        };
+
+        // If multiple cells are selected, clear all of them
+        if (selectedCellKeys.size > 0) {
+          selectedCellKeys.forEach((key) => {
+            const [rowId, cellId] = key.split('|');
+            if (rowId && cellId) {
+              clearCell(rowId, cellId);
+            }
+          });
+        } else if (activeCell) {
+          // Otherwise, clear just the active cell
+          clearCell(activeCell.rowId, activeCell.cellId);
         }
         return;
       }
@@ -219,34 +228,43 @@ export default function usePlannerInteractions({
       if (shouldDeferToNativeCopy || shouldDeferToNativePaste) return;
 
       if (key === 'c') {
-        // Priority: activeCell > first selected cell > highlightedRowId
-        let cellToCopy = activeCell;
+        event.preventDefault();
 
-        if (!cellToCopy && selectedCellKeys.size > 0) {
-          // Get the first selected cell
+        // If multiple cells are selected, copy all of them as tab-separated values
+        if (selectedCellKeys.size > 0) {
+          const cellValues = Array.from(selectedCellKeys).map((key) => {
+            const [rowId, cellId] = key.split('|');
+            if (rowId && cellId) {
+              return copyCellContents({ rowId, cellId }, { includeClipboard: false });
+            }
+            return '';
+          });
+          const combinedText = cellValues.join('\t');
+          copyTextToClipboard(combinedText);
+          // Store the first selected cell as the copied cell for paste reference
           const firstKey = Array.from(selectedCellKeys)[0];
           if (firstKey) {
             const [rowId, cellId] = firstKey.split('|');
             if (rowId && cellId) {
-              cellToCopy = { rowId, cellId };
+              setCopiedCell({ rowId, cellId });
+              setCopiedCellHighlight({ rowId, cellId });
             }
           }
-        }
+        } else {
+          // Single cell copy: Priority: activeCell > highlightedRowId
+          let cellToCopy = activeCell;
 
-        if (!cellToCopy && highlightedRowId) {
-          cellToCopy = { rowId: highlightedRowId, cellId: 'task' };
-        }
+          if (!cellToCopy && highlightedRowId) {
+            cellToCopy = { rowId: highlightedRowId, cellId: 'task' };
+          }
 
-        if (!cellToCopy) return;
+          if (!cellToCopy) return;
 
-        event.preventDefault();
-        copyCellContents(cellToCopy);
-        const isDifferentCell =
-          copiedCell?.rowId !== cellToCopy.rowId || copiedCell?.cellId !== cellToCopy.cellId;
-        if (isDifferentCell) {
+          copyCellContents(cellToCopy);
           setCopiedCell(cellToCopy);
+          setCopiedCellHighlight(cellToCopy);
         }
-        setCopiedCellHighlight(cellToCopy);
+
         if (copiedCellHighlightTimeoutRef.current) {
           clearTimeout(copiedCellHighlightTimeoutRef.current);
         }
@@ -257,48 +275,30 @@ export default function usePlannerInteractions({
         return;
       }
 
-      // Priority: activeCell > first selected cell > highlightedRowId
-      let cellToPaste = activeCell;
-
-      if (!cellToPaste && selectedCellKeys.size > 0) {
-        // Get the first selected cell
-        const firstKey = Array.from(selectedCellKeys)[0];
-        if (firstKey) {
-          const [rowId, cellId] = firstKey.split('|');
-          if (rowId && cellId) {
-            cellToPaste = { rowId, cellId };
-          }
-        }
-      }
-
-      if (!cellToPaste && highlightedRowId) {
-        cellToPaste = { rowId: highlightedRowId, cellId: copiedCell?.cellId || 'task' };
-      }
-
-      if (!copiedCell || !cellToPaste) return;
+      if (!copiedCell) return;
 
       event.preventDefault();
 
-      // Don't paste into the same cell
-      if (
-        cellToPaste.rowId === copiedCell.rowId &&
-        cellToPaste.cellId === copiedCell.cellId
-      ) {
-        return;
-      }
+      if (!tableContainerRef.current) return;
 
       // Get the content from the copied cell
       const copiedText = copyCellContents(copiedCell, { includeClipboard: false });
       if (!copiedText) return;
 
-      // Find the target cell element and paste the content
-      if (!tableContainerRef.current) return;
-      const selector = `[data-row-id="${cellToPaste.rowId}"][data-column-key="${cellToPaste.cellId}"]`;
-      const targetCellElement = tableContainerRef.current.querySelector(selector);
-      if (!targetCellElement) return;
+      // Helper function to paste into a cell
+      const pasteIntoCell = (targetRowId, targetCellId) => {
+        // Don't paste into the same cell we copied from
+        if (targetRowId === copiedCell.rowId && targetCellId === copiedCell.cellId) {
+          return;
+        }
 
-      const formElement = targetCellElement.querySelector('input, textarea, select');
-      if (formElement) {
+        const selector = `[data-row-id="${targetRowId}"][data-column-key="${targetCellId}"]`;
+        const targetCellElement = tableContainerRef.current.querySelector(selector);
+        if (!targetCellElement) return;
+
+        const formElement = targetCellElement.querySelector('input, textarea, select');
+        if (!formElement) return;
+
         if (formElement.tagName === 'SELECT') {
           // For select elements, find the option that matches the text
           const selectEl = formElement;
@@ -306,18 +306,45 @@ export default function usePlannerInteractions({
           const matchingOption = options.find(opt => opt.text === copiedText || opt.value === copiedText);
           if (matchingOption) {
             selectEl.value = matchingOption.value;
-            // Trigger change event to update the underlying data
             const changeEvent = new Event('change', { bubbles: true });
             selectEl.dispatchEvent(changeEvent);
           }
         } else {
-          // For input/textarea, set the value and trigger events
+          // For input/textarea, set the value and trigger blur
           formElement.value = copiedText;
-          formElement.focus();
-          // Trigger blur to save the value
+          // Need to focus first, then blur to properly trigger the onBlur handler
+          const wasFocused = document.activeElement === formElement;
+          if (!wasFocused) {
+            formElement.focus();
+          }
           const blurEvent = new Event('blur', { bubbles: true });
           formElement.dispatchEvent(blurEvent);
+          // If it wasn't originally focused, blur it
+          if (!wasFocused) {
+            formElement.blur();
+          }
         }
+      };
+
+      // If multiple cells are selected, paste into all of them
+      if (selectedCellKeys.size > 0) {
+        selectedCellKeys.forEach((key) => {
+          const [rowId, cellId] = key.split('|');
+          if (rowId && cellId) {
+            pasteIntoCell(rowId, cellId);
+          }
+        });
+      } else {
+        // Single cell paste: Priority: activeCell > highlightedRowId
+        let cellToPaste = activeCell;
+
+        if (!cellToPaste && highlightedRowId) {
+          cellToPaste = { rowId: highlightedRowId, cellId: copiedCell?.cellId || 'task' };
+        }
+
+        if (!cellToPaste) return;
+
+        pasteIntoCell(cellToPaste.rowId, cellToPaste.cellId);
       }
     };
 

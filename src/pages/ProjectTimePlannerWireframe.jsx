@@ -951,6 +951,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     isCellActive,
     isCellInSelection,
     selectedRowIdSet,
+    selectedCellKeys,
     dragIndex,
     hoverIndex,
   });
