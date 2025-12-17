@@ -74,7 +74,27 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     return stagingState?.shortlist ?? [];
   });
   const [projectWeeklyQuotas, setProjectWeeklyQuotas] = useState(() => new Map());
+  const [collapsedGroups, setCollapsedGroups] = useState(() => {
+    // Load from localStorage if available
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('planner-collapsed-groups');
+      if (stored) {
+        try {
+          return new Set(JSON.parse(stored));
+        } catch (e) {
+          return new Set();
+        }
+      }
+    }
+    return new Set();
+  });
   const totalDays = 84;
+
+  // Persist collapsed groups to localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('planner-collapsed-groups', JSON.stringify(Array.from(collapsedGroups)));
+  }, [collapsedGroups]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -472,6 +492,34 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       return false; // Hide non-task rows when filtering by estimate since they lack that control.
     };
 
+    // Apply grouping/collapsing filter
+    const applyGroupingFilter = (rows) => {
+      const result = [];
+      const collapsedGroupsSet = collapsedGroups;
+
+      for (const row of rows) {
+        // Always show the row if it's a group header
+        if (row.isGroupHeader) {
+          result.push(row);
+          continue;
+        }
+
+        // If row has a parentGroupId, check if that group is collapsed
+        if (row.parentGroupId && collapsedGroupsSet.has(row.parentGroupId)) {
+          continue; // Skip this row, its parent group is collapsed
+        }
+
+        // If row has a groupId (it's within a group), check if it's collapsed
+        if (row.groupId && collapsedGroupsSet.has(row.groupId)) {
+          continue; // Skip this row, it's in a collapsed group
+        }
+
+        result.push(row);
+      }
+
+      return result;
+    };
+
     if (
       !activeDayFilters.length &&
       !selectedProjectFilters.size &&
@@ -480,9 +528,9 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       !selectedEstimateFilters.size &&
       showMaxMinRows
     ) {
-      return rowsWithNumbers;
+      return applyGroupingFilter(rowsWithNumbers);
     }
-    return rowsWithNumbers.filter((row) => {
+    const filtered = rowsWithNumbers.filter((row) => {
       if (!matchesProjectFilter(row)) return false;
       if (!matchesStatusFilter(row)) return false;
       if (!matchesRecurringFilter(row)) return false;
@@ -496,7 +544,9 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
         return coerceNumber(value) !== null;
       });
     });
-  }, [rowsWithNumbers, activeFilterColumns, selectedProjectFilters, selectedStatusFilters, selectedRecurringFilters, selectedEstimateFilters]);
+
+    return applyGroupingFilter(filtered);
+  }, [rowsWithNumbers, activeFilterColumns, selectedProjectFilters, selectedStatusFilters, selectedRecurringFilters, selectedEstimateFilters, collapsedGroups]);
 
   const table = useReactTable({
     data: filteredRows,
@@ -649,6 +699,20 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     if (!dates.length || !dates[0]) return null;
     return 1; // The foremost week in the 12-week view is the first block of 7 days.
   }, [dates]);
+
+  const foremostWeekTotals = useMemo(() => {
+    // Sum the first 7 days (first week) from dailyMinEntries and dailyMaxEntries
+    let minTotal = 0;
+    let maxTotal = 0;
+    for (let i = 0; i < 7 && i < dailyMinEntries.length; i++) {
+      minTotal += parseFloat(dailyMinEntries[i] || 0);
+      maxTotal += parseFloat(dailyMaxEntries[i] || 0);
+    }
+    return {
+      min: minTotal.toFixed(2),
+      max: maxTotal.toFixed(2),
+    };
+  }, [dailyMinEntries, dailyMaxEntries]);
 
   const monthSpans = useMemo(() => {
     if (!hasStartDate) return [{ label: 'Month', span: totalDays }];
@@ -899,6 +963,18 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     isCellActive,
   } = interactions;
 
+  const toggleGroupCollapse = useCallback((groupId) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  }, []);
+
   const projectNames = useMemo(() => {
     // Use official projects from staging - only colored projects
     // Use nickname if available, otherwise fall back to projectName or text
@@ -941,6 +1017,8 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       DARK_HEADER_STYLE,
       ARCHIVE_ROW_STYLE,
       officialProjects,
+      collapsedGroups,
+      toggleGroupCollapse,
     }),
     [
       totalDays,
@@ -974,6 +1052,8 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       DARK_HEADER_STYLE,
       ARCHIVE_ROW_STYLE,
       officialProjects,
+      collapsedGroups,
+      toggleGroupCollapse,
     ]
   );
 
@@ -1084,13 +1164,25 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   const recurringNames = useMemo(() => RECURRING_VALUES, []);
   const estimateNames = useMemo(() => ESTIMATE_VALUES, []);
   const insertArchiveRow = useCallback(
-    (prevRows) => {
+    (prevRows, projectTotals = {}, archiveWeekId = null) => {
       const headerIndex = prevRows.findIndex((row) => row.type === 'archiveHeader');
       if (headerIndex === -1) return prevRows;
+
+      // Find insertion point (at the bottom of existing archive rows)
       let insertIndex = headerIndex + 1;
       while (insertIndex < prevRows.length && prevRows[insertIndex].type === 'archiveRow') {
         insertIndex += 1;
       }
+
+      // Calculate total hours across all projects
+      let totalHours = 0;
+      Object.values(projectTotals).forEach((total) => {
+        const numericValue = parseFloat(total);
+        if (!isNaN(numericValue)) {
+          totalHours += numericValue;
+        }
+      });
+
       const newRow = {
         id: `archive-row-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         type: 'archiveRow',
@@ -1099,12 +1191,17 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
         archiveWeekLabel: foremostWeekNumber
           ? `Year 1, Week ${foremostWeekNumber}`
           : 'Year 1, Week -',
+        archiveWeeklyMin: foremostWeekTotals.min,
+        archiveWeeklyMax: foremostWeekTotals.max,
+        archiveTotalHours: totalHours.toFixed(2),
+        groupId: archiveWeekId,
+        isGroupHeader: true,
       };
       const nextRows = [...prevRows];
       nextRows.splice(insertIndex, 0, newRow);
       return nextRows;
     },
-    [foremostWeekNumber, foremostWeekRange, totalDays]
+    [createEmptyDayEntries, foremostWeekNumber, foremostWeekRange, foremostWeekTotals, totalDays]
   );
   const toggleSortStatus = useCallback((status) => {
     setSelectedSortStatuses((prev) => {
@@ -1117,10 +1214,150 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       return next;
     });
   }, []);
+
   const handleArchiveWeek = useCallback(() => {
     setIsListicalMenuOpen(false);
-    setRows((prevRows) => insertArchiveRow(prevRows));
-  }, [insertArchiveRow]);
+
+    // Create a unique ID for this archive week
+    const archiveWeekId = `archive-week-${Date.now()}`;
+
+    // Collapse this archive week by default
+    setCollapsedGroups((prev) => new Set(prev).add(archiveWeekId));
+
+    setRows((prevRows) => {
+      // Step 1: Insert archive week row with totals
+      let nextRows = insertArchiveRow(prevRows, projectHeaderTotals, archiveWeekId);
+
+      // Step 2: Copy project structure (headers, general, unscheduled)
+      const archiveHeaderIndex = nextRows.findIndex((row) => row.type === 'archiveHeader');
+      if (archiveHeaderIndex === -1) return nextRows;
+
+      // Find the newly created archive row (it's right after the archive header)
+      let archiveWeekRowIndex = archiveHeaderIndex + 1;
+      while (archiveWeekRowIndex < nextRows.length && nextRows[archiveWeekRowIndex].type === 'archiveRow') {
+        // Find the last archive row (we want to insert after it)
+        if (archiveWeekRowIndex + 1 >= nextRows.length || nextRows[archiveWeekRowIndex + 1].type !== 'archiveRow') {
+          break;
+        }
+        archiveWeekRowIndex++;
+      }
+
+      // Collect project structure rows to copy
+      const projectStructureRows = [];
+      let projectGroupIdForHeaders = null;
+
+      nextRows.forEach((row) => {
+        if (row.type === 'projectHeader' || row.type === 'projectGeneral' || row.type === 'projectUnscheduled') {
+          // Create a unique group ID for each project
+          if (row.type === 'projectHeader') {
+            projectGroupIdForHeaders = `${archiveWeekId}-project-${row.id}`;
+          }
+
+          // Create archived version of this row
+          const archivedRow = {
+            ...row,
+            id: `archived-${row.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            type: row.type === 'projectHeader' ? 'archivedProjectHeader' :
+                  row.type === 'projectGeneral' ? 'archivedProjectGeneral' :
+                  'archivedProjectUnscheduled',
+            // Preserve project totals for archived project headers
+            archivedTotal: row.type === 'projectHeader' ? projectHeaderTotals[row.id] : undefined,
+            // Add grouping metadata
+            parentGroupId: archiveWeekId,
+            groupId: row.type === 'projectHeader' ? projectGroupIdForHeaders : undefined,
+            isGroupHeader: row.type === 'projectHeader',
+          };
+          projectStructureRows.push(archivedRow);
+        }
+      });
+
+      // Insert archived project structure right after the archive week row
+      nextRows.splice(archiveWeekRowIndex + 1, 0, ...projectStructureRows);
+
+      // Step 3: Move non-recurring Done/Abandoned tasks from projects to archive
+      // Step 4a: Create snapshots of recurring Done/Abandoned tasks
+
+      // Group tasks by their project for proper ordering
+      const tasksByProject = new Map(); // Map of projectName -> tasks array
+      const recurringTasksToReset = [];
+      let currentProjectName = null;
+
+      // First pass: collect tasks to archive grouped by project
+      nextRows.forEach((row) => {
+        // Track which project we're in (based on original project headers, not archived ones)
+        if (row.type === 'projectHeader') {
+          currentProjectName = row.projectName;
+        }
+
+        if (row.type === 'projectTask' && currentProjectName && (row.status === 'Done' || row.status === 'Abandoned')) {
+          if (!tasksByProject.has(currentProjectName)) {
+            tasksByProject.set(currentProjectName, []);
+          }
+
+          if (row.recurring === 'Recurring') {
+            // Step 4a: Create a deep copy snapshot for recurring tasks
+            const snapshot = {
+              ...row,
+              id: `archived-${row.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              dayEntries: Array.isArray(row.dayEntries) ? [...row.dayEntries] : createEmptyDayEntries(totalDays),
+            };
+            tasksByProject.get(currentProjectName).push(snapshot);
+            recurringTasksToReset.push(row.id);
+          } else {
+            // Step 3: Move non-recurring tasks to archive
+            tasksByProject.get(currentProjectName).push(row);
+          }
+        }
+      });
+
+      // Second pass: rebuild rows and insert tasks in the proper locations
+      const remainingRows = [];
+      let currentArchivedProjectGroupId = null;
+
+      nextRows.forEach((row) => {
+        // Track archived project headers to get their groupId
+        if (row.type === 'archivedProjectHeader') {
+          currentArchivedProjectGroupId = row.groupId;
+          remainingRows.push(row);
+        } else if (row.type === 'archivedProjectGeneral' || row.type === 'archivedProjectUnscheduled') {
+          remainingRows.push(row);
+
+          // After the last archived subheader (unscheduled), insert the project's tasks
+          if (row.type === 'archivedProjectUnscheduled') {
+            const projectName = row.projectName;
+            const projectTasks = tasksByProject.get(projectName);
+            if (projectTasks && projectTasks.length > 0) {
+              // Add parentGroupId to all tasks
+              projectTasks.forEach(task => {
+                task.parentGroupId = currentArchivedProjectGroupId;
+                remainingRows.push(task);
+              });
+            }
+          }
+        } else if (row.type === 'projectTask' && (row.status === 'Done' || row.status === 'Abandoned') && row.recurring !== 'Recurring') {
+          // Skip non-recurring done/abandoned tasks (they're being moved to archive)
+          // Don't add them to remainingRows
+        } else {
+          remainingRows.push(row);
+        }
+      });
+
+      // Step 4b: Reset the original recurring tasks
+      const finalRows = remainingRows.map((row) => {
+        if (recurringTasksToReset.includes(row.id)) {
+          return {
+            ...row,
+            dayEntries: createEmptyDayEntries(totalDays),
+            status: 'Not Scheduled',
+            timeValue: '0.00',
+          };
+        }
+        return row;
+      });
+
+      return finalRows;
+    });
+  }, [insertArchiveRow, projectHeaderTotals]);
 
   const handleSortInbox = useCallback(() => {
     setIsListicalMenuOpen(false);

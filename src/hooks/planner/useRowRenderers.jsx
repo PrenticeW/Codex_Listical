@@ -86,6 +86,8 @@ export default function useRowRenderers({
   DARK_HEADER_STYLE,
   ARCHIVE_ROW_STYLE,
   officialProjects = [],
+  collapsedGroups = new Set(),
+  toggleGroupCollapse = () => {},
 }) {
   // Memoize estimate options to avoid recreating on every render
   const estimateOptionElements = useMemo(() => [
@@ -193,6 +195,25 @@ export default function useRowRenderers({
       label: 'Archive',
       colSpan: true,  // Spans all fixed columns
     },
+    // Archived versions of project headers
+    archivedProjectHeader: {
+      bgColor: '#d5a6bd',
+      showData: true,
+      labelInCheck: true,
+      isArchived: true,
+    },
+    archivedProjectGeneral: {
+      bgColor: '#f2e5eb',
+      label: 'General',
+      labelInTask: true,
+      isArchived: true,
+    },
+    archivedProjectUnscheduled: {
+      bgColor: '#f2e5eb',
+      label: 'Unscheduled',
+      labelInTask: true,
+      isArchived: true,
+    },
   };
 
   // ============================================================
@@ -274,7 +295,10 @@ export default function useRowRenderers({
     }
 
     // For project headers with data (projectHeader, projectGeneral, projectUnscheduled)
-    const projectRollupValue = config.showData ? (projectHeaderTotals[rowId] ?? '0.00') : null;
+    // Use archivedTotal if this is an archived row, otherwise use current totals
+    const projectRollupValue = config.showData
+      ? (config.isArchived ? (row.archivedTotal ?? '0.00') : (projectHeaderTotals[rowId] ?? '0.00'))
+      : null;
     const projectLabel = config.showData ? (row.projectNickname || row.projectName) : null;
     const rawQuota = config.showData ? (projectWeeklyQuotas?.get(projectLabel) ?? '0.00') : null;
     const projectQuota = config.showData
@@ -284,6 +308,10 @@ export default function useRowRenderers({
           ? parseFloat(rawQuota).toFixed(2)
           : rawQuota)
       : null;
+
+    // Expand/collapse functionality for archived project headers
+    const isCollapsed = row.groupId ? collapsedGroups.has(row.groupId) : false;
+    const expandIcon = isCollapsed ? '▶' : '▼';
 
     return (
       <tr
@@ -321,7 +349,19 @@ export default function useRowRenderers({
           data-cell-purpose={config.labelInCheck ? 'header-project-name' : 'header-decoration'}
           data-display-only="true"
         >
-          {config.labelInCheck ? projectLabel : ''}
+          {config.labelInCheck && row.isGroupHeader && row.groupId ? (
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleGroupCollapse(row.groupId);
+              }}
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+            >
+              {expandIcon} {projectLabel}
+            </span>
+          ) : (
+            config.labelInCheck ? projectLabel : ''
+          )}
         </td>
         <td
           className={withCellSelectionClass('', 'project')}
@@ -824,11 +864,34 @@ export default function useRowRenderers({
           {rowNumber}
         </td>
         {fixedColumnConfig.map(({ key, className }, colIdx) => {
+          const isCollapsed = row.groupId ? collapsedGroups.has(row.groupId) : false;
+          const expandIcon = isCollapsed ? '▶' : '▼';
+
           const cellContent = (() => {
-            if (colIdx === 0) return row.archiveWeekLabel ?? '';
+            if (colIdx === 0) {
+              // Add expand/collapse icon if this is a group header
+              if (row.isGroupHeader && row.groupId) {
+                return (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleGroupCollapse(row.groupId);
+                    }}
+                    style={{ cursor: 'pointer', userSelect: 'none' }}
+                  >
+                    {expandIcon} {row.archiveWeekLabel ?? ''}
+                  </span>
+                );
+              }
+              return row.archiveWeekLabel ?? '';
+            }
             if (key === 'task') return row.archiveLabel ?? '';
-            if (key === 'estimate') return '0.00';
-            if (key === 'timeValue') return 'of 0.00 - 0.00';
+            if (key === 'estimate') return row.archiveTotalHours ?? '0.00';
+            if (key === 'timeValue') {
+              const min = row.archiveWeeklyMin ?? '0.00';
+              const max = row.archiveWeeklyMax ?? '0.00';
+              return `of ${min} - ${max}`;
+            }
             return '';
           })();
           const extraStyles =
@@ -896,12 +959,16 @@ export default function useRowRenderers({
   const renderArchiveRow = (props) => <ArchiveRowComponent {...props} />;
 
   return {
-    // Use unified header renderer for all 5 header types
+    // Use unified header renderer for all header types
     projectHeader: renderUnifiedHeaderRow('projectHeader'),
     projectGeneral: renderUnifiedHeaderRow('projectGeneral'),
     projectUnscheduled: renderUnifiedHeaderRow('projectUnscheduled'),
     inboxHeader: renderUnifiedHeaderRow('inboxHeader'),
     archiveHeader: renderUnifiedHeaderRow('archiveHeader'),
+    // Archived header renderers
+    archivedProjectHeader: renderUnifiedHeaderRow('archivedProjectHeader'),
+    archivedProjectGeneral: renderUnifiedHeaderRow('archivedProjectGeneral'),
+    archivedProjectUnscheduled: renderUnifiedHeaderRow('archivedProjectUnscheduled'),
     // Use unified task renderer for both task types
     projectTask: renderUnifiedTaskRow,
     inboxItem: renderUnifiedTaskRow,
