@@ -1371,12 +1371,13 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       // Step 3: Move non-recurring Done/Abandoned tasks from projects to archive
       // Step 4a: Create snapshots of recurring Done/Abandoned tasks
 
-      // Group tasks by their project for proper ordering
-      const tasksByProject = new Map(); // Map of projectName -> tasks array
+      // Group tasks by their project and target subheader (general vs unscheduled)
+      const generalTasksByProject = new Map(); // Map of projectName -> general tasks array
+      const unscheduledTasksByProject = new Map(); // Map of projectName -> unscheduled tasks array
       const recurringTasksToReset = [];
       let currentProjectName = null;
 
-      // First pass: collect tasks to archive grouped by project
+      // First pass: collect tasks to archive grouped by project and status
       nextRows.forEach((row) => {
         // Track which project we're in (based on original project headers, not archived ones)
         if (row.type === 'projectHeader') {
@@ -1384,8 +1385,12 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
         }
 
         if (row.type === 'projectTask' && currentProjectName && (row.status === 'Done' || row.status === 'Abandoned')) {
-          if (!tasksByProject.has(currentProjectName)) {
-            tasksByProject.set(currentProjectName, []);
+          // Determine target based on status (Done/Scheduled go to general, others to unscheduled)
+          const target = row.status === 'Done' ? 'general' : 'unscheduled';
+          const targetMap = target === 'general' ? generalTasksByProject : unscheduledTasksByProject;
+
+          if (!targetMap.has(currentProjectName)) {
+            targetMap.set(currentProjectName, []);
           }
 
           if (row.recurring === 'Recurring') {
@@ -1395,11 +1400,11 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
               id: `archived-${row.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
               dayEntries: Array.isArray(row.dayEntries) ? [...row.dayEntries] : createEmptyDayEntries(totalDays),
             };
-            tasksByProject.get(currentProjectName).push(snapshot);
+            targetMap.get(currentProjectName).push(snapshot);
             recurringTasksToReset.push(row.id);
           } else {
             // Step 3: Move non-recurring tasks to archive
-            tasksByProject.get(currentProjectName).push(row);
+            targetMap.get(currentProjectName).push(row);
           }
         }
       });
@@ -1416,13 +1421,24 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
         } else if (row.type === 'archivedProjectGeneral' || row.type === 'archivedProjectUnscheduled') {
           remainingRows.push(row);
 
-          // After the last archived subheader (unscheduled), insert the project's tasks
+          const projectName = row.projectName;
+
+          // After archivedProjectGeneral, insert general tasks (Done)
+          if (row.type === 'archivedProjectGeneral') {
+            const generalTasks = generalTasksByProject.get(projectName);
+            if (generalTasks && generalTasks.length > 0) {
+              generalTasks.forEach(task => {
+                task.parentGroupId = currentArchivedProjectGroupId;
+                remainingRows.push(task);
+              });
+            }
+          }
+
+          // After archivedProjectUnscheduled, insert unscheduled tasks (Abandoned)
           if (row.type === 'archivedProjectUnscheduled') {
-            const projectName = row.projectName;
-            const projectTasks = tasksByProject.get(projectName);
-            if (projectTasks && projectTasks.length > 0) {
-              // Add parentGroupId to all tasks
-              projectTasks.forEach(task => {
+            const unscheduledTasks = unscheduledTasksByProject.get(projectName);
+            if (unscheduledTasks && unscheduledTasks.length > 0) {
+              unscheduledTasks.forEach(task => {
                 task.parentGroupId = currentArchivedProjectGroupId;
                 remainingRows.push(task);
               });
