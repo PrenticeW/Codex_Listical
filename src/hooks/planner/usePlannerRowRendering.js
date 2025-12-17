@@ -88,6 +88,19 @@ export default function usePlannerRowRendering({
                 return;
               }
 
+              // Blur any currently focused input to save its value before cell selection changes
+              const activeInput = document.activeElement;
+              if (activeInput instanceof HTMLInputElement ||
+                  activeInput instanceof HTMLTextAreaElement) {
+                activeInput.blur();
+                // Wait for blur to complete and save value before changing selection
+                setTimeout(() => {
+                  handleCellMouseDown(event, rowId, columnKey);
+                }, 0);
+                event.preventDefault();
+                return;
+              }
+
               // For modifier keys, prevent default to enable multi-select without focusing
               if (hasModifierKey) {
                 event.preventDefault();

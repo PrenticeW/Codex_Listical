@@ -825,6 +825,41 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
 
   clearSelectionRef.current = clearSelection;
 
+  const clearCellValue = useCallback((rowId, cellId) => {
+    const rowIndex = rowIndexById.get(rowId);
+    if (rowIndex == null) return;
+
+    // Determine what to clear based on cellId
+    if (cellId === 'task') {
+      updateRowValues(rowIndex, { taskName: '' }, { markInteraction: true });
+    } else if (cellId === 'recurring') {
+      updateRowValues(rowIndex, { recurring: 'One-Time' }, { markInteraction: true });
+    } else if (cellId === 'estimate') {
+      updateRowValues(rowIndex, { estimate: 'Small' }, { markInteraction: true });
+    } else if (cellId === 'status') {
+      updateRowValues(rowIndex, { status: 'Not Scheduled' }, { markInteraction: true });
+    } else if (cellId === 'project') {
+      updateRowValues(rowIndex, { project: '' }, { markInteraction: true });
+    } else if (cellId === 'subproject') {
+      updateRowValues(rowIndex, { subproject: '' }, { markInteraction: true });
+    } else if (cellId.startsWith('day-')) {
+      const dayIndex = parseInt(cellId.replace('day-', ''), 10);
+      if (!isNaN(dayIndex)) {
+        updateRowValues(
+          rowIndex,
+          (currentRow) => {
+            const existingEntries = Array.isArray(currentRow.dayEntries)
+              ? [...currentRow.dayEntries]
+              : createEmptyDayEntries(totalDays);
+            existingEntries[dayIndex] = '';
+            return { dayEntries: existingEntries };
+          },
+          { markInteraction: true }
+        );
+      }
+    }
+  }, [rowIndexById, updateRowValues, totalDays]);
+
   const interactions = usePlannerInteractions({
     columnWidths,
     setColumnWidths,
@@ -849,6 +884,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     pointerModifierRef,
     updatePointerModifierState,
     table,
+    clearCellValue,
   });
 
   const {

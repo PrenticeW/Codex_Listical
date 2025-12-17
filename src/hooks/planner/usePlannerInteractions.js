@@ -25,6 +25,7 @@ export default function usePlannerInteractions({
   pointerModifierRef,
   updatePointerModifierState,
   table,
+  clearCellValue,
 }) {
   const tableContainerRef = useRef(null);
   const columnResizeRef = useRef(null);
@@ -48,6 +49,12 @@ export default function usePlannerInteractions({
 
       const preserveRowSelection = preserveSelection || shouldPreserveSelection();
       setActiveCell({ rowId, cellId });
+
+      // Clear multi-cell selection when activating a new cell (unless preserving selection)
+      if (!preserveRowSelection && selectedCellKeys.size > 0) {
+        setSelectedCellKeys(new Set());
+      }
+
       if (highlightRow) {
         setHighlightedRowId(rowId);
       } else {
@@ -60,11 +67,13 @@ export default function usePlannerInteractions({
     },
     [
       activeCell,
+      selectedCellKeys,
       selectedRowIds,
       shouldPreserveSelection,
       setHighlightedRowId,
       setLastSelectedRowIndex,
       setSelectedRowIds,
+      setSelectedCellKeys,
     ]
   );
 
@@ -162,31 +171,10 @@ export default function usePlannerInteractions({
 
         if (!tableContainerRef.current) return;
 
-        // Helper function to clear a cell
+        // Helper function to clear a cell by directly updating the row data
         const clearCell = (cellRowId, cellColumnKey) => {
-          const selector = `[data-row-id="${cellRowId}"][data-column-key="${cellColumnKey}"]`;
-          const cellElement = tableContainerRef.current.querySelector(selector);
-          if (!cellElement) return;
-
-          const formElement = cellElement.querySelector('input, textarea, select');
-          if (!formElement) return;
-
-          // Clear the value based on element type
-          if (formElement.tagName === 'SELECT') {
-            const selectEl = formElement;
-            if (selectEl.options.length > 0) {
-              selectEl.selectedIndex = 0;
-              const changeEvent = new Event('change', { bubbles: true });
-              selectEl.dispatchEvent(changeEvent);
-            }
-          } else if (formElement.type === 'checkbox') {
-            formElement.checked = false;
-            const changeEvent = new Event('change', { bubbles: true });
-            formElement.dispatchEvent(changeEvent);
-          } else {
-            formElement.value = '';
-            const blurEvent = new Event('blur', { bubbles: true });
-            formElement.dispatchEvent(blurEvent);
+          if (clearCellValue) {
+            clearCellValue(cellRowId, cellColumnKey);
           }
         };
 
@@ -423,7 +411,6 @@ export default function usePlannerInteractions({
         event.preventDefault();
       }
       updatePointerModifierState(event);
-      const preserveSelection = Boolean(event?.metaKey || event?.ctrlKey || event?.shiftKey);
       const descriptor = {
         rowIndex: rowIndexById.get(rowId) ?? null,
         columnIndex: columnIndexByKey[cellId] ?? null,
@@ -463,7 +450,8 @@ export default function usePlannerInteractions({
           }
         }
       }
-      handleCellActivate(rowId, cellId, { ...options, preserveSelection });
+      // Always preserve selection when called from mouse down, since we just set it
+      handleCellActivate(rowId, cellId, { ...options, preserveSelection: true });
     },
     [
       columnIndexByKey,
