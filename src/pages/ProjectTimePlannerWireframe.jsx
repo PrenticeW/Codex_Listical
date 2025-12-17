@@ -1128,12 +1128,17 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     setRows((prevRows) => {
       if (!selectedSortStatuses.size) return prevRows;
 
-      const projectKeys = new Set();
+      // Build a map: normalized nickname -> full projectName
+      // This allows inbox items (which use nicknames) to match with projectGeneral rows
+      const nicknameToFullNameMap = new Map();
       prevRows.forEach((row) => {
         if (row.type === 'projectGeneral') {
-          projectKeys.add(normalizeProjectKey(row.projectName));
+          const nickname = normalizeProjectKey(row.projectNickname || row.projectName);
+          nicknameToFullNameMap.set(nickname, row.projectName);
+          console.log('[SORT INBOX] Found projectGeneral:', row.projectName, 'nickname:', row.projectNickname, '-> key:', nickname);
         }
       });
+      console.log('[SORT INBOX] Nickname map keys:', Array.from(nicknameToFullNameMap.keys()));
 
       const tasksByProject = new Map();
       const unscheduledTasksByProject = new Map();
@@ -1145,15 +1150,28 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
           selectedSortStatuses.has(row.status ?? '')
         ) {
           const target = SORT_INBOX_TARGET_MAP[row.status ?? ''];
+          console.log('[SORT INBOX] Processing inbox item:', {
+            id: row.id,
+            status: row.status,
+            projectSelection: row.projectSelection,
+            target,
+          });
           if (!target) {
             remainingRows.push(row);
             return;
           }
-          const projectKey = normalizeProjectKey(row.projectSelection);
-          if (projectKey && projectKeys.has(projectKey)) {
+          // Match by nickname (inbox items use nicknames)
+          const nicknameKey = normalizeProjectKey(row.projectSelection);
+          const fullProjectName = nicknameToFullNameMap.get(nicknameKey);
+          console.log('[SORT INBOX] Nickname:', row.projectSelection, '-> normalized:', nicknameKey, '-> fullName:', fullProjectName);
+
+          if (nicknameKey && fullProjectName) {
+            // Use full project name as the map key for consistency
+            const projectKey = normalizeProjectKey(fullProjectName);
             if (target === 'general') {
               if (!tasksByProject.has(projectKey)) tasksByProject.set(projectKey, []);
               tasksByProject.get(projectKey).push(row);
+              console.log('[SORT INBOX] Adding to general for project:', fullProjectName);
               return;
             }
             if (target === 'unscheduled') {
@@ -1161,17 +1179,24 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
                 unscheduledTasksByProject.set(projectKey, []);
               }
               unscheduledTasksByProject.get(projectKey).push(row);
+              console.log('[SORT INBOX] Adding to unscheduled for project:', fullProjectName);
               return;
             }
             return;
+          } else {
+            console.log('[SORT INBOX] No match found - keeping as inbox item');
           }
         }
         remainingRows.push(row);
       });
 
       if (tasksByProject.size === 0 && unscheduledTasksByProject.size === 0) {
+        console.log('[SORT INBOX] No tasks to move');
         return prevRows;
       }
+
+      console.log('[SORT INBOX] Tasks by project:', Array.from(tasksByProject.keys()));
+      console.log('[SORT INBOX] Unscheduled tasks by project:', Array.from(unscheduledTasksByProject.keys()));
 
       const nextRows = [];
       remainingRows.forEach((row) => {
@@ -1185,6 +1210,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
                 ...task,
                 type: 'projectTask',
                 projectName: row.projectName,
+                projectNickname: row.projectNickname,
               });
             });
             tasksByProject.delete(projectKey);
@@ -1199,6 +1225,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
                 ...task,
                 type: 'projectTask',
                 projectName: row.projectName,
+                projectNickname: row.projectNickname,
               });
             });
             unscheduledTasksByProject.delete(projectKey);
