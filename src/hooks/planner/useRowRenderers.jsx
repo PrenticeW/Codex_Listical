@@ -60,6 +60,8 @@ export default function useRowRenderers({
   showSubprojects,
   ROW_H,
   projectHeaderTotals,
+  archivedProjectTotals = {},
+  archivedWeekTotals = {},
   projectWeeklyQuotas,
   fixedColumnConfig,
   fixedCols,
@@ -295,9 +297,9 @@ export default function useRowRenderers({
     }
 
     // For project headers with data (projectHeader, projectGeneral, projectUnscheduled)
-    // Use archivedTotal if this is an archived row, otherwise use current totals
+    // Use archivedProjectTotals for archived rows (dynamically calculated), otherwise use current totals
     const projectRollupValue = config.showData
-      ? (config.isArchived ? (row.archivedTotal ?? '0.00') : (projectHeaderTotals[rowId] ?? '0.00'))
+      ? (config.isArchived ? (archivedProjectTotals[rowId] ?? '0.00') : (projectHeaderTotals[rowId] ?? '0.00'))
       : null;
     const projectLabel = config.showData ? (row.projectNickname || row.projectName) : null;
     const rawQuota = config.showData ? (projectWeeklyQuotas?.get(projectLabel) ?? '0.00') : null;
@@ -896,7 +898,7 @@ export default function useRowRenderers({
               return row.archiveWeekLabel ?? '';
             }
             if (key === 'task') return row.archiveLabel ?? '';
-            if (key === 'estimate') return row.archiveTotalHours ?? '0.00';
+            if (key === 'estimate') return archivedWeekTotals[row.id] ?? '0.00';
             if (key === 'timeValue') {
               const min = row.archiveWeeklyMin ?? '0.00';
               const max = row.archiveWeeklyMax ?? '0.00';

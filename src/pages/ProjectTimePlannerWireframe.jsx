@@ -857,6 +857,65 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     };
   }, [debouncedRows, totalDays]);
 
+  // Calculate archived totals dynamically based on archived tasks
+  const { archivedProjectTotals, archivedWeekTotals } = useMemo(() => {
+    const projectTotals = {};
+    const weekTotals = {};
+    let activeArchivedHeaderId = null;
+    let activeArchiveWeekId = null;
+
+    debouncedRows.forEach((row) => {
+      // Track which archive week we're in
+      if (row.type === 'archiveRow') {
+        activeArchiveWeekId = row.id;
+        weekTotals[activeArchiveWeekId] = 0;
+        activeArchivedHeaderId = null;
+        return;
+      }
+
+      // Track which archived project header we're under
+      if (row.type === 'archivedProjectHeader') {
+        activeArchivedHeaderId = row.id;
+        projectTotals[activeArchivedHeaderId] = 0;
+        return;
+      }
+
+      // Reset when we exit an archived section
+      if (row.type === 'inboxHeader' || row.type === 'projectHeader') {
+        activeArchivedHeaderId = null;
+        activeArchiveWeekId = null;
+        return;
+      }
+
+      // Calculate totals for archived tasks
+      if (row.type === 'projectTask' && activeArchivedHeaderId) {
+        const value = coerceNumber(row.timeValue);
+        if (value != null) {
+          projectTotals[activeArchivedHeaderId] += value;
+          if (activeArchiveWeekId) {
+            weekTotals[activeArchiveWeekId] += value;
+          }
+        }
+      }
+    });
+
+    // Format totals
+    const formattedProjectTotals = {};
+    Object.entries(projectTotals).forEach(([key, total]) => {
+      formattedProjectTotals[key] = formatTotalValue(total ?? 0);
+    });
+
+    const formattedWeekTotals = {};
+    Object.entries(weekTotals).forEach(([key, total]) => {
+      formattedWeekTotals[key] = formatTotalValue(total ?? 0);
+    });
+
+    return {
+      archivedProjectTotals: formattedProjectTotals,
+      archivedWeekTotals: formattedWeekTotals,
+    };
+  }, [debouncedRows]);
+
   const { timelineRows } = useTimelineRows({
     dates,
     monthSpans,
@@ -1021,6 +1080,8 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       showSubprojects,
       ROW_H,
       projectHeaderTotals,
+      archivedProjectTotals,
+      archivedWeekTotals,
       projectWeeklyQuotas,
       fixedColumnConfig,
       fixedCols,
@@ -1056,6 +1117,8 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
       showSubprojects,
       ROW_H,
       projectHeaderTotals,
+      archivedProjectTotals,
+      archivedWeekTotals,
       projectWeeklyQuotas,
       fixedColumnConfig,
       fixedCols,
@@ -1255,31 +1318,8 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     const projectGroupIds = [];
 
     setRows((prevRows) => {
-      // Calculate archive-specific project totals (only Done/Abandoned tasks)
-      const archiveProjectTotals = {};
-      let currentProjectHeaderId = null;
-
-      prevRows.forEach((row) => {
-        if (row.type === 'projectHeader') {
-          currentProjectHeaderId = row.id;
-          archiveProjectTotals[currentProjectHeaderId] = 0;
-        }
-
-        if (row.type === 'projectTask' && currentProjectHeaderId && (row.status === 'Done' || row.status === 'Abandoned')) {
-          const timeValue = parseFloat(row.timeValue);
-          if (!isNaN(timeValue)) {
-            archiveProjectTotals[currentProjectHeaderId] += timeValue;
-          }
-        }
-      });
-
-      // Convert totals to fixed decimal strings
-      Object.keys(archiveProjectTotals).forEach((key) => {
-        archiveProjectTotals[key] = archiveProjectTotals[key].toFixed(2);
-      });
-
-      // Step 1: Insert archive week row with archive-specific totals
-      let nextRows = insertArchiveRow(prevRows, archiveProjectTotals, archiveWeekId);
+      // Step 1: Insert archive week row (totals will be calculated dynamically)
+      let nextRows = insertArchiveRow(prevRows, {}, archiveWeekId);
 
       // Step 2: Copy project structure (headers, general, unscheduled)
       const archiveHeaderIndex = nextRows.findIndex((row) => row.type === 'archiveHeader');
@@ -1314,8 +1354,7 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
             type: row.type === 'projectHeader' ? 'archivedProjectHeader' :
                   row.type === 'projectGeneral' ? 'archivedProjectGeneral' :
                   'archivedProjectUnscheduled',
-            // Preserve archive-specific project totals (only Done/Abandoned tasks)
-            archivedTotal: row.type === 'projectHeader' ? archiveProjectTotals[row.id] : undefined,
+            // Note: Project totals are calculated dynamically via archivedProjectTotals memo
             // Add grouping metadata
             // Project headers belong to the week, subproject rows belong to the project
             parentGroupId: row.type === 'projectHeader' ? archiveWeekId : projectGroupIdForHeaders,
