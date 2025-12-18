@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import ProjectTimePlannerWireframe from "./pages/ProjectTimePlannerWireframe";
+import ProjectTimePlannerV2 from "./pages/ProjectTimePlannerV2";
 import StagingPage from "./pages/StagingPage";
 import TacticsPage from "./pages/TacticsPage";
 
@@ -48,12 +49,18 @@ export default function App() {
     );
   }
 
-  return (
-    <div className="p-4">
-      <ProjectTimePlannerWireframe
-        currentPath={currentPath}
-        onNavigate={navigate}
-      />
-    </div>
-  );
+  // Default to v2 (new implementation)
+  // To see old implementation, go to /v1
+  if (currentPath === "/v1") {
+    return (
+      <div className="p-4">
+        <ProjectTimePlannerWireframe
+          currentPath={currentPath}
+          onNavigate={navigate}
+        />
+      </div>
+    );
+  }
+
+  return <ProjectTimePlannerV2 currentPath={currentPath} onNavigate={navigate} />;
 }
