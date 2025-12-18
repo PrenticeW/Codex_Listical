@@ -194,6 +194,8 @@ export default function ProjectTimePlannerV2() {
         header: colLetter,
         accessorKey: `col${colLetter}`,
         size: 120,
+        minSize: 50,
+        maxSize: 500,
         enableResizing: true,
       });
     }
@@ -232,27 +234,35 @@ export default function ProjectTimePlannerV2() {
                       width: header.getSize(),
                       minWidth: header.getSize(),
                       maxWidth: header.getSize(),
+                      position: 'relative',
                     }}
-                    className="border border-gray-300 px-2 py-2 text-center text-xs font-semibold text-gray-700 relative"
+                    className="border border-gray-300 px-2 py-2 text-center text-xs font-semibold text-gray-700"
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
 
-                    {/* Column resize handle - wider hitbox for easier grabbing */}
+                    {/* Column resize handle - subtle but functional */}
                     {header.column.getCanResize() && (
                       <div
                         onMouseDown={header.getResizeHandler()}
-                        onTouchStart={header.getResizeHandler()}
-                        className="absolute right-0 top-0 h-full w-4 cursor-col-resize group"
-                        style={{ right: '-8px' }} // Wider hitbox centered on border
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          right: 0,
+                          height: '100%',
+                          width: '4px',
+                          backgroundColor: header.column.getIsResizing() ? '#3b82f6' : 'transparent',
+                          cursor: 'col-resize',
+                          zIndex: 9999,
+                          pointerEvents: 'auto'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#93c5fd'}
+                        onMouseLeave={(e) => {
+                          if (!header.column.getIsResizing()) {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }
+                        }}
                         title="Drag to resize column"
-                      >
-                        <div
-                          className="absolute left-1/2 top-0 h-full w-0.5 -translate-x-1/2 group-hover:bg-blue-500 transition-colors"
-                          style={{
-                            background: header.column.getIsResizing() ? '#3b82f6' : 'transparent'
-                          }}
-                        />
-                      </div>
+                      />
                     )}
                   </th>
                 ))}
