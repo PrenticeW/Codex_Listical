@@ -38,6 +38,8 @@ const createInitialData = (rowCount = 50) => {
 export default function ProjectTimePlannerV2() {
   const [data, setData] = useState(() => createInitialData(50));
   const [selectedCells, setSelectedCells] = useState(new Set()); // Set of "rowId|columnId"
+  const [selectedRows, setSelectedRows] = useState(new Set()); // Set of rowIds for row highlight
+  const [anchorRow, setAnchorRow] = useState(null); // For shift-click row range selection
   const [anchorCell, setAnchorCell] = useState(null); // For shift-click range selection
   const [editingCell, setEditingCell] = useState(null); // { rowId, columnId }
   const [editValue, setEditValue] = useState('');
@@ -53,6 +55,24 @@ export default function ProjectTimePlannerV2() {
   const isCellSelected = useCallback((rowId, columnId) => {
     return selectedCells.has(getCellKey(rowId, columnId));
   }, [selectedCells]);
+
+  // Helper to get range of rows between two rowIds
+  const getRowRange = useCallback((startRowId, endRowId) => {
+    const startIndex = data.findIndex(r => r.id === startRowId);
+    const endIndex = data.findIndex(r => r.id === endRowId);
+
+    if (startIndex === -1 || endIndex === -1) return new Set();
+
+    const minIndex = Math.min(startIndex, endIndex);
+    const maxIndex = Math.max(startIndex, endIndex);
+
+    const range = new Set();
+    for (let i = minIndex; i <= maxIndex; i++) {
+      range.add(data[i].id);
+    }
+
+    return range;
+  }, [data]);
 
   // Helper to get rectangular range of cells between two cells
   const getCellRange = useCallback((startCell, endCell) => {
@@ -116,6 +136,39 @@ export default function ProjectTimePlannerV2() {
     }
   }, [handleEditComplete]);
 
+  // Row number click handler - selects entire row
+  const handleRowNumberClick = useCallback((e, rowId) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (e.shiftKey && anchorRow) {
+      // Shift-click: select range of rows from anchor to current
+      const range = getRowRange(anchorRow, rowId);
+      setSelectedRows(range);
+      setSelectedCells(new Set()); // Clear cell selections
+      // Don't update anchor - keep it for next shift-click
+    } else if (e.metaKey || e.ctrlKey) {
+      // Cmd/Ctrl-click: toggle row selection
+      setSelectedRows(prev => {
+        const next = new Set(prev);
+        if (next.has(rowId)) {
+          next.delete(rowId);
+        } else {
+          next.add(rowId);
+        }
+        return next;
+      });
+      setSelectedCells(new Set()); // Clear cell selections
+      setAnchorRow(rowId); // Update anchor for next shift-click
+    } else {
+      // Normal click: select single row
+      setSelectedRows(new Set([rowId]));
+      setSelectedCells(new Set()); // Clear cell selections
+      setAnchorRow(rowId); // Set as anchor for shift-click
+    }
+    setEditingCell(null);
+  }, [anchorRow, getRowRange]);
+
   // Cell interaction handlers
   const handleCellMouseDown = useCallback((e, rowId, columnId) => {
     if (columnId === 'rowNum') return; // Don't select row number column
@@ -129,6 +182,9 @@ export default function ProjectTimePlannerV2() {
     }
 
     const cellKey = getCellKey(rowId, columnId);
+
+    // Clear row selections when selecting cells
+    setSelectedRows(new Set());
 
     if (e.shiftKey && anchorCell) {
       // Shift-click: range selection from anchor
@@ -433,39 +489,72 @@ export default function ProjectTimePlannerV2() {
             ))}
           </thead>
           <tbody>
-            {table.getRowModel().rows.map(row => (
-              <tr key={row.id}>
-                {row.getVisibleCells().map(cell => {
-                  const rowId = row.original.id;
-                  const columnId = cell.column.id;
-                  const value = row.original[columnId] || '';
+            {table.getRowModel().rows.map(row => {
+              const rowId = row.original.id;
+              const isRowSelected = selectedRows.has(rowId);
 
-                  const isSelected = isCellSelected(rowId, columnId);
-                  const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === columnId;
+              return (
+                <tr
+                  key={row.id}
+                  className={isRowSelected ? 'selected-row' : ''}
+                >
+                  {row.getVisibleCells().map(cell => {
+                    const columnId = cell.column.id;
+                    const value = row.original[columnId] || '';
 
-                  return (
-                    <td
-                      key={cell.id}
-                      style={{
-                        width: cell.column.getSize(),
-                        minWidth: cell.column.getSize(),
-                        maxWidth: cell.column.getSize(),
-                        height: '32px',
-                        userSelect: 'none', // Disable text selection
-                        WebkitUserSelect: 'none', // Safari
-                        MozUserSelect: 'none', // Firefox
-                        msUserSelect: 'none', // IE/Edge
-                      }}
-                      className="p-0"
-                    >
-                      <div
-                        className={`h-full border-r border-b border-gray-300 px-2 py-1 cursor-cell min-h-[32px] ${
-                          isSelected && !isEditing ? 'ring-2 ring-inset ring-blue-500 bg-blue-50' : ''
-                        } ${columnId === 'rowNum' ? 'bg-gray-50' : ''}`}
-                        onMouseDown={(e) => handleCellMouseDown(e, rowId, columnId)}
-                        onMouseEnter={() => handleCellMouseEnter({}, rowId, columnId)}
-                        onDoubleClick={() => handleCellDoubleClick(rowId, columnId, value)}
+                    const isSelected = isCellSelected(rowId, columnId);
+                    const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === columnId;
+
+                    // Special handling for row number column
+                    if (columnId === 'rowNum') {
+                      return (
+                        <td
+                          key={cell.id}
+                          style={{
+                            width: cell.column.getSize(),
+                            minWidth: cell.column.getSize(),
+                            maxWidth: cell.column.getSize(),
+                            height: '32px',
+                            userSelect: 'none',
+                            WebkitUserSelect: 'none',
+                            MozUserSelect: 'none',
+                            msUserSelect: 'none',
+                          }}
+                          className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
+                        >
+                          <div
+                            className={`h-full border-r border-b border-gray-300 px-2 py-1 min-h-[32px] bg-gray-50 flex items-center justify-center text-gray-500 font-mono text-xs cursor-pointer`}
+                            onClick={(e) => handleRowNumberClick(e, rowId)}
+                          >
+                            {value}
+                          </div>
+                        </td>
+                      );
+                    }
+
+                    return (
+                      <td
+                        key={cell.id}
+                        style={{
+                          width: cell.column.getSize(),
+                          minWidth: cell.column.getSize(),
+                          maxWidth: cell.column.getSize(),
+                          height: '32px',
+                          userSelect: 'none', // Disable text selection
+                          WebkitUserSelect: 'none', // Safari
+                          MozUserSelect: 'none', // Firefox
+                          msUserSelect: 'none', // IE/Edge
+                        }}
+                        className="p-0"
                       >
+                        <div
+                          className={`h-full border-r border-b border-gray-300 px-2 py-1 cursor-cell min-h-[32px] ${
+                            isSelected && !isEditing ? 'ring-2 ring-inset ring-blue-500 bg-blue-50' : ''
+                          }`}
+                          onMouseDown={(e) => handleCellMouseDown(e, rowId, columnId)}
+                          onMouseEnter={() => handleCellMouseEnter({}, rowId, columnId)}
+                          onDoubleClick={() => handleCellDoubleClick(rowId, columnId, value)}
+                        >
                         {isEditing ? (
                           <input
                             type="text"
@@ -482,19 +571,21 @@ export default function ProjectTimePlannerV2() {
                       </div>
                     </td>
                   );
-                })}
-              </tr>
-            ))}
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       {/* Debug info */}
       <div className="mt-4 p-2 bg-gray-100 rounded text-xs font-mono">
-        <div>Selected cells: {selectedCells.size} {selectedCells.size > 0 && `(${Array.from(selectedCells).join(', ')})`}</div>
+        <div>Selected cells: {selectedCells.size} {selectedCells.size > 0 && `(${Array.from(selectedCells).slice(0, 5).join(', ')}${selectedCells.size > 5 ? '...' : ''})`}</div>
+        <div>Selected rows: {selectedRows.size} {selectedRows.size > 0 && `(${Array.from(selectedRows).join(', ')})`}</div>
         <div>Editing: {editingCell ? `${editingCell.rowId} / ${editingCell.columnId}` : 'None'}</div>
         <div className="text-gray-500 mt-1">
-          Try: Click to select • Drag to select range • Shift+Click for range • Cmd/Ctrl+Click for multi • Double-click to edit • Delete to clear • Cmd/Ctrl+C to copy • Cmd/Ctrl+V to paste
+          Try: Click row # to select row • Click cell to select • Drag to select range • Shift+Click for range • Cmd/Ctrl+Click for multi • Double-click to edit • Delete to clear • Cmd/Ctrl+C to copy • Cmd/Ctrl+V to paste
         </div>
       </div>
     </div>
