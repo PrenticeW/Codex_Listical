@@ -41,6 +41,7 @@ export default function ProjectTimePlannerV2() {
   const [anchorCell, setAnchorCell] = useState(null); // For shift-click range selection
   const [editingCell, setEditingCell] = useState(null); // { rowId, columnId }
   const [editValue, setEditValue] = useState('');
+  const [columnSizing, setColumnSizing] = useState({}); // Track column sizes
   const tableRef = useRef(null);
 
   // Helper to create cell key
@@ -206,6 +207,10 @@ export default function ProjectTimePlannerV2() {
     getCoreRowModel: getCoreRowModel(),
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
+    state: {
+      columnSizing,
+    },
+    onColumnSizingChange: setColumnSizing,
   });
 
   return (
