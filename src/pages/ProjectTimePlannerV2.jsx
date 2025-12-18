@@ -42,6 +42,8 @@ export default function ProjectTimePlannerV2() {
   const [editingCell, setEditingCell] = useState(null); // { rowId, columnId }
   const [editValue, setEditValue] = useState('');
   const [columnSizing, setColumnSizing] = useState({}); // Track column sizes
+  const [isDragging, setIsDragging] = useState(false); // Track if user is dragging to select
+  const [dragStartCell, setDragStartCell] = useState(null); // { rowId, columnId }
   const tableRef = useRef(null);
 
   // Helper to create cell key
@@ -52,49 +54,44 @@ export default function ProjectTimePlannerV2() {
     return selectedCells.has(getCellKey(rowId, columnId));
   }, [selectedCells]);
 
-  // Cell interaction handlers
-  const handleCellClick = useCallback((e, rowId, columnId, value) => {
-    if (columnId === 'rowNum') return; // Don't select row number column
+  // Helper to get rectangular range of cells between two cells
+  const getCellRange = useCallback((startCell, endCell) => {
+    if (!startCell || !endCell) return new Set();
 
-    // Prevent default to avoid text selection when shift/cmd clicking
-    if (e.shiftKey || e.metaKey || e.ctrlKey) {
-      e.preventDefault();
+    const allColumnIds = ['colA', 'colB', 'colC', 'colD', 'colE', 'colF', 'colG', 'colH', 'colI', 'colJ', 'colK', 'colL'];
+
+    // Get row indices
+    const startRowIndex = data.findIndex(r => r.id === startCell.rowId);
+    const endRowIndex = data.findIndex(r => r.id === endCell.rowId);
+
+    // Get column indices
+    const startColIndex = allColumnIds.indexOf(startCell.columnId);
+    const endColIndex = allColumnIds.indexOf(endCell.columnId);
+
+    if (startRowIndex === -1 || endRowIndex === -1 || startColIndex === -1 || endColIndex === -1) {
+      return new Set();
     }
 
-    const cellKey = getCellKey(rowId, columnId);
+    // Calculate min/max for the range
+    const minRow = Math.min(startRowIndex, endRowIndex);
+    const maxRow = Math.max(startRowIndex, endRowIndex);
+    const minCol = Math.min(startColIndex, endColIndex);
+    const maxCol = Math.max(startColIndex, endColIndex);
 
-    if (e.shiftKey && anchorCell) {
-      // Shift-click: range selection (TODO: implement range logic)
-      setSelectedCells(new Set([cellKey]));
-      setAnchorCell({ rowId, columnId });
-    } else if (e.metaKey || e.ctrlKey) {
-      // Cmd/Ctrl-click: toggle selection
-      setSelectedCells(prev => {
-        const next = new Set(prev);
-        if (next.has(cellKey)) {
-          next.delete(cellKey);
-        } else {
-          next.add(cellKey);
-        }
-        return next;
-      });
-      setAnchorCell({ rowId, columnId });
-    } else {
-      // Normal click: single selection
-      setSelectedCells(new Set([cellKey]));
-      setAnchorCell({ rowId, columnId });
+    // Generate all cells in the range
+    const range = new Set();
+    for (let r = minRow; r <= maxRow; r++) {
+      for (let c = minCol; c <= maxCol; c++) {
+        const rowId = data[r].id;
+        const columnId = allColumnIds[c];
+        range.add(getCellKey(rowId, columnId));
+      }
     }
 
-    setEditingCell(null);
-  }, [anchorCell]);
+    return range;
+  }, [data]);
 
-  const handleCellDoubleClick = useCallback((rowId, columnId, value) => {
-    if (columnId === 'rowNum') return;
-
-    setEditingCell({ rowId, columnId });
-    setEditValue(value);
-  }, []);
-
+  // Edit handlers
   const handleEditComplete = useCallback((rowId, columnId) => {
     // Update data
     setData(prev => prev.map(row => {
@@ -119,6 +116,162 @@ export default function ProjectTimePlannerV2() {
     }
   }, [handleEditComplete]);
 
+  // Cell interaction handlers
+  const handleCellMouseDown = useCallback((e, rowId, columnId) => {
+    if (columnId === 'rowNum') return; // Don't select row number column
+
+    // Prevent default to avoid text selection
+    e.preventDefault();
+
+    // If we're editing a different cell, save it first
+    if (editingCell && (editingCell.rowId !== rowId || editingCell.columnId !== columnId)) {
+      handleEditComplete(editingCell.rowId, editingCell.columnId);
+    }
+
+    const cellKey = getCellKey(rowId, columnId);
+
+    if (e.shiftKey && anchorCell) {
+      // Shift-click: range selection from anchor
+      const range = getCellRange(anchorCell, { rowId, columnId });
+      setSelectedCells(range);
+      setEditingCell(null);
+    } else if (e.metaKey || e.ctrlKey) {
+      // Cmd/Ctrl-click: toggle selection
+      setSelectedCells(prev => {
+        const next = new Set(prev);
+        if (next.has(cellKey)) {
+          next.delete(cellKey);
+        } else {
+          next.add(cellKey);
+        }
+        return next;
+      });
+      setAnchorCell({ rowId, columnId });
+      setEditingCell(null);
+    } else {
+      // Normal mouse down: start drag selection
+      setSelectedCells(new Set([cellKey]));
+      setAnchorCell({ rowId, columnId });
+      setDragStartCell({ rowId, columnId });
+      setIsDragging(true);
+      setEditingCell(null);
+    }
+  }, [anchorCell, getCellRange, editingCell, handleEditComplete]);
+
+  const handleCellMouseEnter = useCallback((e, rowId, columnId) => {
+    if (!isDragging || !dragStartCell || columnId === 'rowNum') return;
+
+    // Update selection to include range from drag start to current cell
+    const range = getCellRange(dragStartCell, { rowId, columnId });
+    setSelectedCells(range);
+  }, [isDragging, dragStartCell, getCellRange]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+    setDragStartCell(null);
+  }, []);
+
+  const handleCellDoubleClick = useCallback((rowId, columnId, value) => {
+    if (columnId === 'rowNum') return;
+
+    setEditingCell({ rowId, columnId });
+    setEditValue(value);
+  }, []);
+
+  // Copy/Paste functionality
+  const handleCopy = useCallback((e) => {
+    if (editingCell) return; // Don't copy while editing
+    if (selectedCells.size === 0) return;
+
+    e.preventDefault();
+
+    // Get all selected cells and organize by row/column
+    const cellsByRow = new Map();
+
+    selectedCells.forEach(cellKey => {
+      const [rowId, columnId] = cellKey.split('|');
+      if (columnId === 'rowNum') return; // Skip row number column
+
+      if (!cellsByRow.has(rowId)) {
+        cellsByRow.set(rowId, new Map());
+      }
+
+      const row = data.find(r => r.id === rowId);
+      if (row) {
+        cellsByRow.get(rowId).set(columnId, row[columnId] || '');
+      }
+    });
+
+    // Convert to TSV (Tab-Separated Values) format for clipboard
+    const rows = Array.from(cellsByRow.values());
+    const tsvData = rows.map(cellMap => {
+      return Array.from(cellMap.values()).join('\t');
+    }).join('\n');
+
+    // Copy to clipboard
+    navigator.clipboard.writeText(tsvData);
+  }, [selectedCells, data, editingCell]);
+
+  const handlePaste = useCallback((e) => {
+    if (editingCell) return; // Don't paste while editing
+    if (selectedCells.size === 0) return;
+
+    e.preventDefault();
+
+    // Get clipboard data
+    const pastedText = e.clipboardData.getData('text');
+    if (!pastedText) return;
+
+    // Parse TSV data
+    const rows = pastedText.split('\n').map(row => row.split('\t'));
+
+    // Get the anchor cell (first selected cell)
+    const firstCellKey = Array.from(selectedCells)[0];
+    const [anchorRowId, anchorColumnId] = firstCellKey.split('|');
+
+    if (anchorColumnId === 'rowNum') return; // Don't paste into row number column
+
+    // Find the anchor row index and column index
+    const anchorRowIndex = data.findIndex(r => r.id === anchorRowId);
+
+    // Get all column IDs (excluding rowNum) in order
+    const allColumnIds = ['colA', 'colB', 'colC', 'colD', 'colE', 'colF', 'colG', 'colH', 'colI', 'colJ', 'colK', 'colL'];
+    const anchorColIndex = allColumnIds.indexOf(anchorColumnId);
+
+    if (anchorRowIndex === -1 || anchorColIndex === -1) return;
+
+    // Update data with pasted values
+    setData(prev => {
+      const newData = [...prev];
+
+      rows.forEach((rowValues, rowOffset) => {
+        const targetRowIndex = anchorRowIndex + rowOffset;
+        if (targetRowIndex >= newData.length) return; // Skip if out of bounds
+
+        const rowUpdates = {};
+        rowValues.forEach((value, colOffset) => {
+          const targetColIndex = anchorColIndex + colOffset;
+          if (targetColIndex >= allColumnIds.length) return; // Skip if out of bounds
+
+          const columnId = allColumnIds[targetColIndex];
+          rowUpdates[columnId] = value;
+        });
+
+        newData[targetRowIndex] = { ...newData[targetRowIndex], ...rowUpdates };
+      });
+
+      return newData;
+    });
+  }, [selectedCells, data, editingCell]);
+
+  // Handle global mouse up to end drag selection
+  useEffect(() => {
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [handleMouseUp]);
+
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -130,6 +283,9 @@ export default function ProjectTimePlannerV2() {
       if (!firstCellKey) return;
 
       const [currentRowId, currentColumnId] = firstCellKey.split('|');
+
+      // Copy: Cmd/Ctrl+C (handled by copy event listener)
+      // Paste: Cmd/Ctrl+V (handled by paste event listener)
 
       // Arrow key navigation (TODO: implement navigation logic)
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
@@ -166,8 +322,15 @@ export default function ProjectTimePlannerV2() {
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedCells, editingCell]);
+    window.addEventListener('copy', handleCopy);
+    window.addEventListener('paste', handlePaste);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('copy', handleCopy);
+      window.removeEventListener('paste', handlePaste);
+    };
+  }, [selectedCells, editingCell, handleCopy, handlePaste]);
 
   // Column definitions
   const columns = useMemo(() => {
@@ -288,6 +451,10 @@ export default function ProjectTimePlannerV2() {
                         minWidth: cell.column.getSize(),
                         maxWidth: cell.column.getSize(),
                         height: '32px',
+                        userSelect: 'none', // Disable text selection
+                        WebkitUserSelect: 'none', // Safari
+                        MozUserSelect: 'none', // Firefox
+                        msUserSelect: 'none', // IE/Edge
                       }}
                       className="p-0"
                     >
@@ -295,7 +462,8 @@ export default function ProjectTimePlannerV2() {
                         className={`h-full border-r border-b border-gray-300 px-2 py-1 cursor-cell min-h-[32px] ${
                           isSelected && !isEditing ? 'ring-2 ring-inset ring-blue-500 bg-blue-50' : ''
                         } ${columnId === 'rowNum' ? 'bg-gray-50' : ''}`}
-                        onClick={(e) => handleCellClick(e, rowId, columnId, value)}
+                        onMouseDown={(e) => handleCellMouseDown(e, rowId, columnId)}
+                        onMouseEnter={() => handleCellMouseEnter({}, rowId, columnId)}
                         onDoubleClick={() => handleCellDoubleClick(rowId, columnId, value)}
                       >
                         {isEditing ? (
@@ -326,7 +494,7 @@ export default function ProjectTimePlannerV2() {
         <div>Selected cells: {selectedCells.size} {selectedCells.size > 0 && `(${Array.from(selectedCells).join(', ')})`}</div>
         <div>Editing: {editingCell ? `${editingCell.rowId} / ${editingCell.columnId}` : 'None'}</div>
         <div className="text-gray-500 mt-1">
-          Try: Click to select • Cmd/Ctrl+Click for multi • Double-click to edit • Delete to clear
+          Try: Click to select • Drag to select range • Shift+Click for range • Cmd/Ctrl+Click for multi • Double-click to edit • Delete to clear • Cmd/Ctrl+C to copy • Cmd/Ctrl+V to paste
         </div>
       </div>
     </div>
