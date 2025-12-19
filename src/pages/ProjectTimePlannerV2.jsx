@@ -20,15 +20,98 @@ import { GripVertical } from 'lucide-react';
  */
 
 // Sample data structure - will be replaced with real data later
-const createInitialData = (rowCount = 100, totalDays = 84) => {
-  return Array.from({ length: rowCount }, (_, rowIndex) => {
+const createInitialData = (rowCount = 100, totalDays = 84, startDate) => {
+  const rows = [];
+
+  // Calculate dates array
+  const start = new Date(startDate);
+  const dates = Array.from({ length: totalDays }, (_, i) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + i);
+    return date;
+  });
+
+  // Row 1: Month row
+  const monthRow = {
+    id: 'month-row',
+    project: '',
+    status: '',
+    task: '',
+    estimate: '',
+    timeValue: '',
+    col_f: '',
+    col_g: '',
+    col_h: '',
+  };
+  dates.forEach((date, i) => {
+    monthRow[`day-${i}`] = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  });
+  rows.push(monthRow);
+
+  // Row 2: Week row
+  const weekRow = {
+    id: 'week-row',
+    project: '',
+    status: '',
+    task: '',
+    estimate: '',
+    timeValue: '',
+    col_f: '',
+    col_g: '',
+    col_h: '',
+  };
+  dates.forEach((_, i) => {
+    const weekNumber = Math.floor(i / 7) + 1;
+    weekRow[`day-${i}`] = `Week ${weekNumber}`;
+  });
+  rows.push(weekRow);
+
+  // Row 3: Day number row
+  const dayRow = {
+    id: 'day-row',
+    project: '',
+    status: '',
+    task: '',
+    estimate: '',
+    timeValue: '',
+    col_f: '',
+    col_g: '',
+    col_h: '',
+  };
+  dates.forEach((date, i) => {
+    dayRow[`day-${i}`] = date.getDate().toString();
+  });
+  rows.push(dayRow);
+
+  // Row 4: Day of week row
+  const dayOfWeekRow = {
+    id: 'dayofweek-row',
+    project: '',
+    status: '',
+    task: '',
+    estimate: '',
+    timeValue: '',
+    col_f: '',
+    col_g: '',
+    col_h: '',
+  };
+  dates.forEach((date, i) => {
+    dayOfWeekRow[`day-${i}`] = date.toLocaleDateString('en-US', { weekday: 'short' });
+  });
+  rows.push(dayOfWeekRow);
+
+  // Regular data rows (starting from row 5)
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
     const row = {
       id: `row-${rowIndex}`,
       project: '',
-      status: 'Not Scheduled',
+      status: '',
       task: '',
-      estimate: '-',
-      timeValue: '0.00',
+      estimate: '',
+      timeValue: '',
+      col_f: '',
+      col_g: '',
+      col_h: '',
     };
 
     // Add day entry columns (84 days)
@@ -36,8 +119,10 @@ const createInitialData = (rowCount = 100, totalDays = 84) => {
       row[`day-${dayIndex}`] = '';
     }
 
-    return row;
-  });
+    rows.push(row);
+  }
+
+  return rows;
 };
 
 // Row Component
@@ -202,7 +287,12 @@ export default function ProjectTimePlannerV2() {
   // Timeline configuration
   const totalDays = 84; // 12 weeks
 
-  const [data, setData] = useState(() => createInitialData(100, totalDays));
+  const [startDate, setStartDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0]; // YYYY-MM-DD
+  });
+
+  const [data, setData] = useState(() => createInitialData(100, totalDays, startDate));
   const [selectedCells, setSelectedCells] = useState(new Set()); // Set of "rowId|columnId"
   const [selectedRows, setSelectedRows] = useState(new Set()); // Set of rowIds for row highlight
   const [anchorRow, setAnchorRow] = useState(null); // For shift-click row range selection
@@ -219,10 +309,6 @@ export default function ProjectTimePlannerV2() {
   const [draggedRowId, setDraggedRowId] = useState(null); // Track which row is being dragged
   const [dropTargetRowId, setDropTargetRowId] = useState(null); // Track drop target
   const tableBodyRef = useRef(null);
-  const [startDate, setStartDate] = useState(() => {
-    const today = new Date();
-    return today.toISOString().split('T')[0]; // YYYY-MM-DD
-  });
 
   // Calculate dates array from startDate
   const dates = useMemo(() => {
@@ -265,14 +351,11 @@ export default function ProjectTimePlannerV2() {
   // Calculate number of weeks
   const weeksCount = Math.ceil(totalDays / 7);
 
-  // Build timeline header rows - starting simple with just the main header row
+  // Build timeline header rows - just column letters
   const timelineHeaderRows = useMemo(() => {
     const headerRows = [];
 
-    // Column letters mapping: # = no letter, then A, B, C, D, E, then day columns continue with letters
-    const fixedColumnLetters = ['', 'A', 'B', 'C', 'D', 'E']; // rowNum gets no letter
-
-    // Just the column labels row for now
+    // Column letters row (A, B, C, etc.)
     const mainHeaderRow = {
       id: 'main-header',
       cells: [
@@ -282,9 +365,12 @@ export default function ProjectTimePlannerV2() {
         { id: 'header-task', columnKey: 'task', content: 'C' },
         { id: 'header-estimate', columnKey: 'estimate', content: 'D' },
         { id: 'header-timeValue', columnKey: 'timeValue', content: 'E' },
-        ...dates.map((d, i) => {
-          // Day columns continue the letter sequence: F, G, H, ... Z, AA, AB, etc.
-          const letterIndex = i + 5; // Start after E (5 fixed columns)
+        { id: 'header-col_f', columnKey: 'col_f', content: 'F' },
+        { id: 'header-col_g', columnKey: 'col_g', content: 'G' },
+        { id: 'header-col_h', columnKey: 'col_h', content: 'H' },
+        ...dates.map((_, i) => {
+          // Day columns start from I (index 8)
+          const letterIndex = i + 8; // Start after H (8 columns before day columns)
           let columnLetter = '';
           let index = letterIndex;
 
@@ -342,9 +428,9 @@ export default function ProjectTimePlannerV2() {
   const maxHistorySize = 100; // Limit history to prevent memory issues
 
   // All column IDs in order (used throughout the component)
-  // Fixed columns + day columns
+  // Fixed columns + extra columns (F, G, H) + day columns (starting from I)
   const allColumnIds = useMemo(() => {
-    const fixed = ['project', 'status', 'task', 'estimate', 'timeValue'];
+    const fixed = ['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'];
     const days = Array.from({ length: totalDays }, (_, i) => `day-${i}`);
     return [...fixed, ...days];
   }, [totalDays]);
@@ -1404,9 +1490,36 @@ export default function ProjectTimePlannerV2() {
         maxSize: 150,
         enableResizing: true,
       },
+      {
+        id: 'col_f',
+        header: 'F',
+        accessorKey: 'col_f',
+        size: 80,
+        minSize: 30,
+        maxSize: 200,
+        enableResizing: true,
+      },
+      {
+        id: 'col_g',
+        header: 'G',
+        accessorKey: 'col_g',
+        size: 80,
+        minSize: 30,
+        maxSize: 200,
+        enableResizing: true,
+      },
+      {
+        id: 'col_h',
+        header: 'H',
+        accessorKey: 'col_h',
+        size: 80,
+        minSize: 30,
+        maxSize: 200,
+        enableResizing: true,
+      },
     ];
 
-    // Add day columns (84 columns for 12 weeks)
+    // Add day columns (84 columns for 12 weeks) - starting from column I
     for (let i = 0; i < totalDays; i++) {
       cols.push({
         id: `day-${i}`,
