@@ -358,14 +358,79 @@ export default function ProjectTimePlannerV2() {
     const pastedText = e.clipboardData.getData('text');
     if (!pastedText) return;
 
-    // Parse TSV data
-    const rows = pastedText.split('\n').map(row => row.split('\t'));
+    // Check if it's a single cell value (no tabs or newlines)
+    const isSingleCell = !pastedText.includes('\t') && !pastedText.includes('\n');
 
     // Get the anchor cell (first selected cell)
     const firstCellKey = Array.from(selectedCells)[0];
     const [anchorRowId, anchorColumnId] = firstCellKey.split('|');
 
     if (anchorColumnId === 'rowNum') return; // Don't paste into row number column
+
+    // FILL MODE: Copy one value to all selected cells
+    if (isSingleCell && selectedCells.size > 1) {
+      // Store old values for undo
+      const oldValues = new Map(); // Map<rowId, Map<columnId, value>>
+
+      selectedCells.forEach(cellKey => {
+        const [rowId, columnId] = cellKey.split('|');
+        if (columnId === 'rowNum') return;
+
+        const row = data.find(r => r.id === rowId);
+        if (!row) return;
+
+        if (!oldValues.has(rowId)) {
+          oldValues.set(rowId, new Map());
+        }
+        oldValues.get(rowId).set(columnId, row[columnId] || '');
+      });
+
+      // Create command for fill operation
+      const command = {
+        execute: () => {
+          setData(prev => prev.map(row => {
+            const rowUpdates = {};
+            let hasUpdates = false;
+
+            selectedCells.forEach(cellKey => {
+              const [rowId, columnId] = cellKey.split('|');
+              if (row.id === rowId && columnId !== 'rowNum') {
+                rowUpdates[columnId] = pastedText;
+                hasUpdates = true;
+              }
+            });
+
+            return hasUpdates ? { ...row, ...rowUpdates } : row;
+          }));
+        },
+        undo: () => {
+          setData(prev => {
+            const newData = [...prev];
+
+            oldValues.forEach((rowOldValues, rowId) => {
+              const rowIndex = newData.findIndex(r => r.id === rowId);
+              if (rowIndex === -1) return;
+
+              const rowUpdates = {};
+              rowOldValues.forEach((value, columnId) => {
+                rowUpdates[columnId] = value;
+              });
+
+              newData[rowIndex] = { ...newData[rowIndex], ...rowUpdates };
+            });
+
+            return newData;
+          });
+        },
+      };
+
+      executeCommand(command);
+      return;
+    }
+
+    // RANGE MODE: Paste TSV grid starting from anchor cell
+    // Parse TSV data
+    const rows = pastedText.split('\n').map(row => row.split('\t'));
 
     // Find the anchor row index and column index
     const anchorRowIndex = data.findIndex(r => r.id === anchorRowId);
