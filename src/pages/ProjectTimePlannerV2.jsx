@@ -20,16 +20,20 @@ import { GripVertical } from 'lucide-react';
  */
 
 // Sample data structure - will be replaced with real data later
-const createInitialData = (rowCount = 1000) => {
+const createInitialData = (rowCount = 100, totalDays = 84) => {
   return Array.from({ length: rowCount }, (_, rowIndex) => {
     const row = {
       id: `row-${rowIndex}`,
+      project: '',
+      status: 'Not Scheduled',
+      task: '',
+      estimate: '-',
+      timeValue: '0.00',
     };
 
-    // Add 12 editable columns (A-L)
-    for (let colIndex = 0; colIndex < 12; colIndex++) {
-      const colLetter = String.fromCharCode(65 + colIndex); // A, B, C, ...
-      row[`col${colLetter}`] = '';
+    // Add day entry columns (84 days)
+    for (let dayIndex = 0; dayIndex < totalDays; dayIndex++) {
+      row[`day-${dayIndex}`] = '';
     }
 
     return row;
@@ -195,19 +199,113 @@ function TableRow({
 }
 
 export default function ProjectTimePlannerV2() {
-  const [data, setData] = useState(() => createInitialData(1000));
+  // Timeline configuration
+  const totalDays = 84; // 12 weeks
+
+  const [data, setData] = useState(() => createInitialData(100, totalDays));
   const [selectedCells, setSelectedCells] = useState(new Set()); // Set of "rowId|columnId"
   const [selectedRows, setSelectedRows] = useState(new Set()); // Set of rowIds for row highlight
   const [anchorRow, setAnchorRow] = useState(null); // For shift-click row range selection
   const [anchorCell, setAnchorCell] = useState(null); // For shift-click range selection
   const [editingCell, setEditingCell] = useState(null); // { rowId, columnId }
   const [editValue, setEditValue] = useState('');
-  const [columnSizing, setColumnSizing] = useState({}); // Track column sizes
+  const [columnSizing, setColumnSizing] = useState(() => {
+    // Load column sizes from localStorage
+    const saved = localStorage.getItem('planner-column-sizing');
+    return saved ? JSON.parse(saved) : {};
+  }); // Track column sizes
   const [isDragging, setIsDragging] = useState(false); // Track if user is dragging to select
   const [dragStartCell, setDragStartCell] = useState(null); // { rowId, columnId }
   const [draggedRowId, setDraggedRowId] = useState(null); // Track which row is being dragged
   const [dropTargetRowId, setDropTargetRowId] = useState(null); // Track drop target
   const tableBodyRef = useRef(null);
+  const [startDate, setStartDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0]; // YYYY-MM-DD
+  });
+
+  // Calculate dates array from startDate
+  const dates = useMemo(() => {
+    const start = new Date(startDate);
+    return Array.from({ length: totalDays }, (_, i) => {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      return date;
+    });
+  }, [startDate, totalDays]);
+
+  // Calculate month spans for header
+  const monthSpans = useMemo(() => {
+    const spans = [];
+    let currentMonth = null;
+    let currentSpan = 0;
+
+    dates.forEach((date, index) => {
+      const monthLabel = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+      if (monthLabel !== currentMonth) {
+        if (currentMonth !== null) {
+          spans.push({ label: currentMonth, span: currentSpan });
+        }
+        currentMonth = monthLabel;
+        currentSpan = 1;
+      } else {
+        currentSpan++;
+      }
+
+      // Push final span
+      if (index === dates.length - 1) {
+        spans.push({ label: currentMonth, span: currentSpan });
+      }
+    });
+
+    return spans;
+  }, [dates]);
+
+  // Calculate number of weeks
+  const weeksCount = Math.ceil(totalDays / 7);
+
+  // Build timeline header rows - starting simple with just the main header row
+  const timelineHeaderRows = useMemo(() => {
+    const headerRows = [];
+
+    // Column letters mapping: # = no letter, then A, B, C, D, E, then day columns continue with letters
+    const fixedColumnLetters = ['', 'A', 'B', 'C', 'D', 'E']; // rowNum gets no letter
+
+    // Just the column labels row for now
+    const mainHeaderRow = {
+      id: 'main-header',
+      cells: [
+        { id: 'header-rowNum', columnKey: 'rowNum', content: '#' },
+        { id: 'header-project', columnKey: 'project', content: 'A' },
+        { id: 'header-status', columnKey: 'status', content: 'B' },
+        { id: 'header-task', columnKey: 'task', content: 'C' },
+        { id: 'header-estimate', columnKey: 'estimate', content: 'D' },
+        { id: 'header-timeValue', columnKey: 'timeValue', content: 'E' },
+        ...dates.map((d, i) => {
+          // Day columns continue the letter sequence: F, G, H, ... Z, AA, AB, etc.
+          const letterIndex = i + 5; // Start after E (5 fixed columns)
+          let columnLetter = '';
+          let index = letterIndex;
+
+          // Convert number to Excel-style column letters
+          while (index >= 0) {
+            columnLetter = String.fromCharCode(65 + (index % 26)) + columnLetter;
+            index = Math.floor(index / 26) - 1;
+          }
+
+          return {
+            id: `header-day-${i}`,
+            columnKey: `day-${i}`,
+            content: columnLetter,
+          };
+        }),
+      ],
+    };
+    headerRows.push(mainHeaderRow);
+
+    return headerRows;
+  }, [dates]);
 
   // Sizing state - stored in localStorage
   const [sizeScale, setSizeScale] = useState(() => {
@@ -219,6 +317,13 @@ export default function ProjectTimePlannerV2() {
   useEffect(() => {
     localStorage.setItem('spreadsheet-size-scale', sizeScale.toString());
   }, [sizeScale]);
+
+  // Save column sizes to localStorage when they change
+  useEffect(() => {
+    if (Object.keys(columnSizing).length > 0) {
+      localStorage.setItem('planner-column-sizing', JSON.stringify(columnSizing));
+    }
+  }, [columnSizing]);
 
   // Calculate sizes based on scale
   const rowHeight = Math.round(21 * sizeScale);
@@ -237,7 +342,12 @@ export default function ProjectTimePlannerV2() {
   const maxHistorySize = 100; // Limit history to prevent memory issues
 
   // All column IDs in order (used throughout the component)
-  const allColumnIds = useMemo(() => ['colA', 'colB', 'colC', 'colD', 'colE', 'colF', 'colG', 'colH', 'colI', 'colJ', 'colK', 'colL'], []);
+  // Fixed columns + day columns
+  const allColumnIds = useMemo(() => {
+    const fixed = ['project', 'status', 'task', 'estimate', 'timeValue'];
+    const days = Array.from({ length: totalDays }, (_, i) => `day-${i}`);
+    return [...fixed, ...days];
+  }, [totalDays]);
 
   // Helper to create cell key
   const getCellKey = (rowId, columnId) => `${rowId}|${columnId}`;
@@ -1246,32 +1356,71 @@ export default function ProjectTimePlannerV2() {
       {
         id: 'rowNum',
         header: '#',
-        size: 50,
+        size: 36,
         enableResizing: false,
-        cell: ({ row }) => (
-          <div className="h-full flex items-center justify-center text-gray-500 font-mono text-xs bg-gray-50">
-            {row.index + 1}
-          </div>
-        ),
+      },
+      {
+        id: 'project',
+        header: 'Project',
+        accessorKey: 'project',
+        size: 120,
+        minSize: 30,
+        maxSize: 400,
+        enableResizing: true,
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        accessorKey: 'status',
+        size: 120,
+        minSize: 30,
+        maxSize: 300,
+        enableResizing: true,
+      },
+      {
+        id: 'task',
+        header: 'Task',
+        accessorKey: 'task',
+        size: 240,
+        minSize: 50,
+        maxSize: 800,
+        enableResizing: true,
+      },
+      {
+        id: 'estimate',
+        header: 'Estimate',
+        accessorKey: 'estimate',
+        size: 100,
+        minSize: 30,
+        maxSize: 200,
+        enableResizing: true,
+      },
+      {
+        id: 'timeValue',
+        header: 'Time',
+        accessorKey: 'timeValue',
+        size: 80,
+        minSize: 30,
+        maxSize: 150,
+        enableResizing: true,
       },
     ];
 
-    // Add 12 editable columns (A-L)
-    for (let i = 0; i < 12; i++) {
-      const colLetter = String.fromCharCode(65 + i);
+    // Add day columns (84 columns for 12 weeks)
+    for (let i = 0; i < totalDays; i++) {
       cols.push({
-        id: `col${colLetter}`,
-        header: colLetter,
-        accessorKey: `col${colLetter}`,
-        size: 120,
-        minSize: 50,
-        maxSize: 500,
+        id: `day-${i}`,
+        header: `Day ${i + 1}`,
+        accessorKey: `day-${i}`,
+        size: 60,
+        minSize: 40,
+        maxSize: 120,
         enableResizing: true,
       });
     }
 
     return cols;
-  }, []);
+  }, [totalDays]);
 
   const table = useReactTable({
     data,
@@ -1284,6 +1433,12 @@ export default function ProjectTimePlannerV2() {
     },
     onColumnSizingChange: setColumnSizing,
   });
+
+  // Helper to get column width
+  const getColumnWidth = useCallback((columnId) => {
+    const column = table.getColumn(columnId);
+    return column ? column.getSize() : 60;
+  }, [table]);
 
   // Set up row virtualizer
   const rowVirtualizer = useVirtualizer({
@@ -1362,50 +1517,83 @@ export default function ProjectTimePlannerV2() {
       >
         <table className="border-collapse" style={{ display: 'grid' }}>
           <thead className="sticky top-0 bg-gray-100 z-10" style={{ display: 'grid', position: 'sticky', top: 0, zIndex: 1 }}>
-            {table.getHeaderGroups().map(headerGroup => (
-              <tr key={headerGroup.id} style={{ display: 'flex' }}>
-                {headerGroup.headers.map(header => (
-                  <th
-                    key={header.id}
-                    style={{
-                      width: `${header.getSize()}px`,
-                      flexShrink: 0,
-                      flexGrow: 0,
-                      position: 'relative',
-                      boxSizing: 'border-box',
-                      fontSize: `${headerFontSize}px`,
-                      height: `${rowHeight}px`,
-                    }}
-                    className="border border-gray-300 px-2 py-1 text-center font-semibold text-gray-700"
-                  >
-                    {flexRender(header.column.columnDef.header, header.getContext())}
+            {timelineHeaderRows.map((headerRow) => (
+              <tr key={headerRow.id} style={{ display: 'flex', height: `${rowHeight}px` }}>
+                {headerRow.cells.map((cell) => {
+                  const column = table.getColumn(cell.columnKey);
+                  const cellWidth = column ? column.getSize() : 60;
 
-                    {/* Column resize handle - subtle but functional */}
-                    {header.column.getCanResize() && (
-                      <div
-                        onMouseDown={header.getResizeHandler()}
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          right: 0,
-                          height: '100%',
-                          width: '4px',
-                          backgroundColor: header.column.getIsResizing() ? '#3b82f6' : 'transparent',
-                          cursor: 'col-resize',
-                          zIndex: 9999,
-                          pointerEvents: 'auto'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#93c5fd'}
-                        onMouseLeave={(e) => {
-                          if (!header.column.getIsResizing()) {
+                  return (
+                    <th
+                      key={cell.id}
+                      style={{
+                        width: `${cellWidth}px`,
+                        minWidth: `${cellWidth}px`,
+                        flexShrink: 0,
+                        flexGrow: 0,
+                        boxSizing: 'border-box',
+                        fontSize: `${headerFontSize}px`,
+                        position: 'relative',
+                      }}
+                      className="border border-gray-300 px-2 py-1 text-center font-semibold text-gray-700 bg-gray-100"
+                    >
+                      {cell.content}
+
+                      {/* Add resize handle for resizable columns */}
+                      {column && column.getCanResize && column.getCanResize() && (
+                        <div
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            const startX = e.clientX;
+                            const startWidth = column.getSize();
+
+                            const handleMouseMove = (moveEvent) => {
+                              const diff = moveEvent.clientX - startX;
+                              const minSize = column.columnDef.minSize || 30;
+                              const maxSize = column.columnDef.maxSize || 1000;
+                              const newWidth = Math.max(minSize, Math.min(maxSize, startWidth + diff));
+
+                              table.setColumnSizing(prev => ({
+                                ...prev,
+                                [column.id]: newWidth
+                              }));
+                            };
+
+                            const handleMouseUp = () => {
+                              document.removeEventListener('mousemove', handleMouseMove);
+                              document.removeEventListener('mouseup', handleMouseUp);
+                            };
+
+                            document.addEventListener('mousemove', handleMouseMove);
+                            document.addEventListener('mouseup', handleMouseUp);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            right: 0,
+                            height: '100%',
+                            width: '4px',
+                            backgroundColor: 'transparent',
+                            cursor: 'col-resize',
+                            zIndex: 9999,
+                            pointerEvents: 'auto',
+                            userSelect: 'none',
+                            touchAction: 'none',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#93c5fd';
+                          }}
+                          onMouseLeave={(e) => {
                             e.currentTarget.style.backgroundColor = 'transparent';
-                          }
-                        }}
-                        title="Drag to resize column"
-                      />
-                    )}
-                  </th>
-                ))}
+                          }}
+                          title="Drag to resize column"
+                        />
+                      )}
+                    </th>
+                  );
+                })}
               </tr>
             ))}
           </thead>
