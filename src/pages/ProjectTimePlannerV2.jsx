@@ -1451,7 +1451,6 @@ export default function ProjectTimePlannerV2() {
         accessorKey: 'project',
         size: 120,
         minSize: 30,
-        maxSize: 400,
         enableResizing: true,
       },
       {
@@ -1460,7 +1459,6 @@ export default function ProjectTimePlannerV2() {
         accessorKey: 'status',
         size: 120,
         minSize: 30,
-        maxSize: 300,
         enableResizing: true,
       },
       {
@@ -1469,7 +1467,6 @@ export default function ProjectTimePlannerV2() {
         accessorKey: 'task',
         size: 240,
         minSize: 50,
-        maxSize: 800,
         enableResizing: true,
       },
       {
@@ -1478,7 +1475,6 @@ export default function ProjectTimePlannerV2() {
         accessorKey: 'estimate',
         size: 100,
         minSize: 30,
-        maxSize: 200,
         enableResizing: true,
       },
       {
@@ -1487,7 +1483,6 @@ export default function ProjectTimePlannerV2() {
         accessorKey: 'timeValue',
         size: 80,
         minSize: 30,
-        maxSize: 150,
         enableResizing: true,
       },
       {
@@ -1496,7 +1491,6 @@ export default function ProjectTimePlannerV2() {
         accessorKey: 'col_f',
         size: 80,
         minSize: 30,
-        maxSize: 200,
         enableResizing: true,
       },
       {
@@ -1505,7 +1499,6 @@ export default function ProjectTimePlannerV2() {
         accessorKey: 'col_g',
         size: 80,
         minSize: 30,
-        maxSize: 200,
         enableResizing: true,
       },
       {
@@ -1514,7 +1507,6 @@ export default function ProjectTimePlannerV2() {
         accessorKey: 'col_h',
         size: 80,
         minSize: 30,
-        maxSize: 200,
         enableResizing: true,
       },
     ];
@@ -1527,7 +1519,6 @@ export default function ProjectTimePlannerV2() {
         accessorKey: `day-${i}`,
         size: 60,
         minSize: 40,
-        maxSize: 120,
         enableResizing: true,
       });
     }
@@ -1665,8 +1656,7 @@ export default function ProjectTimePlannerV2() {
                             const handleMouseMove = (moveEvent) => {
                               const diff = moveEvent.clientX - startX;
                               const minSize = column.columnDef.minSize || 30;
-                              const maxSize = column.columnDef.maxSize || 1000;
-                              const newWidth = Math.max(minSize, Math.min(maxSize, startWidth + diff));
+                              const newWidth = Math.max(minSize, startWidth + diff);
 
                               table.setColumnSizing(prev => ({
                                 ...prev,
