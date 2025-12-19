@@ -130,6 +130,7 @@ const createInitialData = (rowCount = 100, totalDays = 84, startDate) => {
     col_f: '',
     col_g: '',
     col_h: '',
+    _isDayRow: true, // Flag to identify this as a day row
   };
   dates.forEach((date, i) => {
     dayRow[`day-${i}`] = date.getDate().toString();
@@ -147,6 +148,7 @@ const createInitialData = (rowCount = 100, totalDays = 84, startDate) => {
     col_f: '',
     col_g: '',
     col_h: '',
+    _isDayOfWeekRow: true, // Flag to identify this as a day of week row
   };
   dates.forEach((date, i) => {
     const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
@@ -262,10 +264,16 @@ function TableRow({
   headerFontSize,
   gripIconSize,
   table,
+  dates,
 }) {
   const rowId = row.original.id;
   const isDragging = Array.isArray(draggedRowId) && draggedRowId.includes(rowId);
   const isDropTarget = dropTargetRowId === rowId;
+
+  // Check if this is a pinned row (first 7 rows)
+  const isPinnedRow = row.index < 7;
+  // Higher z-index for pinned row number cells
+  const rowNumZIndex = isPinnedRow ? 15 : 10;
 
   const style = {
     display: 'flex',
@@ -280,6 +288,8 @@ function TableRow({
   // Check if this is a special row
   const isMonthRow = row.original._isMonthRow;
   const isWeekRow = row.original._isWeekRow;
+  const isDayRow = row.original._isDayRow;
+  const isDayOfWeekRow = row.original._isDayOfWeekRow;
   const isDailyMinRow = row.original._isDailyMinRow;
   const isDailyMaxRow = row.original._isDailyMaxRow;
   const isFilterRow = row.original._isFilterRow;
@@ -287,7 +297,7 @@ function TableRow({
   return (
     <>
       {isDropTarget && draggedRowId && !isDragging && (
-        <div
+        <tr
           style={{
             position: 'absolute',
             top: virtualRow.start - 1,
@@ -297,6 +307,7 @@ function TableRow({
             backgroundColor: '#3b82f6',
             zIndex: 1000,
             pointerEvents: 'none',
+            display: 'block',
           }}
         />
       )}
@@ -319,12 +330,16 @@ function TableRow({
               height: `${rowHeight}px`,
               userSelect: 'none',
               boxSizing: 'border-box',
+              position: 'sticky',
+              left: 0,
+              backgroundColor: '#d9f6e0',
+              zIndex: rowNumZIndex,
             }}
             className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
           >
             <div
-              className={`h-full border-r border-b border-gray-300 px-2 bg-gray-50 flex items-center justify-between text-gray-500 font-mono cursor-pointer`}
-              style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px` }}
+              className={`h-full border-r border-b border-gray-300 px-2 flex items-center justify-between font-mono cursor-pointer`}
+              style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#d9f6e0', color: '#065f46' }}
               onClick={(e) => handleRowNumberClick(e, rowId)}
             >
               <div
@@ -408,12 +423,16 @@ function TableRow({
               height: `${rowHeight}px`,
               userSelect: 'none',
               boxSizing: 'border-box',
+              position: 'sticky',
+              left: 0,
+              backgroundColor: '#d9f6e0',
+              zIndex: rowNumZIndex,
             }}
             className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
           >
             <div
-              className={`h-full border-r border-b border-gray-300 px-2 bg-gray-50 flex items-center justify-between text-gray-500 font-mono cursor-pointer`}
-              style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px` }}
+              className={`h-full border-r border-b border-gray-300 px-2 flex items-center justify-between font-mono cursor-pointer`}
+              style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#d9f6e0', color: '#065f46' }}
               onClick={(e) => handleRowNumberClick(e, rowId)}
             >
               <div
@@ -484,6 +503,128 @@ function TableRow({
             );
           })}
         </>
+      ) : isDayRow || isDayOfWeekRow ? (
+        // Render day/day-of-week rows with centered calendar cells
+        row.getVisibleCells().map(cell => {
+        const columnId = cell.column.id;
+        const value = row.original[columnId] || '';
+
+        // Special handling for row number column
+        if (columnId === 'rowNum') {
+          return (
+            <td
+              key={cell.id}
+              style={{
+                width: `${cell.column.getSize()}px`,
+                flexShrink: 0,
+                flexGrow: 0,
+                height: `${rowHeight}px`,
+                userSelect: 'none',
+                boxSizing: 'border-box',
+                position: 'sticky',
+                left: 0,
+                backgroundColor: '#d9f6e0',
+                zIndex: rowNumZIndex,
+              }}
+              className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
+            >
+              <div
+                className={`h-full border-r border-b border-gray-300 px-2 flex items-center justify-between font-mono cursor-pointer`}
+                style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#d9f6e0', color: '#065f46' }}
+                onClick={(e) => handleRowNumberClick(e, rowId)}
+              >
+                <div
+                  draggable
+                  onDragStart={(e) => {
+                    e.stopPropagation();
+                    handleDragStart(e, rowId);
+                  }}
+                  onDragEnd={handleDragEnd}
+                  className="cursor-grab active:cursor-grabbing flex items-center"
+                  title="Drag to reorder"
+                >
+                  <GripVertical size={gripIconSize} className="text-gray-400 hover:text-gray-600" />
+                </div>
+                <span>{row.index + 1}</span>
+                <div style={{ width: `${gripIconSize}px` }} />
+              </div>
+            </td>
+          );
+        }
+
+        // For fixed columns, show empty cells
+        if (['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].includes(columnId)) {
+          return (
+            <td
+              key={cell.id}
+              style={{
+                width: `${cell.column.getSize()}px`,
+                flexShrink: 0,
+                flexGrow: 0,
+                height: `${rowHeight}px`,
+                boxSizing: 'border-box',
+              }}
+              className="p-0"
+            >
+              <div
+                className="h-full border-r border-b border-gray-300 bg-gray-50"
+                style={{ minHeight: `${rowHeight}px` }}
+              />
+            </td>
+          );
+        }
+
+        // For day columns, determine if it's a weekend and apply appropriate background
+        // Extract day index from columnId (e.g., "day-0" -> 0)
+        const dayIndex = parseInt(columnId.split('-')[1]);
+        const date = dates[dayIndex];
+        const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+        // Different background colors based on row type and whether it's a weekend
+        let bgColor;
+        if (isDayOfWeekRow) {
+          // Day of week row: #d9d9d9 for weekends, #efefef for weekdays
+          bgColor = isWeekend ? '#d9d9d9' : '#efefef';
+        } else {
+          // Day number row: transparent to show borders
+          bgColor = 'transparent';
+        }
+
+        // Add top border for day number row (row 3) to separate it from week row (row 2)
+        // Add top border for day of week row (row 4) to separate it from day number row (row 3)
+        const borderClasses = isDayRow
+          ? 'h-full border-t border-r border-b border-gray-300 flex items-center justify-center'
+          : isDayOfWeekRow
+          ? 'h-full border-t border-r border-b border-gray-300 flex items-center justify-center'
+          : 'h-full border-r border-b border-gray-300 flex items-center justify-center';
+
+        // For day columns, center-align the content
+        return (
+          <td
+            key={cell.id}
+            style={{
+              width: `${cell.column.getSize()}px`,
+              flexShrink: 0,
+              flexGrow: 0,
+              height: `${rowHeight}px`,
+              boxSizing: 'border-box',
+            }}
+            className="p-0"
+          >
+            <div
+              className={borderClasses}
+              style={{
+                minHeight: `${rowHeight}px`,
+                fontSize: `${cellFontSize}px`,
+                backgroundColor: bgColor
+              }}
+            >
+              {value || '\u00A0'}
+            </div>
+          </td>
+        );
+      })
       ) : isDailyMinRow || isDailyMaxRow ? (
         // Render daily min/max rows with special styling
         row.getVisibleCells().map(cell => {
@@ -505,12 +646,16 @@ function TableRow({
                 height: `${rowHeight}px`,
                 userSelect: 'none',
                 boxSizing: 'border-box',
+                position: 'sticky',
+                left: 0,
+                backgroundColor: '#d9f6e0',
+                zIndex: rowNumZIndex,
               }}
               className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
             >
               <div
-                className={`h-full border-r border-b border-gray-300 px-2 flex items-center justify-between text-gray-500 font-mono cursor-pointer`}
-                style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: bgColor }}
+                className={`h-full border-r border-b border-gray-300 px-2 flex items-center justify-between font-mono cursor-pointer`}
+                style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#d9f6e0', color: '#065f46' }}
                 onClick={(e) => handleRowNumberClick(e, rowId)}
               >
                 <div
@@ -593,12 +738,16 @@ function TableRow({
                 height: `${rowHeight}px`,
                 userSelect: 'none',
                 boxSizing: 'border-box',
+                position: 'sticky',
+                left: 0,
+                backgroundColor: '#d9f6e0',
+                zIndex: rowNumZIndex,
               }}
               className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
             >
               <div
-                className={`h-full border-r border-b border-gray-300 px-2 flex items-center justify-between text-gray-500 font-mono cursor-pointer`}
-                style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#ead1dc' }}
+                className={`h-full border-r border-b border-gray-300 px-2 flex items-center justify-between font-mono cursor-pointer`}
+                style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#d9f6e0', color: '#065f46' }}
                 onClick={(e) => handleRowNumberClick(e, rowId)}
               >
                 <div
@@ -664,11 +813,11 @@ function TableRow({
             className="p-0"
           >
             <div
-              className="h-full border-r border-b border-gray-300 flex items-center justify-between"
-              style={{ minHeight: `${rowHeight}px`, fontSize: `${cellFontSize}px`, paddingLeft: '2px', paddingRight: '2px', backgroundColor: '#ead1dc' }}
+              className="h-full border-r border-b border-gray-300 flex items-center gap-1"
+              style={{ paddingLeft: '2.5px', paddingRight: '2px', minHeight: `${rowHeight}px`, fontSize: `${cellFontSize}px`, backgroundColor: '#ead1dc' }}
             >
-              <span className="text-xs">{value}</span>
-              <ListFilter size={10} className="text-gray-400 flex-shrink-0 ml-1" />
+              <span className="text-xs flex-1">{value}</span>
+              <ListFilter size={10} className="text-gray-400 flex-shrink-0" />
             </div>
           </td>
         );
@@ -696,12 +845,16 @@ function TableRow({
                 MozUserSelect: 'none',
                 msUserSelect: 'none',
                 boxSizing: 'border-box',
+                position: 'sticky',
+                left: 0,
+                backgroundColor: '#d9f6e0',
+                zIndex: rowNumZIndex,
               }}
               className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
             >
               <div
-                className={`h-full border-r border-b border-gray-300 px-2 bg-gray-50 flex items-center justify-between text-gray-500 font-mono cursor-pointer`}
-                style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px` }}
+                className={`h-full border-r border-b border-gray-300 px-2 flex items-center justify-between font-mono cursor-pointer`}
+                style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#d9f6e0', color: '#065f46' }}
                 onClick={(e) => handleRowNumberClick(e, rowId)}
               >
                 <div
@@ -2023,6 +2176,9 @@ export default function ProjectTimePlannerV2() {
     columnResizeMode: 'onChange',
     state: {
       columnSizing,
+      columnPinning: {
+        left: ['rowNum'], // Pin the row number column to the left
+      },
     },
     onColumnSizingChange: setColumnSizing,
   });
@@ -2131,6 +2287,8 @@ export default function ProjectTimePlannerV2() {
                 {headerRow.cells.map((cell) => {
                   const column = table.getColumn(cell.columnKey);
                   const cellWidth = column ? column.getSize() : 60;
+                  const isPinned = column?.getIsPinned();
+                  const pinnedOffset = isPinned ? column.getStart('left') : undefined;
 
                   return (
                     <th
@@ -2142,9 +2300,13 @@ export default function ProjectTimePlannerV2() {
                         flexGrow: 0,
                         boxSizing: 'border-box',
                         fontSize: `${headerFontSize}px`,
-                        position: 'relative',
+                        position: isPinned ? 'sticky' : 'relative',
+                        left: isPinned ? `${pinnedOffset}px` : undefined,
+                        backgroundColor: '#d9f6e0',
+                        color: '#065f46',
+                        zIndex: isPinned ? 20 : 1,
                       }}
-                      className="border border-gray-300 px-2 py-1 text-center font-semibold text-gray-700 bg-gray-100"
+                      className="border border-gray-300 px-2 py-1 text-center font-semibold"
                     >
                       {cell.content}
 
@@ -2205,17 +2367,27 @@ export default function ProjectTimePlannerV2() {
               </tr>
             ))}
           </thead>
+          {/* Pinned tbody for first 7 rows */}
           <tbody
             style={{
               display: 'grid',
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              position: 'relative',
+              position: 'sticky',
+              top: `${rowHeight}px`, // Position below the header
+              zIndex: 4,
+              backgroundColor: 'white',
+              height: `${7 * rowHeight}px`,
             }}
           >
-            {rowVirtualizer.getVirtualItems().map(virtualRow => {
-              const row = table.getRowModel().rows[virtualRow.index];
+            {table.getRowModel().rows.slice(0, 7).map((row, index) => {
               const rowId = row.original.id;
               const isRowSelected = selectedRows.has(rowId);
+
+              // Create a virtual row object for proper positioning
+              const virtualRow = {
+                index,
+                start: index * rowHeight, // Position each row at its proper offset
+                size: rowHeight,
+              };
 
               return (
                 <TableRow
@@ -2244,6 +2416,61 @@ export default function ProjectTimePlannerV2() {
                   headerFontSize={headerFontSize}
                   gripIconSize={gripIconSize}
                   table={table}
+                  dates={dates}
+                />
+              );
+            })}
+          </tbody>
+          {/* Main virtualized tbody for rows 7+ */}
+          <tbody
+            style={{
+              display: 'grid',
+              height: `${rowVirtualizer.getTotalSize() - (7 * rowHeight)}px`,
+              position: 'relative',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map(virtualRow => {
+              // Skip first 7 rows as they're in the pinned tbody
+              if (virtualRow.index < 7) return null;
+
+              const row = table.getRowModel().rows[virtualRow.index];
+              const rowId = row.original.id;
+              const isRowSelected = selectedRows.has(rowId);
+
+              // Adjust virtualRow start to account for the 7 pinned rows
+              const adjustedVirtualRow = {
+                ...virtualRow,
+                start: virtualRow.start - (7 * rowHeight),
+              };
+
+              return (
+                <TableRow
+                  key={rowId}
+                  row={row}
+                  virtualRow={adjustedVirtualRow}
+                  isRowSelected={isRowSelected}
+                  isCellSelected={isCellSelected}
+                  editingCell={editingCell}
+                  editValue={editValue}
+                  setEditValue={setEditValue}
+                  handleRowNumberClick={handleRowNumberClick}
+                  handleCellMouseDown={handleCellMouseDown}
+                  handleCellMouseEnter={handleCellMouseEnter}
+                  handleCellDoubleClick={handleCellDoubleClick}
+                  handleEditComplete={handleEditComplete}
+                  handleEditKeyDown={handleEditKeyDown}
+                  draggedRowId={draggedRowId}
+                  dropTargetRowId={dropTargetRowId}
+                  handleDragStart={handleDragStart}
+                  handleDragOver={handleDragOver}
+                  handleDrop={handleDrop}
+                  handleDragEnd={handleDragEnd}
+                  rowHeight={rowHeight}
+                  cellFontSize={cellFontSize}
+                  headerFontSize={headerFontSize}
+                  gripIconSize={gripIconSize}
+                  table={table}
+                  dates={dates}
                 />
               );
             })}
