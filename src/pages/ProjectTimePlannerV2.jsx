@@ -31,7 +31,7 @@ const createInitialData = (rowCount = 100, totalDays = 84, startDate) => {
     return date;
   });
 
-  // Row 1: Month row
+  // Row 1: Month row - store month spans info
   const monthRow = {
     id: 'month-row',
     project: '',
@@ -42,13 +42,40 @@ const createInitialData = (rowCount = 100, totalDays = 84, startDate) => {
     col_f: '',
     col_g: '',
     col_h: '',
+    _isMonthRow: true, // Flag to identify this as a month row
+    _monthSpans: [], // Will store [{startDay, span, label}]
   };
+
+  // Calculate month spans
+  let currentMonth = null;
+  let currentSpan = 0;
+  let spanStartDay = 0;
+
   dates.forEach((date, i) => {
-    monthRow[`day-${i}`] = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    const monthLabel = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+    if (monthLabel !== currentMonth) {
+      if (currentMonth !== null) {
+        monthRow._monthSpans.push({ startDay: spanStartDay, span: currentSpan, label: currentMonth.split(' ')[0].toUpperCase() });
+      }
+      currentMonth = monthLabel;
+      currentSpan = 1;
+      spanStartDay = i;
+    } else {
+      currentSpan++;
+    }
+
+    // Push final span
+    if (i === dates.length - 1) {
+      monthRow._monthSpans.push({ startDay: spanStartDay, span: currentSpan, label: monthLabel.split(' ')[0].toUpperCase() });
+    }
+
+    // Still set individual values for fallback
+    monthRow[`day-${i}`] = monthLabel.split(' ')[0].toUpperCase();
   });
   rows.push(monthRow);
 
-  // Row 2: Week row
+  // Row 2: Week row - store week spans info
   const weekRow = {
     id: 'week-row',
     project: '',
@@ -59,9 +86,35 @@ const createInitialData = (rowCount = 100, totalDays = 84, startDate) => {
     col_f: '',
     col_g: '',
     col_h: '',
+    _isWeekRow: true, // Flag to identify this as a week row
+    _weekSpans: [], // Will store [{startDay, span, label}]
   };
+
+  // Calculate week spans
+  let currentWeek = null;
+  currentSpan = 0;
+  spanStartDay = 0;
+
   dates.forEach((_, i) => {
     const weekNumber = Math.floor(i / 7) + 1;
+
+    if (weekNumber !== currentWeek) {
+      if (currentWeek !== null) {
+        weekRow._weekSpans.push({ startDay: spanStartDay, span: currentSpan, label: `Week ${currentWeek}` });
+      }
+      currentWeek = weekNumber;
+      currentSpan = 1;
+      spanStartDay = i;
+    } else {
+      currentSpan++;
+    }
+
+    // Push final span
+    if (i === dates.length - 1) {
+      weekRow._weekSpans.push({ startDay: spanStartDay, span: currentSpan, label: `Week ${weekNumber}` });
+    }
+
+    // Still set individual values for fallback
     weekRow[`day-${i}`] = `Week ${weekNumber}`;
   });
   rows.push(weekRow);
@@ -152,6 +205,7 @@ function TableRow({
   cellFontSize,
   headerFontSize,
   gripIconSize,
+  table,
 }) {
   const rowId = row.original.id;
   const isDragging = Array.isArray(draggedRowId) && draggedRowId.includes(rowId);
@@ -166,6 +220,10 @@ function TableRow({
     width: '100%',
     opacity: isDragging ? 0.5 : 1,
   };
+
+  // Check if this is a month or week row
+  const isMonthRow = row.original._isMonthRow;
+  const isWeekRow = row.original._isWeekRow;
 
   return (
     <>
@@ -189,7 +247,187 @@ function TableRow({
         onDragOver={(e) => handleDragOver(e, rowId)}
         onDrop={(e) => handleDrop(e, rowId)}
       >
-      {row.getVisibleCells().map(cell => {
+      {isMonthRow ? (
+        // Render month row with merged cells
+        <>
+          {/* Row number cell */}
+          <td
+            key="rowNum"
+            style={{
+              width: `${table.getColumn('rowNum').getSize()}px`,
+              flexShrink: 0,
+              flexGrow: 0,
+              height: `${rowHeight}px`,
+              userSelect: 'none',
+              boxSizing: 'border-box',
+            }}
+            className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
+          >
+            <div
+              className={`h-full border-r border-b border-gray-300 px-2 bg-gray-50 flex items-center justify-between text-gray-500 font-mono cursor-pointer`}
+              style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px` }}
+              onClick={(e) => handleRowNumberClick(e, rowId)}
+            >
+              <div
+                draggable
+                onDragStart={(e) => {
+                  e.stopPropagation();
+                  handleDragStart(e, rowId);
+                }}
+                onDragEnd={handleDragEnd}
+                className="cursor-grab active:cursor-grabbing flex items-center"
+                title="Drag to reorder"
+              >
+                <GripVertical size={gripIconSize} className="text-gray-400 hover:text-gray-600" />
+              </div>
+              <span>{row.index + 1}</span>
+              <div style={{ width: `${gripIconSize}px` }} />
+            </div>
+          </td>
+
+          {/* Fixed columns - empty for month row */}
+          {['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].map(colId => (
+            <td
+              key={colId}
+              style={{
+                width: `${table.getColumn(colId).getSize()}px`,
+                flexShrink: 0,
+                flexGrow: 0,
+                height: `${rowHeight}px`,
+                boxSizing: 'border-box',
+              }}
+              className="p-0"
+            >
+              <div
+                className="h-full border-r border-b border-gray-300 bg-gray-50"
+                style={{ minHeight: `${rowHeight}px` }}
+              />
+            </td>
+          ))}
+
+          {/* Merged month cells */}
+          {row.original._monthSpans.map((span, idx) => {
+            // Calculate total width of merged cells
+            let totalWidth = 0;
+            for (let i = 0; i < span.span; i++) {
+              const colId = `day-${span.startDay + i}`;
+              totalWidth += table.getColumn(colId).getSize();
+            }
+
+            return (
+              <td
+                key={`month-span-${idx}`}
+                style={{
+                  width: `${totalWidth}px`,
+                  flexShrink: 0,
+                  flexGrow: 0,
+                  height: `${rowHeight}px`,
+                  boxSizing: 'border-box',
+                }}
+                className="p-0"
+              >
+                <div
+                  className="h-full border-r border-b border-gray-300 bg-blue-50 flex items-center justify-center font-semibold text-gray-700"
+                  style={{ fontSize: `${cellFontSize}px`, minHeight: `${rowHeight}px` }}
+                >
+                  {span.label}
+                </div>
+              </td>
+            );
+          })}
+        </>
+      ) : isWeekRow ? (
+        // Render week row with merged cells
+        <>
+          {/* Row number cell */}
+          <td
+            key="rowNum"
+            style={{
+              width: `${table.getColumn('rowNum').getSize()}px`,
+              flexShrink: 0,
+              flexGrow: 0,
+              height: `${rowHeight}px`,
+              userSelect: 'none',
+              boxSizing: 'border-box',
+            }}
+            className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
+          >
+            <div
+              className={`h-full border-r border-b border-gray-300 px-2 bg-gray-50 flex items-center justify-between text-gray-500 font-mono cursor-pointer`}
+              style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px` }}
+              onClick={(e) => handleRowNumberClick(e, rowId)}
+            >
+              <div
+                draggable
+                onDragStart={(e) => {
+                  e.stopPropagation();
+                  handleDragStart(e, rowId);
+                }}
+                onDragEnd={handleDragEnd}
+                className="cursor-grab active:cursor-grabbing flex items-center"
+                title="Drag to reorder"
+              >
+                <GripVertical size={gripIconSize} className="text-gray-400 hover:text-gray-600" />
+              </div>
+              <span>{row.index + 1}</span>
+              <div style={{ width: `${gripIconSize}px` }} />
+            </div>
+          </td>
+
+          {/* Fixed columns - empty for week row */}
+          {['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].map(colId => (
+            <td
+              key={colId}
+              style={{
+                width: `${table.getColumn(colId).getSize()}px`,
+                flexShrink: 0,
+                flexGrow: 0,
+                height: `${rowHeight}px`,
+                boxSizing: 'border-box',
+              }}
+              className="p-0"
+            >
+              <div
+                className="h-full border-r border-b border-gray-300 bg-gray-50"
+                style={{ minHeight: `${rowHeight}px` }}
+              />
+            </td>
+          ))}
+
+          {/* Merged week cells */}
+          {row.original._weekSpans.map((span, idx) => {
+            // Calculate total width of merged cells
+            let totalWidth = 0;
+            for (let i = 0; i < span.span; i++) {
+              const colId = `day-${span.startDay + i}`;
+              totalWidth += table.getColumn(colId).getSize();
+            }
+
+            return (
+              <td
+                key={`week-span-${idx}`}
+                style={{
+                  width: `${totalWidth}px`,
+                  flexShrink: 0,
+                  flexGrow: 0,
+                  height: `${rowHeight}px`,
+                  boxSizing: 'border-box',
+                }}
+                className="p-0"
+              >
+                <div
+                  className="h-full border-r border-b border-gray-300 bg-green-50 flex items-center justify-center font-semibold text-gray-700"
+                  style={{ fontSize: `${cellFontSize}px`, minHeight: `${rowHeight}px` }}
+                >
+                  {span.label}
+                </div>
+              </td>
+            );
+          })}
+        </>
+      ) : (
+        // Regular row rendering
+        row.getVisibleCells().map(cell => {
         const columnId = cell.column.id;
         const value = row.original[columnId] || '';
         const isSelected = isCellSelected(rowId, columnId);
@@ -279,7 +517,8 @@ function TableRow({
             </div>
           </td>
         );
-      })}
+      })
+      )}
     </tr>
     </>
   );
@@ -1756,6 +1995,7 @@ export default function ProjectTimePlannerV2() {
                   cellFontSize={cellFontSize}
                   headerFontSize={headerFontSize}
                   gripIconSize={gripIconSize}
+                  table={table}
                 />
               );
             })}
