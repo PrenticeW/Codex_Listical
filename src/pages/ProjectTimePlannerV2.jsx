@@ -57,6 +57,10 @@ function TableRow({
   handleDragOver,
   handleDrop,
   handleDragEnd,
+  rowHeight,
+  cellFontSize,
+  headerFontSize,
+  gripIconSize,
 }) {
   const rowId = row.original.id;
   const isDragging = Array.isArray(draggedRowId) && draggedRowId.includes(rowId);
@@ -109,7 +113,7 @@ function TableRow({
                 width: `${cell.column.getSize()}px`,
                 flexShrink: 0,
                 flexGrow: 0,
-                height: '32px',
+                height: `${rowHeight}px`,
                 userSelect: 'none',
                 WebkitUserSelect: 'none',
                 MozUserSelect: 'none',
@@ -119,7 +123,8 @@ function TableRow({
               className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
             >
               <div
-                className={`h-full border-t border-r border-b border-gray-300 px-2 py-1 min-h-[32px] bg-gray-50 flex items-center justify-between text-gray-500 font-mono text-xs cursor-pointer`}
+                className={`h-full border-r border-b border-gray-300 px-2 bg-gray-50 flex items-center justify-between text-gray-500 font-mono cursor-pointer`}
+                style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px` }}
                 onClick={(e) => handleRowNumberClick(e, rowId)}
               >
                 <div
@@ -132,10 +137,10 @@ function TableRow({
                   className="cursor-grab active:cursor-grabbing flex items-center"
                   title="Drag to reorder"
                 >
-                  <GripVertical size={14} className="text-gray-400 hover:text-gray-600" />
+                  <GripVertical size={gripIconSize} className="text-gray-400 hover:text-gray-600" />
                 </div>
                 <span>{row.index + 1}</span>
-                <div style={{ width: '14px' }} />
+                <div style={{ width: `${gripIconSize}px` }} />
               </div>
             </td>
           );
@@ -148,7 +153,7 @@ function TableRow({
               width: `${cell.column.getSize()}px`,
               flexShrink: 0,
               flexGrow: 0,
-              height: '32px',
+              height: `${rowHeight}px`,
               userSelect: 'none',
               WebkitUserSelect: 'none',
               MozUserSelect: 'none',
@@ -158,9 +163,10 @@ function TableRow({
             className="p-0"
           >
             <div
-              className={`h-full border-t border-r border-b border-gray-300 px-2 py-1 cursor-cell min-h-[32px] ${
+              className={`h-full border-r border-b border-gray-300 cursor-cell flex items-center ${
                 isSelected && !isEditing ? 'ring-2 ring-inset ring-blue-500 bg-blue-50' : ''
               }`}
+              style={{ paddingLeft: '3px', paddingRight: '3px', fontSize: `${cellFontSize}px`, minHeight: `${rowHeight}px` }}
               onMouseDown={(e) => handleCellMouseDown(e, rowId, columnId)}
               onMouseEnter={() => handleCellMouseEnter({}, rowId, columnId)}
               onDoubleClick={() => handleCellDoubleClick(rowId, columnId, value)}
@@ -173,10 +179,11 @@ function TableRow({
                   onBlur={() => handleEditComplete(rowId, columnId)}
                   onKeyDown={(e) => handleEditKeyDown(e, rowId, columnId)}
                   autoFocus
-                  className="w-full h-full border-none outline-none bg-transparent text-sm"
+                  className="w-full border-none outline-none bg-transparent px-0"
+                  style={{ height: 'auto', fontSize: `${cellFontSize}px` }}
                 />
               ) : (
-                <div className="text-sm min-h-[20px]">{value || '\u00A0'}</div>
+                <div className="w-full">{value || '\u00A0'}</div>
               )}
             </div>
           </td>
@@ -201,6 +208,28 @@ export default function ProjectTimePlannerV2() {
   const [draggedRowId, setDraggedRowId] = useState(null); // Track which row is being dragged
   const [dropTargetRowId, setDropTargetRowId] = useState(null); // Track drop target
   const tableBodyRef = useRef(null);
+
+  // Sizing state - stored in localStorage
+  const [sizeScale, setSizeScale] = useState(() => {
+    const saved = localStorage.getItem('spreadsheet-size-scale');
+    return saved ? parseFloat(saved) : 1.0;
+  });
+
+  // Update localStorage when size changes
+  useEffect(() => {
+    localStorage.setItem('spreadsheet-size-scale', sizeScale.toString());
+  }, [sizeScale]);
+
+  // Calculate sizes based on scale
+  const rowHeight = Math.round(21 * sizeScale);
+  const cellFontSize = Math.round(10 * sizeScale);
+  const headerFontSize = Math.round(9 * sizeScale);
+  const gripIconSize = Math.round(12 * sizeScale);
+
+  // Size adjustment functions
+  const increaseSize = () => setSizeScale(prev => Math.min(prev + 0.1, 3.0));
+  const decreaseSize = () => setSizeScale(prev => Math.max(prev - 0.1, 0.5));
+  const resetSize = () => setSizeScale(1.0);
 
   // Undo/Redo state
   const [undoStack, setUndoStack] = useState([]); // Array of commands
@@ -1260,7 +1289,7 @@ export default function ProjectTimePlannerV2() {
   const rowVirtualizer = useVirtualizer({
     count: table.getRowModel().rows.length,
     getScrollElement: () => tableBodyRef.current,
-    estimateSize: () => 32, // Estimated row height in pixels
+    estimateSize: () => rowHeight, // Estimated row height in pixels
     overscan: 10, // Render 10 extra rows above and below viewport
   });
 
@@ -1272,6 +1301,33 @@ export default function ProjectTimePlannerV2() {
           <p className="text-sm text-gray-600">Google Sheets-like spreadsheet with TanStack Table v8</p>
         </div>
         <div className="flex gap-2">
+          {/* Size controls */}
+          <div className="flex gap-1 items-center border border-gray-300 rounded px-2 py-1 bg-white">
+            <span className="text-xs text-gray-600 mr-1">Size:</span>
+            <button
+              onClick={decreaseSize}
+              className="px-2 py-0.5 rounded text-sm font-medium bg-gray-200 hover:bg-gray-300 transition-colors"
+              title="Decrease size"
+            >
+              -
+            </button>
+            <span className="text-xs text-gray-700 font-mono min-w-[3ch] text-center">{Math.round(sizeScale * 100)}%</span>
+            <button
+              onClick={increaseSize}
+              className="px-2 py-0.5 rounded text-sm font-medium bg-gray-200 hover:bg-gray-300 transition-colors"
+              title="Increase size"
+            >
+              +
+            </button>
+            <button
+              onClick={resetSize}
+              className="px-2 py-0.5 rounded text-xs font-medium bg-gray-200 hover:bg-gray-300 transition-colors ml-1"
+              title="Reset to default size"
+            >
+              Reset
+            </button>
+          </div>
+
           <button
             onClick={undo}
             disabled={undoStack.length === 0}
@@ -1317,8 +1373,10 @@ export default function ProjectTimePlannerV2() {
                       flexGrow: 0,
                       position: 'relative',
                       boxSizing: 'border-box',
+                      fontSize: `${headerFontSize}px`,
+                      height: `${rowHeight}px`,
                     }}
-                    className="border border-gray-300 px-2 py-2 text-center text-xs font-semibold text-gray-700"
+                    className="border border-gray-300 px-2 py-1 text-center font-semibold text-gray-700"
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
 
@@ -1385,6 +1443,10 @@ export default function ProjectTimePlannerV2() {
                   handleDragOver={handleDragOver}
                   handleDrop={handleDrop}
                   handleDragEnd={handleDragEnd}
+                  rowHeight={rowHeight}
+                  cellFontSize={cellFontSize}
+                  headerFontSize={headerFontSize}
+                  gripIconSize={gripIconSize}
                 />
               );
             })}
