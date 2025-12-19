@@ -59,7 +59,7 @@ function TableRow({
   handleDragEnd,
 }) {
   const rowId = row.original.id;
-  const isDragging = draggedRowId === rowId;
+  const isDragging = Array.isArray(draggedRowId) && draggedRowId.includes(rowId);
   const isDropTarget = dropTargetRowId === rowId;
 
   const style = {
@@ -74,7 +74,7 @@ function TableRow({
 
   return (
     <>
-      {isDropTarget && draggedRowId && draggedRowId !== rowId && (
+      {isDropTarget && draggedRowId && !isDragging && (
         <div
           style={{
             position: 'absolute',
@@ -264,16 +264,26 @@ export default function ProjectTimePlannerV2() {
 
   // Drag and drop handlers
   const handleDragStart = useCallback((e, rowId) => {
-    setDraggedRowId(rowId);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', rowId);
-  }, []);
+    // If the dragged row is part of selected rows, drag all selected rows
+    // Otherwise, just drag the single row
+    if (selectedRows.has(rowId)) {
+      // Dragging multiple selected rows
+      setDraggedRowId(Array.from(selectedRows));
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', JSON.stringify(Array.from(selectedRows)));
+    } else {
+      // Dragging a single row
+      setDraggedRowId([rowId]);
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', JSON.stringify([rowId]));
+    }
+  }, [selectedRows]);
 
   const handleDragOver = useCallback((e, rowId) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
 
-    if (draggedRowId && draggedRowId !== rowId) {
+    if (draggedRowId && Array.isArray(draggedRowId) && !draggedRowId.includes(rowId)) {
       setDropTargetRowId(rowId);
     }
   }, [draggedRowId]);
@@ -281,37 +291,87 @@ export default function ProjectTimePlannerV2() {
   const handleDrop = useCallback((e, targetRowId) => {
     e.preventDefault();
 
-    if (!draggedRowId || draggedRowId === targetRowId) {
+    if (!draggedRowId || !Array.isArray(draggedRowId) || draggedRowId.includes(targetRowId)) {
       setDraggedRowId(null);
       setDropTargetRowId(null);
       return;
     }
 
-    // Find indices
-    const oldIndex = data.findIndex(r => r.id === draggedRowId);
-    const newIndex = data.findIndex(r => r.id === targetRowId);
+    const draggedRowIds = draggedRowId;
 
-    if (oldIndex === -1 || newIndex === -1) {
+    // Find target index
+    const targetIndex = data.findIndex(r => r.id === targetRowId);
+    if (targetIndex === -1) {
       setDraggedRowId(null);
       setDropTargetRowId(null);
       return;
     }
+
+    // Get the indices of all dragged rows in their current positions
+    const draggedIndices = draggedRowIds
+      .map(id => data.findIndex(r => r.id === id))
+      .filter(idx => idx !== -1)
+      .sort((a, b) => a - b);
+
+    if (draggedIndices.length === 0) {
+      setDraggedRowId(null);
+      setDropTargetRowId(null);
+      return;
+    }
+
+    // Store original positions for undo
+    const originalPositions = draggedRowIds.map(id => {
+      const index = data.findIndex(r => r.id === id);
+      return { id, index };
+    });
 
     // Create reorder command
     const reorderCommand = {
       execute: () => {
         setData(prevData => {
           const newData = [...prevData];
-          const [movedRow] = newData.splice(oldIndex, 1);
-          newData.splice(newIndex, 0, movedRow);
+
+          // Extract the dragged rows
+          const draggedRows = draggedIndices.map(idx => newData[idx]);
+
+          // Remove dragged rows (in reverse order to maintain indices)
+          for (let i = draggedIndices.length - 1; i >= 0; i--) {
+            newData.splice(draggedIndices[i], 1);
+          }
+
+          // Calculate new insert position
+          // Count how many dragged rows were before the target
+          const rowsBeforeTarget = draggedIndices.filter(idx => idx < targetIndex).length;
+          const adjustedTargetIndex = targetIndex - rowsBeforeTarget;
+
+          // Insert all dragged rows at the target position
+          newData.splice(adjustedTargetIndex, 0, ...draggedRows);
+
           return newData;
         });
       },
       undo: () => {
         setData(prevData => {
           const newData = [...prevData];
-          const [movedRow] = newData.splice(newIndex, 1);
-          newData.splice(oldIndex, 0, movedRow);
+
+          // Remove the moved rows from their current positions
+          draggedRowIds.forEach(id => {
+            const idx = newData.findIndex(r => r.id === id);
+            if (idx !== -1) {
+              newData.splice(idx, 1);
+            }
+          });
+
+          // Restore rows to their original positions (in order)
+          originalPositions
+            .sort((a, b) => a.index - b.index)
+            .forEach(({ id, index }) => {
+              const row = prevData.find(r => r.id === id);
+              if (row) {
+                newData.splice(index, 0, row);
+              }
+            });
+
           return newData;
         });
       }
