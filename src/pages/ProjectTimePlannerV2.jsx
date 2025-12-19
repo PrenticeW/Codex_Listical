@@ -4,6 +4,7 @@ import {
   getCoreRowModel,
   flexRender,
 } from '@tanstack/react-table';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 /**
  * Google Sheets-like Spreadsheet using TanStack Table v8
@@ -18,7 +19,7 @@ import {
  */
 
 // Sample data structure - will be replaced with real data later
-const createInitialData = (rowCount = 50) => {
+const createInitialData = (rowCount = 1000) => {
   return Array.from({ length: rowCount }, (_, rowIndex) => {
     const row = {
       id: `row-${rowIndex}`,
@@ -36,7 +37,7 @@ const createInitialData = (rowCount = 50) => {
 };
 
 export default function ProjectTimePlannerV2() {
-  const [data, setData] = useState(() => createInitialData(50));
+  const [data, setData] = useState(() => createInitialData(1000));
   const [selectedCells, setSelectedCells] = useState(new Set()); // Set of "rowId|columnId"
   const [selectedRows, setSelectedRows] = useState(new Set()); // Set of rowIds for row highlight
   const [anchorRow, setAnchorRow] = useState(null); // For shift-click row range selection
@@ -46,7 +47,7 @@ export default function ProjectTimePlannerV2() {
   const [columnSizing, setColumnSizing] = useState({}); // Track column sizes
   const [isDragging, setIsDragging] = useState(false); // Track if user is dragging to select
   const [dragStartCell, setDragStartCell] = useState(null); // { rowId, columnId }
-  const tableRef = useRef(null);
+  const tableBodyRef = useRef(null);
 
   // Undo/Redo state
   const [undoStack, setUndoStack] = useState([]); // Array of commands
@@ -617,6 +618,14 @@ export default function ProjectTimePlannerV2() {
     onColumnSizingChange: setColumnSizing,
   });
 
+  // Set up row virtualizer
+  const rowVirtualizer = useVirtualizer({
+    count: table.getRowModel().rows.length,
+    getScrollElement: () => tableBodyRef.current,
+    estimateSize: () => 32, // Estimated row height in pixels
+    overscan: 10, // Render 10 extra rows above and below viewport
+  });
+
   return (
     <div className="w-full h-screen flex flex-col bg-gray-50 p-4">
       <div className="mb-4 flex items-center justify-between">
@@ -652,19 +661,24 @@ export default function ProjectTimePlannerV2() {
         </div>
       </div>
 
-      <div ref={tableRef} className="flex-1 overflow-auto border border-gray-300 bg-white">
-        <table className="border-collapse w-full">
-          <thead className="sticky top-0 bg-gray-100 z-10">
+      <div
+        ref={tableBodyRef}
+        className="flex-1 overflow-auto border border-gray-300 bg-white"
+        style={{ position: 'relative' }}
+      >
+        <table className="border-collapse" style={{ display: 'grid' }}>
+          <thead className="sticky top-0 bg-gray-100 z-10" style={{ display: 'grid', position: 'sticky', top: 0, zIndex: 1 }}>
             {table.getHeaderGroups().map(headerGroup => (
-              <tr key={headerGroup.id}>
+              <tr key={headerGroup.id} style={{ display: 'flex' }}>
                 {headerGroup.headers.map(header => (
                   <th
                     key={header.id}
                     style={{
-                      width: header.getSize(),
-                      minWidth: header.getSize(),
-                      maxWidth: header.getSize(),
+                      width: `${header.getSize()}px`,
+                      flexShrink: 0,
+                      flexGrow: 0,
                       position: 'relative',
+                      boxSizing: 'border-box',
                     }}
                     className="border border-gray-300 px-2 py-2 text-center text-xs font-semibold text-gray-700"
                   >
@@ -699,8 +713,15 @@ export default function ProjectTimePlannerV2() {
               </tr>
             ))}
           </thead>
-          <tbody>
-            {table.getRowModel().rows.map(row => {
+          <tbody
+            style={{
+              display: 'grid',
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              position: 'relative',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map(virtualRow => {
+              const row = table.getRowModel().rows[virtualRow.index];
               const rowId = row.original.id;
               const isRowSelected = selectedRows.has(rowId);
 
@@ -708,6 +729,12 @@ export default function ProjectTimePlannerV2() {
                 <tr
                   key={row.id}
                   className={isRowSelected ? 'selected-row' : ''}
+                  style={{
+                    display: 'flex',
+                    position: 'absolute',
+                    transform: `translateY(${virtualRow.start}px)`,
+                    width: '100%',
+                  }}
                 >
                   {row.getVisibleCells().map(cell => {
                     const columnId = cell.column.id;
@@ -722,14 +749,15 @@ export default function ProjectTimePlannerV2() {
                         <td
                           key={cell.id}
                           style={{
-                            width: cell.column.getSize(),
-                            minWidth: cell.column.getSize(),
-                            maxWidth: cell.column.getSize(),
+                            width: `${cell.column.getSize()}px`,
+                            flexShrink: 0,
+                            flexGrow: 0,
                             height: '32px',
                             userSelect: 'none',
                             WebkitUserSelect: 'none',
                             MozUserSelect: 'none',
                             msUserSelect: 'none',
+                            boxSizing: 'border-box',
                           }}
                           className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
                         >
@@ -747,14 +775,15 @@ export default function ProjectTimePlannerV2() {
                       <td
                         key={cell.id}
                         style={{
-                          width: cell.column.getSize(),
-                          minWidth: cell.column.getSize(),
-                          maxWidth: cell.column.getSize(),
+                          width: `${cell.column.getSize()}px`,
+                          flexShrink: 0,
+                          flexGrow: 0,
                           height: '32px',
                           userSelect: 'none', // Disable text selection
                           WebkitUserSelect: 'none', // Safari
                           MozUserSelect: 'none', // Firefox
                           msUserSelect: 'none', // IE/Edge
+                          boxSizing: 'border-box',
                         }}
                         className="p-0"
                       >
@@ -792,16 +821,22 @@ export default function ProjectTimePlannerV2() {
 
       {/* Debug info */}
       <div className="mt-4 p-2 bg-gray-100 rounded text-xs font-mono">
-        <div>Selected cells: {selectedCells.size} {selectedCells.size > 0 && `(${Array.from(selectedCells).slice(0, 5).join(', ')}${selectedCells.size > 5 ? '...' : ''})`}</div>
-        <div>Selected rows: {selectedRows.size} {selectedRows.size > 0 && `(${Array.from(selectedRows).join(', ')})`}</div>
-        <div>Editing: {editingCell ? `${editingCell.rowId} / ${editingCell.columnId}` : 'None'}</div>
+        <div className="flex gap-4">
+          <div>
+            <span className="text-green-600 font-semibold">Virtualization:</span> Rendering {rowVirtualizer.getVirtualItems().length} of {data.length} rows
+          </div>
+          <div>Selected cells: {selectedCells.size} {selectedCells.size > 0 && `(${Array.from(selectedCells).slice(0, 5).join(', ')}${selectedCells.size > 5 ? '...' : ''})`}</div>
+          <div>Selected rows: {selectedRows.size} {selectedRows.size > 0 && `(${Array.from(selectedRows).join(', ')})`}</div>
+        </div>
         <div className="mt-1">
+          <span>Editing: {editingCell ? `${editingCell.rowId} / ${editingCell.columnId}` : 'None'}</span>
+          {' • '}
           <span className={undoStack.length > 0 ? 'text-blue-600 font-semibold' : 'text-gray-400'}>
-            Undo stack: {undoStack.length}
+            Undo: {undoStack.length}
           </span>
           {' • '}
           <span className={redoStack.length > 0 ? 'text-blue-600 font-semibold' : 'text-gray-400'}>
-            Redo stack: {redoStack.length}
+            Redo: {redoStack.length}
           </span>
         </div>
         <div className="text-gray-500 mt-1">
