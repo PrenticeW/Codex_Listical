@@ -977,6 +977,57 @@ export default function ProjectTimePlannerV2() {
     };
   }, [handleMouseUp]);
 
+  // Delete rows entirely (remove from data array)
+  const handleDeleteRows = useCallback(() => {
+    if (selectedRows.size === 0) return;
+
+    // Store deleted rows and their positions for undo
+    const deletedRows = [];
+    const rowIndices = [];
+
+    selectedRows.forEach(rowId => {
+      const rowIndex = data.findIndex(r => r.id === rowId);
+      if (rowIndex !== -1) {
+        deletedRows.push({ ...data[rowIndex] });
+        rowIndices.push(rowIndex);
+      }
+    });
+
+    // Sort by index (descending) for proper restoration
+    const sortedDeletions = deletedRows
+      .map((row, i) => ({ row, index: rowIndices[i] }))
+      .sort((a, b) => a.index - b.index);
+
+    // Create command for row deletion
+    const command = {
+      execute: () => {
+        setData(prev => {
+          const newData = [...prev];
+          // Remove in reverse order to maintain indices
+          [...sortedDeletions].reverse().forEach(({ index }) => {
+            newData.splice(index, 1);
+          });
+          return newData;
+        });
+        // Clear selection after deletion
+        setSelectedRows(new Set());
+        setSelectedCells(new Set());
+      },
+      undo: () => {
+        setData(prev => {
+          const newData = [...prev];
+          // Restore in original order
+          sortedDeletions.forEach(({ row, index }) => {
+            newData.splice(index, 0, row);
+          });
+          return newData;
+        });
+      },
+    };
+
+    executeCommand(command);
+  }, [selectedRows, data, executeCommand]);
+
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -1000,11 +1051,20 @@ export default function ProjectTimePlannerV2() {
       // Copy: Cmd/Ctrl+C (handled by copy event listener)
       // Paste: Cmd/Ctrl+V (handled by paste event listener)
 
+      // Cmd/Ctrl+Backspace to delete rows entirely
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Backspace') {
+        e.preventDefault();
+        if (selectedRows.size > 0) {
+          handleDeleteRows();
+        }
+        return;
+      }
+
       // Delete/Backspace to clear cells or rows
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
 
-        // ROW DELETE MODE: If rows are selected, clear all cells in those rows
+        // ROW CLEAR MODE: If rows are selected, clear all cells in those rows
         if (selectedRows.size > 0) {
           // Store old values for undo
           const oldValues = new Map(); // Map<rowId, Map<columnId, value>>
@@ -1021,7 +1081,7 @@ export default function ProjectTimePlannerV2() {
             oldValues.set(rowId, rowOldValues);
           });
 
-          // Create command for row delete operation
+          // Create command for row clear operation
           const command = {
             execute: () => {
               setData(prev => prev.map(row => {
@@ -1149,7 +1209,7 @@ export default function ProjectTimePlannerV2() {
       window.removeEventListener('copy', handleCopy);
       window.removeEventListener('paste', handlePaste);
     };
-  }, [selectedCells, selectedRows, editingCell, handleCopy, handlePaste, undo, redo, data, executeCommand, allColumnIds]);
+  }, [selectedCells, selectedRows, editingCell, handleCopy, handlePaste, undo, redo, data, executeCommand, allColumnIds, handleDeleteRows]);
 
   // Column definitions
   const columns = useMemo(() => {
@@ -1353,7 +1413,7 @@ export default function ProjectTimePlannerV2() {
           </span>
         </div>
         <div className="text-gray-500 mt-1">
-          Try: Click row # to select row • Click cell to select • Drag to select range • Shift+Click for range • Cmd/Ctrl+Click for multi • Double-click to edit • Delete to clear (cells or entire rows) • Cmd/Ctrl+C to copy (cells or entire rows) • Cmd/Ctrl+V to paste • Cmd/Ctrl+Z to undo • Cmd/Ctrl+Shift+Z to redo
+          Try: Click row # to select row • Click cell to select • Drag to select range • Shift+Click for range • Cmd/Ctrl+Click for multi • Double-click to edit • Delete/Backspace to clear cells/rows • Cmd/Ctrl+Backspace to delete rows entirely • Cmd/Ctrl+C to copy • Cmd/Ctrl+V to paste • Cmd/Ctrl+Z to undo • Cmd/Ctrl+Shift+Z to redo
         </div>
       </div>
     </div>
