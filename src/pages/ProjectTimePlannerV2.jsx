@@ -48,8 +48,62 @@ export default function ProjectTimePlannerV2() {
   const [dragStartCell, setDragStartCell] = useState(null); // { rowId, columnId }
   const tableRef = useRef(null);
 
+  // Undo/Redo state
+  const [undoStack, setUndoStack] = useState([]); // Array of commands
+  const [redoStack, setRedoStack] = useState([]); // Array of commands
+  const maxHistorySize = 100; // Limit history to prevent memory issues
+
   // Helper to create cell key
   const getCellKey = (rowId, columnId) => `${rowId}|${columnId}`;
+
+  // Command pattern for undo/redo
+  const executeCommand = useCallback((command) => {
+    // Execute the command
+    command.execute();
+
+    // Add to undo stack
+    setUndoStack(prev => {
+      const newStack = [...prev, command];
+      // Limit stack size
+      if (newStack.length > maxHistorySize) {
+        return newStack.slice(-maxHistorySize);
+      }
+      return newStack;
+    });
+
+    // Clear redo stack when new command is executed
+    setRedoStack([]);
+  }, [maxHistorySize]);
+
+  // Undo function
+  const undo = useCallback(() => {
+    if (undoStack.length === 0) return;
+
+    const command = undoStack[undoStack.length - 1];
+    command.undo();
+
+    // Move command from undo to redo stack
+    setUndoStack(prev => prev.slice(0, -1));
+    setRedoStack(prev => [...prev, command]);
+  }, [undoStack]);
+
+  // Redo function
+  const redo = useCallback(() => {
+    if (redoStack.length === 0) return;
+
+    const command = redoStack[redoStack.length - 1];
+    command.execute();
+
+    // Move command from redo to undo stack
+    setRedoStack(prev => prev.slice(0, -1));
+    setUndoStack(prev => {
+      const newStack = [...prev, command];
+      if (newStack.length > maxHistorySize) {
+        return newStack.slice(-maxHistorySize);
+      }
+      return newStack;
+    });
+  }, [redoStack, undoStack, maxHistorySize]);
 
   // Helper to check if cell is selected
   const isCellSelected = useCallback((rowId, columnId) => {
@@ -113,17 +167,42 @@ export default function ProjectTimePlannerV2() {
 
   // Edit handlers
   const handleEditComplete = useCallback((rowId, columnId) => {
-    // Update data
-    setData(prev => prev.map(row => {
-      if (row.id === rowId) {
-        return { ...row, [columnId]: editValue };
-      }
-      return row;
-    }));
+    // Get the old value before updating
+    const oldValue = data.find(r => r.id === rowId)?.[columnId] || '';
+    const newValue = editValue;
+
+    // Don't create command if value hasn't changed
+    if (oldValue === newValue) {
+      setEditingCell(null);
+      setEditValue('');
+      return;
+    }
+
+    // Create command for this edit
+    const command = {
+      execute: () => {
+        setData(prev => prev.map(row => {
+          if (row.id === rowId) {
+            return { ...row, [columnId]: newValue };
+          }
+          return row;
+        }));
+      },
+      undo: () => {
+        setData(prev => prev.map(row => {
+          if (row.id === rowId) {
+            return { ...row, [columnId]: oldValue };
+          }
+          return row;
+        }));
+      },
+    };
+
+    executeCommand(command);
 
     setEditingCell(null);
     setEditValue('');
-  }, [editValue]);
+  }, [editValue, data, executeCommand]);
 
   const handleEditKeyDown = useCallback((e, rowId, columnId) => {
     if (e.key === 'Enter') {
@@ -296,29 +375,77 @@ export default function ProjectTimePlannerV2() {
 
     if (anchorRowIndex === -1 || anchorColIndex === -1) return;
 
-    // Update data with pasted values
-    setData(prev => {
-      const newData = [...prev];
+    // Store old values for undo
+    const oldValues = new Map(); // Map<rowId, Map<columnId, value>>
 
-      rows.forEach((rowValues, rowOffset) => {
-        const targetRowIndex = anchorRowIndex + rowOffset;
-        if (targetRowIndex >= newData.length) return; // Skip if out of bounds
+    rows.forEach((rowValues, rowOffset) => {
+      const targetRowIndex = anchorRowIndex + rowOffset;
+      if (targetRowIndex >= data.length) return;
 
-        const rowUpdates = {};
-        rowValues.forEach((value, colOffset) => {
-          const targetColIndex = anchorColIndex + colOffset;
-          if (targetColIndex >= allColumnIds.length) return; // Skip if out of bounds
+      const rowId = data[targetRowIndex].id;
+      const rowOldValues = new Map();
 
-          const columnId = allColumnIds[targetColIndex];
-          rowUpdates[columnId] = value;
-        });
+      rowValues.forEach((value, colOffset) => {
+        const targetColIndex = anchorColIndex + colOffset;
+        if (targetColIndex >= allColumnIds.length) return;
 
-        newData[targetRowIndex] = { ...newData[targetRowIndex], ...rowUpdates };
+        const columnId = allColumnIds[targetColIndex];
+        rowOldValues.set(columnId, data[targetRowIndex][columnId] || '');
       });
 
-      return newData;
+      if (rowOldValues.size > 0) {
+        oldValues.set(rowId, rowOldValues);
+      }
     });
-  }, [selectedCells, data, editingCell]);
+
+    // Create command for paste operation
+    const command = {
+      execute: () => {
+        setData(prev => {
+          const newData = [...prev];
+
+          rows.forEach((rowValues, rowOffset) => {
+            const targetRowIndex = anchorRowIndex + rowOffset;
+            if (targetRowIndex >= newData.length) return;
+
+            const rowUpdates = {};
+            rowValues.forEach((value, colOffset) => {
+              const targetColIndex = anchorColIndex + colOffset;
+              if (targetColIndex >= allColumnIds.length) return;
+
+              const columnId = allColumnIds[targetColIndex];
+              rowUpdates[columnId] = value;
+            });
+
+            newData[targetRowIndex] = { ...newData[targetRowIndex], ...rowUpdates };
+          });
+
+          return newData;
+        });
+      },
+      undo: () => {
+        setData(prev => {
+          const newData = [...prev];
+
+          oldValues.forEach((rowOldValues, rowId) => {
+            const rowIndex = newData.findIndex(r => r.id === rowId);
+            if (rowIndex === -1) return;
+
+            const rowUpdates = {};
+            rowOldValues.forEach((value, columnId) => {
+              rowUpdates[columnId] = value;
+            });
+
+            newData[rowIndex] = { ...newData[rowIndex], ...rowUpdates };
+          });
+
+          return newData;
+        });
+      },
+    };
+
+    executeCommand(command);
+  }, [selectedCells, data, editingCell, executeCommand]);
 
   // Handle global mouse up to end drag selection
   useEffect(() => {
@@ -331,6 +458,20 @@ export default function ProjectTimePlannerV2() {
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Undo: Cmd/Ctrl+Z (not while editing)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey && !editingCell) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+
+      // Redo: Cmd/Ctrl+Shift+Z (not while editing)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey && !editingCell) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+
       // Don't interfere if we're editing
       if (editingCell) return;
 
@@ -352,21 +493,63 @@ export default function ProjectTimePlannerV2() {
       // Delete/Backspace to clear
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
-        // Clear all selected cells
-        setData(prev => prev.map(row => {
-          const rowUpdates = {};
-          let hasUpdates = false;
 
-          selectedCells.forEach(cellKey => {
-            const [rowId, columnId] = cellKey.split('|');
-            if (row.id === rowId && columnId !== 'rowNum') {
-              rowUpdates[columnId] = '';
-              hasUpdates = true;
-            }
-          });
+        // Store old values for undo
+        const oldValues = new Map(); // Map<rowId, Map<columnId, value>>
 
-          return hasUpdates ? { ...row, ...rowUpdates } : row;
-        }));
+        selectedCells.forEach(cellKey => {
+          const [rowId, columnId] = cellKey.split('|');
+          if (columnId === 'rowNum') return;
+
+          const row = data.find(r => r.id === rowId);
+          if (!row) return;
+
+          if (!oldValues.has(rowId)) {
+            oldValues.set(rowId, new Map());
+          }
+          oldValues.get(rowId).set(columnId, row[columnId] || '');
+        });
+
+        // Create command for delete operation
+        const command = {
+          execute: () => {
+            setData(prev => prev.map(row => {
+              const rowUpdates = {};
+              let hasUpdates = false;
+
+              selectedCells.forEach(cellKey => {
+                const [rowId, columnId] = cellKey.split('|');
+                if (row.id === rowId && columnId !== 'rowNum') {
+                  rowUpdates[columnId] = '';
+                  hasUpdates = true;
+                }
+              });
+
+              return hasUpdates ? { ...row, ...rowUpdates } : row;
+            }));
+          },
+          undo: () => {
+            setData(prev => {
+              const newData = [...prev];
+
+              oldValues.forEach((rowOldValues, rowId) => {
+                const rowIndex = newData.findIndex(r => r.id === rowId);
+                if (rowIndex === -1) return;
+
+                const rowUpdates = {};
+                rowOldValues.forEach((value, columnId) => {
+                  rowUpdates[columnId] = value;
+                });
+
+                newData[rowIndex] = { ...newData[rowIndex], ...rowUpdates };
+              });
+
+              return newData;
+            });
+          },
+        };
+
+        executeCommand(command);
       }
 
       // Start typing to edit (if alphanumeric)
@@ -386,7 +569,7 @@ export default function ProjectTimePlannerV2() {
       window.removeEventListener('copy', handleCopy);
       window.removeEventListener('paste', handlePaste);
     };
-  }, [selectedCells, editingCell, handleCopy, handlePaste]);
+  }, [selectedCells, editingCell, handleCopy, handlePaste, undo, redo, data, executeCommand]);
 
   // Column definitions
   const columns = useMemo(() => {
@@ -436,9 +619,37 @@ export default function ProjectTimePlannerV2() {
 
   return (
     <div className="w-full h-screen flex flex-col bg-gray-50 p-4">
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold">Project Time Planner v2</h1>
-        <p className="text-sm text-gray-600">Google Sheets-like spreadsheet with TanStack Table v8</p>
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Project Time Planner v2</h1>
+          <p className="text-sm text-gray-600">Google Sheets-like spreadsheet with TanStack Table v8</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={undo}
+            disabled={undoStack.length === 0}
+            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+              undoStack.length === 0
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
+            }`}
+            title={`Undo (${undoStack.length === 0 ? 'No actions' : `${undoStack.length} action${undoStack.length > 1 ? 's' : ''}`})`}
+          >
+            ↶ Undo
+          </button>
+          <button
+            onClick={redo}
+            disabled={redoStack.length === 0}
+            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+              redoStack.length === 0
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
+            }`}
+            title={`Redo (${redoStack.length === 0 ? 'No actions' : `${redoStack.length} action${redoStack.length > 1 ? 's' : ''}`})`}
+          >
+            ↷ Redo
+          </button>
+        </div>
       </div>
 
       <div ref={tableRef} className="flex-1 overflow-auto border border-gray-300 bg-white">
@@ -584,8 +795,17 @@ export default function ProjectTimePlannerV2() {
         <div>Selected cells: {selectedCells.size} {selectedCells.size > 0 && `(${Array.from(selectedCells).slice(0, 5).join(', ')}${selectedCells.size > 5 ? '...' : ''})`}</div>
         <div>Selected rows: {selectedRows.size} {selectedRows.size > 0 && `(${Array.from(selectedRows).join(', ')})`}</div>
         <div>Editing: {editingCell ? `${editingCell.rowId} / ${editingCell.columnId}` : 'None'}</div>
+        <div className="mt-1">
+          <span className={undoStack.length > 0 ? 'text-blue-600 font-semibold' : 'text-gray-400'}>
+            Undo stack: {undoStack.length}
+          </span>
+          {' • '}
+          <span className={redoStack.length > 0 ? 'text-blue-600 font-semibold' : 'text-gray-400'}>
+            Redo stack: {redoStack.length}
+          </span>
+        </div>
         <div className="text-gray-500 mt-1">
-          Try: Click row # to select row • Click cell to select • Drag to select range • Shift+Click for range • Cmd/Ctrl+Click for multi • Double-click to edit • Delete to clear • Cmd/Ctrl+C to copy • Cmd/Ctrl+V to paste
+          Try: Click row # to select row • Click cell to select • Drag to select range • Shift+Click for range • Cmd/Ctrl+Click for multi • Double-click to edit • Delete to clear • Cmd/Ctrl+C to copy • Cmd/Ctrl+V to paste • Cmd/Ctrl+Z to undo • Cmd/Ctrl+Shift+Z to redo
         </div>
       </div>
     </div>
