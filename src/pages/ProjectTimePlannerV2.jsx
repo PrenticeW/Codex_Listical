@@ -390,9 +390,79 @@ export default function ProjectTimePlannerV2() {
 
       if (selectedRowIndices.length === 0) return;
 
+      // Check if pasting a single row to multiple selected rows (FILL MODE)
+      const isSingleRowPaste = pastedRows.length === 1 && selectedRowIndices.length > 1;
+
       // Store old values for undo
       const oldValues = new Map(); // Map<rowId, Map<columnId, value>>
 
+      if (isSingleRowPaste) {
+        // FILL MODE: Paste single row to all selected rows
+        const pastedRowValues = pastedRows[0];
+
+        selectedRowIndices.forEach(dataRowIndex => {
+          const rowId = data[dataRowIndex].id;
+          const rowOldValues = new Map();
+
+          pastedRowValues.forEach((value, colIndex) => {
+            if (colIndex < allColumnIds.length) {
+              const columnId = allColumnIds[colIndex];
+              rowOldValues.set(columnId, data[dataRowIndex][columnId] || '');
+            }
+          });
+
+          if (rowOldValues.size > 0) {
+            oldValues.set(rowId, rowOldValues);
+          }
+        });
+
+        // Create command for fill operation
+        const command = {
+          execute: () => {
+            setData(prev => {
+              const newData = [...prev];
+
+              selectedRowIndices.forEach(dataRowIndex => {
+                const rowUpdates = {};
+                pastedRowValues.forEach((value, colIndex) => {
+                  if (colIndex < allColumnIds.length) {
+                    const columnId = allColumnIds[colIndex];
+                    rowUpdates[columnId] = value;
+                  }
+                });
+
+                newData[dataRowIndex] = { ...newData[dataRowIndex], ...rowUpdates };
+              });
+
+              return newData;
+            });
+          },
+          undo: () => {
+            setData(prev => {
+              const newData = [...prev];
+
+              oldValues.forEach((rowOldValues, rowId) => {
+                const rowIndex = newData.findIndex(r => r.id === rowId);
+                if (rowIndex === -1) return;
+
+                const rowUpdates = {};
+                rowOldValues.forEach((value, columnId) => {
+                  rowUpdates[columnId] = value;
+                });
+
+                newData[rowIndex] = { ...newData[rowIndex], ...rowUpdates };
+              });
+
+              return newData;
+            });
+          },
+        };
+
+        executeCommand(command);
+        return;
+      }
+
+      // RANGE MODE: Paste multiple rows starting from first selected row
       // Calculate how many rows to paste
       const targetRowIndex = selectedRowIndices[0]; // Start pasting at first selected row
       const rowsToPaste = Math.min(pastedRows.length, data.length - targetRowIndex);
@@ -647,25 +717,71 @@ export default function ProjectTimePlannerV2() {
       // Don't interfere if we're editing
       if (editingCell) return;
 
-      // Get the first selected cell
-      const firstCellKey = Array.from(selectedCells)[0];
-      if (!firstCellKey) return;
-
-      const [currentRowId, currentColumnId] = firstCellKey.split('|');
-
       // Copy: Cmd/Ctrl+C (handled by copy event listener)
       // Paste: Cmd/Ctrl+V (handled by paste event listener)
 
-      // Arrow key navigation (TODO: implement navigation logic)
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        e.preventDefault();
-        console.log('Arrow key pressed:', e.key, 'Current cell:', currentRowId, currentColumnId);
-      }
-
-      // Delete/Backspace to clear
+      // Delete/Backspace to clear cells or rows
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
 
+        // ROW DELETE MODE: If rows are selected, clear all cells in those rows
+        if (selectedRows.size > 0) {
+          // Store old values for undo
+          const oldValues = new Map(); // Map<rowId, Map<columnId, value>>
+
+          selectedRows.forEach(rowId => {
+            const row = data.find(r => r.id === rowId);
+            if (!row) return;
+
+            const rowOldValues = new Map();
+            allColumnIds.forEach(columnId => {
+              rowOldValues.set(columnId, row[columnId] || '');
+            });
+
+            oldValues.set(rowId, rowOldValues);
+          });
+
+          // Create command for row delete operation
+          const command = {
+            execute: () => {
+              setData(prev => prev.map(row => {
+                if (selectedRows.has(row.id)) {
+                  // Clear all columns in this row
+                  const rowUpdates = {};
+                  allColumnIds.forEach(columnId => {
+                    rowUpdates[columnId] = '';
+                  });
+                  return { ...row, ...rowUpdates };
+                }
+                return row;
+              }));
+            },
+            undo: () => {
+              setData(prev => {
+                const newData = [...prev];
+
+                oldValues.forEach((rowOldValues, rowId) => {
+                  const rowIndex = newData.findIndex(r => r.id === rowId);
+                  if (rowIndex === -1) return;
+
+                  const rowUpdates = {};
+                  rowOldValues.forEach((value, columnId) => {
+                    rowUpdates[columnId] = value;
+                  });
+
+                  newData[rowIndex] = { ...newData[rowIndex], ...rowUpdates };
+                });
+
+                return newData;
+              });
+            },
+          };
+
+          executeCommand(command);
+          return;
+        }
+
+        // CELL DELETE MODE: Clear selected cells
         // Store old values for undo
         const oldValues = new Map(); // Map<rowId, Map<columnId, value>>
 
@@ -724,11 +840,23 @@ export default function ProjectTimePlannerV2() {
         executeCommand(command);
       }
 
-      // Start typing to edit (if alphanumeric)
-      if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault();
-        setEditingCell({ rowId: currentRowId, columnId: currentColumnId });
-        setEditValue(e.key);
+      // Arrow key navigation and typing to edit only work with cell selection
+      if (selectedCells.size > 0) {
+        const firstCellKey = Array.from(selectedCells)[0];
+        const [currentRowId, currentColumnId] = firstCellKey.split('|');
+
+        // Arrow key navigation (TODO: implement navigation logic)
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+          e.preventDefault();
+          console.log('Arrow key pressed:', e.key, 'Current cell:', currentRowId, currentColumnId);
+        }
+
+        // Start typing to edit (if alphanumeric)
+        if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
+          e.preventDefault();
+          setEditingCell({ rowId: currentRowId, columnId: currentColumnId });
+          setEditValue(e.key);
+        }
       }
     };
 
@@ -741,7 +869,7 @@ export default function ProjectTimePlannerV2() {
       window.removeEventListener('copy', handleCopy);
       window.removeEventListener('paste', handlePaste);
     };
-  }, [selectedCells, editingCell, handleCopy, handlePaste, undo, redo, data, executeCommand]);
+  }, [selectedCells, selectedRows, editingCell, handleCopy, handlePaste, undo, redo, data, executeCommand, allColumnIds]);
 
   // Column definitions
   const columns = useMemo(() => {
@@ -1011,7 +1139,7 @@ export default function ProjectTimePlannerV2() {
           </span>
         </div>
         <div className="text-gray-500 mt-1">
-          Try: Click row # to select row • Click cell to select • Drag to select range • Shift+Click for range • Cmd/Ctrl+Click for multi • Double-click to edit • Delete to clear • Cmd/Ctrl+C to copy (cells or entire rows) • Cmd/Ctrl+V to paste • Cmd/Ctrl+Z to undo • Cmd/Ctrl+Shift+Z to redo
+          Try: Click row # to select row • Click cell to select • Drag to select range • Shift+Click for range • Cmd/Ctrl+Click for multi • Double-click to edit • Delete to clear (cells or entire rows) • Cmd/Ctrl+C to copy (cells or entire rows) • Cmd/Ctrl+V to paste • Cmd/Ctrl+Z to undo • Cmd/Ctrl+Shift+Z to redo
         </div>
       </div>
     </div>
