@@ -5,7 +5,7 @@ import {
   flexRender,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { GripVertical } from 'lucide-react';
+import { GripVertical, ListFilter } from 'lucide-react';
 
 /**
  * Google Sheets-like Spreadsheet using TanStack Table v8
@@ -155,7 +155,63 @@ const createInitialData = (rowCount = 100, totalDays = 84, startDate) => {
   });
   rows.push(dayOfWeekRow);
 
-  // Regular data rows (starting from row 5)
+  // Row 5: Daily min row
+  const dailyMinRow = {
+    id: 'daily-min-row',
+    project: '',
+    status: '',
+    task: '',
+    estimate: '',
+    timeValue: '',
+    col_f: '',
+    col_g: '',
+    col_h: '',
+    _isDailyMinRow: true, // Flag to identify this as a daily min row
+  };
+  dates.forEach((date, i) => {
+    // Placeholder - will be populated from dailyBoundsMap
+    dailyMinRow[`day-${i}`] = '';
+  });
+  rows.push(dailyMinRow);
+
+  // Row 6: Daily max row
+  const dailyMaxRow = {
+    id: 'daily-max-row',
+    project: '',
+    status: '',
+    task: '',
+    estimate: '',
+    timeValue: '',
+    col_f: '',
+    col_g: '',
+    col_h: '',
+    _isDailyMaxRow: true, // Flag to identify this as a daily max row
+  };
+  dates.forEach((date, i) => {
+    // Placeholder - will be populated from dailyBoundsMap
+    dailyMaxRow[`day-${i}`] = '';
+  });
+  rows.push(dailyMaxRow);
+
+  // Row 7: Filter row
+  const filterRow = {
+    id: 'filter-row',
+    project: '', // Column A - no filter needed
+    status: '',
+    task: '',
+    estimate: '', // Column E - no filter needed
+    timeValue: '', // Column F - no filter needed
+    col_f: '',
+    col_g: '',
+    col_h: '', // Column H - no filter needed
+    _isFilterRow: true, // Flag to identify this as a filter row
+  };
+  dates.forEach((date, i) => {
+    filterRow[`day-${i}`] = '0.00'; // Default value for calendar area filters
+  });
+  rows.push(filterRow);
+
+  // Regular data rows (starting from row 8)
   for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
     const row = {
       id: `row-${rowIndex}`,
@@ -221,9 +277,12 @@ function TableRow({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  // Check if this is a month or week row
+  // Check if this is a special row
   const isMonthRow = row.original._isMonthRow;
   const isWeekRow = row.original._isWeekRow;
+  const isDailyMinRow = row.original._isDailyMinRow;
+  const isDailyMaxRow = row.original._isDailyMaxRow;
+  const isFilterRow = row.original._isFilterRow;
 
   return (
     <>
@@ -425,6 +484,195 @@ function TableRow({
             );
           })}
         </>
+      ) : isDailyMinRow || isDailyMaxRow ? (
+        // Render daily min/max rows with special styling
+        row.getVisibleCells().map(cell => {
+        const columnId = cell.column.id;
+        const value = row.original[columnId] || '';
+
+        // Determine background color based on row type
+        const bgColor = isDailyMinRow ? '#ead1dc' : '#f2e5eb';
+
+        // Special handling for row number column
+        if (columnId === 'rowNum') {
+          return (
+            <td
+              key={cell.id}
+              style={{
+                width: `${cell.column.getSize()}px`,
+                flexShrink: 0,
+                flexGrow: 0,
+                height: `${rowHeight}px`,
+                userSelect: 'none',
+                boxSizing: 'border-box',
+              }}
+              className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
+            >
+              <div
+                className={`h-full border-r border-b border-gray-300 px-2 flex items-center justify-between text-gray-500 font-mono cursor-pointer`}
+                style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: bgColor }}
+                onClick={(e) => handleRowNumberClick(e, rowId)}
+              >
+                <div
+                  draggable
+                  onDragStart={(e) => {
+                    e.stopPropagation();
+                    handleDragStart(e, rowId);
+                  }}
+                  onDragEnd={handleDragEnd}
+                  className="cursor-grab active:cursor-grabbing flex items-center"
+                  title="Drag to reorder"
+                >
+                  <GripVertical size={gripIconSize} className="text-gray-400 hover:text-gray-600" />
+                </div>
+                <span>{row.index + 1}</span>
+                <div style={{ width: `${gripIconSize}px` }} />
+              </div>
+            </td>
+          );
+        }
+
+        // For fixed columns, show empty cells with background color
+        if (['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].includes(columnId)) {
+          return (
+            <td
+              key={cell.id}
+              style={{
+                width: `${cell.column.getSize()}px`,
+                flexShrink: 0,
+                flexGrow: 0,
+                height: `${rowHeight}px`,
+                boxSizing: 'border-box',
+              }}
+              className="p-0"
+            >
+              <div
+                className="h-full border-r border-b border-gray-300"
+                style={{ minHeight: `${rowHeight}px`, backgroundColor: bgColor }}
+              />
+            </td>
+          );
+        }
+
+        // For day columns, show the value with special styling
+        return (
+          <td
+            key={cell.id}
+            style={{
+              width: `${cell.column.getSize()}px`,
+              flexShrink: 0,
+              flexGrow: 0,
+              height: `${rowHeight}px`,
+              boxSizing: 'border-box',
+            }}
+            className="p-0"
+          >
+            <div
+              className="h-full border-r border-b border-gray-300 flex items-center justify-center italic text-xs"
+              style={{ minHeight: `${rowHeight}px`, backgroundColor: bgColor, fontSize: '10px' }}
+            >
+              {value || '\u00A0'}
+            </div>
+          </td>
+        );
+      })
+      ) : isFilterRow ? (
+        // Render filter row with filter button placeholders
+        row.getVisibleCells().map(cell => {
+        const columnId = cell.column.id;
+
+        // Special handling for row number column
+        if (columnId === 'rowNum') {
+          return (
+            <td
+              key={cell.id}
+              style={{
+                width: `${cell.column.getSize()}px`,
+                flexShrink: 0,
+                flexGrow: 0,
+                height: `${rowHeight}px`,
+                userSelect: 'none',
+                boxSizing: 'border-box',
+              }}
+              className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
+            >
+              <div
+                className={`h-full border-r border-b border-gray-300 px-2 flex items-center justify-between text-gray-500 font-mono cursor-pointer`}
+                style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#ead1dc' }}
+                onClick={(e) => handleRowNumberClick(e, rowId)}
+              >
+                <div
+                  draggable
+                  onDragStart={(e) => {
+                    e.stopPropagation();
+                    handleDragStart(e, rowId);
+                  }}
+                  onDragEnd={handleDragEnd}
+                  className="cursor-grab active:cursor-grabbing flex items-center"
+                  title="Drag to reorder"
+                >
+                  <GripVertical size={gripIconSize} className="text-gray-400 hover:text-gray-600" />
+                </div>
+                <span>{row.index + 1}</span>
+                <div style={{ width: `${gripIconSize}px` }} />
+              </div>
+            </td>
+          );
+        }
+
+        // For fixed columns
+        if (['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].includes(columnId)) {
+          // Columns that need filter buttons: B (status), C (task), D (col_f), G (col_g)
+          const hasFilter = ['status', 'task', 'col_f', 'col_g'].includes(columnId);
+
+          return (
+            <td
+              key={cell.id}
+              style={{
+                width: `${cell.column.getSize()}px`,
+                flexShrink: 0,
+                flexGrow: 0,
+                height: `${rowHeight}px`,
+                boxSizing: 'border-box',
+              }}
+              className="p-0"
+            >
+              <div
+                className="h-full border-r border-b border-gray-300 flex items-center justify-center"
+                style={{ minHeight: `${rowHeight}px`, backgroundColor: '#ead1dc' }}
+              >
+                {hasFilter && (
+                  <ListFilter size={14} className="text-gray-400" />
+                )}
+              </div>
+            </td>
+          );
+        }
+
+        // For day columns, show filter button (right-aligned) and 0.00 value
+        const value = row.original[columnId] || '';
+        return (
+          <td
+            key={cell.id}
+            style={{
+              width: `${cell.column.getSize()}px`,
+              flexShrink: 0,
+              flexGrow: 0,
+              height: `${rowHeight}px`,
+              boxSizing: 'border-box',
+            }}
+            className="p-0"
+          >
+            <div
+              className="h-full border-r border-b border-gray-300 flex items-center justify-between"
+              style={{ minHeight: `${rowHeight}px`, fontSize: `${cellFontSize}px`, paddingLeft: '2px', paddingRight: '2px', backgroundColor: '#ead1dc' }}
+            >
+              <span className="text-xs">{value}</span>
+              <ListFilter size={10} className="text-gray-400 flex-shrink-0 ml-1" />
+            </div>
+          </td>
+        );
+      })
       ) : (
         // Regular row rendering
         row.getVisibleCells().map(cell => {
