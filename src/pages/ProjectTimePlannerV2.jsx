@@ -285,6 +285,7 @@ function TableRow({
     transform: `translateY(${virtualRow.start}px)`,
     width: '100%',
     opacity: isDragging ? 0.5 : 1,
+    gap: 0,
   };
 
   // Check if this is a special row
@@ -340,7 +341,7 @@ function TableRow({
             className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
           >
             <div
-              className={`h-full border-r border-b border-gray-300 px-2 flex items-center justify-between font-mono cursor-pointer`}
+              className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-pointer`}
               style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#d9f6e0', color: '#065f46' }}
               onClick={(e) => handleRowNumberClick(e, rowId)}
             >
@@ -375,8 +376,15 @@ function TableRow({
               className="p-0"
             >
               <div
-                className="h-full border-r border-b border-gray-300 bg-gray-50"
-                style={{ minHeight: `${rowHeight}px` }}
+                className="h-full"
+                style={{
+                  minHeight: `${rowHeight}px`,
+                  backgroundColor: row.index < 4 ? 'black' : '#f9fafb',
+                  borderTop: row.index === 3 ? '1px solid white' : 'none',
+                  borderBottom: row.index === 2 ? '1px solid white' : (row.index < 4 ? 'none' : '1px solid #d3d3d3'),
+                  borderLeft: (row.index === 2 && colId === 'project') ? '1px solid white' : 'none',
+                  borderRight: (row.index === 2 && colId === 'col_h') ? '1px solid white' : (colId === 'col_h' ? '1.5px solid black' : (row.index < 4 ? 'none' : '1px solid #d3d3d3'))
+                }}
               />
             </td>
           ))}
@@ -390,8 +398,7 @@ function TableRow({
               totalWidth += table.getColumn(colId).getSize();
             }
 
-            // First month span gets left border, all get right border
-            const isFirstMonth = idx === 0;
+            // Last month span gets thicker right border
             const isLastMonth = idx === row.original._monthSpans.length - 1;
 
             return (
@@ -413,7 +420,6 @@ function TableRow({
                     minHeight: `${rowHeight}px`,
                     borderTop: '1.5px solid black',
                     borderBottom: '1px solid #d3d3d3',
-                    borderLeft: isFirstMonth ? '1.5px solid black' : undefined,
                     borderRight: isLastMonth ? '1.5px solid black' : '1px solid #d3d3d3'
                   }}
                 >
@@ -444,7 +450,7 @@ function TableRow({
             className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
           >
             <div
-              className={`h-full border-r border-b border-gray-300 px-2 flex items-center justify-between font-mono cursor-pointer`}
+              className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-pointer`}
               style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#d9f6e0', color: '#065f46' }}
               onClick={(e) => handleRowNumberClick(e, rowId)}
             >
@@ -479,8 +485,15 @@ function TableRow({
               className="p-0"
             >
               <div
-                className="h-full border-r border-b border-gray-300 bg-gray-50"
-                style={{ minHeight: `${rowHeight}px` }}
+                className="h-full"
+                style={{
+                  minHeight: `${rowHeight}px`,
+                  backgroundColor: row.index < 4 ? 'black' : '#f9fafb',
+                  borderTop: row.index === 3 ? '1px solid white' : 'none',
+                  borderBottom: row.index === 2 ? '1px solid white' : (row.index < 4 ? 'none' : '1px solid #d3d3d3'),
+                  borderLeft: (row.index === 2 && colId === 'project') ? '1px solid white' : 'none',
+                  borderRight: (row.index === 2 && colId === 'col_h') ? '1px solid white' : (colId === 'col_h' ? '1.5px solid black' : (row.index < 4 ? 'none' : '1px solid #d3d3d3'))
+                }}
               />
             </td>
           ))}
@@ -494,9 +507,7 @@ function TableRow({
               totalWidth += table.getColumn(colId).getSize();
             }
 
-            // Determine if this is the first/last week span
-            const isFirstWeek = idx === 0;
-            const isLastWeek = idx === row.original._weekSpans.length - 1;
+            // All week spans get thicker right borders
 
             return (
               <td
@@ -517,8 +528,7 @@ function TableRow({
                     minHeight: `${rowHeight}px`,
                     borderTop: '1.5px solid black',
                     borderBottom: '1px solid #d3d3d3',
-                    borderLeft: isFirstWeek ? '1.5px solid black' : undefined,
-                    borderRight: isLastWeek ? '1.5px solid black' : '1.5px solid black'
+                    borderRight: '1.5px solid black'
                   }}
                 >
                   {span.label}
@@ -553,7 +563,7 @@ function TableRow({
               className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
             >
               <div
-                className={`h-full border-r border-b border-gray-300 px-2 flex items-center justify-between font-mono cursor-pointer`}
+                className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-pointer`}
                 style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#d9f6e0', color: '#065f46' }}
                 onClick={(e) => handleRowNumberClick(e, rowId)}
               >
@@ -591,8 +601,14 @@ function TableRow({
               className="p-0"
             >
               <div
-                className="h-full border-r border-b border-gray-300 bg-gray-50"
-                style={{ minHeight: `${rowHeight}px` }}
+                className="h-full"
+                style={{
+                  minHeight: `${rowHeight}px`,
+                  backgroundColor: row.index < 4 ? 'black' : '#f9fafb',
+                  borderBottom: row.index < 4 ? '1px solid black' : '1px solid #d3d3d3',
+                  borderLeft: (row.index < 4 && columnId === 'project') ? '1px solid black' : 'none',
+                  borderRight: columnId === 'col_h' ? '1.5px solid black' : (row.index < 4 ? 'none' : '1px solid #d3d3d3')
+                }}
               />
             </td>
           );
@@ -607,8 +623,6 @@ function TableRow({
 
         // Check if this is the last day of a week (every 7th day: day 6, 13, 20, etc.)
         const isLastDayOfWeek = (dayIndex + 1) % 7 === 0;
-        // Check if this is the first day column (day-0 = column I)
-        const isFirstDayColumn = dayIndex === 0;
 
         // Different background colors based on row type and whether it's a weekend
         let bgColor;
@@ -641,7 +655,6 @@ function TableRow({
                 backgroundColor: bgColor,
                 borderTop: isDayRow ? '1.5px solid black' : (isDayOfWeekRow ? '1.5px solid black' : undefined),
                 borderBottom: isDayOfWeekRow ? '1.5px solid black' : '1px solid #d3d3d3',
-                borderLeft: isFirstDayColumn ? '1.5px solid black' : undefined,
                 borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3'
               }}
             >
@@ -679,7 +692,7 @@ function TableRow({
               className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
             >
               <div
-                className={`h-full border-r border-b border-gray-300 px-2 flex items-center justify-between font-mono cursor-pointer`}
+                className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-pointer`}
                 style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#d9f6e0', color: '#065f46' }}
                 onClick={(e) => handleRowNumberClick(e, rowId)}
               >
@@ -717,8 +730,14 @@ function TableRow({
               className="p-0"
             >
               <div
-                className="h-full border-r border-b border-gray-300"
-                style={{ minHeight: `${rowHeight}px`, backgroundColor: bgColor }}
+                className="h-full"
+                style={{
+                  minHeight: `${rowHeight}px`,
+                  backgroundColor: row.index < 4 ? 'black' : bgColor,
+                  borderBottom: row.index < 4 ? '1px solid black' : '1px solid #d3d3d3',
+                  borderLeft: (row.index < 4 && columnId === 'project') ? '1px solid black' : 'none',
+                  borderRight: columnId === 'col_h' ? '1.5px solid black' : (row.index < 4 ? 'none' : '1px solid #d3d3d3')
+                }}
               />
             </td>
           );
@@ -728,7 +747,6 @@ function TableRow({
         // Extract day index and check if it's the last day of a week (every 7th day)
         const dayIndex = parseInt(columnId.split('-')[1]);
         const isLastDayOfWeek = (dayIndex + 1) % 7 === 0;
-        const isFirstDayColumn = dayIndex === 0;
 
         return (
           <td
@@ -749,7 +767,6 @@ function TableRow({
                 backgroundColor: bgColor,
                 fontSize: '10px',
                 borderBottom: '1px solid #d3d3d3',
-                borderLeft: isFirstDayColumn ? '1.5px solid black' : undefined,
                 borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3'
               }}
             >
@@ -783,7 +800,7 @@ function TableRow({
               className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
             >
               <div
-                className={`h-full border-r border-b border-gray-300 px-2 flex items-center justify-between font-mono cursor-pointer`}
+                className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-pointer`}
                 style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#d9f6e0', color: '#065f46' }}
                 onClick={(e) => handleRowNumberClick(e, rowId)}
               >
@@ -824,8 +841,14 @@ function TableRow({
               className="p-0"
             >
               <div
-                className="h-full border-r border-b border-gray-300 flex items-center justify-center"
-                style={{ minHeight: `${rowHeight}px`, backgroundColor: '#ead1dc' }}
+                className="h-full flex items-center justify-center"
+                style={{
+                  minHeight: `${rowHeight}px`,
+                  backgroundColor: row.index < 4 ? 'black' : '#ead1dc',
+                  borderBottom: row.index < 4 ? '1px solid black' : '1px solid #d3d3d3',
+                  borderLeft: (row.index < 4 && columnId === 'project') ? '1px solid black' : 'none',
+                  borderRight: columnId === 'col_h' ? '1.5px solid black' : (row.index < 4 ? 'none' : '1px solid #d3d3d3')
+                }}
               >
                 {hasFilter && (
                   <ListFilter size={14} className="text-gray-400" />
@@ -839,7 +862,6 @@ function TableRow({
         const value = row.original[columnId] || '';
         const dayIndex = parseInt(columnId.split('-')[1]);
         const isLastDayOfWeek = (dayIndex + 1) % 7 === 0;
-        const isFirstDayColumn = dayIndex === 0;
 
         return (
           <td
@@ -856,13 +878,10 @@ function TableRow({
             <div
               className="h-full flex items-center gap-1"
               style={{
-                paddingLeft: '2.5px',
-                paddingRight: '2px',
                 minHeight: `${rowHeight}px`,
                 fontSize: `${cellFontSize}px`,
                 backgroundColor: '#ead1dc',
                 borderBottom: '1px solid #d3d3d3',
-                borderLeft: isFirstDayColumn ? '1.5px solid black' : undefined,
                 borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3'
               }}
             >
@@ -903,7 +922,7 @@ function TableRow({
               className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
             >
               <div
-                className={`h-full border-r border-b border-gray-300 px-2 flex items-center justify-between font-mono cursor-pointer`}
+                className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-pointer`}
                 style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#d9f6e0', color: '#065f46' }}
                 onClick={(e) => handleRowNumberClick(e, rowId)}
               >
@@ -928,22 +947,20 @@ function TableRow({
 
         // Check if this is a day column to apply week border
         const isDayColumn = columnId.startsWith('day-');
-        let borderLeftStyle = undefined;
         let borderRightStyle = undefined;
 
         if (isDayColumn) {
           const dayIndex = parseInt(columnId.split('-')[1]);
           const isLastDayOfWeek = (dayIndex + 1) % 7 === 0;
-          const isFirstDayColumn = dayIndex === 0;
 
-          if (isFirstDayColumn) {
-            borderLeftStyle = '1.5px solid black';
-          }
           if (isLastDayOfWeek) {
             borderRightStyle = '1.5px solid black';
           } else {
             borderRightStyle = '1px solid #d3d3d3';
           }
+        } else if (columnId === 'col_h') {
+          // Thick border after col_h (last fixed column before day columns)
+          borderRightStyle = '1.5px solid black';
         } else {
           borderRightStyle = '1px solid #d3d3d3';
         }
@@ -969,12 +986,9 @@ function TableRow({
                 isSelected && !isEditing ? 'ring-2 ring-inset ring-blue-500 bg-blue-50' : ''
               }`}
               style={{
-                paddingLeft: '3px',
-                paddingRight: '3px',
                 fontSize: `${cellFontSize}px`,
                 minHeight: `${rowHeight}px`,
                 borderBottom: '1px solid #d3d3d3',
-                borderLeft: borderLeftStyle,
                 borderRight: borderRightStyle
               }}
               onMouseDown={(e) => handleCellMouseDown(e, rowId, columnId)}
@@ -2360,10 +2374,10 @@ export default function ProjectTimePlannerV2() {
         className="flex-1 overflow-auto border border-gray-300 bg-white"
         style={{ position: 'relative' }}
       >
-        <table className="border-collapse" style={{ display: 'grid' }}>
+        <table className="border-collapse" style={{ display: 'grid', borderSpacing: 0 }}>
           <thead className="sticky top-0 bg-gray-100 z-10" style={{ display: 'grid', position: 'sticky', top: 0, zIndex: 1 }}>
             {timelineHeaderRows.map((headerRow) => (
-              <tr key={headerRow.id} style={{ display: 'flex', height: `${rowHeight}px` }}>
+              <tr key={headerRow.id} style={{ display: 'flex', height: `${rowHeight}px`, gap: 0 }}>
                 {headerRow.cells.map((cell) => {
                   const column = table.getColumn(cell.columnKey);
                   const cellWidth = column ? column.getSize() : 60;
@@ -2385,8 +2399,14 @@ export default function ProjectTimePlannerV2() {
                         backgroundColor: '#d9f6e0',
                         color: '#065f46',
                         zIndex: isPinned ? 20 : 1,
+                        borderRight: '1px solid #d1d5db',
+                        borderBottom: '1px solid #d1d5db',
+                        paddingTop: '0.25rem',
+                        paddingBottom: '0.25rem',
+                        textAlign: 'center',
+                        fontWeight: 600,
                       }}
-                      className="border border-gray-300 px-2 py-1 text-center font-semibold"
+                      className=""
                     >
                       {cell.content}
 
