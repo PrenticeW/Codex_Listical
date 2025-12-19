@@ -54,6 +54,9 @@ export default function ProjectTimePlannerV2() {
   const [redoStack, setRedoStack] = useState([]); // Array of commands
   const maxHistorySize = 100; // Limit history to prevent memory issues
 
+  // All column IDs in order (used throughout the component)
+  const allColumnIds = useMemo(() => ['colA', 'colB', 'colC', 'colD', 'colE', 'colF', 'colG', 'colH', 'colI', 'colJ', 'colK', 'colL'], []);
+
   // Helper to create cell key
   const getCellKey = (rowId, columnId) => `${rowId}|${columnId}`;
 
@@ -133,8 +136,6 @@ export default function ProjectTimePlannerV2() {
   const getCellRange = useCallback((startCell, endCell) => {
     if (!startCell || !endCell) return new Set();
 
-    const allColumnIds = ['colA', 'colB', 'colC', 'colD', 'colE', 'colF', 'colG', 'colH', 'colI', 'colJ', 'colK', 'colL'];
-
     // Get row indices
     const startRowIndex = data.findIndex(r => r.id === startCell.rowId);
     const endRowIndex = data.findIndex(r => r.id === endCell.rowId);
@@ -164,7 +165,7 @@ export default function ProjectTimePlannerV2() {
     }
 
     return range;
-  }, [data]);
+  }, [data, allColumnIds]);
 
   // Edit handlers
   const handleEditComplete = useCallback((rowId, columnId) => {
@@ -317,10 +318,27 @@ export default function ProjectTimePlannerV2() {
   // Copy/Paste functionality
   const handleCopy = useCallback((e) => {
     if (editingCell) return; // Don't copy while editing
-    if (selectedCells.size === 0) return;
+    if (selectedCells.size === 0 && selectedRows.size === 0) return;
 
     e.preventDefault();
 
+    // ROW COPY MODE: If rows are selected, copy entire rows
+    if (selectedRows.size > 0) {
+      // Get selected rows in order
+      const selectedRowIds = Array.from(selectedRows);
+      const rowsInOrder = data.filter(row => selectedRowIds.includes(row.id));
+
+      // Convert each row to TSV
+      const tsvData = rowsInOrder.map(row => {
+        return allColumnIds.map(colId => row[colId] || '').join('\t');
+      }).join('\n');
+
+      // Copy to clipboard
+      navigator.clipboard.writeText(tsvData);
+      return;
+    }
+
+    // CELL COPY MODE: Copy selected cells
     // Get all selected cells and organize by row/column
     const cellsByRow = new Map();
 
@@ -346,11 +364,11 @@ export default function ProjectTimePlannerV2() {
 
     // Copy to clipboard
     navigator.clipboard.writeText(tsvData);
-  }, [selectedCells, data, editingCell]);
+  }, [selectedCells, selectedRows, data, editingCell, allColumnIds]);
 
   const handlePaste = useCallback((e) => {
     if (editingCell) return; // Don't paste while editing
-    if (selectedCells.size === 0) return;
+    if (selectedCells.size === 0 && selectedRows.size === 0) return;
 
     e.preventDefault();
 
@@ -358,6 +376,95 @@ export default function ProjectTimePlannerV2() {
     const pastedText = e.clipboardData.getData('text');
     if (!pastedText) return;
 
+    // ROW PASTE MODE: If rows are selected, paste into entire rows
+    if (selectedRows.size > 0) {
+      // Parse TSV data
+      const pastedRows = pastedText.split('\n').map(row => row.split('\t'));
+
+      // Get selected rows in order (by their index in data array)
+      const selectedRowIds = Array.from(selectedRows);
+      const selectedRowIndices = selectedRowIds
+        .map(rowId => data.findIndex(r => r.id === rowId))
+        .filter(idx => idx !== -1)
+        .sort((a, b) => a - b);
+
+      if (selectedRowIndices.length === 0) return;
+
+      // Store old values for undo
+      const oldValues = new Map(); // Map<rowId, Map<columnId, value>>
+
+      // Calculate how many rows to paste
+      const targetRowIndex = selectedRowIndices[0]; // Start pasting at first selected row
+      const rowsToPaste = Math.min(pastedRows.length, data.length - targetRowIndex);
+
+      for (let i = 0; i < rowsToPaste; i++) {
+        const dataRowIndex = targetRowIndex + i;
+        const rowId = data[dataRowIndex].id;
+        const pastedRowValues = pastedRows[i];
+
+        const rowOldValues = new Map();
+        pastedRowValues.forEach((value, colIndex) => {
+          if (colIndex < allColumnIds.length) {
+            const columnId = allColumnIds[colIndex];
+            rowOldValues.set(columnId, data[dataRowIndex][columnId] || '');
+          }
+        });
+
+        if (rowOldValues.size > 0) {
+          oldValues.set(rowId, rowOldValues);
+        }
+      }
+
+      // Create command for row paste operation
+      const command = {
+        execute: () => {
+          setData(prev => {
+            const newData = [...prev];
+
+            for (let i = 0; i < rowsToPaste; i++) {
+              const dataRowIndex = targetRowIndex + i;
+              const pastedRowValues = pastedRows[i];
+
+              const rowUpdates = {};
+              pastedRowValues.forEach((value, colIndex) => {
+                if (colIndex < allColumnIds.length) {
+                  const columnId = allColumnIds[colIndex];
+                  rowUpdates[columnId] = value;
+                }
+              });
+
+              newData[dataRowIndex] = { ...newData[dataRowIndex], ...rowUpdates };
+            }
+
+            return newData;
+          });
+        },
+        undo: () => {
+          setData(prev => {
+            const newData = [...prev];
+
+            oldValues.forEach((rowOldValues, rowId) => {
+              const rowIndex = newData.findIndex(r => r.id === rowId);
+              if (rowIndex === -1) return;
+
+              const rowUpdates = {};
+              rowOldValues.forEach((value, columnId) => {
+                rowUpdates[columnId] = value;
+              });
+
+              newData[rowIndex] = { ...newData[rowIndex], ...rowUpdates };
+            });
+
+            return newData;
+          });
+        },
+      };
+
+      executeCommand(command);
+      return;
+    }
+
+    // CELL PASTE MODE: Continue with existing cell paste logic
     // Check if it's a single cell value (no tabs or newlines)
     const isSingleCell = !pastedText.includes('\t') && !pastedText.includes('\n');
 
@@ -435,8 +542,7 @@ export default function ProjectTimePlannerV2() {
     // Find the anchor row index and column index
     const anchorRowIndex = data.findIndex(r => r.id === anchorRowId);
 
-    // Get all column IDs (excluding rowNum) in order
-    const allColumnIds = ['colA', 'colB', 'colC', 'colD', 'colE', 'colF', 'colG', 'colH', 'colI', 'colJ', 'colK', 'colL'];
+    // Get column index from allColumnIds
     const anchorColIndex = allColumnIds.indexOf(anchorColumnId);
 
     if (anchorRowIndex === -1 || anchorColIndex === -1) return;
@@ -511,7 +617,7 @@ export default function ProjectTimePlannerV2() {
     };
 
     executeCommand(command);
-  }, [selectedCells, data, editingCell, executeCommand]);
+  }, [selectedCells, selectedRows, data, editingCell, executeCommand, allColumnIds]);
 
   // Handle global mouse up to end drag selection
   useEffect(() => {
@@ -905,7 +1011,7 @@ export default function ProjectTimePlannerV2() {
           </span>
         </div>
         <div className="text-gray-500 mt-1">
-          Try: Click row # to select row • Click cell to select • Drag to select range • Shift+Click for range • Cmd/Ctrl+Click for multi • Double-click to edit • Delete to clear • Cmd/Ctrl+C to copy • Cmd/Ctrl+V to paste • Cmd/Ctrl+Z to undo • Cmd/Ctrl+Shift+Z to redo
+          Try: Click row # to select row • Click cell to select • Drag to select range • Shift+Click for range • Cmd/Ctrl+Click for multi • Double-click to edit • Delete to clear • Cmd/Ctrl+C to copy (cells or entire rows) • Cmd/Ctrl+V to paste • Cmd/Ctrl+Z to undo • Cmd/Ctrl+Shift+Z to redo
         </div>
       </div>
     </div>
