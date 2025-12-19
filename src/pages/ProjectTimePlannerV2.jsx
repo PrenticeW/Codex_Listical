@@ -5,6 +5,7 @@ import {
   flexRender,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { GripVertical } from 'lucide-react';
 
 /**
  * Google Sheets-like Spreadsheet using TanStack Table v8
@@ -23,7 +24,6 @@ const createInitialData = (rowCount = 1000) => {
   return Array.from({ length: rowCount }, (_, rowIndex) => {
     const row = {
       id: `row-${rowIndex}`,
-      rowNum: rowIndex + 1,
     };
 
     // Add 12 editable columns (A-L)
@@ -36,6 +36,157 @@ const createInitialData = (rowCount = 1000) => {
   });
 };
 
+// Row Component
+function TableRow({
+  row,
+  virtualRow,
+  isRowSelected,
+  isCellSelected,
+  editingCell,
+  editValue,
+  setEditValue,
+  handleRowNumberClick,
+  handleCellMouseDown,
+  handleCellMouseEnter,
+  handleCellDoubleClick,
+  handleEditComplete,
+  handleEditKeyDown,
+  draggedRowId,
+  dropTargetRowId,
+  handleDragStart,
+  handleDragOver,
+  handleDrop,
+  handleDragEnd,
+}) {
+  const rowId = row.original.id;
+  const isDragging = draggedRowId === rowId;
+  const isDropTarget = dropTargetRowId === rowId;
+
+  const style = {
+    display: 'flex',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    transform: `translateY(${virtualRow.start}px)`,
+    width: '100%',
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <>
+      {isDropTarget && draggedRowId && draggedRowId !== rowId && (
+        <div
+          style={{
+            position: 'absolute',
+            top: virtualRow.start - 1,
+            left: 0,
+            width: '100%',
+            height: '2px',
+            backgroundColor: '#3b82f6',
+            zIndex: 1000,
+            pointerEvents: 'none',
+          }}
+        />
+      )}
+      <tr
+        style={style}
+        className={isRowSelected || isDragging ? 'selected-row' : ''}
+        onDragOver={(e) => handleDragOver(e, rowId)}
+        onDrop={(e) => handleDrop(e, rowId)}
+      >
+      {row.getVisibleCells().map(cell => {
+        const columnId = cell.column.id;
+        const value = row.original[columnId] || '';
+        const isSelected = isCellSelected(rowId, columnId);
+        const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === columnId;
+
+        // Special handling for row number column
+        if (columnId === 'rowNum') {
+          return (
+            <td
+              key={cell.id}
+              style={{
+                width: `${cell.column.getSize()}px`,
+                flexShrink: 0,
+                flexGrow: 0,
+                height: '32px',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                MozUserSelect: 'none',
+                msUserSelect: 'none',
+                boxSizing: 'border-box',
+              }}
+              className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
+            >
+              <div
+                className={`h-full border-t border-r border-b border-gray-300 px-2 py-1 min-h-[32px] bg-gray-50 flex items-center justify-between text-gray-500 font-mono text-xs cursor-pointer`}
+                onClick={(e) => handleRowNumberClick(e, rowId)}
+              >
+                <div
+                  draggable
+                  onDragStart={(e) => {
+                    e.stopPropagation();
+                    handleDragStart(e, rowId);
+                  }}
+                  onDragEnd={handleDragEnd}
+                  className="cursor-grab active:cursor-grabbing flex items-center"
+                  title="Drag to reorder"
+                >
+                  <GripVertical size={14} className="text-gray-400 hover:text-gray-600" />
+                </div>
+                <span>{row.index + 1}</span>
+                <div style={{ width: '14px' }} />
+              </div>
+            </td>
+          );
+        }
+
+        return (
+          <td
+            key={cell.id}
+            style={{
+              width: `${cell.column.getSize()}px`,
+              flexShrink: 0,
+              flexGrow: 0,
+              height: '32px',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              MozUserSelect: 'none',
+              msUserSelect: 'none',
+              boxSizing: 'border-box',
+            }}
+            className="p-0"
+          >
+            <div
+              className={`h-full border-t border-r border-b border-gray-300 px-2 py-1 cursor-cell min-h-[32px] ${
+                isSelected && !isEditing ? 'ring-2 ring-inset ring-blue-500 bg-blue-50' : ''
+              }`}
+              onMouseDown={(e) => handleCellMouseDown(e, rowId, columnId)}
+              onMouseEnter={() => handleCellMouseEnter({}, rowId, columnId)}
+              onDoubleClick={() => handleCellDoubleClick(rowId, columnId, value)}
+            >
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={() => handleEditComplete(rowId, columnId)}
+                  onKeyDown={(e) => handleEditKeyDown(e, rowId, columnId)}
+                  autoFocus
+                  className="w-full h-full border-none outline-none bg-transparent text-sm"
+                />
+              ) : (
+                <div className="text-sm min-h-[20px]">{value || '\u00A0'}</div>
+              )}
+            </div>
+          </td>
+        );
+      })}
+    </tr>
+    </>
+  );
+}
+
 export default function ProjectTimePlannerV2() {
   const [data, setData] = useState(() => createInitialData(1000));
   const [selectedCells, setSelectedCells] = useState(new Set()); // Set of "rowId|columnId"
@@ -47,6 +198,8 @@ export default function ProjectTimePlannerV2() {
   const [columnSizing, setColumnSizing] = useState({}); // Track column sizes
   const [isDragging, setIsDragging] = useState(false); // Track if user is dragging to select
   const [dragStartCell, setDragStartCell] = useState(null); // { rowId, columnId }
+  const [draggedRowId, setDraggedRowId] = useState(null); // Track which row is being dragged
+  const [dropTargetRowId, setDropTargetRowId] = useState(null); // Track drop target
   const tableBodyRef = useRef(null);
 
   // Undo/Redo state
@@ -108,6 +261,73 @@ export default function ProjectTimePlannerV2() {
       return newStack;
     });
   }, [redoStack, undoStack, maxHistorySize]);
+
+  // Drag and drop handlers
+  const handleDragStart = useCallback((e, rowId) => {
+    setDraggedRowId(rowId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', rowId);
+  }, []);
+
+  const handleDragOver = useCallback((e, rowId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+
+    if (draggedRowId && draggedRowId !== rowId) {
+      setDropTargetRowId(rowId);
+    }
+  }, [draggedRowId]);
+
+  const handleDrop = useCallback((e, targetRowId) => {
+    e.preventDefault();
+
+    if (!draggedRowId || draggedRowId === targetRowId) {
+      setDraggedRowId(null);
+      setDropTargetRowId(null);
+      return;
+    }
+
+    // Find indices
+    const oldIndex = data.findIndex(r => r.id === draggedRowId);
+    const newIndex = data.findIndex(r => r.id === targetRowId);
+
+    if (oldIndex === -1 || newIndex === -1) {
+      setDraggedRowId(null);
+      setDropTargetRowId(null);
+      return;
+    }
+
+    // Create reorder command
+    const reorderCommand = {
+      execute: () => {
+        setData(prevData => {
+          const newData = [...prevData];
+          const [movedRow] = newData.splice(oldIndex, 1);
+          newData.splice(newIndex, 0, movedRow);
+          return newData;
+        });
+      },
+      undo: () => {
+        setData(prevData => {
+          const newData = [...prevData];
+          const [movedRow] = newData.splice(newIndex, 1);
+          newData.splice(oldIndex, 0, movedRow);
+          return newData;
+        });
+      }
+    };
+
+    executeCommand(reorderCommand);
+
+    // Clear drag state
+    setDraggedRowId(null);
+    setDropTargetRowId(null);
+  }, [draggedRowId, data, executeCommand]);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedRowId(null);
+    setDropTargetRowId(null);
+  }, []);
 
   // Helper to check if cell is selected
   const isCellSelected = useCallback((rowId, columnId) => {
@@ -877,12 +1097,11 @@ export default function ProjectTimePlannerV2() {
       {
         id: 'rowNum',
         header: '#',
-        accessorKey: 'rowNum',
         size: 50,
         enableResizing: false,
-        cell: ({ getValue }) => (
+        cell: ({ row }) => (
           <div className="h-full flex items-center justify-center text-gray-500 font-mono text-xs bg-gray-50">
-            {getValue()}
+            {row.index + 1}
           </div>
         ),
       },
@@ -1025,93 +1244,28 @@ export default function ProjectTimePlannerV2() {
               const isRowSelected = selectedRows.has(rowId);
 
               return (
-                <tr
-                  key={row.id}
-                  className={isRowSelected ? 'selected-row' : ''}
-                  style={{
-                    display: 'flex',
-                    position: 'absolute',
-                    transform: `translateY(${virtualRow.start}px)`,
-                    width: '100%',
-                  }}
-                >
-                  {row.getVisibleCells().map(cell => {
-                    const columnId = cell.column.id;
-                    const value = row.original[columnId] || '';
-
-                    const isSelected = isCellSelected(rowId, columnId);
-                    const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === columnId;
-
-                    // Special handling for row number column
-                    if (columnId === 'rowNum') {
-                      return (
-                        <td
-                          key={cell.id}
-                          style={{
-                            width: `${cell.column.getSize()}px`,
-                            flexShrink: 0,
-                            flexGrow: 0,
-                            height: '32px',
-                            userSelect: 'none',
-                            WebkitUserSelect: 'none',
-                            MozUserSelect: 'none',
-                            msUserSelect: 'none',
-                            boxSizing: 'border-box',
-                          }}
-                          className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
-                        >
-                          <div
-                            className={`h-full border-r border-b border-gray-300 px-2 py-1 min-h-[32px] bg-gray-50 flex items-center justify-center text-gray-500 font-mono text-xs cursor-pointer`}
-                            onClick={(e) => handleRowNumberClick(e, rowId)}
-                          >
-                            {value}
-                          </div>
-                        </td>
-                      );
-                    }
-
-                    return (
-                      <td
-                        key={cell.id}
-                        style={{
-                          width: `${cell.column.getSize()}px`,
-                          flexShrink: 0,
-                          flexGrow: 0,
-                          height: '32px',
-                          userSelect: 'none', // Disable text selection
-                          WebkitUserSelect: 'none', // Safari
-                          MozUserSelect: 'none', // Firefox
-                          msUserSelect: 'none', // IE/Edge
-                          boxSizing: 'border-box',
-                        }}
-                        className="p-0"
-                      >
-                        <div
-                          className={`h-full border-r border-b border-gray-300 px-2 py-1 cursor-cell min-h-[32px] ${
-                            isSelected && !isEditing ? 'ring-2 ring-inset ring-blue-500 bg-blue-50' : ''
-                          }`}
-                          onMouseDown={(e) => handleCellMouseDown(e, rowId, columnId)}
-                          onMouseEnter={() => handleCellMouseEnter({}, rowId, columnId)}
-                          onDoubleClick={() => handleCellDoubleClick(rowId, columnId, value)}
-                        >
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onBlur={() => handleEditComplete(rowId, columnId)}
-                            onKeyDown={(e) => handleEditKeyDown(e, rowId, columnId)}
-                            autoFocus
-                            className="w-full h-full border-none outline-none bg-transparent text-sm"
-                          />
-                        ) : (
-                          <div className="text-sm min-h-[20px]">{value || '\u00A0'}</div>
-                        )}
-                      </div>
-                    </td>
-                  );
-                  })}
-                </tr>
+                <TableRow
+                  key={rowId}
+                  row={row}
+                  virtualRow={virtualRow}
+                  isRowSelected={isRowSelected}
+                  isCellSelected={isCellSelected}
+                  editingCell={editingCell}
+                  editValue={editValue}
+                  setEditValue={setEditValue}
+                  handleRowNumberClick={handleRowNumberClick}
+                  handleCellMouseDown={handleCellMouseDown}
+                  handleCellMouseEnter={handleCellMouseEnter}
+                  handleCellDoubleClick={handleCellDoubleClick}
+                  handleEditComplete={handleEditComplete}
+                  handleEditKeyDown={handleEditKeyDown}
+                  draggedRowId={draggedRowId}
+                  dropTargetRowId={dropTargetRowId}
+                  handleDragStart={handleDragStart}
+                  handleDragOver={handleDragOver}
+                  handleDrop={handleDrop}
+                  handleDragEnd={handleDragEnd}
+                />
               );
             })}
           </tbody>
