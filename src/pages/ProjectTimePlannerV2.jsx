@@ -52,7 +52,7 @@ const createInitialData = (rowCount = 100, totalDays = 84, startDate) => {
   let spanStartDay = 0;
 
   dates.forEach((date, i) => {
-    const monthLabel = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    const monthLabel = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
     if (monthLabel !== currentMonth) {
       if (currentMonth !== null) {
@@ -133,7 +133,9 @@ const createInitialData = (rowCount = 100, totalDays = 84, startDate) => {
     _isDayRow: true, // Flag to identify this as a day row
   };
   dates.forEach((date, i) => {
-    dayRow[`day-${i}`] = date.getDate().toString();
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = date.toLocaleDateString('en-US', { month: 'short' });
+    dayRow[`day-${i}`] = `${day}-${month}`;
   });
   rows.push(dayRow);
 
@@ -388,6 +390,10 @@ function TableRow({
               totalWidth += table.getColumn(colId).getSize();
             }
 
+            // First month span gets left border, all get right border
+            const isFirstMonth = idx === 0;
+            const isLastMonth = idx === row.original._monthSpans.length - 1;
+
             return (
               <td
                 key={`month-span-${idx}`}
@@ -401,8 +407,15 @@ function TableRow({
                 className="p-0"
               >
                 <div
-                  className="h-full border-r border-b border-gray-300 bg-blue-50 flex items-center justify-center font-semibold text-gray-700"
-                  style={{ fontSize: `${cellFontSize}px`, minHeight: `${rowHeight}px` }}
+                  className="h-full bg-blue-50 flex items-center justify-center font-semibold text-gray-700"
+                  style={{
+                    fontSize: `${cellFontSize}px`,
+                    minHeight: `${rowHeight}px`,
+                    borderTop: '1.5px solid black',
+                    borderBottom: '1px solid #d3d3d3',
+                    borderLeft: isFirstMonth ? '1.5px solid black' : undefined,
+                    borderRight: isLastMonth ? '1.5px solid black' : '1px solid #d3d3d3'
+                  }}
                 >
                   {span.label}
                 </div>
@@ -481,6 +494,10 @@ function TableRow({
               totalWidth += table.getColumn(colId).getSize();
             }
 
+            // Determine if this is the first/last week span
+            const isFirstWeek = idx === 0;
+            const isLastWeek = idx === row.original._weekSpans.length - 1;
+
             return (
               <td
                 key={`week-span-${idx}`}
@@ -494,8 +511,15 @@ function TableRow({
                 className="p-0"
               >
                 <div
-                  className="h-full border-r border-b border-gray-300 bg-green-50 flex items-center justify-center font-semibold text-gray-700"
-                  style={{ fontSize: `${cellFontSize}px`, minHeight: `${rowHeight}px` }}
+                  className="h-full bg-green-50 flex items-center justify-center font-semibold text-gray-700"
+                  style={{
+                    fontSize: `${cellFontSize}px`,
+                    minHeight: `${rowHeight}px`,
+                    borderTop: '1.5px solid black',
+                    borderBottom: '1px solid #d3d3d3',
+                    borderLeft: isFirstWeek ? '1.5px solid black' : undefined,
+                    borderRight: isLastWeek ? '1.5px solid black' : '1.5px solid black'
+                  }}
                 >
                   {span.label}
                 </div>
@@ -581,6 +605,11 @@ function TableRow({
         const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
+        // Check if this is the last day of a week (every 7th day: day 6, 13, 20, etc.)
+        const isLastDayOfWeek = (dayIndex + 1) % 7 === 0;
+        // Check if this is the first day column (day-0 = column I)
+        const isFirstDayColumn = dayIndex === 0;
+
         // Different background colors based on row type and whether it's a weekend
         let bgColor;
         if (isDayOfWeekRow) {
@@ -590,14 +619,6 @@ function TableRow({
           // Day number row: transparent to show borders
           bgColor = 'transparent';
         }
-
-        // Add top border for day number row (row 3) to separate it from week row (row 2)
-        // Add top border for day of week row (row 4) to separate it from day number row (row 3)
-        const borderClasses = isDayRow
-          ? 'h-full border-t border-r border-b border-gray-300 flex items-center justify-center'
-          : isDayOfWeekRow
-          ? 'h-full border-t border-r border-b border-gray-300 flex items-center justify-center'
-          : 'h-full border-r border-b border-gray-300 flex items-center justify-center';
 
         // For day columns, center-align the content
         return (
@@ -613,11 +634,15 @@ function TableRow({
             className="p-0"
           >
             <div
-              className={borderClasses}
+              className="h-full flex items-center justify-center"
               style={{
                 minHeight: `${rowHeight}px`,
                 fontSize: `${cellFontSize}px`,
-                backgroundColor: bgColor
+                backgroundColor: bgColor,
+                borderTop: isDayRow ? '1.5px solid black' : (isDayOfWeekRow ? '1.5px solid black' : undefined),
+                borderBottom: isDayOfWeekRow ? '1.5px solid black' : '1px solid #d3d3d3',
+                borderLeft: isFirstDayColumn ? '1.5px solid black' : undefined,
+                borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3'
               }}
             >
               {value || '\u00A0'}
@@ -700,6 +725,11 @@ function TableRow({
         }
 
         // For day columns, show the value with special styling
+        // Extract day index and check if it's the last day of a week (every 7th day)
+        const dayIndex = parseInt(columnId.split('-')[1]);
+        const isLastDayOfWeek = (dayIndex + 1) % 7 === 0;
+        const isFirstDayColumn = dayIndex === 0;
+
         return (
           <td
             key={cell.id}
@@ -713,8 +743,15 @@ function TableRow({
             className="p-0"
           >
             <div
-              className="h-full border-r border-b border-gray-300 flex items-center justify-center italic text-xs"
-              style={{ minHeight: `${rowHeight}px`, backgroundColor: bgColor, fontSize: '10px' }}
+              className="h-full flex items-center justify-center italic text-xs"
+              style={{
+                minHeight: `${rowHeight}px`,
+                backgroundColor: bgColor,
+                fontSize: '10px',
+                borderBottom: '1px solid #d3d3d3',
+                borderLeft: isFirstDayColumn ? '1.5px solid black' : undefined,
+                borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3'
+              }}
             >
               {value || '\u00A0'}
             </div>
@@ -800,6 +837,10 @@ function TableRow({
 
         // For day columns, show filter button (right-aligned) and 0.00 value
         const value = row.original[columnId] || '';
+        const dayIndex = parseInt(columnId.split('-')[1]);
+        const isLastDayOfWeek = (dayIndex + 1) % 7 === 0;
+        const isFirstDayColumn = dayIndex === 0;
+
         return (
           <td
             key={cell.id}
@@ -813,8 +854,17 @@ function TableRow({
             className="p-0"
           >
             <div
-              className="h-full border-r border-b border-gray-300 flex items-center gap-1"
-              style={{ paddingLeft: '2.5px', paddingRight: '2px', minHeight: `${rowHeight}px`, fontSize: `${cellFontSize}px`, backgroundColor: '#ead1dc' }}
+              className="h-full flex items-center gap-1"
+              style={{
+                paddingLeft: '2.5px',
+                paddingRight: '2px',
+                minHeight: `${rowHeight}px`,
+                fontSize: `${cellFontSize}px`,
+                backgroundColor: '#ead1dc',
+                borderBottom: '1px solid #d3d3d3',
+                borderLeft: isFirstDayColumn ? '1.5px solid black' : undefined,
+                borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3'
+              }}
             >
               <span className="text-xs flex-1">{value}</span>
               <ListFilter size={10} className="text-gray-400 flex-shrink-0" />
@@ -876,6 +926,28 @@ function TableRow({
           );
         }
 
+        // Check if this is a day column to apply week border
+        const isDayColumn = columnId.startsWith('day-');
+        let borderLeftStyle = undefined;
+        let borderRightStyle = undefined;
+
+        if (isDayColumn) {
+          const dayIndex = parseInt(columnId.split('-')[1]);
+          const isLastDayOfWeek = (dayIndex + 1) % 7 === 0;
+          const isFirstDayColumn = dayIndex === 0;
+
+          if (isFirstDayColumn) {
+            borderLeftStyle = '1.5px solid black';
+          }
+          if (isLastDayOfWeek) {
+            borderRightStyle = '1.5px solid black';
+          } else {
+            borderRightStyle = '1px solid #d3d3d3';
+          }
+        } else {
+          borderRightStyle = '1px solid #d3d3d3';
+        }
+
         return (
           <td
             key={cell.id}
@@ -893,10 +965,18 @@ function TableRow({
             className="p-0"
           >
             <div
-              className={`h-full border-r border-b border-gray-300 cursor-cell flex items-center ${
+              className={`h-full cursor-cell flex items-center ${
                 isSelected && !isEditing ? 'ring-2 ring-inset ring-blue-500 bg-blue-50' : ''
               }`}
-              style={{ paddingLeft: '3px', paddingRight: '3px', fontSize: `${cellFontSize}px`, minHeight: `${rowHeight}px` }}
+              style={{
+                paddingLeft: '3px',
+                paddingRight: '3px',
+                fontSize: `${cellFontSize}px`,
+                minHeight: `${rowHeight}px`,
+                borderBottom: '1px solid #d3d3d3',
+                borderLeft: borderLeftStyle,
+                borderRight: borderRightStyle
+              }}
               onMouseDown={(e) => handleCellMouseDown(e, rowId, columnId)}
               onMouseEnter={() => handleCellMouseEnter({}, rowId, columnId)}
               onDoubleClick={() => handleCellDoubleClick(rowId, columnId, value)}
