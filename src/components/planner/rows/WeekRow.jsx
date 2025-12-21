@@ -5,7 +5,7 @@ import { GripVertical } from 'lucide-react';
  * WeekRow Component
  * Renders the second row of the table with merged week cells
  */
-const WeekRow = React.memo(function WeekRow({
+function WeekRow({
   row,
   rowId,
   isRowSelected,
@@ -122,6 +122,6 @@ const WeekRow = React.memo(function WeekRow({
       })}
     </>
   );
-});
+}
 
 export default WeekRow;

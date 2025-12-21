@@ -7,6 +7,8 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { GripVertical, ListFilter } from 'lucide-react';
 import usePlannerStorage from '../hooks/planner/usePlannerStorage';
+import usePlannerColumns from '../hooks/planner/usePlannerColumns';
+import useCommandPattern from '../hooks/planner/useCommandPattern';
 import { MonthRow, WeekRow } from '../components/planner/rows';
 
 /**
@@ -1015,10 +1017,8 @@ export default function ProjectTimePlannerV2() {
   const decreaseSize = () => setSizeScale(prev => Math.max(prev - 0.1, 0.5));
   const resetSize = () => setSizeScale(1.0);
 
-  // Undo/Redo state
-  const [undoStack, setUndoStack] = useState([]); // Array of commands
-  const [redoStack, setRedoStack] = useState([]); // Array of commands
-  const maxHistorySize = 100; // Limit history to prevent memory issues
+  // Command pattern for undo/redo
+  const { undoStack, redoStack, executeCommand, undo, redo } = useCommandPattern();
 
   // All column IDs in order (used throughout the component)
   // Fixed columns + extra columns (F, G, H) + day columns (starting from I)
@@ -1030,55 +1030,6 @@ export default function ProjectTimePlannerV2() {
 
   // Helper to create cell key
   const getCellKey = (rowId, columnId) => `${rowId}|${columnId}`;
-
-  // Command pattern for undo/redo
-  const executeCommand = useCallback((command) => {
-    // Execute the command
-    command.execute();
-
-    // Add to undo stack
-    setUndoStack(prev => {
-      const newStack = [...prev, command];
-      // Limit stack size
-      if (newStack.length > maxHistorySize) {
-        return newStack.slice(-maxHistorySize);
-      }
-      return newStack;
-    });
-
-    // Clear redo stack when new command is executed
-    setRedoStack([]);
-  }, [maxHistorySize]);
-
-  // Undo function
-  const undo = useCallback(() => {
-    if (undoStack.length === 0) return;
-
-    const command = undoStack[undoStack.length - 1];
-    command.undo();
-
-    // Move command from undo to redo stack
-    setUndoStack(prev => prev.slice(0, -1));
-    setRedoStack(prev => [...prev, command]);
-  }, [undoStack]);
-
-  // Redo function
-  const redo = useCallback(() => {
-    if (redoStack.length === 0) return;
-
-    const command = redoStack[redoStack.length - 1];
-    command.execute();
-
-    // Move command from redo to undo stack
-    setRedoStack(prev => prev.slice(0, -1));
-    setUndoStack(prev => {
-      const newStack = [...prev, command];
-      if (newStack.length > maxHistorySize) {
-        return newStack.slice(-maxHistorySize);
-      }
-      return newStack;
-    });
-  }, [redoStack, undoStack, maxHistorySize]);
 
   // Drag and drop handlers
   const handleDragStart = useCallback((e, rowId) => {
@@ -2030,94 +1981,7 @@ export default function ProjectTimePlannerV2() {
   }, [selectedCells, selectedRows, editingCell, handleCopy, handlePaste, undo, redo, data, executeCommand, allColumnIds, handleDeleteRows]);
 
   // Column definitions
-  const columns = useMemo(() => {
-    const cols = [
-      {
-        id: 'rowNum',
-        header: '#',
-        size: 36,
-        enableResizing: false,
-      },
-      {
-        id: 'project',
-        header: 'Project',
-        accessorKey: 'project',
-        size: 120,
-        minSize: 30,
-        enableResizing: true,
-      },
-      {
-        id: 'status',
-        header: 'Status',
-        accessorKey: 'status',
-        size: 120,
-        minSize: 30,
-        enableResizing: true,
-      },
-      {
-        id: 'task',
-        header: 'Task',
-        accessorKey: 'task',
-        size: 240,
-        minSize: 50,
-        enableResizing: true,
-      },
-      {
-        id: 'estimate',
-        header: 'Estimate',
-        accessorKey: 'estimate',
-        size: 100,
-        minSize: 30,
-        enableResizing: true,
-      },
-      {
-        id: 'timeValue',
-        header: 'Time',
-        accessorKey: 'timeValue',
-        size: 80,
-        minSize: 30,
-        enableResizing: true,
-      },
-      {
-        id: 'col_f',
-        header: 'F',
-        accessorKey: 'col_f',
-        size: 80,
-        minSize: 30,
-        enableResizing: true,
-      },
-      {
-        id: 'col_g',
-        header: 'G',
-        accessorKey: 'col_g',
-        size: 80,
-        minSize: 30,
-        enableResizing: true,
-      },
-      {
-        id: 'col_h',
-        header: 'H',
-        accessorKey: 'col_h',
-        size: 80,
-        minSize: 30,
-        enableResizing: true,
-      },
-    ];
-
-    // Add day columns (84 columns for 12 weeks) - starting from column I
-    for (let i = 0; i < totalDays; i++) {
-      cols.push({
-        id: `day-${i}`,
-        header: `Day ${i + 1}`,
-        accessorKey: `day-${i}`,
-        size: 60,
-        minSize: 40,
-        enableResizing: true,
-      });
-    }
-
-    return cols;
-  }, [totalDays]);
+  const columns = usePlannerColumns({ totalDays });
 
   const table = useReactTable({
     data,

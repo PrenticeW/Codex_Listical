@@ -5,7 +5,7 @@ import { GripVertical } from 'lucide-react';
  * MonthRow Component
  * Renders the first row of the table with merged month cells
  */
-const MonthRow = React.memo(function MonthRow({
+function MonthRow({
   row,
   rowId,
   isRowSelected,
@@ -125,6 +125,6 @@ const MonthRow = React.memo(function MonthRow({
       })}
     </>
   );
-});
+}
 
 export default MonthRow;
