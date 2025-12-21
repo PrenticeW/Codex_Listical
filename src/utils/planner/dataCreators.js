@@ -206,15 +206,16 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
   rows.push(filterRow);
 
   // Regular data rows (starting from row 8)
+  // Create just a few task rows for testing, leave rest as placeholder
   for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
     const row = {
       id: `row-${rowIndex}`,
-      type: 'task', // Row type for rendering
+      type: rowIndex < 5 ? 'task' : undefined, // Only first 5 rows are tasks for now
       project: '',
-      status: '',
+      status: rowIndex < 5 ? '-' : '', // Task rows get default status
       task: '',
-      estimate: '',
-      timeValue: '',
+      estimate: rowIndex < 5 ? '-' : '', // Task rows get default estimate
+      timeValue: rowIndex < 5 ? '0.00' : '', // Task rows get default time value
       col_f: '',
       col_g: '',
       col_h: '',
