@@ -20,16 +20,13 @@ function EditableCell({
     localValueRef.current = localValue;
   }, [localValue]);
 
-  // Sync with external changes (e.g., when editing starts)
-  useEffect(() => {
-    setLocalValue(initialValue);
-  }, [initialValue]);
-
   // Auto-focus when component mounts
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus();
-      inputRef.current.select();
+      // Position cursor at end instead of selecting all
+      const length = inputRef.current.value.length;
+      inputRef.current.setSelectionRange(length, length);
     }
   }, []);
 

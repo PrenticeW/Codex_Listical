@@ -1088,8 +1088,8 @@ export default function ProjectTimePlannerV2() {
           console.log('Arrow key pressed:', e.key, 'Current cell:', currentRowId, currentColumnId);
         }
 
-        // Start typing to edit (if alphanumeric)
-        if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
+        // Start typing to edit (if alphanumeric) - only if not already editing
+        if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !editingCell) {
           e.preventDefault();
           setEditingCell({ rowId: currentRowId, columnId: currentColumnId });
           setEditValue(e.key);
