@@ -1,6 +1,6 @@
 import React from 'react';
 import { GripVertical, ListFilter } from 'lucide-react';
-import { MonthRow, WeekRow, TaskRow } from './rows';
+import { MonthRow, WeekRow } from './rows';
 import EditableCell from './EditableCell';
 
 /**
@@ -34,7 +34,6 @@ export default function TableRow({
   gripIconSize,
   table,
   dates,
-  onUpdateRow, // New prop for updating row data
 }) {
   const rowId = row.original.id;
   const isDragging = Array.isArray(draggedRowId) && draggedRowId.includes(rowId);
@@ -535,34 +534,6 @@ export default function TableRow({
           </td>
         );
       })
-      ) : rowType === 'task' ? (
-        // Task row - use TaskRow component
-        <TaskRow
-          row={row}
-          virtualRow={virtualRow}
-          isRowSelected={isRowSelected}
-          isCellSelected={isCellSelected}
-          editingCell={editingCell}
-          editValue={editValue}
-          setEditValue={setEditValue}
-          handleRowNumberClick={handleRowNumberClick}
-          handleCellMouseDown={handleCellMouseDown}
-          handleCellMouseEnter={handleCellMouseEnter}
-          handleCellDoubleClick={handleCellDoubleClick}
-          handleEditComplete={handleEditComplete}
-          handleEditKeyDown={handleEditKeyDown}
-          draggedRowId={draggedRowId}
-          dropTargetRowId={dropTargetRowId}
-          handleDragStart={handleDragStart}
-          handleDragOver={handleDragOver}
-          handleDragEnd={handleDragEnd}
-          rowHeight={rowHeight}
-          cellFontSize={cellFontSize}
-          headerFontSize={headerFontSize}
-          gripIconSize={gripIconSize}
-          table={table}
-          onUpdateRow={onUpdateRow}
-        />
       ) : (
         // Fallback: Regular row rendering for rows without a type
         row.getVisibleCells().map(cell => {

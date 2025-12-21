@@ -36,7 +36,6 @@ function PlannerTable({
   selectedCells,
   undoStack,
   redoStack,
-  onUpdateRow,
 }) {
   return (
     <>
@@ -188,7 +187,6 @@ function PlannerTable({
                   gripIconSize={gripIconSize}
                   table={table}
                   dates={dates}
-                  onUpdateRow={onUpdateRow}
                 />
               );
             })}
@@ -243,7 +241,6 @@ function PlannerTable({
                   gripIconSize={gripIconSize}
                   table={table}
                   dates={dates}
-                  onUpdateRow={onUpdateRow}
                 />
               );
             })}

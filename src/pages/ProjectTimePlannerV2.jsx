@@ -149,35 +149,6 @@ export default function ProjectTimePlannerV2() {
   // Command pattern for undo/redo
   const { undoStack, redoStack, executeCommand, undo, redo } = useCommandPattern();
 
-  // Handle row data updates (for task rows)
-  const handleUpdateRow = useCallback((rowId, updates) => {
-    const oldValues = {};
-
-    // Get the old values before updating
-    const rowIndex = data.findIndex(r => r.id === rowId);
-    if (rowIndex === -1) return;
-
-    Object.keys(updates).forEach(key => {
-      oldValues[key] = data[rowIndex][key];
-    });
-
-    // Create command for row update
-    const command = {
-      execute: () => {
-        setData(prev => prev.map(row =>
-          row.id === rowId ? { ...row, ...updates } : row
-        ));
-      },
-      undo: () => {
-        setData(prev => prev.map(row =>
-          row.id === rowId ? { ...row, ...oldValues } : row
-        ));
-      },
-    };
-
-    executeCommand(command);
-  }, [data, executeCommand]);
-
   // All column IDs in order (used throughout the component)
   // Fixed columns + extra columns (F, G, H) + day columns (starting from I)
   const allColumnIds = useMemo(() => {
@@ -1223,7 +1194,6 @@ export default function ProjectTimePlannerV2() {
         selectedCells={selectedCells}
         undoStack={undoStack}
         redoStack={redoStack}
-        onUpdateRow={handleUpdateRow}
       />
     </div>
   );
