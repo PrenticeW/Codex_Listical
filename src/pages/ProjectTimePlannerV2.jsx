@@ -362,32 +362,29 @@ function TableRow({
             </div>
           </td>
 
-          {/* Fixed columns - empty for month row */}
-          {['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].map(colId => (
-            <td
-              key={colId}
+          {/* Merged cell for columns A-H */}
+          <td
+            key="merged-fixed-cols"
+            style={{
+              width: `${['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0)}px`,
+              flexShrink: 0,
+              flexGrow: 0,
+              height: `${rowHeight}px`,
+              boxSizing: 'border-box',
+            }}
+            className="p-0"
+          >
+            <div
+              className="h-full"
               style={{
-                width: `${table.getColumn(colId).getSize()}px`,
-                flexShrink: 0,
-                flexGrow: 0,
-                height: `${rowHeight}px`,
-                boxSizing: 'border-box',
+                minHeight: `${rowHeight}px`,
+                backgroundColor: 'black',
+                borderTop: '1.5px solid black',
+                borderBottom: '3px solid white',
+                borderRight: '1.5px solid black',
               }}
-              className="p-0"
-            >
-              <div
-                className="h-full"
-                style={{
-                  minHeight: `${rowHeight}px`,
-                  backgroundColor: row.index < 4 ? 'black' : '#f9fafb',
-                  borderTop: row.index === 3 ? '1px solid white' : 'none',
-                  borderBottom: row.index === 2 ? '1px solid white' : (row.index < 4 ? 'none' : '1px solid #d3d3d3'),
-                  borderLeft: (row.index === 2 && colId === 'project') ? '1px solid white' : 'none',
-                  borderRight: (row.index === 2 && colId === 'col_h') ? '1px solid white' : (colId === 'col_h' ? '1.5px solid black' : (row.index < 4 ? 'none' : '1px solid #d3d3d3'))
-                }}
-              />
-            </td>
-          ))}
+            />
+          </td>
 
           {/* Merged month cells */}
           {row.original._monthSpans.map((span, idx) => {
@@ -471,32 +468,29 @@ function TableRow({
             </div>
           </td>
 
-          {/* Fixed columns - empty for week row */}
-          {['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].map(colId => (
-            <td
-              key={colId}
+          {/* Merged cell for columns A-H */}
+          <td
+            key="merged-fixed-cols"
+            style={{
+              width: `${['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0)}px`,
+              flexShrink: 0,
+              flexGrow: 0,
+              height: `${rowHeight}px`,
+              boxSizing: 'border-box',
+            }}
+            className="p-0"
+          >
+            <div
+              className="h-full"
               style={{
-                width: `${table.getColumn(colId).getSize()}px`,
-                flexShrink: 0,
-                flexGrow: 0,
-                height: `${rowHeight}px`,
-                boxSizing: 'border-box',
+                minHeight: `${rowHeight}px`,
+                backgroundColor: 'black',
+                borderTop: '1.5px solid black',
+                borderBottom: '3px solid white',
+                borderRight: '1.5px solid black',
               }}
-              className="p-0"
-            >
-              <div
-                className="h-full"
-                style={{
-                  minHeight: `${rowHeight}px`,
-                  backgroundColor: row.index < 4 ? 'black' : '#f9fafb',
-                  borderTop: row.index === 3 ? '1px solid white' : 'none',
-                  borderBottom: row.index === 2 ? '1px solid white' : (row.index < 4 ? 'none' : '1px solid #d3d3d3'),
-                  borderLeft: (row.index === 2 && colId === 'project') ? '1px solid white' : 'none',
-                  borderRight: (row.index === 2 && colId === 'col_h') ? '1px solid white' : (colId === 'col_h' ? '1.5px solid black' : (row.index < 4 ? 'none' : '1px solid #d3d3d3'))
-                }}
-              />
-            </td>
-          ))}
+            />
+          </td>
 
           {/* Merged week cells */}
           {row.original._weekSpans.map((span, idx) => {
@@ -539,80 +533,132 @@ function TableRow({
         </>
       ) : isDayRow || isDayOfWeekRow ? (
         // Render day/day-of-week rows with centered calendar cells
-        row.getVisibleCells().map(cell => {
-        const columnId = cell.column.id;
-        const value = row.original[columnId] || '';
+        (() => {
+          let mergedCellRendered = false;
+          return row.getVisibleCells().map(cell => {
+            const columnId = cell.column.id;
+            const value = row.original[columnId] || '';
 
-        // Special handling for row number column
-        if (columnId === 'rowNum') {
-          return (
-            <td
-              key={cell.id}
-              style={{
-                width: `${cell.column.getSize()}px`,
-                flexShrink: 0,
-                flexGrow: 0,
-                height: `${rowHeight}px`,
-                userSelect: 'none',
-                boxSizing: 'border-box',
-                position: 'sticky',
-                left: 0,
-                backgroundColor: '#d9f6e0',
-                zIndex: rowNumZIndex,
-              }}
-              className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
-            >
-              <div
-                className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-pointer`}
-                style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#d9f6e0', color: '#065f46' }}
-                onClick={(e) => handleRowNumberClick(e, rowId)}
-              >
-                <div
-                  draggable
-                  onDragStart={(e) => {
-                    e.stopPropagation();
-                    handleDragStart(e, rowId);
+            // Special handling for row number column
+            if (columnId === 'rowNum') {
+              return (
+                <td
+                  key={cell.id}
+                  style={{
+                    width: `${cell.column.getSize()}px`,
+                    flexShrink: 0,
+                    flexGrow: 0,
+                    height: `${rowHeight}px`,
+                    userSelect: 'none',
+                    boxSizing: 'border-box',
+                    position: 'sticky',
+                    left: 0,
+                    backgroundColor: '#d9f6e0',
+                    zIndex: rowNumZIndex,
                   }}
-                  onDragEnd={handleDragEnd}
-                  className="cursor-grab active:cursor-grabbing flex items-center"
-                  title="Drag to reorder"
+                  className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
                 >
-                  <GripVertical size={gripIconSize} className="text-gray-400 hover:text-gray-600" />
-                </div>
-                <span>{row.index + 1}</span>
-                <div style={{ width: `${gripIconSize}px` }} />
-              </div>
-            </td>
-          );
-        }
+                  <div
+                    className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-pointer`}
+                    style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#d9f6e0', color: '#065f46' }}
+                    onClick={(e) => handleRowNumberClick(e, rowId)}
+                  >
+                    <div
+                      draggable
+                      onDragStart={(e) => {
+                        e.stopPropagation();
+                        handleDragStart(e, rowId);
+                      }}
+                      onDragEnd={handleDragEnd}
+                      className="cursor-grab active:cursor-grabbing flex items-center"
+                      title="Drag to reorder"
+                    >
+                      <GripVertical size={gripIconSize} className="text-gray-400 hover:text-gray-600" />
+                    </div>
+                    <span>{row.index + 1}</span>
+                    <div style={{ width: `${gripIconSize}px` }} />
+                  </div>
+                </td>
+              );
+            }
 
-        // For fixed columns, show empty cells
-        if (['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].includes(columnId)) {
-          return (
-            <td
-              key={cell.id}
-              style={{
-                width: `${cell.column.getSize()}px`,
-                flexShrink: 0,
-                flexGrow: 0,
-                height: `${rowHeight}px`,
-                boxSizing: 'border-box',
-              }}
-              className="p-0"
-            >
-              <div
-                className="h-full"
-                style={{
-                  minHeight: `${rowHeight}px`,
-                  backgroundColor: row.index < 4 ? 'black' : '#f9fafb',
-                  borderBottom: row.index < 4 ? '1px solid black' : '1px solid #d3d3d3',
-                  borderLeft: (row.index < 4 && columnId === 'project') ? '1px solid black' : 'none',
-                  borderRight: columnId === 'col_h' ? '1.5px solid black' : (row.index < 4 ? 'none' : '1px solid #d3d3d3')
-                }}
-              />
-            </td>
-          );
-        }
+            // For fixed columns, show empty cells
+            if (['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].includes(columnId)) {
+              // For day of week row (row 4), merge all fixed columns
+              if (isDayOfWeekRow && !mergedCellRendered) {
+                mergedCellRendered = true;
+                return (
+                  <td
+                    key="merged-fixed-cols"
+                    style={{
+                      width: `${['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0)}px`,
+                      flexShrink: 0,
+                      flexGrow: 0,
+                      height: `${rowHeight}px`,
+                      boxSizing: 'border-box',
+                    }}
+                    className="p-0"
+                  >
+                    <div
+                      className="h-full"
+                      style={{
+                        minHeight: `${rowHeight}px`,
+                        backgroundColor: 'black',
+                        borderTop: '3px solid white',
+                        borderBottom: '3px solid white',
+                        borderRight: '1.5px solid black',
+                      }}
+                    />
+                  </td>
+                );
+              } else if (isDayOfWeekRow) {
+                // Skip subsequent fixed columns for day of week row
+                return null;
+              }
+
+              // For day row (row 3), render individual cells with labels
+              const labelMap = {
+                'project': '\u00A0\u00A0✓',
+                'status': '\u00A0\u00A0Project',
+                'task': '\u00A0\u00A0Subproject',
+                'estimate': '\u00A0\u00A0Status',
+                'timeValue': '\u00A0\u00A0Task',
+                'col_f': '\u00A0\u00A0Recurring',
+                'col_g': '\u00A0\u00A0Estimate',
+                'col_h': '\u00A0\u00A0Time Value'
+              };
+
+              return (
+                <td
+                  key={cell.id}
+                  style={{
+                    width: `${cell.column.getSize()}px`,
+                    flexShrink: 0,
+                    flexGrow: 0,
+                    height: `${rowHeight}px`,
+                    boxSizing: 'border-box',
+                  }}
+                  className="p-0"
+                >
+                  <div
+                    className="h-full flex items-center"
+                    style={{
+                      minHeight: `${rowHeight}px`,
+                      backgroundColor: 'black',
+                      color: 'white',
+                      fontSize: `${cellFontSize}px`,
+                      fontWeight: 500,
+                      borderTop: '3px solid white',
+                      borderBottom: '3px solid white',
+                      borderLeft: (columnId === 'project') ? '1px solid black' : 'none',
+                      borderRight: columnId === 'col_h' ? '1.5px solid black' : 'none'
+                    }}
+                  >
+                    {labelMap[columnId] || ''}
+                  </div>
+                </td>
+              );
+            }
 
         // For day columns, determine if it's a weekend and apply appropriate background
         // Extract day index from columnId (e.g., "day-0" -> 0)
@@ -662,10 +708,13 @@ function TableRow({
             </div>
           </td>
         );
-      })
+      });
+    })()
       ) : isDailyMinRow || isDailyMaxRow ? (
         // Render daily min/max rows with special styling
-        row.getVisibleCells().map(cell => {
+        (() => {
+          let mergedCellRendered = false;
+          return row.getVisibleCells().map(cell => {
         const columnId = cell.column.id;
         const value = row.original[columnId] || '';
 
@@ -715,32 +764,38 @@ function TableRow({
           );
         }
 
-        // For fixed columns, show empty cells with background color
+        // For fixed columns A-H, merge them into a single black cell
         if (['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].includes(columnId)) {
-          return (
-            <td
-              key={cell.id}
-              style={{
-                width: `${cell.column.getSize()}px`,
-                flexShrink: 0,
-                flexGrow: 0,
-                height: `${rowHeight}px`,
-                boxSizing: 'border-box',
-              }}
-              className="p-0"
-            >
-              <div
-                className="h-full"
+          if (!mergedCellRendered) {
+            mergedCellRendered = true;
+            return (
+              <td
+                key="merged-fixed-cols"
                 style={{
-                  minHeight: `${rowHeight}px`,
-                  backgroundColor: row.index < 4 ? 'black' : bgColor,
-                  borderBottom: row.index < 4 ? '1px solid black' : '1px solid #d3d3d3',
-                  borderLeft: (row.index < 4 && columnId === 'project') ? '1px solid black' : 'none',
-                  borderRight: columnId === 'col_h' ? '1.5px solid black' : (row.index < 4 ? 'none' : '1px solid #d3d3d3')
+                  width: `${['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0)}px`,
+                  flexShrink: 0,
+                  flexGrow: 0,
+                  height: `${rowHeight}px`,
+                  boxSizing: 'border-box',
                 }}
-              />
-            </td>
-          );
+                className="p-0"
+              >
+                <div
+                  className="h-full"
+                  style={{
+                    minHeight: `${rowHeight}px`,
+                    backgroundColor: 'black',
+                    borderTop: '1px solid black',
+                    borderBottom: '1px solid black',
+                    borderRight: '1.5px solid black',
+                  }}
+                />
+              </td>
+            );
+          } else {
+            // Skip subsequent fixed columns since they're merged
+            return null;
+          }
         }
 
         // For day columns, show the value with special styling
@@ -774,7 +829,8 @@ function TableRow({
             </div>
           </td>
         );
-      })
+      });
+    })()
       ) : isFilterRow ? (
         // Render filter row with filter button placeholders
         row.getVisibleCells().map(cell => {
@@ -825,8 +881,8 @@ function TableRow({
 
         // For fixed columns
         if (['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].includes(columnId)) {
-          // Columns that need filter buttons: B (status), C (task), D (col_f), G (col_g)
-          const hasFilter = ['status', 'task', 'col_f', 'col_g'].includes(columnId);
+          // Columns that need filter buttons: B (status), C (task), D (estimate), F (col_f), G (col_g)
+          const hasFilter = ['status', 'task', 'estimate', 'col_f', 'col_g'].includes(columnId);
 
           return (
             <td
