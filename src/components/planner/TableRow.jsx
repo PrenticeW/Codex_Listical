@@ -1,6 +1,7 @@
 import React from 'react';
 import { GripVertical, ListFilter } from 'lucide-react';
 import { MonthRow, WeekRow } from './rows';
+import EditableCell from './EditableCell';
 
 /**
  * TableRow Component
@@ -637,15 +638,11 @@ export default function TableRow({
               onDoubleClick={() => handleCellDoubleClick(rowId, columnId, value)}
             >
               {isEditing ? (
-                <input
-                  type="text"
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onBlur={() => handleEditComplete(rowId, columnId)}
-                  onKeyDown={(e) => handleEditKeyDown(e, rowId, columnId)}
-                  autoFocus
-                  className="w-full border-none outline-none bg-transparent px-0"
-                  style={{ height: 'auto', fontSize: `${cellFontSize}px` }}
+                <EditableCell
+                  initialValue={editValue}
+                  onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
+                  onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
+                  cellFontSize={cellFontSize}
                 />
               ) : (
                 <div className="w-full">{value || '\u00A0'}</div>

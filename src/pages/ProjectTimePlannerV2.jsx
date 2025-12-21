@@ -566,10 +566,9 @@ export default function ProjectTimePlannerV2() {
   }, [data, allColumnIds]);
 
   // Edit handlers
-  const handleEditComplete = useCallback((rowId, columnId) => {
+  const handleEditComplete = useCallback((rowId, columnId, newValue) => {
     // Get the old value before updating
     const oldValue = data.find(r => r.id === rowId)?.[columnId] || '';
-    const newValue = editValue;
 
     // Don't create command if value hasn't changed
     if (oldValue === newValue) {
@@ -602,12 +601,12 @@ export default function ProjectTimePlannerV2() {
 
     setEditingCell(null);
     setEditValue('');
-  }, [editValue, data, executeCommand]);
+  }, [data, executeCommand]);
 
-  const handleEditKeyDown = useCallback((e, rowId, columnId) => {
+  const handleEditKeyDown = useCallback((e, rowId, columnId, currentValue) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      handleEditComplete(rowId, columnId);
+      handleEditComplete(rowId, columnId, currentValue);
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setEditingCell(null);
