@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { GripVertical, ListFilter } from 'lucide-react';
+import usePlannerStorage from '../hooks/planner/usePlannerStorage';
 
 /**
  * Google Sheets-like Spreadsheet using TanStack Table v8
@@ -1091,16 +1092,14 @@ export default function ProjectTimePlannerV2() {
   const [anchorCell, setAnchorCell] = useState(null); // For shift-click range selection
   const [editingCell, setEditingCell] = useState(null); // { rowId, columnId }
   const [editValue, setEditValue] = useState('');
-  const [columnSizing, setColumnSizing] = useState(() => {
-    // Load column sizes from localStorage
-    const saved = localStorage.getItem('planner-column-sizing');
-    return saved ? JSON.parse(saved) : {};
-  }); // Track column sizes
   const [isDragging, setIsDragging] = useState(false); // Track if user is dragging to select
   const [dragStartCell, setDragStartCell] = useState(null); // { rowId, columnId }
   const [draggedRowId, setDraggedRowId] = useState(null); // Track which row is being dragged
   const [dropTargetRowId, setDropTargetRowId] = useState(null); // Track drop target
   const tableBodyRef = useRef(null);
+
+  // Storage management (column sizing and size scale)
+  const { columnSizing, setColumnSizing, sizeScale, setSizeScale } = usePlannerStorage();
 
   // Calculate dates array from startDate
   const dates = useMemo(() => {
@@ -1184,24 +1183,6 @@ export default function ProjectTimePlannerV2() {
 
     return headerRows;
   }, [dates]);
-
-  // Sizing state - stored in localStorage
-  const [sizeScale, setSizeScale] = useState(() => {
-    const saved = localStorage.getItem('spreadsheet-size-scale');
-    return saved ? parseFloat(saved) : 1.0;
-  });
-
-  // Update localStorage when size changes
-  useEffect(() => {
-    localStorage.setItem('spreadsheet-size-scale', sizeScale.toString());
-  }, [sizeScale]);
-
-  // Save column sizes to localStorage when they change
-  useEffect(() => {
-    if (Object.keys(columnSizing).length > 0) {
-      localStorage.setItem('planner-column-sizing', JSON.stringify(columnSizing));
-    }
-  }, [columnSizing]);
 
   // Calculate sizes based on scale
   const rowHeight = Math.round(21 * sizeScale);
@@ -2346,6 +2327,11 @@ export default function ProjectTimePlannerV2() {
     estimateSize: () => rowHeight, // Estimated row height in pixels
     overscan: 10, // Render 10 extra rows above and below viewport
   });
+
+  // Force virtualizer to recalculate when rowHeight changes
+  useEffect(() => {
+    rowVirtualizer.measure();
+  }, [rowHeight, rowVirtualizer]);
 
   return (
     <div className="w-full h-screen flex flex-col bg-gray-50 p-4">
