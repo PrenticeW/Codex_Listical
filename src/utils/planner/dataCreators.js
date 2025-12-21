@@ -209,6 +209,7 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
   for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
     const row = {
       id: `row-${rowIndex}`,
+      type: 'task', // Row type for rendering
       project: '',
       status: '',
       task: '',
