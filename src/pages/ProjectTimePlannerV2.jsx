@@ -150,9 +150,9 @@ export default function ProjectTimePlannerV2() {
   const { undoStack, redoStack, executeCommand, undo, redo } = useCommandPattern();
 
   // All column IDs in order (used throughout the component)
-  // Fixed columns + extra columns (F, G, H) + day columns (starting from I)
+  // Fixed columns (A-H) + day columns (starting from I)
   const allColumnIds = useMemo(() => {
-    const fixed = ['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'];
+    const fixed = ['check', 'project', 'subprojects', 'status', 'task', 'recurring', 'estimate', 'timeValue'];
     const days = Array.from({ length: totalDays }, (_, i) => `day-${i}`);
     return [...fixed, ...days];
   }, [totalDays]);
