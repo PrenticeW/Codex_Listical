@@ -436,7 +436,7 @@ export default function ProjectTimePlannerV2() {
 
     // If we're editing a different cell, save it first
     if (editingCell && (editingCell.rowId !== rowId || editingCell.columnId !== columnId)) {
-      handleEditComplete(editingCell.rowId, editingCell.columnId);
+      handleEditComplete(editingCell.rowId, editingCell.columnId, editValue);
     }
 
     const cellKey = getCellKey(rowId, columnId);
@@ -468,9 +468,19 @@ export default function ProjectTimePlannerV2() {
       setAnchorCell({ rowId, columnId });
       setDragStartCell({ rowId, columnId });
       setIsDragging(true);
-      setEditingCell(null);
+
+      // For dropdown columns (estimate), immediately enter edit mode on single click
+      if (columnId === 'estimate') {
+        const row = data.find(r => r.id === rowId);
+        const currentValue = row ? row[columnId] || '' : '';
+        setEditingCell({ rowId, columnId });
+        setEditValue(currentValue);
+        setIsDragging(false); // Cancel drag since we're entering edit mode
+      } else {
+        setEditingCell(null);
+      }
     }
-  }, [anchorCell, getCellRange, editingCell, handleEditComplete]);
+  }, [anchorCell, getCellRange, editingCell, editValue, handleEditComplete, data]);
 
   const handleCellMouseEnter = useCallback((e, rowId, columnId) => {
     if (!isDragging || !dragStartCell || columnId === 'rowNum') return;
@@ -1091,8 +1101,18 @@ export default function ProjectTimePlannerV2() {
         // Start typing to edit (if alphanumeric) - only if not already editing
         if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !editingCell) {
           e.preventDefault();
-          setEditingCell({ rowId: currentRowId, columnId: currentColumnId });
-          setEditValue(e.key);
+          const row = data.find(r => r.id === currentRowId);
+          const currentValue = row ? row[currentColumnId] || '' : '';
+
+          // For dropdown columns (estimate), start editing with current value
+          if (currentColumnId === 'estimate') {
+            setEditingCell({ rowId: currentRowId, columnId: currentColumnId });
+            setEditValue(currentValue);
+          } else {
+            // For regular columns, start editing with the typed character
+            setEditingCell({ rowId: currentRowId, columnId: currentColumnId });
+            setEditValue(e.key);
+          }
         }
       }
     };

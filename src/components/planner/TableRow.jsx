@@ -1,7 +1,8 @@
 import React from 'react';
-import { GripVertical, ListFilter } from 'lucide-react';
+import { GripVertical, ListFilter, ChevronDown } from 'lucide-react';
 import { MonthRow, WeekRow } from './rows';
 import EditableCell from './EditableCell';
+import DropdownCell from './DropdownCell';
 
 /**
  * TableRow Component
@@ -639,14 +640,33 @@ export default function TableRow({
               onDoubleClick={() => handleCellDoubleClick(rowId, columnId, value)}
             >
               {isEditing ? (
-                <EditableCell
-                  initialValue={editValue}
-                  onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
-                  onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
-                  cellFontSize={cellFontSize}
-                />
+                columnId === 'estimate' ? (
+                  <DropdownCell
+                    initialValue={editValue}
+                    onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
+                    onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
+                    cellFontSize={cellFontSize}
+                    rowHeight={rowHeight}
+                  />
+                ) : (
+                  <EditableCell
+                    initialValue={editValue}
+                    onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
+                    onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
+                    cellFontSize={cellFontSize}
+                  />
+                )
               ) : (
-                <div className="w-full">{value || '\u00A0'}</div>
+                columnId === 'estimate' ? (
+                  <div className="w-full px-1 flex items-center justify-between">
+                    <span className="flex-1 text-left">{value || '\u00A0'}</span>
+                    <ChevronDown size={10} className="flex-shrink-0 text-gray-400 ml-1" />
+                  </div>
+                ) : (
+                  <div className="w-full px-1">
+                    {value || '\u00A0'}
+                  </div>
+                )
               )}
             </div>
           </td>

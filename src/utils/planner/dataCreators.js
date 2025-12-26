@@ -212,7 +212,7 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
       project: '',
       status: '',
       task: '',
-      estimate: '',
+      estimate: '-', // Default dropdown value
       timeValue: '',
       col_f: '',
       col_g: '',
