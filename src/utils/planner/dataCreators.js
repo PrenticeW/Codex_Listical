@@ -24,14 +24,14 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
   // Row 1: Month row - store month spans info
   const monthRow = {
     id: 'month-row',
+    checkbox: '',
     project: '',
+    subproject: '',
     status: '',
     task: '',
+    recurring: '',
     estimate: '',
     timeValue: '',
-    col_f: '',
-    col_g: '',
-    col_h: '',
     _isMonthRow: true, // Flag to identify this as a month row
     _monthSpans: [], // Will store [{startDay, span, label}]
   };
@@ -68,14 +68,14 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
   // Row 2: Week row - store week spans info
   const weekRow = {
     id: 'week-row',
+    checkbox: '',
     project: '',
+    subproject: '',
     status: '',
     task: '',
+    recurring: '',
     estimate: '',
     timeValue: '',
-    col_f: '',
-    col_g: '',
-    col_h: '',
     _isWeekRow: true, // Flag to identify this as a week row
     _weekSpans: [], // Will store [{startDay, span, label}]
   };
@@ -112,14 +112,14 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
   // Row 3: Day number row
   const dayRow = {
     id: 'day-row',
+    checkbox: '',
     project: '',
+    subproject: '',
     status: '',
     task: '',
+    recurring: '',
     estimate: '',
     timeValue: '',
-    col_f: '',
-    col_g: '',
-    col_h: '',
     _isDayRow: true, // Flag to identify this as a day row
   };
   dates.forEach((date, i) => {
@@ -132,14 +132,14 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
   // Row 4: Day of week row
   const dayOfWeekRow = {
     id: 'dayofweek-row',
+    checkbox: '',
     project: '',
+    subproject: '',
     status: '',
     task: '',
+    recurring: '',
     estimate: '',
     timeValue: '',
-    col_f: '',
-    col_g: '',
-    col_h: '',
     _isDayOfWeekRow: true, // Flag to identify this as a day of week row
   };
   dates.forEach((date, i) => {
@@ -152,14 +152,14 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
   // Row 5: Daily min row
   const dailyMinRow = {
     id: 'daily-min-row',
+    checkbox: '',
     project: '',
+    subproject: '',
     status: '',
     task: '',
+    recurring: '',
     estimate: '',
     timeValue: '',
-    col_f: '',
-    col_g: '',
-    col_h: '',
     _isDailyMinRow: true, // Flag to identify this as a daily min row
   };
   dates.forEach((date, i) => {
@@ -171,14 +171,14 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
   // Row 6: Daily max row
   const dailyMaxRow = {
     id: 'daily-max-row',
+    checkbox: '',
     project: '',
+    subproject: '',
     status: '',
     task: '',
+    recurring: '',
     estimate: '',
     timeValue: '',
-    col_f: '',
-    col_g: '',
-    col_h: '',
     _isDailyMaxRow: true, // Flag to identify this as a daily max row
   };
   dates.forEach((date, i) => {
@@ -190,14 +190,14 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
   // Row 7: Filter row
   const filterRow = {
     id: 'filter-row',
-    project: '', // Column A - no filter needed
+    checkbox: '', // Column A - no filter needed
+    project: '',
+    subproject: '',
     status: '',
-    task: '',
-    estimate: '', // Column E - no filter needed
-    timeValue: '', // Column F - no filter needed
-    col_f: '',
-    col_g: '',
-    col_h: '', // Column H - no filter needed
+    task: '', // Column E - no filter needed
+    recurring: '',
+    estimate: '',
+    timeValue: '', // Column H - no filter needed
     _isFilterRow: true, // Flag to identify this as a filter row
   };
   dates.forEach((date, i) => {
@@ -209,14 +209,14 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
   for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
     const row = {
       id: `row-${rowIndex}`,
+      checkbox: '',
       project: '',
-      status: '',
+      subproject: '',
+      status: '-', // Default status dropdown value
       task: '',
-      estimate: '-', // Default dropdown value
+      recurring: '',
+      estimate: '',
       timeValue: '',
-      col_f: '',
-      col_g: '',
-      col_h: '',
     };
 
     // Add day entry columns (84 days)

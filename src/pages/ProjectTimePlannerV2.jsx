@@ -102,14 +102,14 @@ export default function ProjectTimePlannerV2() {
       id: 'main-header',
       cells: [
         { id: 'header-rowNum', columnKey: 'rowNum', content: '#' },
-        { id: 'header-project', columnKey: 'project', content: 'A' },
-        { id: 'header-status', columnKey: 'status', content: 'B' },
-        { id: 'header-task', columnKey: 'task', content: 'C' },
-        { id: 'header-estimate', columnKey: 'estimate', content: 'D' },
-        { id: 'header-timeValue', columnKey: 'timeValue', content: 'E' },
-        { id: 'header-col_f', columnKey: 'col_f', content: 'F' },
-        { id: 'header-col_g', columnKey: 'col_g', content: 'G' },
-        { id: 'header-col_h', columnKey: 'col_h', content: 'H' },
+        { id: 'header-checkbox', columnKey: 'checkbox', content: 'A' },
+        { id: 'header-project', columnKey: 'project', content: 'B' },
+        { id: 'header-subproject', columnKey: 'subproject', content: 'C' },
+        { id: 'header-status', columnKey: 'status', content: 'D' },
+        { id: 'header-task', columnKey: 'task', content: 'E' },
+        { id: 'header-recurring', columnKey: 'recurring', content: 'F' },
+        { id: 'header-estimate', columnKey: 'estimate', content: 'G' },
+        { id: 'header-timeValue', columnKey: 'timeValue', content: 'H' },
         ...dates.map((_, i) => {
           // Day columns start from I (index 8)
           const letterIndex = i + 8; // Start after H (8 columns before day columns)
@@ -152,7 +152,7 @@ export default function ProjectTimePlannerV2() {
   // All column IDs in order (used throughout the component)
   // Fixed columns (A-H) + day columns (starting from I)
   const allColumnIds = useMemo(() => {
-    const fixed = ['check', 'project', 'subprojects', 'status', 'task', 'recurring', 'estimate', 'timeValue'];
+    const fixed = ['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'];
     const days = Array.from({ length: totalDays }, (_, i) => `day-${i}`);
     return [...fixed, ...days];
   }, [totalDays]);
@@ -469,8 +469,8 @@ export default function ProjectTimePlannerV2() {
       setDragStartCell({ rowId, columnId });
       setIsDragging(true);
 
-      // For dropdown columns (estimate), immediately enter edit mode on single click
-      if (columnId === 'estimate') {
+      // For dropdown columns (status), immediately enter edit mode on single click
+      if (columnId === 'status') {
         const row = data.find(r => r.id === rowId);
         const currentValue = row ? row[columnId] || '' : '';
         setEditingCell({ rowId, columnId });
@@ -1104,8 +1104,8 @@ export default function ProjectTimePlannerV2() {
           const row = data.find(r => r.id === currentRowId);
           const currentValue = row ? row[currentColumnId] || '' : '';
 
-          // For dropdown columns (estimate), start editing with current value
-          if (currentColumnId === 'estimate') {
+          // For dropdown columns (status), start editing with current value
+          if (currentColumnId === 'status') {
             setEditingCell({ rowId: currentRowId, columnId: currentColumnId });
             setEditValue(currentValue);
           } else {

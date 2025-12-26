@@ -2,7 +2,7 @@ import React from 'react';
 import { GripVertical, ListFilter, ChevronDown } from 'lucide-react';
 import { MonthRow, WeekRow } from './rows';
 import EditableCell from './EditableCell';
-import DropdownCell from './DropdownCell';
+import DropdownCell, { PILLBOX_COLORS } from './DropdownCell';
 
 /**
  * TableRow Component
@@ -171,7 +171,7 @@ export default function TableRow({
             }
 
             // For fixed columns, show empty cells
-            if (['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].includes(columnId)) {
+            if (['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].includes(columnId)) {
               // For day of week row (row 4), merge all fixed columns
               if (isDayOfWeekRow && !mergedCellRendered) {
                 mergedCellRendered = true;
@@ -179,7 +179,7 @@ export default function TableRow({
                   <td
                     key="merged-fixed-cols"
                     style={{
-                      width: `${['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0)}px`,
+                      width: `${['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0)}px`,
                       flexShrink: 0,
                       flexGrow: 0,
                       height: `${rowHeight}px`,
@@ -206,14 +206,14 @@ export default function TableRow({
 
               // For day row (row 3), render individual cells with labels
               const labelMap = {
-                'project': '\u00A0\u00A0✓',
-                'status': '\u00A0\u00A0Project',
-                'task': '\u00A0\u00A0Subproject',
-                'estimate': '\u00A0\u00A0Status',
-                'timeValue': '\u00A0\u00A0Task',
-                'col_f': '\u00A0\u00A0Recurring',
-                'col_g': '\u00A0\u00A0Estimate',
-                'col_h': '\u00A0\u00A0Time Value'
+                'checkbox': '\u00A0\u00A0✓',
+                'project': '\u00A0\u00A0Project',
+                'subproject': '\u00A0\u00A0Subproject',
+                'status': '\u00A0\u00A0Status',
+                'task': '\u00A0\u00A0Task',
+                'recurring': '\u00A0\u00A0Recurring',
+                'estimate': '\u00A0\u00A0Estimate',
+                'timeValue': '\u00A0\u00A0Time Value'
               };
 
               return (
@@ -238,8 +238,8 @@ export default function TableRow({
                       fontWeight: 500,
                       borderTop: '3px solid white',
                       borderBottom: '3px solid white',
-                      borderLeft: (columnId === 'project') ? '1px solid black' : 'none',
-                      borderRight: columnId === 'col_h' ? '1.5px solid black' : 'none'
+                      borderLeft: (columnId === 'checkbox') ? '1px solid black' : 'none',
+                      borderRight: columnId === 'timeValue' ? '1.5px solid black' : 'none'
                     }}
                   >
                     {labelMap[columnId] || ''}
@@ -353,14 +353,14 @@ export default function TableRow({
         }
 
         // For fixed columns A-H, merge them into a single black cell
-        if (['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].includes(columnId)) {
+        if (['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].includes(columnId)) {
           if (!mergedCellRendered) {
             mergedCellRendered = true;
             return (
               <td
                 key="merged-fixed-cols"
                 style={{
-                  width: `${['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0)}px`,
+                  width: `${['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0)}px`,
                   flexShrink: 0,
                   flexGrow: 0,
                   height: `${rowHeight}px`,
@@ -468,9 +468,9 @@ export default function TableRow({
         }
 
         // For fixed columns
-        if (['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].includes(columnId)) {
-          // Columns that need filter buttons: B (status), C (task), D (estimate), F (col_f), G (col_g)
-          const hasFilter = ['status', 'task', 'estimate', 'col_f', 'col_g'].includes(columnId);
+        if (['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].includes(columnId)) {
+          // Columns that need filter buttons: B (project), C (subproject), D (status), F (recurring), G (estimate)
+          const hasFilter = ['project', 'subproject', 'status', 'recurring', 'estimate'].includes(columnId);
 
           return (
             <td
@@ -490,8 +490,8 @@ export default function TableRow({
                   minHeight: `${rowHeight}px`,
                   backgroundColor: row.index < 4 ? 'black' : '#ead1dc',
                   borderBottom: row.index < 4 ? '1px solid black' : '1px solid #d3d3d3',
-                  borderLeft: (row.index < 4 && columnId === 'project') ? '1px solid black' : 'none',
-                  borderRight: columnId === 'col_h' ? '1.5px solid black' : (row.index < 4 ? 'none' : '1px solid #d3d3d3')
+                  borderLeft: (row.index < 4 && columnId === 'checkbox') ? '1px solid black' : 'none',
+                  borderRight: columnId === 'timeValue' ? '1.5px solid black' : (row.index < 4 ? 'none' : '1px solid #d3d3d3')
                 }}
               >
                 {hasFilter && (
@@ -602,8 +602,8 @@ export default function TableRow({
           } else {
             borderRightStyle = '1px solid #d3d3d3';
           }
-        } else if (columnId === 'col_h') {
-          // Thick border after col_h (last fixed column before day columns)
+        } else if (columnId === 'timeValue') {
+          // Thick border after timeValue (last fixed column before day columns)
           borderRightStyle = '1.5px solid black';
         } else {
           borderRightStyle = '1px solid #d3d3d3';
@@ -640,13 +640,14 @@ export default function TableRow({
               onDoubleClick={() => handleCellDoubleClick(rowId, columnId, value)}
             >
               {isEditing ? (
-                columnId === 'estimate' ? (
+                columnId === 'status' ? (
                   <DropdownCell
                     initialValue={editValue}
                     onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
                     onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
                     cellFontSize={cellFontSize}
                     rowHeight={rowHeight}
+                    isPillbox={true}
                   />
                 ) : (
                   <EditableCell
@@ -657,10 +658,37 @@ export default function TableRow({
                   />
                 )
               ) : (
-                columnId === 'estimate' ? (
-                  <div className="w-full px-1 flex items-center justify-between">
-                    <span className="flex-1 text-left">{value || '\u00A0'}</span>
-                    <ChevronDown size={10} className="flex-shrink-0 text-gray-400 ml-1" />
+                columnId === 'status' ? (
+                  <div className="w-full flex items-center" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
+                    {value && value !== '' ? (
+                      <div
+                        className="py-0.5 rounded-full font-medium text-xs flex items-center justify-between gap-1 flex-1"
+                        style={{
+                          backgroundColor: PILLBOX_COLORS[value]?.bg || PILLBOX_COLORS['-'].bg,
+                          color: PILLBOX_COLORS[value]?.text || PILLBOX_COLORS['-'].text,
+                          fontSize: `${cellFontSize}px`,
+                          paddingLeft: '8px',
+                          paddingRight: '8px'
+                        }}
+                      >
+                        <span>{value}</span>
+                        <ChevronDown size={10} style={{ color: PILLBOX_COLORS[value]?.text || PILLBOX_COLORS['-'].text }} />
+                      </div>
+                    ) : (
+                      <div
+                        className="py-0.5 rounded-full font-medium text-xs flex items-center justify-between gap-1 flex-1"
+                        style={{
+                          backgroundColor: PILLBOX_COLORS['-'].bg,
+                          color: PILLBOX_COLORS['-'].text,
+                          fontSize: `${cellFontSize}px`,
+                          paddingLeft: '8px',
+                          paddingRight: '8px'
+                        }}
+                      >
+                        <span>-</span>
+                        <ChevronDown size={10} style={{ color: PILLBOX_COLORS['-'].text }} />
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="w-full px-1">

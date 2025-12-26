@@ -64,7 +64,7 @@ function WeekRow({
       <td
         key="merged-fixed-cols"
         style={{
-          width: `${['project', 'status', 'task', 'estimate', 'timeValue', 'col_f', 'col_g', 'col_h'].reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0)}px`,
+          width: `${['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0)}px`,
           flexShrink: 0,
           flexGrow: 0,
           height: `${rowHeight}px`,

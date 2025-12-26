@@ -17,12 +17,25 @@ const DROPDOWN_OPTIONS = [
   'Special'
 ];
 
+// Pillbox color configuration
+const PILLBOX_COLORS = {
+  '-': { bg: '#ffffff', text: '#000000' },
+  'Not Scheduled': { bg: '#e5e5e5', text: '#000000' },
+  'Scheduled': { bg: '#ffe5a0', text: '#473821' },
+  'Done': { bg: '#c9e9c0', text: '#276436' },
+  'Abandoned': { bg: '#e8d9f3', text: '#5a3b74' },
+  'Blocked': { bg: '#f3c4c4', text: '#9c2f2f' },
+  'On Hold': { bg: '#505050', text: '#ffffff' },
+  'Special': { bg: '#cce3ff', text: '#3a70b7' }
+};
+
 function DropdownCell({
   initialValue,
   onComplete,
   onKeyDown,
   cellFontSize,
   rowHeight,
+  isPillbox = false, // New prop to enable pillbox styling
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(() => {
@@ -106,24 +119,35 @@ function DropdownCell({
     handleComplete(option);
   };
 
+  const currentOption = DROPDOWN_OPTIONS[selectedIndex];
+  const colors = isPillbox ? PILLBOX_COLORS[currentOption] : null;
+
   return (
     <div
       ref={dropdownRef}
-      className="relative w-full h-full"
+      className="relative w-full h-full flex items-center"
+      style={{ paddingLeft: '3px', paddingRight: '3px' }}
       onKeyDown={handleKeyDown}
       onMouseDown={(e) => e.stopPropagation()} // Prevent parent cell handlers from interfering
       tabIndex={0}
     >
       <button
         ref={buttonRef}
-        className="w-full h-full px-1 border-2 border-blue-500 focus:outline-none flex items-center justify-between bg-white"
-        style={{ fontSize: `${cellFontSize}px` }}
+        className={`${isPillbox ? 'py-0.5 rounded-full flex-1' : 'w-full h-full px-1'} border-2 border-blue-500 focus:outline-none flex items-center justify-between gap-1`}
+        style={{
+          fontSize: isPillbox ? `${cellFontSize}px` : `${cellFontSize}px`,
+          backgroundColor: isPillbox && colors ? colors.bg : '#ffffff',
+          color: isPillbox && colors ? colors.text : 'inherit',
+          fontWeight: isPillbox ? '500' : 'normal',
+          paddingLeft: isPillbox ? '8px' : undefined,
+          paddingRight: isPillbox ? '8px' : undefined
+        }}
         onClick={() => setIsOpen(!isOpen)}
       >
-        <span className="flex-1 text-left">
+        <span className={isPillbox ? '' : 'flex-1 text-left'}>
           {DROPDOWN_OPTIONS[selectedIndex] || '\u00A0'}
         </span>
-        <ChevronDown size={12} className="flex-shrink-0 text-gray-400 ml-1" />
+        <ChevronDown size={isPillbox ? 10 : 12} className="flex-shrink-0" style={{ color: isPillbox && colors ? colors.text : '#9ca3af' }} />
       </button>
 
       {isOpen && createPortal(
@@ -140,24 +164,34 @@ function DropdownCell({
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {DROPDOWN_OPTIONS.map((option, index) => (
-            <div
-              key={option}
-              className={`px-2 py-1 cursor-pointer hover:bg-blue-100 ${
-                index === selectedIndex ? 'bg-blue-50' : ''
-              } ${option === '-' ? 'text-left' : ''}`}
-              style={{
-                fontSize: `${cellFontSize}px`,
-                minHeight: `${rowHeight}px`,
-                display: 'flex',
-                alignItems: 'center'
-              }}
-              onMouseDown={(e) => handleSelect(e, option)}
-              onMouseEnter={() => setSelectedIndex(index)}
-            >
-              {option}
-            </div>
-          ))}
+          {DROPDOWN_OPTIONS.map((option, index) => {
+            const optionColors = isPillbox ? PILLBOX_COLORS[option] : null;
+            return (
+              <div
+                key={option}
+                className={`py-1 cursor-pointer ${
+                  index === selectedIndex ? 'ring-2 ring-inset ring-blue-500' : ''
+                } ${option === '-' ? 'text-left' : ''}`}
+                style={{
+                  fontSize: `${cellFontSize}px`,
+                  minHeight: `${rowHeight}px`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  backgroundColor: isPillbox && optionColors ? optionColors.bg : (index === selectedIndex ? '#eff6ff' : '#ffffff'),
+                  color: isPillbox && optionColors ? optionColors.text : 'inherit',
+                  borderRadius: isPillbox ? '9999px' : '0',
+                  margin: isPillbox ? '2px 4px' : '0',
+                  fontWeight: isPillbox ? '500' : 'normal',
+                  paddingLeft: isPillbox ? '8px' : '8px',
+                  paddingRight: isPillbox ? '8px' : '8px'
+                }}
+                onMouseDown={(e) => handleSelect(e, option)}
+                onMouseEnter={() => setSelectedIndex(index)}
+              >
+                {option}
+              </div>
+            );
+          })}
         </div>,
         document.body
       )}
@@ -166,3 +200,4 @@ function DropdownCell({
 }
 
 export default DropdownCell;
+export { PILLBOX_COLORS };
