@@ -392,7 +392,8 @@ export default function ProjectTimePlannerV2() {
   // Edit handlers
   const handleEditComplete = useCallback((rowId, columnId, newValue) => {
     // Get the old value before updating
-    const oldValue = data.find(r => r.id === rowId)?.[columnId] || '';
+    const row = data.find(r => r.id === rowId);
+    const oldValue = row?.[columnId] || '';
 
     // Don't create command if value hasn't changed
     if (oldValue === newValue) {
@@ -401,7 +402,53 @@ export default function ProjectTimePlannerV2() {
       return;
     }
 
-    // Create command for this edit
+    // Special handling for timeValue column
+    if (columnId === 'timeValue') {
+      const currentEstimate = row?.estimate || '';
+      const oldEstimate = currentEstimate;
+
+      // Calculate what the timeValue should be based on current estimate
+      const minutes = parseEstimateLabelToMinutes(currentEstimate);
+      const computedTimeValue = formatMinutesToHHmm(minutes);
+
+      // If the new value doesn't match the computed value, set estimate to "Custom"
+      const shouldSetToCustom = newValue !== computedTimeValue && currentEstimate !== 'Custom';
+
+      // Create command that updates both timeValue and potentially estimate
+      const command = {
+        execute: () => {
+          setData(prev => prev.map(row => {
+            if (row.id === rowId) {
+              if (shouldSetToCustom) {
+                return { ...row, timeValue: newValue, estimate: 'Custom' };
+              } else {
+                return { ...row, timeValue: newValue };
+              }
+            }
+            return row;
+          }));
+        },
+        undo: () => {
+          setData(prev => prev.map(row => {
+            if (row.id === rowId) {
+              if (shouldSetToCustom) {
+                return { ...row, timeValue: oldValue, estimate: oldEstimate };
+              } else {
+                return { ...row, timeValue: oldValue };
+              }
+            }
+            return row;
+          }));
+        },
+      };
+
+      executeCommand(command);
+      setEditingCell(null);
+      setEditValue('');
+      return;
+    }
+
+    // Create command for regular edits
     const command = {
       execute: () => {
         setData(prev => prev.map(row => {
@@ -542,16 +589,9 @@ export default function ProjectTimePlannerV2() {
   const handleCellDoubleClick = useCallback((rowId, columnId, value) => {
     if (columnId === 'rowNum') return;
 
-    // For timeValue column, only allow editing if estimate is "Custom"
-    if (columnId === 'timeValue') {
-      const row = data.find(r => r.id === rowId);
-      const estimate = row?.estimate;
-      if (estimate !== 'Custom') return; // Only editable when estimate is Custom
-    }
-
     setEditingCell({ rowId, columnId });
     setEditValue(value);
-  }, [data]);
+  }, []);
 
   // Track the last copied columns (to detect if copying from timeValue)
   const lastCopiedColumnsRef = useRef([]);
@@ -1189,12 +1229,6 @@ export default function ProjectTimePlannerV2() {
           e.preventDefault();
           const row = data.find(r => r.id === currentRowId);
           const currentValue = row ? row[currentColumnId] || '' : '';
-
-          // For timeValue column, only allow editing if estimate is "Custom"
-          if (currentColumnId === 'timeValue') {
-            const estimate = row?.estimate;
-            if (estimate !== 'Custom') return; // Don't start editing if not Custom
-          }
 
           // For dropdown columns (status, estimate), start editing with current value
           if (currentColumnId === 'status' || currentColumnId === 'estimate') {
