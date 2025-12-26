@@ -469,8 +469,8 @@ export default function ProjectTimePlannerV2() {
       setDragStartCell({ rowId, columnId });
       setIsDragging(true);
 
-      // For dropdown columns (status), immediately enter edit mode on single click
-      if (columnId === 'status') {
+      // For dropdown columns (status, estimate), immediately enter edit mode on single click
+      if (columnId === 'status' || columnId === 'estimate') {
         const row = data.find(r => r.id === rowId);
         const currentValue = row ? row[columnId] || '' : '';
         setEditingCell({ rowId, columnId });
@@ -1104,8 +1104,8 @@ export default function ProjectTimePlannerV2() {
           const row = data.find(r => r.id === currentRowId);
           const currentValue = row ? row[currentColumnId] || '' : '';
 
-          // For dropdown columns (status), start editing with current value
-          if (currentColumnId === 'status') {
+          // For dropdown columns (status, estimate), start editing with current value
+          if (currentColumnId === 'status' || currentColumnId === 'estimate') {
             setEditingCell({ rowId: currentRowId, columnId: currentColumnId });
             setEditValue(currentValue);
           } else {

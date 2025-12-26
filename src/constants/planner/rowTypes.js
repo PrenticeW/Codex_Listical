@@ -11,8 +11,27 @@ export const ESTIMATE_VALUES = [
   '-',
   'Custom',
   '1 Minute',
-  ...Array.from({ length: 11 }, (_, i) => `${(i + 1) * 5} Minutes`),
-  ...[1, 2, 3, 4, 5, 6, 7, 8].map((h) => `${h} Hour${h > 1 ? 's' : ''}`),
+  '5 Minutes',
+  '10 Minutes',
+  '15 Minutes',
+  '20 Minutes',
+  '25 Minutes',
+  '30 Minutes',
+  '35 Minutes',
+  '40 Minutes',
+  '45 Minutes',
+  '50 Minutes',
+  '55 Minutes',
+  '1 Hour',
+  '2 Hours',
+  '3 Hours',
+  '4 Hours',
+  '5 Hours',
+  '6 Hours',
+  '7 Hours',
+  '8 Hours',
+  '9 Hours',
+  '10 Hours',
 ];
 
 // Status color styling
@@ -25,6 +44,12 @@ export const STATUS_COLOR_MAP = {
   'Blocked': { bg: '#f3c4c4', text: '#9c2f2f' },
   'On Hold': { bg: '#505050', text: '#ffffff' },
   'Special': { bg: '#cce3ff', text: '#3a70b7' },
+};
+
+// Estimate color styling (text colors only)
+export const ESTIMATE_COLOR_MAP = {
+  '1 Minute': { text: '#08ad2d' },
+  '5 Minutes': { text: '#08ad2d' },
 };
 
 /**

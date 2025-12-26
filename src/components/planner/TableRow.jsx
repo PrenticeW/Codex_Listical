@@ -3,6 +3,8 @@ import { GripVertical, ListFilter, ChevronDown } from 'lucide-react';
 import { MonthRow, WeekRow } from './rows';
 import EditableCell from './EditableCell';
 import DropdownCell, { PILLBOX_COLORS } from './DropdownCell';
+import EstimateDropdownCell from './EstimateDropdownCell';
+import { ESTIMATE_COLOR_MAP } from '../../constants/planner/rowTypes';
 
 /**
  * TableRow Component
@@ -649,6 +651,14 @@ export default function TableRow({
                     rowHeight={rowHeight}
                     isPillbox={true}
                   />
+                ) : columnId === 'estimate' ? (
+                  <EstimateDropdownCell
+                    initialValue={editValue}
+                    onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
+                    onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
+                    cellFontSize={cellFontSize}
+                    rowHeight={rowHeight}
+                  />
                 ) : (
                   <EditableCell
                     initialValue={editValue}
@@ -689,6 +699,21 @@ export default function TableRow({
                         <ChevronDown size={10} style={{ color: PILLBOX_COLORS['-'].text }} />
                       </div>
                     )}
+                  </div>
+                ) : columnId === 'estimate' ? (
+                  <div className="w-full flex items-center" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
+                    <div
+                      className="flex items-center justify-between gap-1 flex-1"
+                      style={{
+                        fontSize: `${cellFontSize}px`,
+                        paddingLeft: '8px',
+                        paddingRight: '8px',
+                        color: ESTIMATE_COLOR_MAP[value]?.text || 'inherit'
+                      }}
+                    >
+                      <span>{value || '-'}</span>
+                      <ChevronDown size={12} style={{ color: '#9ca3af' }} />
+                    </div>
                   </div>
                 ) : (
                   <div className="w-full px-1">
