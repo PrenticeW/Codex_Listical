@@ -216,7 +216,7 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
       task: '',
       recurring: '',
       estimate: '',
-      timeValue: '',
+      timeValue: '0.00',
     };
 
     // Add day entry columns (84 days)

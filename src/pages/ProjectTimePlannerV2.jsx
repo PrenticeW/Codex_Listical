@@ -14,6 +14,7 @@ import TableRow from '../components/planner/TableRow';
 import PlannerControls from '../components/planner/PlannerControls';
 import PlannerTable from '../components/planner/PlannerTable';
 import { createInitialData } from '../utils/planner/dataCreators';
+import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../constants/planner/rowTypes';
 
 /**
  * Google Sheets-like Spreadsheet using TanStack Table v8
@@ -51,6 +52,49 @@ export default function ProjectTimePlannerV2() {
 
   // Storage management (column sizing and size scale)
   const { columnSizing, setColumnSizing, sizeScale, setSizeScale } = usePlannerStorage();
+
+  // Compute data with timeValue derived from estimate column
+  // This ensures timeValue is always in sync with estimate without manual updates
+  // Also computes day column values that are linked to timeValue
+  const computedData = useMemo(() => {
+    return data.map(row => {
+      // Skip special rows (first 7 rows) - they don't need computation
+      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
+          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow || row._isFilterRow) {
+        return row;
+      }
+
+      // For regular task rows, compute timeValue from estimate
+      const estimate = row.estimate;
+      let timeValue;
+
+      // If estimate is "Custom", preserve the manually entered timeValue
+      if (estimate === 'Custom') {
+        timeValue = row.timeValue;
+      } else {
+        // Otherwise, compute timeValue from estimate
+        const minutes = parseEstimateLabelToMinutes(estimate);
+        timeValue = formatMinutesToHHmm(minutes);
+      }
+
+      // Now compute day columns that are marked as linked to timeValue
+      // A day column is marked as linked by storing "=timeValue" as the value
+      const updatedRow = { ...row, timeValue };
+
+      // Process all day columns
+      for (let i = 0; i < totalDays; i++) {
+        const dayColumnId = `day-${i}`;
+        const dayValue = row[dayColumnId];
+
+        // If the day column has "=timeValue", replace it with the computed timeValue
+        if (dayValue === '=timeValue') {
+          updatedRow[dayColumnId] = timeValue;
+        }
+      }
+
+      return updatedRow;
+    });
+  }, [data, totalDays]);
 
   // Calculate dates array from startDate
   const dates = useMemo(() => {
@@ -498,9 +542,19 @@ export default function ProjectTimePlannerV2() {
   const handleCellDoubleClick = useCallback((rowId, columnId, value) => {
     if (columnId === 'rowNum') return;
 
+    // For timeValue column, only allow editing if estimate is "Custom"
+    if (columnId === 'timeValue') {
+      const row = data.find(r => r.id === rowId);
+      const estimate = row?.estimate;
+      if (estimate !== 'Custom') return; // Only editable when estimate is Custom
+    }
+
     setEditingCell({ rowId, columnId });
     setEditValue(value);
-  }, []);
+  }, [data]);
+
+  // Track the last copied columns (to detect if copying from timeValue)
+  const lastCopiedColumnsRef = useRef([]);
 
   // Copy/Paste functionality
   const handleCopy = useCallback((e) => {
@@ -511,14 +565,17 @@ export default function ProjectTimePlannerV2() {
 
     // ROW COPY MODE: If rows are selected, copy entire rows
     if (selectedRows.size > 0) {
-      // Get selected rows in order
+      // Get selected rows in order (use computedData to get calculated timeValue)
       const selectedRowIds = Array.from(selectedRows);
-      const rowsInOrder = data.filter(row => selectedRowIds.includes(row.id));
+      const rowsInOrder = computedData.filter(row => selectedRowIds.includes(row.id));
 
       // Convert each row to TSV
       const tsvData = rowsInOrder.map(row => {
         return allColumnIds.map(colId => row[colId] || '').join('\t');
       }).join('\n');
+
+      // Track that we copied all columns
+      lastCopiedColumnsRef.current = allColumnIds;
 
       // Copy to clipboard
       navigator.clipboard.writeText(tsvData);
@@ -528,20 +585,27 @@ export default function ProjectTimePlannerV2() {
     // CELL COPY MODE: Copy selected cells
     // Get all selected cells and organize by row/column
     const cellsByRow = new Map();
+    const copiedColumns = new Set();
 
     selectedCells.forEach(cellKey => {
       const [rowId, columnId] = cellKey.split('|');
       if (columnId === 'rowNum') return; // Skip row number column
 
+      copiedColumns.add(columnId);
+
       if (!cellsByRow.has(rowId)) {
         cellsByRow.set(rowId, new Map());
       }
 
-      const row = data.find(r => r.id === rowId);
+      // Use computedData to get the calculated timeValue
+      const row = computedData.find(r => r.id === rowId);
       if (row) {
         cellsByRow.get(rowId).set(columnId, row[columnId] || '');
       }
     });
+
+    // Track which columns were copied (to detect timeValue copy)
+    lastCopiedColumnsRef.current = Array.from(copiedColumns);
 
     // Convert to TSV (Tab-Separated Values) format for clipboard
     const rows = Array.from(cellsByRow.values());
@@ -551,7 +615,7 @@ export default function ProjectTimePlannerV2() {
 
     // Copy to clipboard
     navigator.clipboard.writeText(tsvData);
-  }, [selectedCells, selectedRows, data, editingCell, allColumnIds]);
+  }, [selectedCells, selectedRows, computedData, editingCell, allColumnIds]);
 
   const handlePaste = useCallback((e) => {
     if (editingCell) return; // Don't paste while editing
@@ -733,6 +797,10 @@ export default function ProjectTimePlannerV2() {
 
     // FILL MODE: Copy one value to all selected cells
     if (isSingleCell && selectedCells.size > 1) {
+      // Check if the copied data came from timeValue column
+      const copiedFromTimeValue = lastCopiedColumnsRef.current.length === 1 &&
+                                   lastCopiedColumnsRef.current[0] === 'timeValue';
+
       // Store old values for undo
       const oldValues = new Map(); // Map<rowId, Map<columnId, value>>
 
@@ -759,7 +827,13 @@ export default function ProjectTimePlannerV2() {
             selectedCells.forEach(cellKey => {
               const [rowId, columnId] = cellKey.split('|');
               if (row.id === rowId && columnId !== 'rowNum') {
-                rowUpdates[columnId] = pastedText;
+                // If copying from timeValue to a day column, create a link
+                const isDayColumn = columnId.startsWith('day-');
+                if (copiedFromTimeValue && isDayColumn) {
+                  rowUpdates[columnId] = '=timeValue';
+                } else {
+                  rowUpdates[columnId] = pastedText;
+                }
                 hasUpdates = true;
               }
             });
@@ -804,6 +878,10 @@ export default function ProjectTimePlannerV2() {
 
     if (anchorRowIndex === -1 || anchorColIndex === -1) return;
 
+    // Check if we're pasting from timeValue column(s)
+    // For range paste, check if the source columns include timeValue
+    const copiedFromTimeValue = lastCopiedColumnsRef.current.includes('timeValue');
+
     // Store old values for undo
     const oldValues = new Map(); // Map<rowId, Map<columnId, value>>
 
@@ -843,7 +921,15 @@ export default function ProjectTimePlannerV2() {
               if (targetColIndex >= allColumnIds.length) return;
 
               const columnId = allColumnIds[targetColIndex];
-              rowUpdates[columnId] = value;
+              const sourceColIndex = lastCopiedColumnsRef.current[colOffset];
+
+              // If pasting from timeValue to a day column, create a link
+              const isDayColumn = columnId.startsWith('day-');
+              if (copiedFromTimeValue && sourceColIndex === 'timeValue' && isDayColumn) {
+                rowUpdates[columnId] = '=timeValue';
+              } else {
+                rowUpdates[columnId] = value;
+              }
             });
 
             newData[targetRowIndex] = { ...newData[targetRowIndex], ...rowUpdates };
@@ -1104,6 +1190,12 @@ export default function ProjectTimePlannerV2() {
           const row = data.find(r => r.id === currentRowId);
           const currentValue = row ? row[currentColumnId] || '' : '';
 
+          // For timeValue column, only allow editing if estimate is "Custom"
+          if (currentColumnId === 'timeValue') {
+            const estimate = row?.estimate;
+            if (estimate !== 'Custom') return; // Don't start editing if not Custom
+          }
+
           // For dropdown columns (status, estimate), start editing with current value
           if (currentColumnId === 'status' || currentColumnId === 'estimate') {
             setEditingCell({ rowId: currentRowId, columnId: currentColumnId });
@@ -1132,7 +1224,7 @@ export default function ProjectTimePlannerV2() {
   const columns = usePlannerColumns({ totalDays });
 
   const table = useReactTable({
-    data,
+    data: computedData,
     columns,
     getCoreRowModel: getCoreRowModel(),
     enableColumnResizing: true,

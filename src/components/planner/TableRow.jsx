@@ -715,6 +715,10 @@ export default function TableRow({
                       <ChevronDown size={12} style={{ color: '#9ca3af' }} />
                     </div>
                   </div>
+                ) : columnId === 'timeValue' ? (
+                  <div className="w-full text-right" style={{ paddingRight: '8px' }}>
+                    {value || '\u00A0'}
+                  </div>
                 ) : (
                   <div className="w-full px-1">
                     {value || '\u00A0'}
