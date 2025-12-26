@@ -152,14 +152,13 @@ function DropdownCell({
 
       {isOpen && createPortal(
         <div
-          className="bg-white border border-gray-300 shadow-lg"
+          className="border border-gray-300 shadow-lg"
           style={{
             position: 'fixed',
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
             width: `${dropdownPosition.width}px`,
-            maxHeight: '200px',
-            overflowY: 'auto',
+            backgroundColor: '#ffffff',
             zIndex: 9999
           }}
           onMouseDown={(e) => e.stopPropagation()}
