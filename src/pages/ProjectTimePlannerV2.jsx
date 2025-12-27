@@ -20,6 +20,7 @@ import PlannerTable from '../components/planner/PlannerTable';
 import { createInitialData } from '../utils/planner/dataCreators';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../constants/planner/rowTypes';
 import { mapDailyBoundsToTimeline } from '../utils/planner/dailyBoundsMapper';
+import { createEmptyTaskRows } from '../utils/planner/taskRowGenerator';
 
 // Sortable status values for the "Sort Inbox" feature
 const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned'];
@@ -1514,21 +1515,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     const count = parseInt(addTasksCount, 10);
     if (!Number.isFinite(count) || count <= 0) return;
 
-    // Create new empty rows
-    const newRows = Array.from({ length: count }, (_, i) => ({
-      id: `row-${Date.now()}-${i}`,
-      checkbox: false,
-      project: '',
-      subproject: '',
-      status: '-',
-      task: '',
-      recurring: '',
-      estimate: '',
-      timeValue: '',
-      ...Object.fromEntries(
-        Array.from({ length: totalDays }, (_, dayIdx) => [`day-${dayIdx}`, ''])
-      ),
-    }));
+    // Create new empty rows using the task row generator utility
+    const newRows = createEmptyTaskRows(count, totalDays);
 
     // Add new rows to the end of the data
     const command = {
