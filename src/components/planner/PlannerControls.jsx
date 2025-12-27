@@ -1,12 +1,8 @@
 /**
  * PlannerControls Component
- * Renders the header controls: size scale and undo/redo
+ * Renders the header controls: undo/redo
  */
 function PlannerControls({
-  sizeScale,
-  decreaseSize,
-  increaseSize,
-  resetSize,
   undoStack,
   redoStack,
   undo,
@@ -15,33 +11,6 @@ function PlannerControls({
   return (
     <div className="mb-4 flex items-center justify-between">
       <div className="flex gap-2 items-end">
-        {/* Size controls */}
-        <div className="flex gap-1 items-center border border-gray-300 rounded px-2 py-1 bg-white">
-          <span className="text-xs text-gray-600 mr-1">Size:</span>
-          <button
-            onClick={decreaseSize}
-            className="px-2 py-0.5 rounded text-sm font-medium bg-gray-200 hover:bg-gray-300 transition-colors"
-            title="Decrease size"
-          >
-            -
-          </button>
-          <span className="text-xs text-gray-700 font-mono min-w-[3ch] text-center">{Math.round(sizeScale * 100)}%</span>
-          <button
-            onClick={increaseSize}
-            className="px-2 py-0.5 rounded text-sm font-medium bg-gray-200 hover:bg-gray-300 transition-colors"
-            title="Increase size"
-          >
-            +
-          </button>
-          <button
-            onClick={resetSize}
-            className="px-2 py-0.5 rounded text-xs font-medium bg-gray-200 hover:bg-gray-300 transition-colors ml-1"
-            title="Reset to default size"
-          >
-            Reset
-          </button>
-        </div>
-
         <button
           onClick={undo}
           disabled={undoStack.length === 0}

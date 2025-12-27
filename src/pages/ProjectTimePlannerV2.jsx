@@ -15,7 +15,6 @@ import { MonthRow, WeekRow } from '../components/planner/rows';
 import TableRow from '../components/planner/TableRow';
 import NavigationBar from '../components/planner/NavigationBar';
 import ProjectListicalMenu from '../components/planner/ProjectListicalMenu';
-import PlannerControls from '../components/planner/PlannerControls';
 import PlannerTable from '../components/planner/PlannerTable';
 import { createInitialData } from '../utils/planner/dataCreators';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../constants/planner/rowTypes';
@@ -1633,23 +1632,21 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
             handleArchiveWeek={handleArchiveWeek}
             checkboxInputClass={checkboxInputClass}
             sortableStatuses={SORTABLE_STATUSES}
+            sizeScale={sizeScale}
+            decreaseSize={decreaseSize}
+            increaseSize={increaseSize}
+            resetSize={resetSize}
+            undoStack={undoStack}
+            redoStack={redoStack}
+            undo={undo}
+            redo={redo}
           />
         }
       />
 
-      <PlannerControls
-        sizeScale={sizeScale}
-        decreaseSize={decreaseSize}
-        increaseSize={increaseSize}
-        resetSize={resetSize}
-        undoStack={undoStack}
-        redoStack={redoStack}
-        undo={undo}
-        redo={redo}
-      />
-
-      <PlannerTable
-        tableBodyRef={tableBodyRef}
+      <div className="mt-4">
+        <PlannerTable
+          tableBodyRef={tableBodyRef}
         timelineHeaderRows={timelineHeaderRows}
         table={table}
         rowHeight={rowHeight}
@@ -1683,6 +1680,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         subprojects={subprojects}
         projectSubprojectsMap={projectSubprojectsMap}
       />
+      </div>
     </div>
   );
 }

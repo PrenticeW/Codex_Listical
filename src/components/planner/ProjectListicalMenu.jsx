@@ -21,6 +21,14 @@ export default function ProjectListicalMenu({
   handleArchiveWeek,
   checkboxInputClass,
   sortableStatuses,
+  sizeScale,
+  decreaseSize,
+  increaseSize,
+  resetSize,
+  undoStack,
+  redoStack,
+  undo,
+  redo,
 }) {
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
@@ -62,6 +70,64 @@ export default function ProjectListicalMenu({
           className="absolute z-20 mt-2 w-[36rem] rounded border border-[#ced3d0] bg-[#f2fdf6] p-4 shadow-lg"
         >
           <div className="flex flex-col gap-3 text-[12px] text-slate-800">
+            {/* Page Size Controls */}
+            <div className="flex items-center gap-3 rounded border border-[#ced3d0] bg-white/60 p-3">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Page Size</span>
+              <div className="flex gap-1 items-center">
+                <button
+                  onClick={decreaseSize}
+                  className="px-2 py-0.5 rounded text-sm font-medium bg-white border border-[#ced3d0] text-[#065f46] hover:bg-[#e6f7ed] transition-colors"
+                  title="Decrease size"
+                >
+                  -
+                </button>
+                <span className="text-xs text-slate-700 font-mono min-w-[3ch] text-center">{Math.round(sizeScale * 100)}%</span>
+                <button
+                  onClick={increaseSize}
+                  className="px-2 py-0.5 rounded text-sm font-medium bg-white border border-[#ced3d0] text-[#065f46] hover:bg-[#e6f7ed] transition-colors"
+                  title="Increase size"
+                >
+                  +
+                </button>
+                <button
+                  onClick={resetSize}
+                  className="px-2 py-0.5 rounded text-xs font-medium bg-white border border-[#ced3d0] text-[#065f46] hover:bg-[#e6f7ed] transition-colors ml-1"
+                  title="Reset to default size"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+
+            {/* Undo/Redo Controls */}
+            <div className="flex items-center gap-2 rounded border border-[#ced3d0] bg-white/60 p-3">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">History</span>
+              <button
+                onClick={undo}
+                disabled={undoStack.length === 0}
+                className={`px-3 py-1 rounded text-[12px] font-semibold transition-colors ${
+                  undoStack.length === 0
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
+                    : 'bg-white text-[#065f46] hover:bg-[#e6f7ed] border border-[#ced3d0]'
+                }`}
+                title={`Undo (${undoStack.length === 0 ? 'No actions' : `${undoStack.length} action${undoStack.length > 1 ? 's' : ''}`})`}
+              >
+                ↶ Undo
+              </button>
+              <button
+                onClick={redo}
+                disabled={redoStack.length === 0}
+                className={`px-3 py-1 rounded text-[12px] font-semibold transition-colors ${
+                  redoStack.length === 0
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
+                    : 'bg-white text-[#065f46] hover:bg-[#e6f7ed] border border-[#ced3d0]'
+                }`}
+                title={`Redo (${redoStack.length === 0 ? 'No actions' : `${redoStack.length} action${redoStack.length > 1 ? 's' : ''}`})`}
+              >
+                ↷ Redo
+              </button>
+            </div>
+
             <label className="flex items-center gap-2 font-semibold">
               <input
                 type="checkbox"
