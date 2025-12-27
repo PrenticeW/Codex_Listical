@@ -1623,7 +1623,10 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
             onAddTasksCountChange={(value) => setAddTasksCount(value)}
             handleAddTasks={handleAddTasks}
             startDate={startDate}
-            onStartDateChange={(value) => setStartDate(value)}
+            onStartDateChange={(value) => {
+              setStartDate(value);
+              setData(createInitialData(100, totalDays, value));
+            }}
             selectedSortStatuses={selectedSortStatuses}
             onToggleSortStatus={toggleSortStatus}
             handleSortInbox={handleSortInbox}
@@ -1643,11 +1646,6 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         redoStack={redoStack}
         undo={undo}
         redo={redo}
-        startDate={startDate}
-        setStartDate={setStartDate}
-        totalDays={totalDays}
-        setData={setData}
-        createInitialData={createInitialData}
       />
 
       <PlannerTable
