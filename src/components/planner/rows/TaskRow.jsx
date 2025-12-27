@@ -401,6 +401,10 @@ export default function TaskRow({
                     <div className="w-full text-right" style={{ paddingRight: '8px' }}>
                       {value || '\u00A0'}
                     </div>
+                  ) : isDayColumn ? (
+                    <div className="w-full text-center px-1">
+                      {value || '\u00A0'}
+                    </div>
                   ) : (
                     <div className="w-full px-1">
                       {value || '\u00A0'}

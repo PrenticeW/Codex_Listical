@@ -69,6 +69,7 @@ export default function TableRow({
   const isDailyMinRow = row.original._isDailyMinRow;
   const isDailyMaxRow = row.original._isDailyMaxRow;
   const isFilterRow = row.original._isFilterRow;
+  const isInboxRow = row.original._isInboxRow;
   const isProjectRow = row.original._rowType === 'projectHeader' || row.original._rowType === 'projectGeneral' || row.original._rowType === 'projectUnscheduled';
 
   // Delegate to ProjectRow for project/section rows
@@ -97,7 +98,7 @@ export default function TableRow({
   }
 
   // Delegate to TaskRow for regular task rows
-  if (!isMonthRow && !isWeekRow && !isDayRow && !isDayOfWeekRow && !isDailyMinRow && !isDailyMaxRow && !isFilterRow) {
+  if (!isMonthRow && !isWeekRow && !isDayRow && !isDayOfWeekRow && !isDailyMinRow && !isDailyMaxRow && !isFilterRow && !isInboxRow) {
     return (
       <TaskRow
         row={row}
@@ -183,8 +184,8 @@ export default function TableRow({
           handleDragStart={handleDragStart}
           handleDragEnd={handleDragEnd}
         />
-      ) : isDayRow || isDayOfWeekRow || isDailyMinRow || isDailyMaxRow ? (
-        // Render day/day-of-week/daily-min/daily-max rows with centered calendar cells
+      ) : isDayRow || isDayOfWeekRow || isDailyMinRow || isDailyMaxRow || isInboxRow ? (
+        // Render day/day-of-week/daily-min/daily-max/inbox rows with centered calendar cells
         (() => {
           let mergedCellRendered = false;
           return row.getVisibleCells().map(cell => {
@@ -232,6 +233,55 @@ export default function TableRow({
                   </div>
                 </td>
               );
+            }
+
+            // For inbox row, merge ALL cells (fixed columns AND day columns)
+            if (isInboxRow && !mergedCellRendered) {
+              mergedCellRendered = true;
+
+              // Calculate total width of all columns except rowNum
+              const allColumns = ['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'];
+              const visibleFixedColumns = allColumns.filter(colId => table.getColumn(colId).getIsVisible());
+              const totalFixedWidth = visibleFixedColumns.reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0);
+
+              // Add all day columns widths
+              const dayColumnsWidth = Array.from({ length: totalDays }, (_, i) => `day-${i}`)
+                .reduce((sum, dayColId) => sum + table.getColumn(dayColId).getSize(), 0);
+
+              const totalWidth = totalFixedWidth + dayColumnsWidth;
+
+              return (
+                <td
+                  key="merged-all-cols"
+                  style={{
+                    width: `${totalWidth}px`,
+                    flexShrink: 0,
+                    flexGrow: 0,
+                    height: `${rowHeight}px`,
+                    boxSizing: 'border-box',
+                  }}
+                  className="p-0"
+                >
+                  <div
+                    className="h-full flex items-center"
+                    style={{
+                      minHeight: `${rowHeight}px`,
+                      backgroundColor: 'black',
+                      borderBottom: '1.5px solid black',
+                      borderRight: '1.5px solid black',
+                      color: 'white',
+                      fontWeight: '600',
+                      fontSize: `${cellFontSize}px`,
+                      paddingLeft: '8px',
+                    }}
+                  >
+                    Inbox
+                  </div>
+                </td>
+              );
+            } else if (isInboxRow) {
+              // Skip all other columns for inbox row
+              return null;
             }
 
             // For fixed columns, show empty cells (or label for daily min/max)
@@ -458,13 +508,14 @@ export default function TableRow({
               className="p-0"
             >
               <div
-                className="h-full flex items-center justify-center"
+                className="h-full flex items-center justify-end"
                 style={{
                   minHeight: `${rowHeight}px`,
                   backgroundColor: row.index < 4 ? 'black' : '#ead1dc',
                   borderBottom: row.index < 4 ? '1px solid black' : '1px solid #d3d3d3',
                   borderLeft: (row.index < 4 && columnId === 'checkbox') ? '1px solid black' : 'none',
-                  borderRight: columnId === 'timeValue' ? '1.5px solid black' : (row.index < 4 ? 'none' : '1px solid #d3d3d3')
+                  borderRight: columnId === 'timeValue' ? '1.5px solid black' : (row.index < 4 ? 'none' : '1px solid #d3d3d3'),
+                  paddingRight: hasFilter ? '2px' : '0'
                 }}
               >
                 {hasFilter && (
@@ -475,7 +526,7 @@ export default function TableRow({
           );
         }
 
-        // For day columns, show filter button (right-aligned) and 0.00 value
+        // For day columns, show filter button (right-aligned) and 0.00 value (center-aligned)
         const value = row.original[columnId] || '';
         const dayIndex = parseInt(columnId.split('-')[1]);
         const isLastDayOfWeek = (dayIndex + 1) % 7 === 0;
@@ -493,17 +544,19 @@ export default function TableRow({
             className="p-0"
           >
             <div
-              className="h-full flex items-center gap-1"
+              className="h-full flex items-center justify-center relative"
               style={{
                 minHeight: `${rowHeight}px`,
                 fontSize: `${cellFontSize}px`,
                 backgroundColor: '#ead1dc',
                 borderBottom: '1px solid #d3d3d3',
-                borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3'
+                borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3',
+                position: 'relative',
+                paddingRight: '14px'
               }}
             >
-              <span className="text-xs flex-1">{value}</span>
-              <ListFilter size={10} className="text-gray-400 flex-shrink-0" />
+              <span className="text-xs">{value}</span>
+              <ListFilter size={10} className="text-gray-400" style={{ position: 'absolute', right: '2px' }} />
             </div>
           </td>
         );

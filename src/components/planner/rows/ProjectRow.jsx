@@ -222,6 +222,7 @@ export default function ProjectRow({
                     borderRight: '1px solid #d3d3d3',
                     paddingLeft: '8px',
                     paddingRight: '3px',
+                    fontWeight: '600',
                   }}
                 >
                   {sectionLabel}
