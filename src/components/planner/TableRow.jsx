@@ -266,7 +266,7 @@ export default function TableRow({
                   <td
                     key="merged-fixed-cols"
                     style={{
-                      width: `${['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0)}px`,
+                      width: `${['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].filter(colId => table.getColumn(colId).getIsVisible()).reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0)}px`,
                       flexShrink: 0,
                       flexGrow: 0,
                       height: `${rowHeight}px`,
