@@ -38,6 +38,54 @@ export const COLUMN_SIZING_KEY_TEMPLATE = 'planner-v2-{projectId}-column-sizing'
  */
 export const SIZE_SCALE_KEY_TEMPLATE = 'planner-v2-{projectId}-size-scale';
 
+/**
+ * Start date storage key template
+ * Stores the timeline start date in YYYY-MM-DD format
+ *
+ * Example: planner-v2-project-1-start-date
+ */
+export const START_DATE_KEY_TEMPLATE = 'planner-v2-{projectId}-start-date';
+
+/**
+ * Show recurring column storage key template
+ * Stores boolean for recurring column visibility
+ *
+ * Example: planner-v2-project-1-show-recurring
+ */
+export const SHOW_RECURRING_KEY_TEMPLATE = 'planner-v2-{projectId}-show-recurring';
+
+/**
+ * Show subprojects column storage key template
+ * Stores boolean for subprojects column visibility
+ *
+ * Example: planner-v2-project-1-show-subprojects
+ */
+export const SHOW_SUBPROJECTS_KEY_TEMPLATE = 'planner-v2-{projectId}-show-subprojects';
+
+/**
+ * Show max/min rows storage key template
+ * Stores boolean for daily max/min rows visibility
+ *
+ * Example: planner-v2-project-1-show-max-min-rows
+ */
+export const SHOW_MAX_MIN_ROWS_KEY_TEMPLATE = 'planner-v2-{projectId}-show-max-min-rows';
+
+/**
+ * Selected sort statuses storage key template
+ * Stores array of selected status values for "Sort Inbox" feature
+ *
+ * Example: planner-v2-project-1-sort-statuses
+ */
+export const SORT_STATUSES_KEY_TEMPLATE = 'planner-v2-{projectId}-sort-statuses';
+
+/**
+ * Task rows data storage key template
+ * Stores the actual task row data (spreadsheet content)
+ *
+ * Example: planner-v2-project-1-task-rows
+ */
+export const TASK_ROWS_KEY_TEMPLATE = 'planner-v2-{projectId}-task-rows';
+
 // ============================================================
 // LEGACY KEYS (Backward Compatibility)
 // ============================================================

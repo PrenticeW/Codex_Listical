@@ -40,12 +40,45 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   // Timeline configuration
   const totalDays = 84; // 12 weeks
 
-  const [startDate, setStartDate] = useState(() => {
-    const today = new Date();
-    return today.toISOString().split('T')[0]; // YYYY-MM-DD
+  // Storage management (all persistent settings)
+  const {
+    columnSizing,
+    setColumnSizing,
+    sizeScale,
+    setSizeScale,
+    startDate,
+    setStartDate,
+    showRecurring,
+    setShowRecurring,
+    showSubprojects,
+    setShowSubprojects,
+    showMaxMinRows,
+    setShowMaxMinRows,
+    selectedSortStatuses,
+    setSelectedSortStatuses,
+    taskRows,
+    setTaskRows,
+  } = usePlannerStorage();
+
+  // Initialize data from storage or create new
+  const [data, setData] = useState(() => {
+    // Try to load from storage first
+    if (taskRows && taskRows.length > 0) {
+      return taskRows;
+    }
+    // Otherwise create initial data
+    return createInitialData(100, totalDays, startDate);
   });
 
-  const [data, setData] = useState(() => createInitialData(100, totalDays, startDate));
+  // Save data to storage when it changes
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setTaskRows(data);
+    }, 500); // Debounce saves by 500ms to avoid too many writes
+
+    return () => clearTimeout(timeoutId);
+  }, [data, setTaskRows]);
+
   const [selectedCells, setSelectedCells] = useState(new Set()); // Set of "rowId|columnId"
   const [selectedRows, setSelectedRows] = useState(new Set()); // Set of rowIds for row highlight
   const [anchorRow, setAnchorRow] = useState(null); // For shift-click row range selection
@@ -60,14 +93,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
 
   // Listical menu state
   const [isListicalMenuOpen, setIsListicalMenuOpen] = useState(false);
-  const [showRecurring, setShowRecurring] = useState(true);
-  const [showSubprojects, setShowSubprojects] = useState(true);
-  const [showMaxMinRows, setShowMaxMinRows] = useState(true);
   const [addTasksCount, setAddTasksCount] = useState('');
-  const [selectedSortStatuses, setSelectedSortStatuses] = useState(() => new Set(SORTABLE_STATUSES));
-
-  // Storage management (column sizing and size scale)
-  const { columnSizing, setColumnSizing, sizeScale, setSizeScale } = usePlannerStorage();
 
   // Load projects and subprojects from Staging
   const { projects, subprojects, projectSubprojectsMap, projectNamesMap } = useProjectsData();

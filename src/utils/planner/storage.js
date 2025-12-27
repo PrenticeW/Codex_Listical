@@ -7,6 +7,12 @@ import isBrowserEnvironment from '../isBrowserEnvironment';
 import {
   COLUMN_SIZING_KEY_TEMPLATE,
   SIZE_SCALE_KEY_TEMPLATE,
+  START_DATE_KEY_TEMPLATE,
+  SHOW_RECURRING_KEY_TEMPLATE,
+  SHOW_SUBPROJECTS_KEY_TEMPLATE,
+  SHOW_MAX_MIN_ROWS_KEY_TEMPLATE,
+  SORT_STATUSES_KEY_TEMPLATE,
+  TASK_ROWS_KEY_TEMPLATE,
   DEFAULT_PROJECT_ID,
 } from '../../constants/plannerStorageKeys';
 
@@ -101,6 +107,234 @@ export const saveSizeScale = (sizeScale, projectId = DEFAULT_PROJECT_ID) => {
 };
 
 // ============================================================
+// START DATE
+// ============================================================
+
+/**
+ * Reads start date for a project
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ * @returns {string} Start date in YYYY-MM-DD format, or today's date if not set
+ */
+export const readStartDate = (projectId = DEFAULT_PROJECT_ID) => {
+  if (!isBrowserEnvironment()) {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  }
+  try {
+    const key = getProjectKey(START_DATE_KEY_TEMPLATE, projectId);
+    const raw = window.localStorage.getItem(key);
+    if (!raw) {
+      const today = new Date();
+      return today.toISOString().split('T')[0];
+    }
+    return raw;
+  } catch (error) {
+    console.error('Failed to read start date', error);
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  }
+};
+
+/**
+ * Saves start date for a project
+ * @param {string} startDate - Start date in YYYY-MM-DD format
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ */
+export const saveStartDate = (startDate, projectId = DEFAULT_PROJECT_ID) => {
+  if (!isBrowserEnvironment()) return;
+  try {
+    const key = getProjectKey(START_DATE_KEY_TEMPLATE, projectId);
+    window.localStorage.setItem(key, startDate);
+  } catch (error) {
+    console.error('Failed to save start date', error);
+  }
+};
+
+// ============================================================
+// UI TOGGLES (Show Recurring, Show Subprojects, Show Max/Min Rows)
+// ============================================================
+
+/**
+ * Reads show recurring column setting for a project
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ * @returns {boolean} Show recurring column (defaults to true)
+ */
+export const readShowRecurring = (projectId = DEFAULT_PROJECT_ID) => {
+  if (!isBrowserEnvironment()) return true;
+  try {
+    const key = getProjectKey(SHOW_RECURRING_KEY_TEMPLATE, projectId);
+    const raw = window.localStorage.getItem(key);
+    if (raw === null) return true;
+    return raw === 'true';
+  } catch (error) {
+    console.error('Failed to read show recurring', error);
+    return true;
+  }
+};
+
+/**
+ * Saves show recurring column setting for a project
+ * @param {boolean} showRecurring - Show recurring column
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ */
+export const saveShowRecurring = (showRecurring, projectId = DEFAULT_PROJECT_ID) => {
+  if (!isBrowserEnvironment()) return;
+  try {
+    const key = getProjectKey(SHOW_RECURRING_KEY_TEMPLATE, projectId);
+    window.localStorage.setItem(key, showRecurring.toString());
+  } catch (error) {
+    console.error('Failed to save show recurring', error);
+  }
+};
+
+/**
+ * Reads show subprojects column setting for a project
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ * @returns {boolean} Show subprojects column (defaults to true)
+ */
+export const readShowSubprojects = (projectId = DEFAULT_PROJECT_ID) => {
+  if (!isBrowserEnvironment()) return true;
+  try {
+    const key = getProjectKey(SHOW_SUBPROJECTS_KEY_TEMPLATE, projectId);
+    const raw = window.localStorage.getItem(key);
+    if (raw === null) return true;
+    return raw === 'true';
+  } catch (error) {
+    console.error('Failed to read show subprojects', error);
+    return true;
+  }
+};
+
+/**
+ * Saves show subprojects column setting for a project
+ * @param {boolean} showSubprojects - Show subprojects column
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ */
+export const saveShowSubprojects = (showSubprojects, projectId = DEFAULT_PROJECT_ID) => {
+  if (!isBrowserEnvironment()) return;
+  try {
+    const key = getProjectKey(SHOW_SUBPROJECTS_KEY_TEMPLATE, projectId);
+    window.localStorage.setItem(key, showSubprojects.toString());
+  } catch (error) {
+    console.error('Failed to save show subprojects', error);
+  }
+};
+
+/**
+ * Reads show max/min rows setting for a project
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ * @returns {boolean} Show max/min rows (defaults to true)
+ */
+export const readShowMaxMinRows = (projectId = DEFAULT_PROJECT_ID) => {
+  if (!isBrowserEnvironment()) return true;
+  try {
+    const key = getProjectKey(SHOW_MAX_MIN_ROWS_KEY_TEMPLATE, projectId);
+    const raw = window.localStorage.getItem(key);
+    if (raw === null) return true;
+    return raw === 'true';
+  } catch (error) {
+    console.error('Failed to read show max/min rows', error);
+    return true;
+  }
+};
+
+/**
+ * Saves show max/min rows setting for a project
+ * @param {boolean} showMaxMinRows - Show max/min rows
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ */
+export const saveShowMaxMinRows = (showMaxMinRows, projectId = DEFAULT_PROJECT_ID) => {
+  if (!isBrowserEnvironment()) return;
+  try {
+    const key = getProjectKey(SHOW_MAX_MIN_ROWS_KEY_TEMPLATE, projectId);
+    window.localStorage.setItem(key, showMaxMinRows.toString());
+  } catch (error) {
+    console.error('Failed to save show max/min rows', error);
+  }
+};
+
+// ============================================================
+// SORT STATUSES
+// ============================================================
+
+/**
+ * Reads selected sort statuses for a project
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ * @returns {Set<string>} Set of selected status values (defaults to all sortable statuses)
+ */
+export const readSortStatuses = (projectId = DEFAULT_PROJECT_ID) => {
+  if (!isBrowserEnvironment()) {
+    return new Set(['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned']);
+  }
+  try {
+    const key = getProjectKey(SORT_STATUSES_KEY_TEMPLATE, projectId);
+    const raw = window.localStorage.getItem(key);
+    if (!raw) {
+      return new Set(['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned']);
+    }
+    const parsed = JSON.parse(raw);
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch (error) {
+    console.error('Failed to read sort statuses', error);
+    return new Set(['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned']);
+  }
+};
+
+/**
+ * Saves selected sort statuses for a project
+ * @param {Set<string>} sortStatuses - Set of selected status values
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ */
+export const saveSortStatuses = (sortStatuses, projectId = DEFAULT_PROJECT_ID) => {
+  if (!isBrowserEnvironment()) return;
+  try {
+    const key = getProjectKey(SORT_STATUSES_KEY_TEMPLATE, projectId);
+    const statusArray = Array.from(sortStatuses);
+    window.localStorage.setItem(key, JSON.stringify(statusArray));
+  } catch (error) {
+    console.error('Failed to save sort statuses', error);
+  }
+};
+
+// ============================================================
+// TASK ROWS DATA
+// ============================================================
+
+/**
+ * Reads task rows data for a project
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ * @returns {Array} Array of task row objects (empty array if not found)
+ */
+export const readTaskRows = (projectId = DEFAULT_PROJECT_ID) => {
+  if (!isBrowserEnvironment()) return [];
+  try {
+    const key = getProjectKey(TASK_ROWS_KEY_TEMPLATE, projectId);
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error('Failed to read task rows', error);
+    return [];
+  }
+};
+
+/**
+ * Saves task rows data for a project
+ * @param {Array} taskRows - Array of task row objects
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ */
+export const saveTaskRows = (taskRows, projectId = DEFAULT_PROJECT_ID) => {
+  if (!isBrowserEnvironment()) return;
+  try {
+    const key = getProjectKey(TASK_ROWS_KEY_TEMPLATE, projectId);
+    window.localStorage.setItem(key, JSON.stringify(taskRows));
+  } catch (error) {
+    console.error('Failed to save task rows', error);
+  }
+};
+
+// ============================================================
 // RE-EXPORT EXISTING STORAGE FUNCTIONS (Backward Compatibility)
 // ============================================================
 
@@ -110,5 +344,5 @@ export {
   readStoredSettings,
   saveSettings,
   readStoredTaskRows,
-  saveTaskRows,
+  saveTaskRows as saveLegacyTaskRows,
 } from '../plannerStorage';
