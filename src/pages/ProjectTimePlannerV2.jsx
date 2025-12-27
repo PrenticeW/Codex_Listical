@@ -107,15 +107,17 @@ export default function ProjectTimePlannerV2() {
       } else {
         // Task has content
         if (hasScheduledTime) {
-          // Only auto-update to Scheduled if status is '-' or 'Not Scheduled'
-          // Don't override 'Done', 'Blocked', 'On Hold', or 'Abandoned'
-          if (status === '-' || status === 'Not Scheduled') {
+          // Auto-update to Scheduled if status is '-', 'Not Scheduled', or 'Abandoned'
+          // Don't override 'Done', 'Blocked', or 'On Hold'
+          if (status === '-' || status === 'Not Scheduled' || status === 'Abandoned') {
             status = 'Scheduled';
           }
         } else {
-          // No scheduled time - ALWAYS set to 'Not Scheduled', regardless of current status
-          // This ensures that removing all time values resets the status
-          status = 'Not Scheduled';
+          // No scheduled time - set to 'Not Scheduled', unless status is 'Abandoned'
+          // Abandoned tasks can exist without scheduled time
+          if (status !== 'Abandoned') {
+            status = 'Not Scheduled';
+          }
         }
       }
 
@@ -461,6 +463,56 @@ export default function ProjectTimePlannerV2() {
 
     // Don't create command if value hasn't changed
     if (oldValue === newValue) {
+      setEditingCell(null);
+      setEditValue('');
+      return;
+    }
+
+    // Special handling for status column when set to "Abandoned"
+    if (columnId === 'status' && newValue === 'Abandoned') {
+      // Store old day column values for undo
+      const oldDayValues = {};
+      for (let i = 0; i < totalDays; i++) {
+        const dayColumnId = `day-${i}`;
+        oldDayValues[dayColumnId] = row?.[dayColumnId] || '';
+      }
+
+      // Create command that updates status and clears day columns with values
+      const command = {
+        execute: () => {
+          setData(prev => prev.map(row => {
+            if (row.id === rowId) {
+              const updates = { status: newValue };
+              // Clear day columns that have time values
+              for (let i = 0; i < totalDays; i++) {
+                const dayColumnId = `day-${i}`;
+                const currentValue = row[dayColumnId];
+                // Only clear if there's a value present
+                if (currentValue && currentValue !== '') {
+                  updates[dayColumnId] = '';
+                }
+              }
+              return { ...row, ...updates };
+            }
+            return row;
+          }));
+        },
+        undo: () => {
+          setData(prev => prev.map(row => {
+            if (row.id === rowId) {
+              const updates = { status: oldValue };
+              // Restore all day columns
+              for (let i = 0; i < totalDays; i++) {
+                updates[`day-${i}`] = oldDayValues[`day-${i}`];
+              }
+              return { ...row, ...updates };
+            }
+            return row;
+          }));
+        },
+      };
+
+      executeCommand(command);
       setEditingCell(null);
       setEditValue('');
       return;
