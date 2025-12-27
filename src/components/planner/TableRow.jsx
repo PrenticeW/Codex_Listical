@@ -678,9 +678,13 @@ export default function TableRow({
               ) : (
                 columnId === 'checkbox' || columnId === 'recurring' ? (
                   <div
-                    className="w-full h-full flex items-center justify-center"
+                    className={`w-full h-full flex items-center justify-center ${
+                      isSelected && !isEditing ? 'ring-2 ring-inset ring-blue-500' : ''
+                    }`}
                     style={{
-                      backgroundColor: (value === 'true' || value === true) ? '#d4ecbc' : 'transparent',
+                      backgroundColor: (value === 'true' || value === true)
+                        ? (isSelected && !isEditing ? '#b8dff0' : '#d4ecbc')
+                        : (isSelected && !isEditing ? '#eff6ff' : 'transparent'),
                     }}
                   >
                     {/* Hidden input for copy/paste compatibility */}
