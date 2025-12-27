@@ -47,20 +47,28 @@ function extractProjectsData(shortlist) {
       projects: ['-'],
       subprojects: ['-'],
       projectSubprojectsMap: {},
+      projectNamesMap: {},
     };
   }
 
   const projects = ['-'];
   const allSubprojects = new Set(['-']);
   const projectSubprojectsMap = {};
+  const projectNamesMap = {}; // Map from nickname/key to full project name
 
   shortlist.forEach(item => {
-    // Get project name (prefer nickname, fallback to name)
-    const projectName = (item.projectNickname || item.projectName || '').trim();
+    const fullProjectName = (item.projectName || '').trim();
+    const nickname = (item.projectNickname || '').trim();
 
-    if (projectName && projectName !== '-') {
-      projects.push(projectName);
-      projectSubprojectsMap[projectName] = ['-'];
+    // Use nickname as key if available, otherwise use full name
+    const projectKey = nickname || fullProjectName;
+
+    if (projectKey && projectKey !== '-') {
+      projects.push(projectKey);
+      projectSubprojectsMap[projectKey] = ['-'];
+
+      // Store the mapping from key to full project name
+      projectNamesMap[projectKey] = fullProjectName || projectKey;
 
       // Extract subprojects from planSummary
       if (item.planSummary && Array.isArray(item.planSummary.subprojects)) {
@@ -68,7 +76,7 @@ function extractProjectsData(shortlist) {
           const subprojectName = (subproject.name || '').trim();
           if (subprojectName && subprojectName !== '-') {
             allSubprojects.add(subprojectName);
-            projectSubprojectsMap[projectName].push(subprojectName);
+            projectSubprojectsMap[projectKey].push(subprojectName);
           }
         });
       }
@@ -79,5 +87,6 @@ function extractProjectsData(shortlist) {
     projects,
     subprojects: Array.from(allSubprojects),
     projectSubprojectsMap,
+    projectNamesMap,
   };
 }

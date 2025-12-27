@@ -70,7 +70,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   const { columnSizing, setColumnSizing, sizeScale, setSizeScale } = usePlannerStorage();
 
   // Load projects and subprojects from Staging
-  const { projects, subprojects, projectSubprojectsMap } = useProjectsData();
+  const { projects, subprojects, projectSubprojectsMap, projectNamesMap } = useProjectsData();
 
   // Load daily bounds and project weekly quotas from Tactics page
   const { dailyBounds, projectWeeklyQuotas } = useTacticsMetrics();
@@ -365,15 +365,18 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         let insertIndex = filterRowIndex + 1;
 
         // Insert project rows for each project (skip '-')
-        projects.forEach(projectName => {
-          if (projectName === '-') return;
+        projects.forEach(projectKey => {
+          if (projectKey === '-') return;
+
+          // Get full project name from the map (projectKey might be a nickname)
+          const fullProjectName = projectNamesMap[projectKey] || projectKey;
 
           // Create project header row
           const projectHeaderRow = {
-            id: `${projectName}-header`,
+            id: `${projectKey}-header`,
             _rowType: 'projectHeader',
-            projectName: projectName,
-            projectNickname: projectName,
+            projectName: fullProjectName,
+            projectNickname: projectKey,
             rowNum: '',
             checkbox: '',
             project: '',
@@ -392,10 +395,10 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
 
           // Create "General" section row
           const generalRow = {
-            id: `${projectName}-general`,
+            id: `${projectKey}-general`,
             _rowType: 'projectGeneral',
-            projectName: projectName,
-            projectNickname: projectName,
+            projectName: fullProjectName,
+            projectNickname: projectKey,
             rowNum: '',
             checkbox: '',
             project: '',
@@ -413,10 +416,10 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
 
           // Create "Unscheduled" section row
           const unscheduledRow = {
-            id: `${projectName}-unscheduled`,
+            id: `${projectKey}-unscheduled`,
             _rowType: 'projectUnscheduled',
-            projectName: projectName,
-            projectNickname: projectName,
+            projectName: fullProjectName,
+            projectNickname: projectKey,
             rowNum: '',
             checkbox: '',
             project: '',
@@ -441,7 +444,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [projects, totalDays]);
+  }, [projects, projectNamesMap, totalDays]);
 
   // Calculate month spans for header
   const monthSpans = useMemo(() => {
