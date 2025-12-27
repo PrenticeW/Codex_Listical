@@ -24,6 +24,16 @@ import { createEmptyTaskRows } from '../utils/planner/taskRowGenerator';
 // Sortable status values for the "Sort Inbox" feature
 const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned'];
 
+// Map status values to their target sections for Sort Inbox
+const SORT_INBOX_TARGET_MAP = {
+  'Done': 'general',
+  'Scheduled': 'general',
+  'Not Scheduled': 'unscheduled',
+  'Abandoned': 'unscheduled',
+  'Blocked': 'unscheduled',
+  'On Hold': 'unscheduled',
+};
+
 /**
  * Google Sheets-like Spreadsheet using TanStack Table v8
  *
@@ -1844,10 +1854,183 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
 
   const handleSortInbox = useCallback(() => {
     setIsListicalMenuOpen(false);
-    // Placeholder for Sort Inbox functionality
-    // In V2, we have a simpler structure, so this feature may not be applicable yet
-    console.log('Sort Inbox clicked - not yet implemented in V2');
-  }, []);
+
+    // Early exit if no statuses are selected
+    if (selectedSortStatuses.size === 0) {
+      return;
+    }
+
+    // Helper to normalize project keys for matching (lowercase, trim)
+    const normalizeProjectKey = (key) => {
+      if (!key) return '';
+      return key.trim().toLowerCase();
+    };
+
+    // Build a map: normalized nickname -> projectNickname for matching
+    // Project section rows have both projectName (full) and projectNickname (short)
+    // Task rows have project field which contains the nickname from dropdown
+    const nicknameMap = new Map();
+    data.forEach((row) => {
+      if (row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled') {
+        // The project section rows store the nickname, use that as our key
+        const nickname = normalizeProjectKey(row.projectNickname);
+        nicknameMap.set(nickname, row.projectNickname);
+        console.log('[DEBUG] Found project section:', row._rowType, 'nickname:', row.projectNickname, 'normalized:', nickname);
+      }
+    });
+    console.log('[DEBUG] Nickname map has', nicknameMap.size, 'entries:', Array.from(nicknameMap.keys()));
+
+    // Find inbox section boundaries
+    const inboxStartIndex = data.findIndex(row => row._isInboxRow);
+    const archiveStartIndex = data.findIndex(row => row._isArchiveRow);
+
+    if (inboxStartIndex === -1) {
+      return;
+    }
+
+    // Determine inbox section end (either at archive row or end of data)
+    const inboxEndIndex = archiveStartIndex !== -1 ? archiveStartIndex : data.length;
+
+    // Collect inbox tasks that match the selected statuses
+    const generalTasksByProject = new Map(); // Map<projectKey, task[]>
+    const unscheduledTasksByProject = new Map(); // Map<projectKey, task[]>
+    const inboxTasksToMove = new Set(); // Track which task IDs are being moved
+
+    for (let i = inboxStartIndex + 1; i < inboxEndIndex; i++) {
+      const row = data[i];
+
+      // Skip special rows - only process regular task rows
+      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
+          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
+          row._isFilterRow || row._isInboxRow || row._isArchiveRow || row._rowType) {
+        continue;
+      }
+
+      console.log('[DEBUG] Inbox row:', i, 'id:', row.id, 'task:', row.task, 'project:', row.project, 'status:', row.status);
+
+      // Check if this task should be sorted
+      const status = row.status || '';
+      if (!selectedSortStatuses.has(status)) {
+        console.log('[DEBUG] Status not selected:', status);
+        continue;
+      }
+
+      // Determine target section
+      const target = SORT_INBOX_TARGET_MAP[status];
+      if (!target) {
+        console.log('[DEBUG] No target for status:', status);
+        continue;
+      }
+
+      // Match project by nickname
+      // Task row.project contains the nickname from the dropdown
+      const taskProjectNickname = normalizeProjectKey(row.project);
+
+      // Check if this nickname exists in our project sections
+      if (!nicknameMap.has(taskProjectNickname)) {
+        console.log('[DEBUG] No match for project nickname:', row.project, 'normalized:', taskProjectNickname);
+        continue;
+      }
+
+      console.log('[DEBUG] ✓ Matched! project:', row.project, 'target:', target);
+
+      // Use the normalized nickname as the map key
+      const projectKey = taskProjectNickname;
+
+      // Add to appropriate collection
+      if (target === 'general') {
+        if (!generalTasksByProject.has(projectKey)) {
+          generalTasksByProject.set(projectKey, []);
+        }
+        generalTasksByProject.get(projectKey).push(row);
+        inboxTasksToMove.add(row.id);
+      } else if (target === 'unscheduled') {
+        if (!unscheduledTasksByProject.has(projectKey)) {
+          unscheduledTasksByProject.set(projectKey, []);
+        }
+        unscheduledTasksByProject.get(projectKey).push(row);
+        inboxTasksToMove.add(row.id);
+      }
+    }
+
+    console.log('[DEBUG] Tasks to move:', inboxTasksToMove.size);
+    console.log('[DEBUG] General tasks:', Array.from(generalTasksByProject.entries()).map(([k, v]) => `${k}: ${v.length}`));
+    console.log('[DEBUG] Unscheduled tasks:', Array.from(unscheduledTasksByProject.entries()).map(([k, v]) => `${k}: ${v.length}`));
+
+    // If no tasks to move, exit early
+    if (inboxTasksToMove.size === 0) {
+      return;
+    }
+
+    // Store old data for undo
+    const oldData = [...data];
+
+    // Copy the set for closure capture
+    const tasksToMove = new Set(inboxTasksToMove);
+
+    // Create command for sort inbox operation
+    const command = {
+      execute: () => {
+        setData(prevData => {
+          const newData = [];
+          // Create fresh copies of the maps for this execution to avoid mutation issues
+          const generalTasksCopy = new Map(generalTasksByProject);
+          const unscheduledTasksCopy = new Map(unscheduledTasksByProject);
+
+          console.log('[DEBUG EXECUTE] Starting, prevData length:', prevData.length, 'tasks to skip:', tasksToMove.size);
+
+          prevData.forEach((row, idx) => {
+            // Skip tasks that are being moved from inbox
+            if (tasksToMove.has(row.id)) {
+              console.log('[DEBUG EXECUTE] Skipping row', idx, 'id:', row.id);
+              return;
+            }
+
+            // Add the current row
+            newData.push(row);
+
+            // If this is a projectGeneral row, insert general tasks for this project
+            if (row._rowType === 'projectGeneral') {
+              const projectKey = normalizeProjectKey(row.projectNickname);
+              const tasksToInsert = generalTasksCopy.get(projectKey);
+              console.log('[DEBUG EXECUTE] At projectGeneral, nickname:', row.projectNickname, 'key:', projectKey, 'tasks:', tasksToInsert?.length || 0);
+
+              if (tasksToInsert && tasksToInsert.length > 0) {
+                console.log('[DEBUG EXECUTE] Inserting', tasksToInsert.length, 'tasks into General');
+                tasksToInsert.forEach(task => {
+                  newData.push(task);
+                });
+                generalTasksCopy.delete(projectKey);
+              }
+            }
+
+            // If this is a projectUnscheduled row, insert unscheduled tasks for this project
+            if (row._rowType === 'projectUnscheduled') {
+              const projectKey = normalizeProjectKey(row.projectNickname);
+              const tasksToInsert = unscheduledTasksCopy.get(projectKey);
+              console.log('[DEBUG EXECUTE] At projectUnscheduled, nickname:', row.projectNickname, 'key:', projectKey, 'tasks:', tasksToInsert?.length || 0);
+
+              if (tasksToInsert && tasksToInsert.length > 0) {
+                console.log('[DEBUG EXECUTE] Inserting', tasksToInsert.length, 'tasks into Unscheduled');
+                tasksToInsert.forEach(task => {
+                  newData.push(task);
+                });
+                unscheduledTasksCopy.delete(projectKey);
+              }
+            }
+          });
+
+          console.log('[DEBUG EXECUTE] Done, newData length:', newData.length);
+          return newData;
+        });
+      },
+      undo: () => {
+        setData(oldData);
+      },
+    };
+
+    executeCommand(command);
+  }, [data, selectedSortStatuses, executeCommand]);
 
   const handleArchiveWeek = useCallback(() => {
     setIsListicalMenuOpen(false);

@@ -75,17 +75,13 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID } = {
   // Auto-save show recurring to localStorage when it changes (skip initial mount)
   useEffect(() => {
     if (!isInitialMount.current) {
-      console.log('Saving showRecurring:', showRecurring);
       saveShowRecurring(showRecurring, projectId);
-    } else {
-      console.log('Skipping save on initial mount, showRecurring:', showRecurring);
     }
   }, [showRecurring, projectId]);
 
   // Auto-save show subprojects to localStorage when it changes (skip initial mount)
   useEffect(() => {
     if (!isInitialMount.current) {
-      console.log('Saving showSubprojects:', showSubprojects);
       saveShowSubprojects(showSubprojects, projectId);
     }
   }, [showSubprojects, projectId]);
@@ -93,7 +89,6 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID } = {
   // Auto-save show max/min rows to localStorage when it changes (skip initial mount)
   useEffect(() => {
     if (!isInitialMount.current) {
-      console.log('Saving showMaxMinRows:', showMaxMinRows);
       saveShowMaxMinRows(showMaxMinRows, projectId);
     }
   }, [showMaxMinRows, projectId]);
@@ -101,7 +96,6 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID } = {
   // Auto-save sort statuses to localStorage when it changes (skip initial mount)
   useEffect(() => {
     if (!isInitialMount.current) {
-      console.log('Saving selectedSortStatuses:', Array.from(selectedSortStatuses));
       saveSortStatuses(selectedSortStatuses, projectId);
     }
   }, [selectedSortStatuses, projectId]);
