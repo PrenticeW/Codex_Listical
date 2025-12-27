@@ -760,18 +760,6 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     // Prevent default to avoid text selection
     e.preventDefault();
 
-    // If we're editing a different cell, just clear edit state
-    // Let the EditableCell component handle saving via blur
-    if (editingCell && (editingCell.rowId !== rowId || editingCell.columnId !== columnId)) {
-      // Don't manually save here - the EditableCell will save on blur
-      // Just clear the editing state after a short delay to allow blur to fire
-      setTimeout(() => {
-        setEditingCell(null);
-        setEditValue('');
-      }, 0);
-      return; // Return early to avoid selecting the new cell immediately
-    }
-
     const cellKey = getCellKey(rowId, columnId);
 
     // Clear row selections when selecting cells
@@ -814,7 +802,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         setEditingCell(null);
       }
     }
-  }, [anchorCell, getCellRange, editingCell, editValue, handleEditComplete, data]);
+  }, [anchorCell, getCellRange, data]);
 
   const handleCellMouseEnter = useCallback((e, rowId, columnId) => {
     if (!isDragging || !dragStartCell || columnId === 'rowNum') return;
@@ -1518,19 +1506,48 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     // Create new empty rows using the task row generator utility
     const newRows = createEmptyTaskRows(count, totalDays);
 
-    // Add new rows to the end of the data
+    // Determine insertion position
+    // If a row is selected, insert after the last selected row
+    // Otherwise, insert at the end
+    let insertIndex = data.length;
+
+    if (selectedRows.size > 0) {
+      // Find the index of the last selected row
+      const selectedRowIds = Array.from(selectedRows);
+      const selectedIndices = selectedRowIds
+        .map(rowId => data.findIndex(r => r.id === rowId))
+        .filter(idx => idx !== -1)
+        .sort((a, b) => b - a); // Sort descending to get the last selected row
+
+      if (selectedIndices.length > 0) {
+        insertIndex = selectedIndices[0] + 1; // Insert after the last selected row
+      }
+    }
+
+    // Store the insertion index for undo
+    const savedInsertIndex = insertIndex;
+
+    // Add new rows at the determined position
     const command = {
       execute: () => {
-        setData(prev => [...prev, ...newRows]);
+        setData(prev => {
+          const newData = [...prev];
+          newData.splice(savedInsertIndex, 0, ...newRows);
+          return newData;
+        });
       },
       undo: () => {
-        setData(prev => prev.slice(0, -count));
+        setData(prev => {
+          const newData = [...prev];
+          newData.splice(savedInsertIndex, count);
+          return newData;
+        });
       },
     };
 
     executeCommand(command);
     setAddTasksCount('');
-  }, [addTasksCount, totalDays, executeCommand]);
+  }, [addTasksCount, totalDays, executeCommand, selectedRows, data]);
 
   const handleSortInbox = useCallback(() => {
     setIsListicalMenuOpen(false);
