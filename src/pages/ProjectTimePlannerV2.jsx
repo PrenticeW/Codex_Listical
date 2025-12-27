@@ -1003,6 +1003,16 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     setEditValue('');
   }, [data, executeCommand]);
 
+  const handleEditCancel = useCallback((rowId, columnId) => {
+    // Exit edit mode and keep cell selected
+    setEditingCell(null);
+    setEditValue('');
+    // Ensure the cell remains selected
+    const cellKey = getCellKey(rowId, columnId);
+    setSelectedCells(new Set([cellKey]));
+    setAnchorCell({ rowId, columnId });
+  }, []);
+
   const handleEditKeyDown = useCallback((e, rowId, columnId, currentValue) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -1083,20 +1093,9 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
       setAnchorCell({ rowId, columnId });
       setDragStartCell({ rowId, columnId });
       setIsDragging(true);
-
-      // For dropdown columns (project, subproject, status, estimate), immediately enter edit mode on single click
-      // Checkbox columns don't need edit mode - they're always interactive
-      if (columnId === 'project' || columnId === 'subproject' || columnId === 'status' || columnId === 'estimate') {
-        const row = data.find(r => r.id === rowId);
-        const currentValue = row ? row[columnId] || '' : '';
-        setEditingCell({ rowId, columnId });
-        setEditValue(currentValue);
-        setIsDragging(false); // Cancel drag since we're entering edit mode
-      } else {
-        setEditingCell(null);
-      }
+      setEditingCell(null);
     }
-  }, [anchorCell, getCellRange, data]);
+  }, [anchorCell, getCellRange]);
 
   const handleCellMouseEnter = useCallback((e, rowId, columnId) => {
     if (!isDragging || !dragStartCell || columnId === 'rowNum') return;
@@ -1961,6 +1960,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         handleCellMouseEnter={handleCellMouseEnter}
         handleCellDoubleClick={handleCellDoubleClick}
         handleEditComplete={handleEditComplete}
+        handleEditCancel={handleEditCancel}
         handleEditKeyDown={handleEditKeyDown}
         draggedRowId={draggedRowId}
         dropTargetRowId={dropTargetRowId}

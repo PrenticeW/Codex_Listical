@@ -25,6 +25,7 @@ export default function TaskRow({
   handleCellMouseEnter,
   handleCellDoubleClick,
   handleEditComplete,
+  handleEditCancel,
   handleEditKeyDown,
   draggedRowId,
   dropTargetRowId,
@@ -207,36 +208,44 @@ export default function TaskRow({
                     <ProjectDropdownCell
                       initialValue={editValue}
                       onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
+                      onCancel={() => handleEditCancel(rowId, columnId)}
                       onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
                       cellFontSize={cellFontSize}
                       rowHeight={rowHeight}
                       options={projects}
+                      autoOpen={true}
                     />
                   ) : columnId === 'subproject' ? (
                     <SubprojectDropdownCell
                       initialValue={editValue}
                       onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
+                      onCancel={() => handleEditCancel(rowId, columnId)}
                       onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
                       cellFontSize={cellFontSize}
                       rowHeight={rowHeight}
                       options={filteredSubprojects}
+                      autoOpen={true}
                     />
                   ) : columnId === 'status' ? (
                     <DropdownCell
                       initialValue={editValue}
                       onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
+                      onCancel={() => handleEditCancel(rowId, columnId)}
                       onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
                       cellFontSize={cellFontSize}
                       rowHeight={rowHeight}
                       isPillbox={true}
+                      autoOpen={true}
                     />
                   ) : columnId === 'estimate' ? (
                     <EstimateDropdownCell
                       initialValue={editValue}
                       onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
+                      onCancel={() => handleEditCancel(rowId, columnId)}
                       onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
                       cellFontSize={cellFontSize}
                       rowHeight={rowHeight}
+                      autoOpen={true}
                     />
                   ) : (
                     <EditableCell
@@ -317,7 +326,14 @@ export default function TaskRow({
                           }}
                         >
                           <span>{value}</span>
-                          <ChevronDown size={10} style={{ color: '#000000' }} />
+                          <ChevronDown
+                            size={10}
+                            style={{ color: '#000000', cursor: 'pointer' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCellDoubleClick(rowId, columnId, value);
+                            }}
+                          />
                         </div>
                       ) : (
                         <div
@@ -331,7 +347,14 @@ export default function TaskRow({
                           }}
                         >
                           <span>-</span>
-                          <ChevronDown size={10} style={{ color: '#000000' }} />
+                          <ChevronDown
+                            size={10}
+                            style={{ color: '#000000', cursor: 'pointer' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCellDoubleClick(rowId, columnId, value);
+                            }}
+                          />
                         </div>
                       )}
                     </div>
@@ -347,7 +370,14 @@ export default function TaskRow({
                         }}
                       >
                         <span>{value || '-'}</span>
-                        <ChevronDown size={12} style={{ color: '#9ca3af' }} />
+                        <ChevronDown
+                          size={12}
+                          style={{ color: '#9ca3af', cursor: 'pointer' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCellDoubleClick(rowId, columnId, value);
+                          }}
+                        />
                       </div>
                     </div>
                   ) : columnId === 'status' ? (
@@ -364,7 +394,14 @@ export default function TaskRow({
                           }}
                         >
                           <span>{value}</span>
-                          <ChevronDown size={10} style={{ color: PILLBOX_COLORS[value]?.text || PILLBOX_COLORS['-'].text }} />
+                          <ChevronDown
+                            size={10}
+                            style={{ color: PILLBOX_COLORS[value]?.text || PILLBOX_COLORS['-'].text, cursor: 'pointer' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCellDoubleClick(rowId, columnId, value);
+                            }}
+                          />
                         </div>
                       ) : (
                         <div
@@ -378,7 +415,14 @@ export default function TaskRow({
                           }}
                         >
                           <span>-</span>
-                          <ChevronDown size={10} style={{ color: PILLBOX_COLORS['-'].text }} />
+                          <ChevronDown
+                            size={10}
+                            style={{ color: PILLBOX_COLORS['-'].text, cursor: 'pointer' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCellDoubleClick(rowId, columnId, value);
+                            }}
+                          />
                         </div>
                       )}
                     </div>
@@ -394,7 +438,14 @@ export default function TaskRow({
                         }}
                       >
                         <span>{value || '-'}</span>
-                        <ChevronDown size={12} style={{ color: '#9ca3af' }} />
+                        <ChevronDown
+                          size={12}
+                          style={{ color: '#9ca3af', cursor: 'pointer' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCellDoubleClick(rowId, columnId, value);
+                          }}
+                        />
                       </div>
                     </div>
                   ) : columnId === 'timeValue' ? (

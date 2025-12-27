@@ -22,6 +22,7 @@ function PlannerTable({
   handleCellMouseEnter,
   handleCellDoubleClick,
   handleEditComplete,
+  handleEditCancel,
   handleEditKeyDown,
   draggedRowId,
   dropTargetRowId,
@@ -186,6 +187,7 @@ function PlannerTable({
                   handleCellMouseEnter={handleCellMouseEnter}
                   handleCellDoubleClick={handleCellDoubleClick}
                   handleEditComplete={handleEditComplete}
+                  handleEditCancel={handleEditCancel}
                   handleEditKeyDown={handleEditKeyDown}
                   draggedRowId={draggedRowId}
                   dropTargetRowId={dropTargetRowId}
@@ -247,6 +249,7 @@ function PlannerTable({
                   handleCellMouseEnter={handleCellMouseEnter}
                   handleCellDoubleClick={handleCellDoubleClick}
                   handleEditComplete={handleEditComplete}
+                  handleEditCancel={handleEditCancel}
                   handleEditKeyDown={handleEditKeyDown}
                   draggedRowId={draggedRowId}
                   dropTargetRowId={dropTargetRowId}

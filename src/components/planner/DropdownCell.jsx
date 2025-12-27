@@ -32,12 +32,14 @@ const PILLBOX_COLORS = {
 function DropdownCell({
   initialValue,
   onComplete,
+  onCancel,
   onKeyDown,
   cellFontSize,
   rowHeight,
   isPillbox = false, // New prop to enable pillbox styling
+  autoOpen = false, // Auto-open dropdown when mounted
 }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(autoOpen);
   const [selectedIndex, setSelectedIndex] = useState(() => {
     // Handle empty string as "-"
     const valueToFind = initialValue === '' ? '-' : initialValue;
@@ -48,9 +50,9 @@ function DropdownCell({
   const dropdownRef = useRef(null);
   const buttonRef = useRef(null);
 
-  // Auto-open dropdown when component mounts and calculate position
+  // Calculate position when dropdown opens
   useEffect(() => {
-    if (buttonRef.current) {
+    if (isOpen && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
       setDropdownPosition({
         top: rect.bottom,
@@ -58,8 +60,7 @@ function DropdownCell({
         width: rect.width
       });
     }
-    setIsOpen(true);
-  }, []);
+  }, [isOpen]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -84,10 +85,19 @@ function DropdownCell({
     onComplete(value);
   };
 
+  const handleCancel = () => {
+    setIsOpen(false);
+    if (onCancel) {
+      onCancel();
+    } else {
+      onComplete(initialValue);
+    }
+  };
+
   const handleKeyDown = (e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
-      handleComplete(initialValue); // Cancel - use initial value
+      handleCancel();
       return;
     }
 

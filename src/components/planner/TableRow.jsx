@@ -21,6 +21,7 @@ export default function TableRow({
   handleCellMouseEnter,
   handleCellDoubleClick,
   handleEditComplete,
+  handleEditCancel,
   handleEditKeyDown,
   draggedRowId,
   dropTargetRowId,
@@ -113,6 +114,7 @@ export default function TableRow({
         handleCellMouseEnter={handleCellMouseEnter}
         handleCellDoubleClick={handleCellDoubleClick}
         handleEditComplete={handleEditComplete}
+        handleEditCancel={handleEditCancel}
         handleEditKeyDown={handleEditKeyDown}
         draggedRowId={draggedRowId}
         dropTargetRowId={dropTargetRowId}
