@@ -1579,6 +1579,9 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
       columnPinning: {
         left: ['rowNum'], // Pin the row number column to the left
       },
+      columnVisibility: {
+        recurring: showRecurring,
+      },
     },
     onColumnSizingChange: setColumnSizing,
   });
@@ -1603,7 +1606,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   }, [rowHeight, rowVirtualizer]);
 
   return (
-    <div className="w-full h-screen flex flex-col bg-gray-50 p-4">
+    <div className="w-full h-screen flex flex-col bg-gray-50 overflow-hidden">
+      <div className="flex-1 flex flex-col p-4 gap-4 min-h-0 overflow-hidden">
       <NavigationBar
         currentPath={currentPath}
         onNavigate={onNavigate}
@@ -1644,7 +1648,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         }
       />
 
-      <div className="mt-4">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <PlannerTable
           tableBodyRef={tableBodyRef}
         timelineHeaderRows={timelineHeaderRows}
@@ -1680,6 +1684,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         subprojects={subprojects}
         projectSubprojectsMap={projectSubprojectsMap}
       />
+      </div>
       </div>
     </div>
   );

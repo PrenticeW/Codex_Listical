@@ -41,7 +41,7 @@ function PlannerTable({
   projectSubprojectsMap,
 }) {
   return (
-    <>
+    <div className="flex-1 flex flex-col min-h-0 gap-4 overflow-hidden">
       <div
         ref={tableBodyRef}
         className="flex-1 overflow-auto border border-gray-300 bg-white"
@@ -53,8 +53,14 @@ function PlannerTable({
               <tr key={headerRow.id} style={{ display: 'flex', height: `${rowHeight}px`, gap: 0 }}>
                 {headerRow.cells.map((cell) => {
                   const column = table.getColumn(cell.columnKey);
-                  const cellWidth = column ? column.getSize() : 60;
-                  const isPinned = column?.getIsPinned();
+
+                  // Skip rendering header for hidden columns
+                  if (!column || !column.getIsVisible()) {
+                    return null;
+                  }
+
+                  const cellWidth = column.getSize();
+                  const isPinned = column.getIsPinned();
                   const pinnedOffset = isPinned ? column.getStart('left') : undefined;
 
                   return (
@@ -260,7 +266,7 @@ function PlannerTable({
       </div>
 
       {/* Debug info */}
-      <div className="mt-4 p-2 bg-gray-100 rounded text-xs font-mono">
+      <div className="p-2 bg-gray-100 rounded text-xs font-mono flex-shrink-0">
         <div className="flex gap-4">
           <div>
             <span className="text-green-600 font-semibold">Virtualization:</span> Rendering {rowVirtualizer.getVirtualItems().length} of {data.length} rows
@@ -283,7 +289,7 @@ function PlannerTable({
           Try: Click row # to select row • Click cell to select • Drag to select range • Shift+Click for range • Cmd/Ctrl+Click for multi • Double-click to edit • Delete/Backspace to clear cells/rows • Cmd/Ctrl+Backspace to delete rows entirely • Cmd/Ctrl+C to copy • Cmd/Ctrl+V to paste • Cmd/Ctrl+Z to undo • Cmd/Ctrl+Shift+Z to redo
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
