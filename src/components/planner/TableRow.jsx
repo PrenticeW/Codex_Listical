@@ -4,6 +4,7 @@ import { MonthRow, WeekRow } from './rows';
 import EditableCell from './EditableCell';
 import DropdownCell, { PILLBOX_COLORS } from './DropdownCell';
 import EstimateDropdownCell from './EstimateDropdownCell';
+import CheckboxCell from './CheckboxCell';
 import { ESTIMATE_COLOR_MAP } from '../../constants/planner/rowTypes';
 
 /**
@@ -642,7 +643,14 @@ export default function TableRow({
               onDoubleClick={() => handleCellDoubleClick(rowId, columnId, value)}
             >
               {isEditing ? (
-                columnId === 'status' ? (
+                columnId === 'checkbox' || columnId === 'recurring' ? (
+                  <CheckboxCell
+                    initialValue={editValue}
+                    onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
+                    onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
+                    cellFontSize={cellFontSize}
+                  />
+                ) : columnId === 'status' ? (
                   <DropdownCell
                     initialValue={editValue}
                     onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
@@ -668,7 +676,59 @@ export default function TableRow({
                   />
                 )
               ) : (
-                columnId === 'status' ? (
+                columnId === 'checkbox' || columnId === 'recurring' ? (
+                  <div
+                    className="w-full h-full flex items-center justify-center"
+                    style={{
+                      backgroundColor: (value === 'true' || value === true) ? '#d4ecbc' : 'transparent',
+                    }}
+                  >
+                    {/* Hidden input for copy/paste compatibility */}
+                    <input
+                      type="text"
+                      value={(value === 'true' || value === true) ? 'true' : 'false'}
+                      readOnly
+                      style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px' }}
+                      tabIndex={-1}
+                      aria-hidden="true"
+                    />
+                    {/* Custom checkbox styled to match Done status colors */}
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditComplete(rowId, columnId, (!(value === 'true' || value === true)).toString());
+                      }}
+                      className="flex items-center justify-center cursor-pointer"
+                      style={{
+                        width: `${rowHeight - 12}px`,
+                        height: `${rowHeight - 12}px`,
+                        minWidth: `${rowHeight - 12}px`,
+                        minHeight: `${rowHeight - 12}px`,
+                        backgroundColor: (value === 'true' || value === true) ? '#52881c' : 'white',
+                        border: `2px solid ${(value === 'true' || value === true) ? '#52881c' : '#d1d5db'}`,
+                        borderRadius: '3px',
+                      }}
+                    >
+                      {(value === 'true' || value === true) && (
+                        <svg
+                          width={`${rowHeight - 14}`}
+                          height={`${rowHeight - 14}`}
+                          viewBox="0 0 14 14"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M11.6666 3.5L5.24998 9.91667L2.33331 7"
+                            stroke="white"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                  </div>
+                ) : columnId === 'status' ? (
                   <div className="w-full flex items-center" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
                     {value && value !== '' ? (
                       <div

@@ -561,6 +561,7 @@ export default function ProjectTimePlannerV2() {
       setIsDragging(true);
 
       // For dropdown columns (status, estimate), immediately enter edit mode on single click
+      // Checkbox columns don't need edit mode - they're always interactive
       if (columnId === 'status' || columnId === 'estimate') {
         const row = data.find(r => r.id === rowId);
         const currentValue = row ? row[columnId] || '' : '';
