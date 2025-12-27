@@ -56,6 +56,7 @@ export default function ProjectTimePlannerV2() {
   // Compute data with timeValue derived from estimate column
   // This ensures timeValue is always in sync with estimate without manual updates
   // Also computes day column values that are linked to timeValue
+  // Also auto-updates status based on task and time values
   const computedData = useMemo(() => {
     return data.map(row => {
       // Skip special rows (first 7 rows) - they don't need computation
@@ -77,9 +78,50 @@ export default function ProjectTimePlannerV2() {
         timeValue = formatMinutesToHHmm(minutes);
       }
 
+      // Auto-update status based on task column content and day columns
+      const taskContent = row.task || '';
+      let status = row.status;
+
+      // Check if any day column has a time value (including '0.00')
+      let hasScheduledTime = false;
+      for (let i = 0; i < totalDays; i++) {
+        const dayColumnId = `day-${i}`;
+        const dayValue = row[dayColumnId];
+
+        // Check if day has any time value
+        // Consider '=timeValue' as scheduled (it will be computed to actual value)
+        // Consider any non-empty value (including '0.00') as scheduled
+        if (dayValue && dayValue !== '') {
+          hasScheduledTime = true;
+          break;
+        }
+      }
+
+      // If task is empty or only whitespace, set status to '-'
+      // If task has content and day columns have time values, set status to 'Scheduled'
+      // If task has content but no time values, set status to 'Not Scheduled' (always)
+      if (taskContent.trim() === '') {
+        if (status !== '-') {
+          status = '-';
+        }
+      } else {
+        // Task has content
+        if (hasScheduledTime) {
+          // Only auto-update to Scheduled if status is '-' or 'Not Scheduled'
+          // Don't override 'Done', 'Blocked', 'On Hold', or 'Abandoned'
+          if (status === '-' || status === 'Not Scheduled') {
+            status = 'Scheduled';
+          }
+        } else {
+          // No scheduled time - ALWAYS set to 'Not Scheduled', regardless of current status
+          // This ensures that removing all time values resets the status
+          status = 'Not Scheduled';
+        }
+      }
+
       // Now compute day columns that are marked as linked to timeValue
       // A day column is marked as linked by storing "=timeValue" as the value
-      const updatedRow = { ...row, timeValue };
+      const updatedRow = { ...row, timeValue, status };
 
       // Process all day columns
       for (let i = 0; i < totalDays; i++) {
@@ -95,6 +137,28 @@ export default function ProjectTimePlannerV2() {
       return updatedRow;
     });
   }, [data, totalDays]);
+
+  // Sync computed status changes back to actual data
+  // This ensures that auto-computed status changes persist
+  useEffect(() => {
+    let hasChanges = false;
+    const updatedData = data.map((row, index) => {
+      const computedRow = computedData[index];
+
+      // Only update if status has changed and it's not a special row
+      if (computedRow && row.status !== computedRow.status && !row._isMonthRow &&
+          !row._isWeekRow && !row._isDayRow && !row._isDayOfWeekRow &&
+          !row._isDailyMinRow && !row._isDailyMaxRow && !row._isFilterRow) {
+        hasChanges = true;
+        return { ...row, status: computedRow.status };
+      }
+      return row;
+    });
+
+    if (hasChanges) {
+      setData(updatedData);
+    }
+  }, [computedData, data]);
 
   // Calculate dates array from startDate
   const dates = useMemo(() => {
@@ -525,9 +589,16 @@ export default function ProjectTimePlannerV2() {
     // Prevent default to avoid text selection
     e.preventDefault();
 
-    // If we're editing a different cell, save it first
+    // If we're editing a different cell, just clear edit state
+    // Let the EditableCell component handle saving via blur
     if (editingCell && (editingCell.rowId !== rowId || editingCell.columnId !== columnId)) {
-      handleEditComplete(editingCell.rowId, editingCell.columnId, editValue);
+      // Don't manually save here - the EditableCell will save on blur
+      // Just clear the editing state after a short delay to allow blur to fire
+      setTimeout(() => {
+        setEditingCell(null);
+        setEditValue('');
+      }, 0);
+      return; // Return early to avoid selecting the new cell immediately
     }
 
     const cellKey = getCellKey(rowId, columnId);
