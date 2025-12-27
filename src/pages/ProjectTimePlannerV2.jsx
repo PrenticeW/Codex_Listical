@@ -9,12 +9,18 @@ import { GripVertical, ListFilter } from 'lucide-react';
 import usePlannerStorage from '../hooks/planner/usePlannerStorage';
 import usePlannerColumns from '../hooks/planner/usePlannerColumns';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
+import useProjectsData from '../hooks/planner/useProjectsData';
 import { MonthRow, WeekRow } from '../components/planner/rows';
 import TableRow from '../components/planner/TableRow';
+import NavigationBar from '../components/planner/NavigationBar';
+import ProjectListicalMenu from '../components/planner/ProjectListicalMenu';
 import PlannerControls from '../components/planner/PlannerControls';
 import PlannerTable from '../components/planner/PlannerTable';
 import { createInitialData } from '../utils/planner/dataCreators';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../constants/planner/rowTypes';
+
+// Sortable status values for the "Sort Inbox" feature
+const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned'];
 
 /**
  * Google Sheets-like Spreadsheet using TanStack Table v8
@@ -28,7 +34,7 @@ import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../constants/p
  * - Row virtualization
  */
 
-export default function ProjectTimePlannerV2() {
+export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = () => {} }) {
   // Timeline configuration
   const totalDays = 84; // 12 weeks
 
@@ -50,8 +56,19 @@ export default function ProjectTimePlannerV2() {
   const [dropTargetRowId, setDropTargetRowId] = useState(null); // Track drop target
   const tableBodyRef = useRef(null);
 
+  // Listical menu state
+  const [isListicalMenuOpen, setIsListicalMenuOpen] = useState(false);
+  const [showRecurring, setShowRecurring] = useState(true);
+  const [showSubprojects, setShowSubprojects] = useState(true);
+  const [showMaxMinRows, setShowMaxMinRows] = useState(true);
+  const [addTasksCount, setAddTasksCount] = useState('');
+  const [selectedSortStatuses, setSelectedSortStatuses] = useState(() => new Set(SORTABLE_STATUSES));
+
   // Storage management (column sizing and size scale)
   const { columnSizing, setColumnSizing, sizeScale, setSizeScale } = usePlannerStorage();
+
+  // Load projects and subprojects from Staging
+  const { projects, subprojects, projectSubprojectsMap } = useProjectsData();
 
   // Compute data with timeValue derived from estimate column
   // This ensures timeValue is always in sync with estimate without manual updates
@@ -683,9 +700,9 @@ export default function ProjectTimePlannerV2() {
       setDragStartCell({ rowId, columnId });
       setIsDragging(true);
 
-      // For dropdown columns (status, estimate), immediately enter edit mode on single click
+      // For dropdown columns (project, subproject, status, estimate), immediately enter edit mode on single click
       // Checkbox columns don't need edit mode - they're always interactive
-      if (columnId === 'status' || columnId === 'estimate') {
+      if (columnId === 'project' || columnId === 'subproject' || columnId === 'status' || columnId === 'estimate') {
         const row = data.find(r => r.id === rowId);
         const currentValue = row ? row[columnId] || '' : '';
         setEditingCell({ rowId, columnId });
@@ -1354,8 +1371,8 @@ export default function ProjectTimePlannerV2() {
           const row = data.find(r => r.id === currentRowId);
           const currentValue = row ? row[currentColumnId] || '' : '';
 
-          // For dropdown columns (status, estimate), start editing with current value
-          if (currentColumnId === 'status' || currentColumnId === 'estimate') {
+          // For dropdown columns (project, subproject, status, estimate), start editing with current value
+          if (currentColumnId === 'project' || currentColumnId === 'subproject' || currentColumnId === 'status' || currentColumnId === 'estimate') {
             setEditingCell({ rowId: currentRowId, columnId: currentColumnId });
             setEditValue(currentValue);
           } else {
@@ -1377,6 +1394,71 @@ export default function ProjectTimePlannerV2() {
       window.removeEventListener('paste', handlePaste);
     };
   }, [selectedCells, selectedRows, editingCell, handleCopy, handlePaste, undo, redo, data, executeCommand, allColumnIds, handleDeleteRows]);
+
+  // Listical menu handlers
+  const toggleSortStatus = useCallback((status) => {
+    setSelectedSortStatuses(prev => {
+      const next = new Set(prev);
+      if (next.has(status)) {
+        next.delete(status);
+      } else {
+        next.add(status);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleAddTasks = useCallback(() => {
+    setIsListicalMenuOpen(false);
+    const count = parseInt(addTasksCount, 10);
+    if (!Number.isFinite(count) || count <= 0) return;
+
+    // Create new empty rows
+    const newRows = Array.from({ length: count }, (_, i) => ({
+      id: `row-${Date.now()}-${i}`,
+      checkbox: false,
+      project: '',
+      subproject: '',
+      status: '-',
+      task: '',
+      recurring: '',
+      estimate: '',
+      timeValue: '',
+      ...Object.fromEntries(
+        Array.from({ length: totalDays }, (_, dayIdx) => [`day-${dayIdx}`, ''])
+      ),
+    }));
+
+    // Add new rows to the end of the data
+    const command = {
+      execute: () => {
+        setData(prev => [...prev, ...newRows]);
+      },
+      undo: () => {
+        setData(prev => prev.slice(0, -count));
+      },
+    };
+
+    executeCommand(command);
+    setAddTasksCount('');
+  }, [addTasksCount, totalDays, executeCommand]);
+
+  const handleSortInbox = useCallback(() => {
+    setIsListicalMenuOpen(false);
+    // Placeholder for Sort Inbox functionality
+    // In V2, we have a simpler structure, so this feature may not be applicable yet
+    console.log('Sort Inbox clicked - not yet implemented in V2');
+  }, []);
+
+  const handleArchiveWeek = useCallback(() => {
+    setIsListicalMenuOpen(false);
+    // Placeholder for Archive Week functionality
+    // In V2, this feature may not be applicable yet
+    console.log('Archive Week clicked - not yet implemented in V2');
+  }, []);
+
+  // Checkbox input class for menu
+  const checkboxInputClass = 'h-4 w-4 cursor-pointer rounded border-gray-300 text-emerald-700 focus:ring-emerald-600';
 
   // Column definitions
   const columns = usePlannerColumns({ totalDays });
@@ -1417,6 +1499,35 @@ export default function ProjectTimePlannerV2() {
 
   return (
     <div className="w-full h-screen flex flex-col bg-gray-50 p-4">
+      <NavigationBar
+        currentPath={currentPath}
+        onNavigate={onNavigate}
+        listicalButton={
+          <ProjectListicalMenu
+            isOpen={isListicalMenuOpen}
+            onToggle={() => setIsListicalMenuOpen(prev => !prev)}
+            onClose={() => setIsListicalMenuOpen(false)}
+            showRecurring={showRecurring}
+            onToggleShowRecurring={() => setShowRecurring(prev => !prev)}
+            showSubprojects={showSubprojects}
+            onToggleShowSubprojects={() => setShowSubprojects(prev => !prev)}
+            showMaxMinRows={showMaxMinRows}
+            onToggleShowMaxMinRows={() => setShowMaxMinRows(prev => !prev)}
+            addTasksCount={addTasksCount}
+            onAddTasksCountChange={(value) => setAddTasksCount(value)}
+            handleAddTasks={handleAddTasks}
+            startDate={startDate}
+            onStartDateChange={(value) => setStartDate(value)}
+            selectedSortStatuses={selectedSortStatuses}
+            onToggleSortStatus={toggleSortStatus}
+            handleSortInbox={handleSortInbox}
+            handleArchiveWeek={handleArchiveWeek}
+            checkboxInputClass={checkboxInputClass}
+            sortableStatuses={SORTABLE_STATUSES}
+          />
+        }
+      />
+
       <PlannerControls
         sizeScale={sizeScale}
         decreaseSize={decreaseSize}
@@ -1464,6 +1575,9 @@ export default function ProjectTimePlannerV2() {
         selectedCells={selectedCells}
         undoStack={undoStack}
         redoStack={redoStack}
+        projects={projects}
+        subprojects={subprojects}
+        projectSubprojectsMap={projectSubprojectsMap}
       />
     </div>
   );

@@ -5,6 +5,8 @@ import EditableCell from './EditableCell';
 import DropdownCell, { PILLBOX_COLORS } from './DropdownCell';
 import EstimateDropdownCell from './EstimateDropdownCell';
 import CheckboxCell from './CheckboxCell';
+import ProjectDropdownCell from './ProjectDropdownCell';
+import SubprojectDropdownCell from './SubprojectDropdownCell';
 import { ESTIMATE_COLOR_MAP } from '../../constants/planner/rowTypes';
 
 /**
@@ -38,10 +40,24 @@ export default function TableRow({
   gripIconSize,
   table,
   dates,
+  projects = ['-'],
+  subprojects = ['-'],
+  projectSubprojectsMap = {},
+  rowData,
 }) {
   const rowId = row.original.id;
   const isDragging = Array.isArray(draggedRowId) && draggedRowId.includes(rowId);
   const isDropTarget = dropTargetRowId === rowId;
+
+  // Get the current project value for this row to filter subprojects
+  const currentProject = rowData?.project || row.original.project || '';
+
+  // Filter subprojects based on the current project selection
+  // If no project is selected or project is '-', only show '-' option
+  // Otherwise, show only subprojects for the selected project
+  const filteredSubprojects = (currentProject && currentProject !== '-' && projectSubprojectsMap[currentProject])
+    ? projectSubprojectsMap[currentProject]
+    : ['-'];
 
   // Check if this is a pinned row (first 7 rows)
   const isPinnedRow = row.index < 7;
@@ -650,6 +666,24 @@ export default function TableRow({
                     onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
                     cellFontSize={cellFontSize}
                   />
+                ) : columnId === 'project' ? (
+                  <ProjectDropdownCell
+                    initialValue={editValue}
+                    onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
+                    onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
+                    cellFontSize={cellFontSize}
+                    rowHeight={rowHeight}
+                    options={projects}
+                  />
+                ) : columnId === 'subproject' ? (
+                  <SubprojectDropdownCell
+                    initialValue={editValue}
+                    onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
+                    onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
+                    cellFontSize={cellFontSize}
+                    rowHeight={rowHeight}
+                    options={filteredSubprojects}
+                  />
                 ) : columnId === 'status' ? (
                   <DropdownCell
                     initialValue={editValue}
@@ -730,6 +764,53 @@ export default function TableRow({
                           />
                         </svg>
                       )}
+                    </div>
+                  </div>
+                ) : columnId === 'project' ? (
+                  <div className="w-full flex items-center" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
+                    {value && value !== '' && value !== '-' ? (
+                      <div
+                        className="py-0.5 rounded-full font-medium text-xs flex items-center justify-between gap-1 flex-1"
+                        style={{
+                          backgroundColor: '#e5e5e5',
+                          color: '#000000',
+                          fontSize: `${cellFontSize}px`,
+                          paddingLeft: '8px',
+                          paddingRight: '8px'
+                        }}
+                      >
+                        <span>{value}</span>
+                        <ChevronDown size={10} style={{ color: '#000000' }} />
+                      </div>
+                    ) : (
+                      <div
+                        className="py-0.5 rounded-full font-medium text-xs flex items-center justify-between gap-1 flex-1"
+                        style={{
+                          backgroundColor: '#ffffff',
+                          color: '#000000',
+                          fontSize: `${cellFontSize}px`,
+                          paddingLeft: '8px',
+                          paddingRight: '8px'
+                        }}
+                      >
+                        <span>-</span>
+                        <ChevronDown size={10} style={{ color: '#000000' }} />
+                      </div>
+                    )}
+                  </div>
+                ) : columnId === 'subproject' ? (
+                  <div className="w-full flex items-center" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
+                    <div
+                      className="flex items-center justify-between gap-1 flex-1"
+                      style={{
+                        fontSize: `${cellFontSize}px`,
+                        paddingLeft: '8px',
+                        paddingRight: '8px',
+                        color: '#000000'
+                      }}
+                    >
+                      <span>{value || '-'}</span>
+                      <ChevronDown size={12} style={{ color: '#9ca3af' }} />
                     </div>
                   </div>
                 ) : columnId === 'status' ? (

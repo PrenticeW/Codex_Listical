@@ -36,6 +36,9 @@ function PlannerTable({
   selectedCells,
   undoStack,
   redoStack,
+  projects,
+  subprojects,
+  projectSubprojectsMap,
 }) {
   return (
     <>
@@ -187,6 +190,10 @@ function PlannerTable({
                   gripIconSize={gripIconSize}
                   table={table}
                   dates={dates}
+                  projects={projects}
+                  subprojects={subprojects}
+                  projectSubprojectsMap={projectSubprojectsMap}
+                  rowData={row.original}
                 />
               );
             })}
@@ -241,6 +248,10 @@ function PlannerTable({
                   gripIconSize={gripIconSize}
                   table={table}
                   dates={dates}
+                  projects={projects}
+                  subprojects={subprojects}
+                  projectSubprojectsMap={projectSubprojectsMap}
+                  rowData={row.original}
                 />
               );
             })}

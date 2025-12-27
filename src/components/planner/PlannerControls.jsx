@@ -1,5 +1,3 @@
-import React from 'react';
-
 /**
  * PlannerControls Component
  * Renders the header controls: size scale, undo/redo, and start date
@@ -21,10 +19,6 @@ function PlannerControls({
 }) {
   return (
     <div className="mb-4 flex items-center justify-between">
-      <div>
-        <h1 className="text-2xl font-bold">Project Time Planner v2</h1>
-        <p className="text-sm text-gray-600">Google Sheets-like spreadsheet with TanStack Table v8</p>
-      </div>
       <div className="flex flex-col gap-2 items-end">
         <div className="flex gap-2">
           {/* Size controls */}
