@@ -1,6 +1,7 @@
 import { GripVertical, ListFilter } from 'lucide-react';
 import { MonthRow, WeekRow } from './rows';
 import TaskRow from './rows/TaskRow';
+import ProjectRow from './rows/ProjectRow';
 
 /**
  * TableRow Component
@@ -36,6 +37,9 @@ export default function TableRow({
   projects = ['-'],
   projectSubprojectsMap = {},
   rowData,
+  totalDays,
+  projectWeeklyQuotas,
+  projectTotals,
 }) {
   const rowId = row.original.id;
   const isDragging = Array.isArray(draggedRowId) && draggedRowId.includes(rowId);
@@ -65,6 +69,32 @@ export default function TableRow({
   const isDailyMinRow = row.original._isDailyMinRow;
   const isDailyMaxRow = row.original._isDailyMaxRow;
   const isFilterRow = row.original._isFilterRow;
+  const isProjectRow = row.original._rowType === 'projectHeader' || row.original._rowType === 'projectGeneral' || row.original._rowType === 'projectUnscheduled';
+
+  // Delegate to ProjectRow for project/section rows
+  if (isProjectRow) {
+    return (
+      <ProjectRow
+        row={row}
+        virtualRow={virtualRow}
+        isRowSelected={isRowSelected}
+        handleRowNumberClick={handleRowNumberClick}
+        handleDragStart={handleDragStart}
+        handleDragEnd={handleDragEnd}
+        handleDragOver={handleDragOver}
+        handleDrop={handleDrop}
+        draggedRowId={draggedRowId}
+        dropTargetRowId={dropTargetRowId}
+        rowHeight={rowHeight}
+        cellFontSize={cellFontSize}
+        headerFontSize={headerFontSize}
+        gripIconSize={gripIconSize}
+        totalDays={totalDays}
+        projectWeeklyQuotas={projectWeeklyQuotas}
+        projectTotals={projectTotals}
+      />
+    );
+  }
 
   // Delegate to TaskRow for regular task rows
   if (!isMonthRow && !isWeekRow && !isDayRow && !isDayOfWeekRow && !isDailyMinRow && !isDailyMaxRow && !isFilterRow) {

@@ -39,6 +39,9 @@ function PlannerTable({
   projects,
   subprojects,
   projectSubprojectsMap,
+  totalDays,
+  projectWeeklyQuotas,
+  projectTotals,
 }) {
   return (
     <div className="flex-1 flex flex-col min-h-0 gap-4 overflow-hidden">
@@ -200,6 +203,9 @@ function PlannerTable({
                   subprojects={subprojects}
                   projectSubprojectsMap={projectSubprojectsMap}
                   rowData={row.original}
+                  totalDays={totalDays}
+                  projectWeeklyQuotas={projectWeeklyQuotas}
+                  projectTotals={projectTotals}
                 />
               );
             })}
@@ -258,6 +264,9 @@ function PlannerTable({
                   subprojects={subprojects}
                   projectSubprojectsMap={projectSubprojectsMap}
                   rowData={row.original}
+                  totalDays={totalDays}
+                  projectWeeklyQuotas={projectWeeklyQuotas}
+                  projectTotals={projectTotals}
                 />
               );
             })}

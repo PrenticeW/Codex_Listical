@@ -72,8 +72,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   // Load projects and subprojects from Staging
   const { projects, subprojects, projectSubprojectsMap } = useProjectsData();
 
-  // Load daily bounds from Tactics page
-  const { dailyBounds } = useTacticsMetrics();
+  // Load daily bounds and project weekly quotas from Tactics page
+  const { dailyBounds, projectWeeklyQuotas } = useTacticsMetrics();
 
   // Compute data with timeValue derived from estimate column
   // This ensures timeValue is always in sync with estimate without manual updates
@@ -81,9 +81,10 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   // Also auto-updates status based on task and time values
   const computedData = useMemo(() => {
     return data.map(row => {
-      // Skip special rows (first 7 rows) - they don't need computation
+      // Skip special rows (first 7 rows) and project rows - they don't need computation
       if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
-          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow || row._isFilterRow) {
+          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow || row._isFilterRow ||
+          row._rowType === 'projectHeader' || row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled') {
         return row;
       }
 
@@ -165,24 +166,26 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   // Sync computed status changes back to actual data
   // This ensures that auto-computed status changes persist
   useEffect(() => {
-    let hasChanges = false;
-    const updatedData = data.map((row, index) => {
-      const computedRow = computedData[index];
+    setData(prevData => {
+      let hasChanges = false;
+      const updatedData = prevData.map((row, index) => {
+        const computedRow = computedData[index];
 
-      // Only update if status has changed and it's not a special row
-      if (computedRow && row.status !== computedRow.status && !row._isMonthRow &&
-          !row._isWeekRow && !row._isDayRow && !row._isDayOfWeekRow &&
-          !row._isDailyMinRow && !row._isDailyMaxRow && !row._isFilterRow) {
-        hasChanges = true;
-        return { ...row, status: computedRow.status };
-      }
-      return row;
+        // Only update if status has changed and it's not a special row or project row
+        if (computedRow && row.status !== computedRow.status && !row._isMonthRow &&
+            !row._isWeekRow && !row._isDayRow && !row._isDayOfWeekRow &&
+            !row._isDailyMinRow && !row._isDailyMaxRow && !row._isFilterRow &&
+            !row._rowType) {
+          hasChanges = true;
+          return { ...row, status: computedRow.status };
+        }
+        return row;
+      });
+
+      // Only return new data if there were actual changes
+      return hasChanges ? updatedData : prevData;
     });
-
-    if (hasChanges) {
-      setData(updatedData);
-    }
-  }, [computedData, data]);
+  }, [computedData]);
 
   // Calculate dates array from startDate
   const dates = useMemo(() => {
@@ -198,6 +201,53 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   const { dailyMinValues, dailyMaxValues } = useMemo(() => {
     return mapDailyBoundsToTimeline(dailyBounds, dates);
   }, [dailyBounds, dates]);
+
+  // Calculate project totals (sum of Scheduled and Done task timeValues per project)
+  const projectTotals = useMemo(() => {
+    const totals = {};
+    let currentProjectHeaderId = null;
+
+    computedData.forEach((row) => {
+      // Track which project header we're under
+      if (row._rowType === 'projectHeader') {
+        currentProjectHeaderId = row.id;
+        totals[currentProjectHeaderId] = 0;
+        return;
+      }
+
+      // Reset when we exit a project section (encounter another special row type)
+      if (row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled') {
+        // Still within the project, don't reset
+        return;
+      }
+
+      // For regular task rows under a project header
+      if (currentProjectHeaderId && !row._isMonthRow && !row._isWeekRow &&
+          !row._isDayRow && !row._isDayOfWeekRow && !row._isDailyMinRow &&
+          !row._isDailyMaxRow && !row._isFilterRow && !row._rowType) {
+        const status = row.status || '';
+
+        // Only count Scheduled and Done tasks
+        if (status === 'Scheduled' || status === 'Done') {
+          const timeValue = row.timeValue || '0.00';
+
+          // Parse timeValue (format: "HH.mm" or "H.mm")
+          const parsed = parseFloat(timeValue);
+          if (!isNaN(parsed)) {
+            totals[currentProjectHeaderId] += parsed;
+          }
+        }
+      }
+    });
+
+    // Format totals to 2 decimal places
+    const formattedTotals = {};
+    Object.entries(totals).forEach(([key, total]) => {
+      formattedTotals[key] = total.toFixed(2);
+    });
+
+    return formattedTotals;
+  }, [computedData]);
 
   // Update daily min/max rows when bounds change or toggle changes
   useEffect(() => {
@@ -289,6 +339,109 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
       });
     });
   }, [dailyMinValues, dailyMaxValues, showMaxMinRows, totalDays]);
+
+  // Insert project rows into data structure
+  useEffect(() => {
+    // Early exit conditions - don't modify state if not needed
+    if (!projects || projects.length <= 1) return; // Only '-' means no projects
+
+    // Use a flag to prevent updating during mount
+    let isMounted = true;
+
+    // Schedule the update for after the current render cycle
+    const timeoutId = setTimeout(() => {
+      if (!isMounted) return;
+
+      setData(prevData => {
+        // Find the filter row index to insert projects after it
+        const filterRowIndex = prevData.findIndex(row => row._isFilterRow);
+        if (filterRowIndex === -1) return prevData;
+
+        // Check if project rows already exist
+        const hasProjectRows = prevData.some(row => row._rowType === 'projectHeader');
+        if (hasProjectRows) return prevData; // Already inserted
+
+        const newData = [...prevData];
+        let insertIndex = filterRowIndex + 1;
+
+        // Insert project rows for each project (skip '-')
+        projects.forEach(projectName => {
+          if (projectName === '-') return;
+
+          // Create project header row
+          const projectHeaderRow = {
+            id: `${projectName}-header`,
+            _rowType: 'projectHeader',
+            projectName: projectName,
+            projectNickname: projectName,
+            rowNum: '',
+            checkbox: '',
+            project: '',
+            subproject: '',
+            status: '',
+            task: '',
+            recurring: '',
+            estimate: '',
+            timeValue: '',
+          };
+          // Add empty day columns
+          for (let i = 0; i < totalDays; i++) {
+            projectHeaderRow[`day-${i}`] = '';
+          }
+          newData.splice(insertIndex++, 0, projectHeaderRow);
+
+          // Create "General" section row
+          const generalRow = {
+            id: `${projectName}-general`,
+            _rowType: 'projectGeneral',
+            projectName: projectName,
+            projectNickname: projectName,
+            rowNum: '',
+            checkbox: '',
+            project: '',
+            subproject: '',
+            status: '',
+            task: '',
+            recurring: '',
+            estimate: '',
+            timeValue: '',
+          };
+          for (let i = 0; i < totalDays; i++) {
+            generalRow[`day-${i}`] = '';
+          }
+          newData.splice(insertIndex++, 0, generalRow);
+
+          // Create "Unscheduled" section row
+          const unscheduledRow = {
+            id: `${projectName}-unscheduled`,
+            _rowType: 'projectUnscheduled',
+            projectName: projectName,
+            projectNickname: projectName,
+            rowNum: '',
+            checkbox: '',
+            project: '',
+            subproject: '',
+            status: '',
+            task: '',
+            recurring: '',
+            estimate: '',
+            timeValue: '',
+          };
+          for (let i = 0; i < totalDays; i++) {
+            unscheduledRow[`day-${i}`] = '';
+          }
+          newData.splice(insertIndex++, 0, unscheduledRow);
+        });
+
+        return newData;
+      });
+    }, 0);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, [projects, totalDays]);
 
   // Calculate month spans for header
   const monthSpans = useMemo(() => {
@@ -410,9 +563,21 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     e.dataTransfer.dropEffect = 'move';
 
     if (draggedRowId && Array.isArray(draggedRowId) && !draggedRowId.includes(rowId)) {
+      // Check if target row is a special header row (but allow project rows for organization)
+      const targetRow = data.find(r => r.id === rowId);
+      if (targetRow && (
+        targetRow._isMonthRow || targetRow._isWeekRow || targetRow._isDayRow ||
+        targetRow._isDayOfWeekRow || targetRow._isDailyMinRow ||
+        targetRow._isDailyMaxRow || targetRow._isFilterRow
+      )) {
+        // Don't allow dropping on header rows (but project rows are OK)
+        setDropTargetRowId(null);
+        return;
+      }
+
       setDropTargetRowId(rowId);
     }
-  }, [draggedRowId]);
+  }, [draggedRowId, data]);
 
   const handleDrop = useCallback((e, targetRowId) => {
     e.preventDefault();
@@ -428,6 +593,18 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     // Find target index
     const targetIndex = data.findIndex(r => r.id === targetRowId);
     if (targetIndex === -1) {
+      setDraggedRowId(null);
+      setDropTargetRowId(null);
+      return;
+    }
+
+    // Prevent dropping on special header rows (but allow project rows)
+    const targetRow = data[targetIndex];
+    if (targetRow && (
+      targetRow._isMonthRow || targetRow._isWeekRow || targetRow._isDayRow ||
+      targetRow._isDayOfWeekRow || targetRow._isDailyMinRow ||
+      targetRow._isDailyMaxRow || targetRow._isFilterRow
+    )) {
       setDraggedRowId(null);
       setDropTargetRowId(null);
       return;
@@ -1683,6 +1860,9 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         projects={projects}
         subprojects={subprojects}
         projectSubprojectsMap={projectSubprojectsMap}
+        totalDays={totalDays}
+        projectWeeklyQuotas={projectWeeklyQuotas}
+        projectTotals={projectTotals}
       />
       </div>
       </div>
