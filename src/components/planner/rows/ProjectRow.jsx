@@ -143,24 +143,19 @@ export default function ProjectRow({
             );
           }
 
-          // Merge cells A through E (checkbox, project, subproject, status, task)
-          if (['checkbox', 'project', 'subproject', 'status', 'task'].includes(columnId)) {
+          // Merge cells differently for header vs section rows
+          // Header rows: merge A through E (checkbox, project, subproject, status, task)
+          // Section rows: merge A through D (checkbox, project, subproject, status)
+          const columnsToMergeHeader = ['checkbox', 'project', 'subproject', 'status', 'task'];
+          const columnsToMergeSection = ['checkbox', 'project', 'subproject', 'status'];
+          const columnsToMerge = isHeader ? columnsToMergeHeader : columnsToMergeSection;
+
+          if (columnsToMerge.includes(columnId)) {
             // Render merged cell on first occurrence
             if (!mergedCellRendered) {
               mergedCellRendered = true;
 
-              // Determine cell content based on row type
-              let cellContent = '\u00A0'; // Non-breaking space by default
-              if (isHeader) {
-                // Project name for header rows
-                cellContent = projectLabel;
-              } else {
-                // Section label for section rows
-                cellContent = sectionLabel;
-              }
-
-              // Calculate total width of columns A through E
-              const columnsToMerge = ['checkbox', 'project', 'subproject', 'status', 'task'];
+              // Calculate total width of columns to merge
               const totalWidth = columnsToMerge.reduce((sum, colId) => {
                 const column = row.getAllCells().find(c => c.column.id === colId)?.column;
                 return sum + (column ? column.getSize() : 0);
@@ -168,7 +163,7 @@ export default function ProjectRow({
 
               return (
                 <td
-                  key="merged-a-to-e"
+                  key={`merged-${isHeader ? 'a-to-e' : 'a-to-d'}`}
                   style={{
                     width: `${totalWidth}px`,
                     flexShrink: 0,
@@ -192,7 +187,7 @@ export default function ProjectRow({
                       fontWeight: isHeader ? '600' : '400',
                     }}
                   >
-                    {cellContent}
+                    {isHeader ? projectLabel : '\u00A0'}
                   </div>
                 </td>
               );
@@ -200,6 +195,39 @@ export default function ProjectRow({
               // Skip subsequent columns that have been merged
               return null;
             }
+          }
+
+          // For section rows, render task column (E) with section label
+          if (!isHeader && columnId === 'task') {
+            return (
+              <td
+                key={cell.id}
+                style={{
+                  width: `${cell.column.getSize()}px`,
+                  flexShrink: 0,
+                  flexGrow: 0,
+                  height: `${rowHeight}px`,
+                  userSelect: 'none',
+                  boxSizing: 'border-box',
+                }}
+                className="p-0"
+              >
+                <div
+                  className="h-full flex items-center"
+                  style={{
+                    fontSize: `${cellFontSize}px`,
+                    minHeight: `${rowHeight}px`,
+                    backgroundColor: bgColor,
+                    borderBottom: '1px solid #d3d3d3',
+                    borderRight: '1px solid #d3d3d3',
+                    paddingLeft: '8px',
+                    paddingRight: '3px',
+                  }}
+                >
+                  {sectionLabel}
+                </div>
+              </td>
+            );
           }
 
           // For other columns (recurring, estimate, timeValue, day columns)
@@ -254,7 +282,9 @@ export default function ProjectRow({
                   borderRight: borderRightStyle,
                   paddingLeft: '3px',
                   paddingRight: '3px',
-                  fontWeight: isHeader && (columnId === 'estimate' || columnId === 'timeValue') ? '600' : '400',
+                  fontWeight: isHeader && columnId === 'estimate' ? '600' : '400',
+                  fontStyle: columnId === 'timeValue' ? 'italic' : 'normal',
+                  justifyContent: columnId === 'estimate' ? 'flex-end' : 'flex-start',
                 }}
               >
                 {cellContent}
