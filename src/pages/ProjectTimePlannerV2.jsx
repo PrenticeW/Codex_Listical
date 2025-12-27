@@ -746,9 +746,9 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
 
     // ROW COPY MODE: If rows are selected, copy entire rows
     if (selectedRows.size > 0) {
-      // Get selected rows in order (use computedData to get calculated timeValue)
+      // Get selected rows in order (use original data to preserve =timeValue formulas)
       const selectedRowIds = Array.from(selectedRows);
-      const rowsInOrder = computedData.filter(row => selectedRowIds.includes(row.id));
+      const rowsInOrder = data.filter(row => selectedRowIds.includes(row.id));
 
       // Convert each row to TSV
       const tsvData = rowsInOrder.map(row => {
@@ -778,8 +778,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         cellsByRow.set(rowId, new Map());
       }
 
-      // Use computedData to get the calculated timeValue
-      const row = computedData.find(r => r.id === rowId);
+      // Use original data to preserve =timeValue formulas
+      const row = data.find(r => r.id === rowId);
       if (row) {
         cellsByRow.get(rowId).set(columnId, row[columnId] || '');
       }
