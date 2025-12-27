@@ -138,8 +138,8 @@ export default function TableRow({
           handleDragStart={handleDragStart}
           handleDragEnd={handleDragEnd}
         />
-      ) : isDayRow || isDayOfWeekRow ? (
-        // Render day/day-of-week rows with centered calendar cells
+      ) : isDayRow || isDayOfWeekRow || isDailyMinRow || isDailyMaxRow ? (
+        // Render day/day-of-week/daily-min/daily-max rows with centered calendar cells
         (() => {
           let mergedCellRendered = false;
           return row.getVisibleCells().map(cell => {
@@ -189,11 +189,34 @@ export default function TableRow({
               );
             }
 
-            // For fixed columns, show empty cells
+            // For fixed columns, show empty cells (or label for daily min/max)
             if (['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].includes(columnId)) {
               // For day of week row (row 4), merge all fixed columns
-              if (isDayOfWeekRow && !mergedCellRendered) {
+              // For daily min/max rows, merge all fixed columns and show label
+              if ((isDayOfWeekRow || isDailyMinRow || isDailyMaxRow) && !mergedCellRendered) {
                 mergedCellRendered = true;
+
+                // Determine background color and label
+                let bgColor = 'black';
+                let borderStyle = {
+                  borderTop: '3px solid white',
+                  borderBottom: '3px solid white',
+                  borderRight: '1.5px solid black',
+                };
+                let label = '';
+                let labelStyle = {};
+
+                if (isDailyMinRow || isDailyMaxRow) {
+                  // Daily min/max rows: black background for merged fixed columns
+                  bgColor = 'black';
+                  label = '';
+                  borderStyle = {
+                    borderBottom: '1px solid #d3d3d3',
+                    borderRight: '1.5px solid black',
+                  };
+                  labelStyle = {};
+                }
+
                 return (
                   <td
                     key="merged-fixed-cols"
@@ -207,19 +230,20 @@ export default function TableRow({
                     className="p-0"
                   >
                     <div
-                      className="h-full"
+                      className="h-full flex items-center"
                       style={{
                         minHeight: `${rowHeight}px`,
-                        backgroundColor: 'black',
-                        borderTop: '3px solid white',
-                        borderBottom: '3px solid white',
-                        borderRight: '1.5px solid black',
+                        backgroundColor: bgColor,
+                        ...borderStyle,
+                        ...labelStyle,
                       }}
-                    />
+                    >
+                      {label}
+                    </div>
                   </td>
                 );
-              } else if (isDayOfWeekRow) {
-                // Skip subsequent fixed columns for day of week row
+              } else if (isDayOfWeekRow || isDailyMinRow || isDailyMaxRow) {
+                // Skip subsequent fixed columns for day of week/daily min/max rows
                 return null;
               }
 
@@ -282,6 +306,12 @@ export default function TableRow({
         if (isDayOfWeekRow) {
           // Day of week row: #d9d9d9 for weekends, #efefef for weekdays
           bgColor = isWeekend ? '#d9d9d9' : '#efefef';
+        } else if (isDailyMinRow) {
+          // Daily min row: pink
+          bgColor = '#ead1dc';
+        } else if (isDailyMaxRow) {
+          // Daily max row: light pink
+          bgColor = '#f2e5eb';
         } else {
           // Day number row: transparent to show borders
           bgColor = 'transparent';
@@ -307,7 +337,7 @@ export default function TableRow({
                 fontSize: `${cellFontSize}px`,
                 backgroundColor: bgColor,
                 borderTop: isDayRow ? '1.5px solid black' : (isDayOfWeekRow ? '1.5px solid black' : undefined),
-                borderBottom: isDayOfWeekRow ? '1.5px solid black' : '1px solid #d3d3d3',
+                borderBottom: (isDayOfWeekRow || isDailyMaxRow) ? '1.5px solid black' : (isDailyMinRow ? 'none' : '1px solid #d3d3d3'),
                 borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3'
               }}
             >
@@ -372,9 +402,12 @@ export default function TableRow({
         }
 
         // For fixed columns A-H, merge them into a single black cell
+        // AND merge vertically across both daily min and max rows
         if (['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].includes(columnId)) {
           if (!mergedCellRendered) {
             mergedCellRendered = true;
+
+            // Render for both rows, but with no border-bottom on daily min
             return (
               <td
                 key="merged-fixed-cols"
@@ -392,8 +425,8 @@ export default function TableRow({
                   style={{
                     minHeight: `${rowHeight}px`,
                     backgroundColor: 'black',
-                    borderTop: '1px solid black',
-                    borderBottom: '1px solid black',
+                    borderTop: isDailyMinRow ? 'none' : 'none',
+                    borderBottom: isDailyMaxRow ? '1.5px solid black' : 'none',
                     borderRight: '1.5px solid black',
                   }}
                 />
@@ -428,7 +461,7 @@ export default function TableRow({
                 minHeight: `${rowHeight}px`,
                 backgroundColor: bgColor,
                 fontSize: '10px',
-                borderBottom: '1px solid #d3d3d3',
+                borderBottom: isDailyMinRow ? 'none' : (isDailyMaxRow ? '1.5px solid black' : '1px solid #d3d3d3'),
                 borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3'
               }}
             >

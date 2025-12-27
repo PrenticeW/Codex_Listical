@@ -10,6 +10,7 @@ import usePlannerStorage from '../hooks/planner/usePlannerStorage';
 import usePlannerColumns from '../hooks/planner/usePlannerColumns';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
+import useTacticsMetrics from '../hooks/planner/useTacticsMetrics';
 import { MonthRow, WeekRow } from '../components/planner/rows';
 import TableRow from '../components/planner/TableRow';
 import NavigationBar from '../components/planner/NavigationBar';
@@ -18,6 +19,7 @@ import PlannerControls from '../components/planner/PlannerControls';
 import PlannerTable from '../components/planner/PlannerTable';
 import { createInitialData } from '../utils/planner/dataCreators';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../constants/planner/rowTypes';
+import { mapDailyBoundsToTimeline } from '../utils/planner/dailyBoundsMapper';
 
 // Sortable status values for the "Sort Inbox" feature
 const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned'];
@@ -69,6 +71,9 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
 
   // Load projects and subprojects from Staging
   const { projects, subprojects, projectSubprojectsMap } = useProjectsData();
+
+  // Load daily bounds from Tactics page
+  const { dailyBounds } = useTacticsMetrics();
 
   // Compute data with timeValue derived from estimate column
   // This ensures timeValue is always in sync with estimate without manual updates
@@ -188,6 +193,102 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
       return date;
     });
   }, [startDate, totalDays]);
+
+  // Map daily bounds to timeline dates
+  const { dailyMinValues, dailyMaxValues } = useMemo(() => {
+    return mapDailyBoundsToTimeline(dailyBounds, dates);
+  }, [dailyBounds, dates]);
+
+  // Update daily min/max rows when bounds change or toggle changes
+  useEffect(() => {
+    if (!dailyMinValues || !dailyMaxValues) return;
+
+    setData(prevData => {
+      // If toggle is off, filter out daily min/max rows
+      if (!showMaxMinRows) {
+        return prevData.filter(row => !row._isDailyMinRow && !row._isDailyMaxRow);
+      }
+
+      // Check if rows already exist
+      const hasMinRow = prevData.some(row => row._isDailyMinRow);
+      const hasMaxRow = prevData.some(row => row._isDailyMaxRow);
+
+      // If toggle is on and rows don't exist, add them
+      if (!hasMinRow || !hasMaxRow) {
+        const filterRowIndex = prevData.findIndex(row => row._isFilterRow);
+        if (filterRowIndex === -1) return prevData;
+
+        const newData = [...prevData];
+
+        if (!hasMinRow) {
+          const minRow = {
+            id: 'daily-min',
+            _isDailyMinRow: true,
+            rowNum: '',
+            checkbox: false,
+            project: 'Daily Min',
+            subproject: '',
+            status: '',
+            task: '',
+            recurring: '',
+            estimate: '',
+            timeValue: '',
+          };
+          dailyMinValues.forEach((value, i) => {
+            minRow[`day-${i}`] = value;
+          });
+          newData.splice(filterRowIndex, 0, minRow);
+        }
+
+        if (!hasMaxRow) {
+          const maxRow = {
+            id: 'daily-max',
+            _isDailyMaxRow: true,
+            rowNum: '',
+            checkbox: false,
+            project: 'Daily Max',
+            subproject: '',
+            status: '',
+            task: '',
+            recurring: '',
+            estimate: '',
+            timeValue: '',
+          };
+          dailyMaxValues.forEach((value, i) => {
+            maxRow[`day-${i}`] = value;
+          });
+          // Insert after daily min (if it was just added) or at filter row index
+          const insertIndex = hasMinRow ? filterRowIndex : filterRowIndex + 1;
+          newData.splice(insertIndex, 0, maxRow);
+        }
+
+        return newData;
+      }
+
+      // Otherwise, just update existing rows with new values
+      return prevData.map(row => {
+        // Update daily min row
+        if (row._isDailyMinRow) {
+          const updates = { project: 'Daily Min' };
+          dailyMinValues.forEach((value, i) => {
+            updates[`day-${i}`] = value;
+          });
+          return { ...row, ...updates };
+        }
+
+        // Update daily max row
+        if (row._isDailyMaxRow) {
+          const updates = { project: 'Daily Max' };
+          dailyMaxValues.forEach((value, i) => {
+            updates[`day-${i}`] = value;
+          });
+          return { ...row, ...updates };
+        }
+
+        return row;
+      });
+    });
+  }, [dailyMinValues, dailyMaxValues, showMaxMinRows, totalDays]);
 
   // Calculate month spans for header
   const monthSpans = useMemo(() => {
