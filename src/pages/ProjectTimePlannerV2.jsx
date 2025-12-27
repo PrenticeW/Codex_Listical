@@ -84,7 +84,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
       // Skip special rows (first 7 rows) and project rows - they don't need computation
       if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
           row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow || row._isFilterRow ||
-          row._isInboxRow ||
+          row._isInboxRow || row._isArchiveRow ||
           row._rowType === 'projectHeader' || row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled') {
         return row;
       }
@@ -341,6 +341,92 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     });
   }, [dailyMinValues, dailyMaxValues, showMaxMinRows, totalDays]);
 
+  // Insert Inbox and Archive divider rows
+  useEffect(() => {
+    setData(prevData => {
+      // Find the filter row index
+      const filterRowIndex = prevData.findIndex(row => row._isFilterRow);
+      if (filterRowIndex === -1) return prevData;
+
+      // Check if inbox row already exists
+      const hasInboxRow = prevData.some(row => row._isInboxRow);
+      // Check if archive row already exists
+      const hasArchiveRow = prevData.some(row => row._isArchiveRow);
+
+      // If both exist, nothing to do
+      if (hasInboxRow && hasArchiveRow) return prevData;
+
+      const newData = [...prevData];
+
+      // Create "Inbox" divider row (if it doesn't exist)
+      if (!hasInboxRow) {
+        // Find where to insert inbox row (after project rows or after filter row)
+        let insertIndex = filterRowIndex + 1;
+
+        // Find the last project-related row if any exist
+        for (let i = newData.length - 1; i >= 0; i--) {
+          if (newData[i]._rowType === 'projectUnscheduled' ||
+              newData[i]._rowType === 'projectGeneral' ||
+              newData[i]._rowType === 'projectHeader') {
+            insertIndex = i + 1;
+            break;
+          }
+        }
+
+        const inboxRow = {
+          id: 'inbox-divider',
+          _isInboxRow: true,
+          rowNum: '',
+          checkbox: '',
+          project: '',
+          subproject: '',
+          status: '',
+          task: '',
+          recurring: '',
+          estimate: '',
+          timeValue: '',
+        };
+        // Add empty day columns
+        for (let i = 0; i < totalDays; i++) {
+          inboxRow[`day-${i}`] = '';
+        }
+        newData.splice(insertIndex, 0, inboxRow);
+      }
+
+      // Create "Archive" divider row 20 rows below inbox (if it doesn't exist)
+      if (!hasArchiveRow) {
+        // Find the inbox row index in newData
+        const inboxIndex = newData.findIndex(row => row._isInboxRow);
+        console.log('Archive row creation - inboxIndex:', inboxIndex, 'hasArchiveRow:', hasArchiveRow);
+        if (inboxIndex !== -1) {
+          const archiveRow = {
+            id: 'archive-divider',
+            _isArchiveRow: true,
+            rowNum: '',
+            checkbox: '',
+            project: '',
+            subproject: '',
+            status: '',
+            task: '',
+            recurring: '',
+            estimate: '',
+            timeValue: '',
+          };
+          // Add empty day columns
+          for (let i = 0; i < totalDays; i++) {
+            archiveRow[`day-${i}`] = '';
+          }
+          // Insert 20 rows after inbox
+          const archiveInsertIndex = Math.min(inboxIndex + 21, newData.length);
+          console.log('Inserting archive row at index:', archiveInsertIndex, 'newData.length:', newData.length);
+          newData.splice(archiveInsertIndex, 0, archiveRow);
+        }
+      }
+
+      return newData;
+    });
+  }, [totalDays]); // Run once on mount and when totalDays changes
+
   // Insert project rows into data structure
   useEffect(() => {
     // Early exit conditions - don't modify state if not needed
@@ -361,19 +447,14 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         // Check if project rows already exist
         const hasProjectRows = prevData.some(row => row._rowType === 'projectHeader');
 
-        // Check if inbox row already exists
-        const hasInboxRow = prevData.some(row => row._isInboxRow);
-
-        // If both project rows and inbox row exist, nothing to do
-        if (hasProjectRows && hasInboxRow) return prevData;
+        // If project rows exist, nothing to do
+        if (hasProjectRows) return prevData;
 
         const newData = [...prevData];
         let insertIndex = filterRowIndex + 1;
 
-        // Only insert project rows if they don't exist
-        if (!hasProjectRows) {
-          // Insert project rows for each project (skip '-')
-          projects.forEach(projectKey => {
+        // Insert project rows for each project (skip '-')
+        projects.forEach(projectKey => {
             if (projectKey === '-') return;
 
             // Get full project name from the map (projectKey might be a nickname)
@@ -443,40 +524,6 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
             }
             newData.splice(insertIndex++, 0, unscheduledRow);
           });
-        } else {
-          // Project rows exist, find where to insert inbox row (after last project row)
-          // Find the last project-related row
-          for (let i = newData.length - 1; i >= 0; i--) {
-            if (newData[i]._rowType === 'projectUnscheduled' ||
-                newData[i]._rowType === 'projectGeneral' ||
-                newData[i]._rowType === 'projectHeader') {
-              insertIndex = i + 1;
-              break;
-            }
-          }
-        }
-
-        // Create "Inbox" divider row after all projects (if it doesn't exist)
-        if (!hasInboxRow) {
-          const inboxRow = {
-            id: 'inbox-divider',
-            _isInboxRow: true,
-            rowNum: '',
-            checkbox: '',
-            project: '',
-            subproject: '',
-            status: '',
-            task: '',
-            recurring: '',
-            estimate: '',
-            timeValue: '',
-          };
-          // Add empty day columns
-          for (let i = 0; i < totalDays; i++) {
-            inboxRow[`day-${i}`] = '';
-          }
-          newData.splice(insertIndex, 0, inboxRow);
-        }
 
         return newData;
       });

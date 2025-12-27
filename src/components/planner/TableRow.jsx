@@ -70,6 +70,7 @@ export default function TableRow({
   const isDailyMaxRow = row.original._isDailyMaxRow;
   const isFilterRow = row.original._isFilterRow;
   const isInboxRow = row.original._isInboxRow;
+  const isArchiveRow = row.original._isArchiveRow;
   const isProjectRow = row.original._rowType === 'projectHeader' || row.original._rowType === 'projectGeneral' || row.original._rowType === 'projectUnscheduled';
 
   // Delegate to ProjectRow for project/section rows
@@ -98,7 +99,7 @@ export default function TableRow({
   }
 
   // Delegate to TaskRow for regular task rows
-  if (!isMonthRow && !isWeekRow && !isDayRow && !isDayOfWeekRow && !isDailyMinRow && !isDailyMaxRow && !isFilterRow && !isInboxRow) {
+  if (!isMonthRow && !isWeekRow && !isDayRow && !isDayOfWeekRow && !isDailyMinRow && !isDailyMaxRow && !isFilterRow && !isInboxRow && !isArchiveRow) {
     return (
       <TaskRow
         row={row}
@@ -184,8 +185,8 @@ export default function TableRow({
           handleDragStart={handleDragStart}
           handleDragEnd={handleDragEnd}
         />
-      ) : isDayRow || isDayOfWeekRow || isDailyMinRow || isDailyMaxRow || isInboxRow ? (
-        // Render day/day-of-week/daily-min/daily-max/inbox rows with centered calendar cells
+      ) : isDayRow || isDayOfWeekRow || isDailyMinRow || isDailyMaxRow || isInboxRow || isArchiveRow ? (
+        // Render day/day-of-week/daily-min/daily-max/inbox/archive rows with centered calendar cells
         (() => {
           let mergedCellRendered = false;
           return row.getVisibleCells().map(cell => {
@@ -281,6 +282,55 @@ export default function TableRow({
               );
             } else if (isInboxRow) {
               // Skip all other columns for inbox row
+              return null;
+            }
+
+            // For archive row, merge ALL cells (fixed columns AND day columns)
+            if (isArchiveRow && !mergedCellRendered) {
+              mergedCellRendered = true;
+
+              // Calculate total width of all columns except rowNum
+              const allColumns = ['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'];
+              const visibleFixedColumns = allColumns.filter(colId => table.getColumn(colId).getIsVisible());
+              const totalFixedWidth = visibleFixedColumns.reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0);
+
+              // Add all day columns widths
+              const dayColumnsWidth = Array.from({ length: totalDays }, (_, i) => `day-${i}`)
+                .reduce((sum, dayColId) => sum + table.getColumn(dayColId).getSize(), 0);
+
+              const totalWidth = totalFixedWidth + dayColumnsWidth;
+
+              return (
+                <td
+                  key="merged-all-cols-archive"
+                  style={{
+                    width: `${totalWidth}px`,
+                    flexShrink: 0,
+                    flexGrow: 0,
+                    height: `${rowHeight}px`,
+                    boxSizing: 'border-box',
+                  }}
+                  className="p-0"
+                >
+                  <div
+                    className="h-full flex items-center"
+                    style={{
+                      minHeight: `${rowHeight}px`,
+                      backgroundColor: 'black',
+                      borderBottom: '1.5px solid black',
+                      borderRight: '1.5px solid black',
+                      color: 'white',
+                      fontWeight: '600',
+                      fontSize: `${cellFontSize}px`,
+                      paddingLeft: '8px',
+                    }}
+                  >
+                    Archive
+                  </div>
+                </td>
+              );
+            } else if (isArchiveRow) {
+              // Skip all other columns for archive row
               return null;
             }
 
