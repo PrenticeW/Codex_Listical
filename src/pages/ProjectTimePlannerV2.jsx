@@ -557,6 +557,82 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     return formattedTotals;
   }, [computedData]);
 
+  // Calculate daily totals for each day column (sum of all regular task rows, ignoring filters)
+  const dailyTotals = useMemo(() => {
+    const totals = {};
+
+    // Initialize all day columns to 0
+    for (let i = 0; i < totalDays; i++) {
+      totals[`day-${i}`] = 0;
+    }
+
+    // Sum up values from all regular task rows
+    computedData.forEach((row) => {
+      // Skip special rows and project rows - only count regular task rows
+      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
+          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
+          row._isFilterRow || row._isInboxRow || row._isArchiveRow || row._rowType) {
+        return;
+      }
+
+      // For each day column, add the numeric value to the total
+      for (let i = 0; i < totalDays; i++) {
+        const dayColumnId = `day-${i}`;
+        const value = row[dayColumnId];
+        const numericValue = coerceNumber(value);
+
+        if (numericValue !== null) {
+          totals[dayColumnId] += numericValue;
+        }
+      }
+    });
+
+    // Format totals to 2 decimal places
+    const formattedTotals = {};
+    Object.entries(totals).forEach(([key, total]) => {
+      formattedTotals[key] = total.toFixed(2);
+    });
+
+    return formattedTotals;
+  }, [computedData, totalDays, coerceNumber]);
+
+  // Update filter row (row 7) with daily totals
+  useEffect(() => {
+    if (!dailyTotals) return;
+
+    setData(prevData => {
+      // Check if filter row needs updating
+      const filterRow = prevData.find(row => row._isFilterRow);
+      if (!filterRow) return prevData;
+
+      // Check if any daily totals have changed
+      let hasChanges = false;
+      for (let i = 0; i < totalDays; i++) {
+        const dayColumnId = `day-${i}`;
+        if (filterRow[dayColumnId] !== dailyTotals[dayColumnId]) {
+          hasChanges = true;
+          break;
+        }
+      }
+
+      // Only update if there are actual changes
+      if (!hasChanges) return prevData;
+
+      return prevData.map(row => {
+        // Update filter row with daily totals
+        if (row._isFilterRow) {
+          const updates = {};
+          for (let i = 0; i < totalDays; i++) {
+            const dayColumnId = `day-${i}`;
+            updates[dayColumnId] = dailyTotals[dayColumnId];
+          }
+          return { ...row, ...updates };
+        }
+        return row;
+      });
+    });
+  }, [dailyTotals, totalDays]);
+
   // Update daily min/max rows when bounds change or toggle changes
   useEffect(() => {
     if (!dailyMinValues || !dailyMaxValues) return;
