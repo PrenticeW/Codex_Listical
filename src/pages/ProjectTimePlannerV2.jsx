@@ -12,6 +12,8 @@ import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
 import useTacticsMetrics from '../hooks/planner/useTacticsMetrics';
 import usePlannerFilters from '../hooks/planner/usePlannerFilters';
+import { useFilteredData, useFilterValues } from '../hooks/planner/useFilteredData';
+import { useProjectTotals, useDailyTotals } from '../hooks/planner/useTotalsCalculation';
 import { MonthRow, WeekRow } from '../components/planner/rows';
 import TableRow from '../components/planner/TableRow';
 import NavigationBar from '../components/planner/NavigationBar';
@@ -22,19 +24,29 @@ import { createInitialData } from '../utils/planner/dataCreators';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../constants/planner/rowTypes';
 import { mapDailyBoundsToTimeline } from '../utils/planner/dailyBoundsMapper';
 import { createEmptyTaskRows } from '../utils/planner/taskRowGenerator';
+import {
+  isDraggableRow,
+  isValidDropTarget,
+} from '../utils/planner/rowTypeChecks';
+import {
+  getDayColumnId,
+  forEachDayColumn,
+  createDayColumnUpdates,
+  createEmptyDayColumns,
+  sumDayColumns,
+} from '../utils/planner/dayColumnHelpers';
+import {
+  normalizeValue,
+  coerceToNumber,
+} from '../utils/planner/valueNormalizers';
+import {
+  handleCopyOperation,
+  handlePasteOperation,
+} from '../utils/planner/clipboardOperations';
+import { createSortInboxCommand } from '../utils/planner/sortInbox';
 
 // Sortable status values for the "Sort Inbox" feature
 const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned'];
-
-// Map status values to their target sections for Sort Inbox
-const SORT_INBOX_TARGET_MAP = {
-  'Done': 'general',
-  'Scheduled': 'general',
-  'Not Scheduled': 'unscheduled',
-  'Abandoned': 'unscheduled',
-  'Blocked': 'unscheduled',
-  'On Hold': 'unscheduled',
-};
 
 /**
  * Google Sheets-like Spreadsheet using TanStack Table v8
@@ -271,72 +283,15 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     });
   }, [computedData]);
 
-  // Helper function to check if a value is a valid number (matches main branch coerceNumber)
+  // Note: coerceNumber is now imported from valueNormalizers as coerceToNumber
+  // We keep this wrapper for backward compatibility with existing code
   const coerceNumber = useCallback((value) => {
-    if (value == null) return null;
-    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-    if (typeof value === 'string') {
-      const normalized = value.trim().replace(',', '.');
-      if (!normalized) return null;
-      const parsed = parseFloat(normalized);
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-    return null;
+    const result = coerceToNumber(value);
+    return result === 0 && value == null ? null : result;
   }, []);
 
   // Collect unique values for filter dropdowns from the data
-  const { projectNames, subprojectNames, statusNames, recurringNames, estimateNames } = useMemo(() => {
-    const projects = new Set();
-    const subprojects = new Set();
-    const statuses = new Set();
-    const recurring = new Set(['Recurring', 'Not Recurring']); // Fixed options
-    const estimates = new Set();
-
-    computedData.forEach(row => {
-      // Skip special rows - only collect from regular task rows
-      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
-          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
-          row._isFilterRow || row._isInboxRow || row._isArchiveRow || row._rowType) {
-        return;
-      }
-
-      // Collect project values (including empty/dash)
-      if (row.project && row.project.trim() !== '') {
-        projects.add(row.project);
-      } else {
-        projects.add('-'); // Add dash for empty projects
-      }
-
-      // Collect subproject values (including empty/dash)
-      if (row.subproject && row.subproject.trim() !== '') {
-        subprojects.add(row.subproject);
-      } else {
-        subprojects.add('-'); // Add dash for empty subprojects
-      }
-
-      // Collect status values (including dash)
-      if (row.status && row.status.trim() !== '') {
-        statuses.add(row.status);
-      } else {
-        statuses.add('-'); // Add dash for empty status
-      }
-
-      // Collect estimate values (including dash)
-      if (row.estimate && row.estimate.trim() !== '') {
-        estimates.add(row.estimate);
-      } else {
-        estimates.add('-'); // Add dash for empty estimates
-      }
-    });
-
-    return {
-      projectNames: Array.from(projects).sort(),
-      subprojectNames: Array.from(subprojects).sort(),
-      statusNames: Array.from(statuses).sort(),
-      recurringNames: Array.from(recurring).sort(),
-      estimateNames: Array.from(estimates).sort(),
-    };
-  }, [computedData]);
+  const { projectNames, subprojectNames, statusNames, recurringNames, estimateNames } = useFilterValues(computedData);
 
   // Wrap filter button click handlers with menu state
   const onProjectFilterButtonClick = useCallback(
@@ -366,134 +321,16 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
 
   // Filter data based on day column filters AND project/status/recurring/estimate filters
   // Only hide regular task rows that don't have numeric values in ALL filtered day columns
-  const filteredData = useMemo(() => {
-    // Helper functions to match filters (from main branch implementation)
-    const matchesProjectFilter = (row) => {
-      if (!selectedProjectFilters.size) return true;
-      // Always show timeline header rows (they should never be filtered)
-      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
-          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
-          row._isFilterRow) {
-        return true;
-      }
-      // Hide section dividers (Inbox/Archive) and project rows when filtering
-      if (row._isInboxRow || row._isArchiveRow || row._rowType) {
-        return false;
-      }
-      // Filter regular task rows by project (treat empty as '-')
-      const projectValue = (row.project && row.project.trim() !== '') ? row.project : '-';
-      return selectedProjectFilters.has(projectValue);
-    };
-
-    const matchesSubprojectFilter = (row) => {
-      if (!selectedSubprojectFilters.size) return true;
-      // Always show timeline header rows
-      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
-          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
-          row._isFilterRow) {
-        return true;
-      }
-      // Hide section dividers and project rows when filtering
-      if (row._isInboxRow || row._isArchiveRow || row._rowType) {
-        return false;
-      }
-      // Filter regular task rows by subproject (treat empty as '-')
-      const subprojectValue = (row.subproject && row.subproject.trim() !== '') ? row.subproject : '-';
-      return selectedSubprojectFilters.has(subprojectValue);
-    };
-
-    const matchesStatusFilter = (row) => {
-      if (!selectedStatusFilters.size) return true;
-      // Always show timeline header rows
-      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
-          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
-          row._isFilterRow) {
-        return true;
-      }
-      // Hide section dividers and project rows when filtering
-      if (row._isInboxRow || row._isArchiveRow || row._rowType) {
-        return false;
-      }
-      // Filter regular task rows by status (treat empty as '-')
-      const statusValue = (row.status && row.status.trim() !== '') ? row.status : '-';
-      return selectedStatusFilters.has(statusValue);
-    };
-
-    const matchesRecurringFilter = (row) => {
-      if (!selectedRecurringFilters.size) return true;
-      // Always show timeline header rows
-      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
-          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
-          row._isFilterRow) {
-        return true;
-      }
-      // Hide section dividers and project rows when filtering
-      if (row._isInboxRow || row._isArchiveRow || row._rowType) {
-        return false;
-      }
-      // Filter regular task rows by recurring
-      const value = row.recurring === 'Recurring' ? 'Recurring' : 'Not Recurring';
-      return selectedRecurringFilters.has(value);
-    };
-
-    const matchesEstimateFilter = (row) => {
-      if (!selectedEstimateFilters.size) return true;
-      // Always show timeline header rows
-      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
-          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
-          row._isFilterRow) {
-        return true;
-      }
-      // Hide section dividers and project rows when filtering
-      if (row._isInboxRow || row._isArchiveRow || row._rowType) {
-        return false;
-      }
-      // Filter regular task rows by estimate (treat empty as '-')
-      const estimateValue = (row.estimate && row.estimate.trim() !== '') ? row.estimate : '-';
-      return selectedEstimateFilters.has(estimateValue);
-    };
-
-    // If no filters are active, return all data
-    if (dayColumnFilters.size === 0 &&
-        !selectedProjectFilters.size &&
-        !selectedSubprojectFilters.size &&
-        !selectedStatusFilters.size &&
-        !selectedRecurringFilters.size &&
-        !selectedEstimateFilters.size) {
-      return computedData;
-    }
-
-    const filtered = computedData.filter(row => {
-      // Apply project/status/recurring/estimate filters first
-      if (!matchesProjectFilter(row)) return false;
-      if (!matchesSubprojectFilter(row)) return false;
-      if (!matchesStatusFilter(row)) return false;
-      if (!matchesRecurringFilter(row)) return false;
-      if (!matchesEstimateFilter(row)) return false;
-
-      // Always show timeline header rows (month, week, day headers, filter row, daily min/max)
-      // These are NOT filterable by day columns - they should always be visible
-      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
-          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
-          row._isFilterRow) {
-        return true;
-      }
-
-      // For all other rows (regular tasks, project rows, inbox/archive dividers), apply day column filtering
-      // In main branch, FILTERABLE_ROW_TYPES includes: projectTask, inboxItem, projectHeader, projectGeneral, projectUnscheduled
-      // Inbox and Archive rows should be filtered just like project rows
-      const hasAllFilteredValues = Array.from(dayColumnFilters).every(dayColumnId => {
-        const value = row[dayColumnId];
-        const numericValue = coerceNumber(value);
-        // Check if this column has a valid numeric value
-        return numericValue !== null;
-      });
-
-      return hasAllFilteredValues;
-    });
-
-    return filtered;
-  }, [computedData, dayColumnFilters, selectedProjectFilters, selectedSubprojectFilters, selectedStatusFilters, selectedRecurringFilters, selectedEstimateFilters, coerceNumber]);
+  const filteredData = useFilteredData({
+    computedData,
+    dayColumnFilters,
+    selectedProjectFilters,
+    selectedSubprojectFilters,
+    selectedStatusFilters,
+    selectedRecurringFilters,
+    selectedEstimateFilters,
+    coerceNumber,
+  });
 
   // Calculate dates array from startDate
   const dates = useMemo(() => {
@@ -511,90 +348,10 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   }, [dailyBounds, dates]);
 
   // Calculate project totals (sum of Scheduled and Done task timeValues per project)
-  const projectTotals = useMemo(() => {
-    const totals = {};
-    let currentProjectHeaderId = null;
-
-    computedData.forEach((row) => {
-      // Track which project header we're under
-      if (row._rowType === 'projectHeader') {
-        currentProjectHeaderId = row.id;
-        totals[currentProjectHeaderId] = 0;
-        return;
-      }
-
-      // Reset when we exit a project section (encounter another special row type)
-      if (row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled') {
-        // Still within the project, don't reset
-        return;
-      }
-
-      // For regular task rows under a project header
-      if (currentProjectHeaderId && !row._isMonthRow && !row._isWeekRow &&
-          !row._isDayRow && !row._isDayOfWeekRow && !row._isDailyMinRow &&
-          !row._isDailyMaxRow && !row._isFilterRow && !row._rowType) {
-        const status = row.status || '';
-
-        // Only count Scheduled and Done tasks
-        if (status === 'Scheduled' || status === 'Done') {
-          const timeValue = row.timeValue || '0.00';
-
-          // Parse timeValue (format: "HH.mm" or "H.mm")
-          const parsed = parseFloat(timeValue);
-          if (!isNaN(parsed)) {
-            totals[currentProjectHeaderId] += parsed;
-          }
-        }
-      }
-    });
-
-    // Format totals to 2 decimal places
-    const formattedTotals = {};
-    Object.entries(totals).forEach(([key, total]) => {
-      formattedTotals[key] = total.toFixed(2);
-    });
-
-    return formattedTotals;
-  }, [computedData]);
+  const projectTotals = useProjectTotals(computedData);
 
   // Calculate daily totals for each day column (sum of all regular task rows, ignoring filters)
-  const dailyTotals = useMemo(() => {
-    const totals = {};
-
-    // Initialize all day columns to 0
-    for (let i = 0; i < totalDays; i++) {
-      totals[`day-${i}`] = 0;
-    }
-
-    // Sum up values from all regular task rows
-    computedData.forEach((row) => {
-      // Skip special rows and project rows - only count regular task rows
-      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
-          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
-          row._isFilterRow || row._isInboxRow || row._isArchiveRow || row._rowType) {
-        return;
-      }
-
-      // For each day column, add the numeric value to the total
-      for (let i = 0; i < totalDays; i++) {
-        const dayColumnId = `day-${i}`;
-        const value = row[dayColumnId];
-        const numericValue = coerceNumber(value);
-
-        if (numericValue !== null) {
-          totals[dayColumnId] += numericValue;
-        }
-      }
-    });
-
-    // Format totals to 2 decimal places
-    const formattedTotals = {};
-    Object.entries(totals).forEach(([key, total]) => {
-      formattedTotals[key] = total.toFixed(2);
-    });
-
-    return formattedTotals;
-  }, [computedData, totalDays, coerceNumber]);
+  const dailyTotals = useDailyTotals({ computedData, totalDays });
 
   // Update filter row (row 7) with daily totals
   useEffect(() => {
@@ -607,13 +364,11 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
 
       // Check if any daily totals have changed
       let hasChanges = false;
-      for (let i = 0; i < totalDays; i++) {
-        const dayColumnId = `day-${i}`;
+      forEachDayColumn(totalDays, (dayColumnId) => {
         if (filterRow[dayColumnId] !== dailyTotals[dayColumnId]) {
           hasChanges = true;
-          break;
         }
-      }
+      });
 
       // Only update if there are actual changes
       if (!hasChanges) return prevData;
@@ -621,12 +376,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
       return prevData.map(row => {
         // Update filter row with daily totals
         if (row._isFilterRow) {
-          const updates = {};
-          for (let i = 0; i < totalDays; i++) {
-            const dayColumnId = `day-${i}`;
-            updates[dayColumnId] = dailyTotals[dayColumnId];
-          }
-          return { ...row, ...updates };
+          return { ...row, ...dailyTotals };
         }
         return row;
       });
@@ -667,10 +417,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
             recurring: '',
             estimate: '',
             timeValue: '',
+            ...createDayColumnUpdates(totalDays, (i) => dailyMinValues[i]),
           };
-          dailyMinValues.forEach((value, i) => {
-            minRow[`day-${i}`] = value;
-          });
           newData.splice(filterRowIndex, 0, minRow);
         }
 
@@ -687,10 +435,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
             recurring: '',
             estimate: '',
             timeValue: '',
+            ...createDayColumnUpdates(totalDays, (i) => dailyMaxValues[i]),
           };
-          dailyMaxValues.forEach((value, i) => {
-            maxRow[`day-${i}`] = value;
-          });
           // Insert after daily min (if it was just added) or at filter row index
           const insertIndex = hasMinRow ? filterRowIndex : filterRowIndex + 1;
           newData.splice(insertIndex, 0, maxRow);
@@ -703,20 +449,20 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
       return prevData.map(row => {
         // Update daily min row
         if (row._isDailyMinRow) {
-          const updates = { project: 'Daily Min' };
-          dailyMinValues.forEach((value, i) => {
-            updates[`day-${i}`] = value;
-          });
-          return { ...row, ...updates };
+          return {
+            ...row,
+            project: 'Daily Min',
+            ...createDayColumnUpdates(totalDays, (i) => dailyMinValues[i]),
+          };
         }
 
         // Update daily max row
         if (row._isDailyMaxRow) {
-          const updates = { project: 'Daily Max' };
-          dailyMaxValues.forEach((value, i) => {
-            updates[`day-${i}`] = value;
-          });
-          return { ...row, ...updates };
+          return {
+            ...row,
+            project: 'Daily Max',
+            ...createDayColumnUpdates(totalDays, (i) => dailyMaxValues[i]),
+          };
         }
 
         return row;
@@ -768,11 +514,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
           recurring: '',
           estimate: '',
           timeValue: '',
+          ...createEmptyDayColumns(totalDays),
         };
-        // Add empty day columns
-        for (let i = 0; i < totalDays; i++) {
-          inboxRow[`day-${i}`] = '';
-        }
         newData.splice(insertIndex, 0, inboxRow);
       }
 
@@ -794,11 +537,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
             recurring: '',
             estimate: '',
             timeValue: '',
+            ...createEmptyDayColumns(totalDays),
           };
-          // Add empty day columns
-          for (let i = 0; i < totalDays; i++) {
-            archiveRow[`day-${i}`] = '';
-          }
           // Insert 20 rows after inbox
           const archiveInsertIndex = Math.min(inboxIndex + 21, newData.length);
           console.log('Inserting archive row at index:', archiveInsertIndex, 'newData.length:', newData.length);
@@ -858,11 +598,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
               recurring: '',
               estimate: '',
               timeValue: '',
+              ...createEmptyDayColumns(totalDays),
             };
-            // Add empty day columns
-            for (let i = 0; i < totalDays; i++) {
-              projectHeaderRow[`day-${i}`] = '';
-            }
             newData.splice(insertIndex++, 0, projectHeaderRow);
 
             // Create "General" section row
@@ -880,10 +617,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
               recurring: '',
               estimate: '',
               timeValue: '',
+              ...createEmptyDayColumns(totalDays),
             };
-            for (let i = 0; i < totalDays; i++) {
-              generalRow[`day-${i}`] = '';
-            }
             newData.splice(insertIndex++, 0, generalRow);
 
             // Create "Unscheduled" section row
@@ -901,10 +636,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
               recurring: '',
               estimate: '',
               timeValue: '',
+              ...createEmptyDayColumns(totalDays),
             };
-            for (let i = 0; i < totalDays; i++) {
-              unscheduledRow[`day-${i}`] = '';
-            }
             newData.splice(insertIndex++, 0, unscheduledRow);
           });
 
@@ -1492,408 +1225,42 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
 
   // Copy/Paste functionality
   const handleCopy = useCallback((e) => {
-    if (editingCell) return; // Don't copy while editing
-    if (selectedCells.size === 0 && selectedRows.size === 0) return;
-
     e.preventDefault();
 
-    // ROW COPY MODE: If rows are selected, copy entire rows
-    if (selectedRows.size > 0) {
-      // Get selected rows in order (use original data to preserve =timeValue formulas)
-      const selectedRowIds = Array.from(selectedRows);
-      const rowsInOrder = data.filter(row => selectedRowIds.includes(row.id));
-
-      // Convert each row to TSV
-      const tsvData = rowsInOrder.map(row => {
-        return allColumnIds.map(colId => row[colId] || '').join('\t');
-      }).join('\n');
-
-      // Track that we copied all columns
-      lastCopiedColumnsRef.current = allColumnIds;
-
-      // Copy to clipboard
-      navigator.clipboard.writeText(tsvData);
-      return;
-    }
-
-    // CELL COPY MODE: Copy selected cells
-    // Get all selected cells and organize by row/column
-    const cellsByRow = new Map();
-    const copiedColumns = new Set();
-
-    selectedCells.forEach(cellKey => {
-      const [rowId, columnId] = cellKey.split('|');
-      if (columnId === 'rowNum') return; // Skip row number column
-
-      copiedColumns.add(columnId);
-
-      if (!cellsByRow.has(rowId)) {
-        cellsByRow.set(rowId, new Map());
-      }
-
-      // Use original data to preserve =timeValue formulas
-      const row = data.find(r => r.id === rowId);
-      if (row) {
-        cellsByRow.get(rowId).set(columnId, row[columnId] || '');
-      }
+    const tsvData = handleCopyOperation({
+      selectedRows,
+      selectedCells,
+      data,
+      allColumnIds,
+      editingCell,
+      lastCopiedColumnsRef,
     });
 
-    // Track which columns were copied (to detect timeValue copy)
-    lastCopiedColumnsRef.current = Array.from(copiedColumns);
-
-    // Convert to TSV (Tab-Separated Values) format for clipboard
-    const rows = Array.from(cellsByRow.values());
-    const tsvData = rows.map(cellMap => {
-      return Array.from(cellMap.values()).join('\t');
-    }).join('\n');
-
-    // Copy to clipboard
-    navigator.clipboard.writeText(tsvData);
-  }, [selectedCells, selectedRows, computedData, editingCell, allColumnIds]);
+    if (tsvData) {
+      navigator.clipboard.writeText(tsvData);
+    }
+  }, [selectedCells, selectedRows, data, editingCell, allColumnIds]);
 
   const handlePaste = useCallback((e) => {
-    if (editingCell) return; // Don't paste while editing
-    if (selectedCells.size === 0 && selectedRows.size === 0) return;
-
     e.preventDefault();
 
     // Get clipboard data
     const pastedText = e.clipboardData.getData('text');
-    if (!pastedText) return;
 
-    // ROW PASTE MODE: If rows are selected, paste into entire rows
-    if (selectedRows.size > 0) {
-      // Parse TSV data
-      const pastedRows = pastedText.split('\n').map(row => row.split('\t'));
-
-      // Get selected rows in order (by their index in data array)
-      const selectedRowIds = Array.from(selectedRows);
-      const selectedRowIndices = selectedRowIds
-        .map(rowId => data.findIndex(r => r.id === rowId))
-        .filter(idx => idx !== -1)
-        .sort((a, b) => a - b);
-
-      if (selectedRowIndices.length === 0) return;
-
-      // Check if pasting a single row to multiple selected rows (FILL MODE)
-      const isSingleRowPaste = pastedRows.length === 1 && selectedRowIndices.length > 1;
-
-      // Store old values for undo
-      const oldValues = new Map(); // Map<rowId, Map<columnId, value>>
-
-      if (isSingleRowPaste) {
-        // FILL MODE: Paste single row to all selected rows
-        const pastedRowValues = pastedRows[0];
-
-        selectedRowIndices.forEach(dataRowIndex => {
-          const rowId = data[dataRowIndex].id;
-          const rowOldValues = new Map();
-
-          pastedRowValues.forEach((value, colIndex) => {
-            if (colIndex < allColumnIds.length) {
-              const columnId = allColumnIds[colIndex];
-              rowOldValues.set(columnId, data[dataRowIndex][columnId] || '');
-            }
-          });
-
-          if (rowOldValues.size > 0) {
-            oldValues.set(rowId, rowOldValues);
-          }
-        });
-
-        // Create command for fill operation
-        const command = {
-          execute: () => {
-            setData(prev => {
-              const newData = [...prev];
-
-              selectedRowIndices.forEach(dataRowIndex => {
-                const rowUpdates = {};
-                pastedRowValues.forEach((value, colIndex) => {
-                  if (colIndex < allColumnIds.length) {
-                    const columnId = allColumnIds[colIndex];
-                    rowUpdates[columnId] = value;
-                  }
-                });
-
-                newData[dataRowIndex] = { ...newData[dataRowIndex], ...rowUpdates };
-              });
-
-              return newData;
-            });
-          },
-          undo: () => {
-            setData(prev => {
-              const newData = [...prev];
-
-              oldValues.forEach((rowOldValues, rowId) => {
-                const rowIndex = newData.findIndex(r => r.id === rowId);
-                if (rowIndex === -1) return;
-
-                const rowUpdates = {};
-                rowOldValues.forEach((value, columnId) => {
-                  rowUpdates[columnId] = value;
-                });
-
-                newData[rowIndex] = { ...newData[rowIndex], ...rowUpdates };
-              });
-
-              return newData;
-            });
-          },
-        };
-
-        executeCommand(command);
-        return;
-      }
-
-      // RANGE MODE: Paste multiple rows starting from first selected row
-      // Calculate how many rows to paste
-      const targetRowIndex = selectedRowIndices[0]; // Start pasting at first selected row
-      const rowsToPaste = Math.min(pastedRows.length, data.length - targetRowIndex);
-
-      for (let i = 0; i < rowsToPaste; i++) {
-        const dataRowIndex = targetRowIndex + i;
-        const rowId = data[dataRowIndex].id;
-        const pastedRowValues = pastedRows[i];
-
-        const rowOldValues = new Map();
-        pastedRowValues.forEach((value, colIndex) => {
-          if (colIndex < allColumnIds.length) {
-            const columnId = allColumnIds[colIndex];
-            rowOldValues.set(columnId, data[dataRowIndex][columnId] || '');
-          }
-        });
-
-        if (rowOldValues.size > 0) {
-          oldValues.set(rowId, rowOldValues);
-        }
-      }
-
-      // Create command for row paste operation
-      const command = {
-        execute: () => {
-          setData(prev => {
-            const newData = [...prev];
-
-            for (let i = 0; i < rowsToPaste; i++) {
-              const dataRowIndex = targetRowIndex + i;
-              const pastedRowValues = pastedRows[i];
-
-              const rowUpdates = {};
-              pastedRowValues.forEach((value, colIndex) => {
-                if (colIndex < allColumnIds.length) {
-                  const columnId = allColumnIds[colIndex];
-                  rowUpdates[columnId] = value;
-                }
-              });
-
-              newData[dataRowIndex] = { ...newData[dataRowIndex], ...rowUpdates };
-            }
-
-            return newData;
-          });
-        },
-        undo: () => {
-          setData(prev => {
-            const newData = [...prev];
-
-            oldValues.forEach((rowOldValues, rowId) => {
-              const rowIndex = newData.findIndex(r => r.id === rowId);
-              if (rowIndex === -1) return;
-
-              const rowUpdates = {};
-              rowOldValues.forEach((value, columnId) => {
-                rowUpdates[columnId] = value;
-              });
-
-              newData[rowIndex] = { ...newData[rowIndex], ...rowUpdates };
-            });
-
-            return newData;
-          });
-        },
-      };
-
-      executeCommand(command);
-      return;
-    }
-
-    // CELL PASTE MODE: Continue with existing cell paste logic
-    // Check if it's a single cell value (no tabs or newlines)
-    const isSingleCell = !pastedText.includes('\t') && !pastedText.includes('\n');
-
-    // Get the anchor cell (first selected cell)
-    const firstCellKey = Array.from(selectedCells)[0];
-    const [anchorRowId, anchorColumnId] = firstCellKey.split('|');
-
-    if (anchorColumnId === 'rowNum') return; // Don't paste into row number column
-
-    // FILL MODE: Copy one value to all selected cells
-    if (isSingleCell && selectedCells.size > 1) {
-      // Check if the copied data came from timeValue column
-      const copiedFromTimeValue = lastCopiedColumnsRef.current.length === 1 &&
-                                   lastCopiedColumnsRef.current[0] === 'timeValue';
-
-      // Store old values for undo
-      const oldValues = new Map(); // Map<rowId, Map<columnId, value>>
-
-      selectedCells.forEach(cellKey => {
-        const [rowId, columnId] = cellKey.split('|');
-        if (columnId === 'rowNum') return;
-
-        const row = data.find(r => r.id === rowId);
-        if (!row) return;
-
-        if (!oldValues.has(rowId)) {
-          oldValues.set(rowId, new Map());
-        }
-        oldValues.get(rowId).set(columnId, row[columnId] || '');
-      });
-
-      // Create command for fill operation
-      const command = {
-        execute: () => {
-          setData(prev => prev.map(row => {
-            const rowUpdates = {};
-            let hasUpdates = false;
-
-            selectedCells.forEach(cellKey => {
-              const [rowId, columnId] = cellKey.split('|');
-              if (row.id === rowId && columnId !== 'rowNum') {
-                // If copying from timeValue to a day column, create a link
-                const isDayColumn = columnId.startsWith('day-');
-                if (copiedFromTimeValue && isDayColumn) {
-                  rowUpdates[columnId] = '=timeValue';
-                } else {
-                  rowUpdates[columnId] = pastedText;
-                }
-                hasUpdates = true;
-              }
-            });
-
-            return hasUpdates ? { ...row, ...rowUpdates } : row;
-          }));
-        },
-        undo: () => {
-          setData(prev => {
-            const newData = [...prev];
-
-            oldValues.forEach((rowOldValues, rowId) => {
-              const rowIndex = newData.findIndex(r => r.id === rowId);
-              if (rowIndex === -1) return;
-
-              const rowUpdates = {};
-              rowOldValues.forEach((value, columnId) => {
-                rowUpdates[columnId] = value;
-              });
-
-              newData[rowIndex] = { ...newData[rowIndex], ...rowUpdates };
-            });
-
-            return newData;
-          });
-        },
-      };
-
-      executeCommand(command);
-      return;
-    }
-
-    // RANGE MODE: Paste TSV grid starting from anchor cell
-    // Parse TSV data
-    const rows = pastedText.split('\n').map(row => row.split('\t'));
-
-    // Find the anchor row index and column index
-    const anchorRowIndex = data.findIndex(r => r.id === anchorRowId);
-
-    // Get column index from allColumnIds
-    const anchorColIndex = allColumnIds.indexOf(anchorColumnId);
-
-    if (anchorRowIndex === -1 || anchorColIndex === -1) return;
-
-    // Check if we're pasting from timeValue column(s)
-    // For range paste, check if the source columns include timeValue
-    const copiedFromTimeValue = lastCopiedColumnsRef.current.includes('timeValue');
-
-    // Store old values for undo
-    const oldValues = new Map(); // Map<rowId, Map<columnId, value>>
-
-    rows.forEach((rowValues, rowOffset) => {
-      const targetRowIndex = anchorRowIndex + rowOffset;
-      if (targetRowIndex >= data.length) return;
-
-      const rowId = data[targetRowIndex].id;
-      const rowOldValues = new Map();
-
-      rowValues.forEach((value, colOffset) => {
-        const targetColIndex = anchorColIndex + colOffset;
-        if (targetColIndex >= allColumnIds.length) return;
-
-        const columnId = allColumnIds[targetColIndex];
-        rowOldValues.set(columnId, data[targetRowIndex][columnId] || '');
-      });
-
-      if (rowOldValues.size > 0) {
-        oldValues.set(rowId, rowOldValues);
-      }
+    const command = handlePasteOperation({
+      pastedText,
+      selectedRows,
+      selectedCells,
+      data,
+      allColumnIds,
+      editingCell,
+      lastCopiedColumns: lastCopiedColumnsRef.current,
+      setData,
     });
 
-    // Create command for paste operation
-    const command = {
-      execute: () => {
-        setData(prev => {
-          const newData = [...prev];
-
-          rows.forEach((rowValues, rowOffset) => {
-            const targetRowIndex = anchorRowIndex + rowOffset;
-            if (targetRowIndex >= newData.length) return;
-
-            const rowUpdates = {};
-            rowValues.forEach((value, colOffset) => {
-              const targetColIndex = anchorColIndex + colOffset;
-              if (targetColIndex >= allColumnIds.length) return;
-
-              const columnId = allColumnIds[targetColIndex];
-              const sourceColIndex = lastCopiedColumnsRef.current[colOffset];
-
-              // If pasting from timeValue to a day column, create a link
-              const isDayColumn = columnId.startsWith('day-');
-              if (copiedFromTimeValue && sourceColIndex === 'timeValue' && isDayColumn) {
-                rowUpdates[columnId] = '=timeValue';
-              } else {
-                rowUpdates[columnId] = value;
-              }
-            });
-
-            newData[targetRowIndex] = { ...newData[targetRowIndex], ...rowUpdates };
-          });
-
-          return newData;
-        });
-      },
-      undo: () => {
-        setData(prev => {
-          const newData = [...prev];
-
-          oldValues.forEach((rowOldValues, rowId) => {
-            const rowIndex = newData.findIndex(r => r.id === rowId);
-            if (rowIndex === -1) return;
-
-            const rowUpdates = {};
-            rowOldValues.forEach((value, columnId) => {
-              rowUpdates[columnId] = value;
-            });
-
-            newData[rowIndex] = { ...newData[rowIndex], ...rowUpdates };
-          });
-
-          return newData;
-        });
-      },
-    };
-
-    executeCommand(command);
+    if (command) {
+      executeCommand(command);
+    }
   }, [selectedCells, selectedRows, data, editingCell, executeCommand, allColumnIds]);
 
   // Handle global mouse up to end drag selection
@@ -2215,160 +1582,15 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   const handleSortInbox = useCallback(() => {
     setIsListicalMenuOpen(false);
 
-    // Early exit if no statuses are selected
-    if (selectedSortStatuses.size === 0) {
-      return;
-    }
-
-    // Helper to normalize project keys for matching (lowercase, trim)
-    const normalizeProjectKey = (key) => {
-      if (!key) return '';
-      return key.trim().toLowerCase();
-    };
-
-    // Build a map: normalized nickname -> projectNickname for matching
-    // Project section rows have both projectName (full) and projectNickname (short)
-    // Task rows have project field which contains the nickname from dropdown
-    const nicknameMap = new Map();
-    data.forEach((row) => {
-      if (row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled') {
-        // The project section rows store the nickname, use that as our key
-        const nickname = normalizeProjectKey(row.projectNickname);
-        nicknameMap.set(nickname, row.projectNickname);
-      }
+    const command = createSortInboxCommand({
+      data,
+      selectedSortStatuses,
+      setData,
     });
 
-    // Find inbox section boundaries
-    const inboxStartIndex = data.findIndex(row => row._isInboxRow);
-    const archiveStartIndex = data.findIndex(row => row._isArchiveRow);
-
-    if (inboxStartIndex === -1) {
-      return;
+    if (command) {
+      executeCommand(command);
     }
-
-    // Determine inbox section end (either at archive row or end of data)
-    const inboxEndIndex = archiveStartIndex !== -1 ? archiveStartIndex : data.length;
-
-    // Collect inbox tasks that match the selected statuses
-    const generalTasksByProject = new Map(); // Map<projectKey, task[]>
-    const unscheduledTasksByProject = new Map(); // Map<projectKey, task[]>
-    const inboxTasksToMove = new Set(); // Track which task IDs are being moved
-
-    for (let i = inboxStartIndex + 1; i < inboxEndIndex; i++) {
-      const row = data[i];
-
-      // Skip special rows - only process regular task rows
-      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
-          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
-          row._isFilterRow || row._isInboxRow || row._isArchiveRow || row._rowType) {
-        continue;
-      }
-
-      // Check if this task should be sorted
-      const status = row.status || '';
-      if (!selectedSortStatuses.has(status)) {
-        continue;
-      }
-
-      // Determine target section
-      const target = SORT_INBOX_TARGET_MAP[status];
-      if (!target) {
-        continue;
-      }
-
-      // Match project by nickname
-      // Task row.project contains the nickname from the dropdown
-      const taskProjectNickname = normalizeProjectKey(row.project);
-
-      // Check if this nickname exists in our project sections
-      if (!nicknameMap.has(taskProjectNickname)) {
-        continue;
-      }
-
-      // Use the normalized nickname as the map key
-      const projectKey = taskProjectNickname;
-
-      // Add to appropriate collection
-      if (target === 'general') {
-        if (!generalTasksByProject.has(projectKey)) {
-          generalTasksByProject.set(projectKey, []);
-        }
-        generalTasksByProject.get(projectKey).push(row);
-        inboxTasksToMove.add(row.id);
-      } else if (target === 'unscheduled') {
-        if (!unscheduledTasksByProject.has(projectKey)) {
-          unscheduledTasksByProject.set(projectKey, []);
-        }
-        unscheduledTasksByProject.get(projectKey).push(row);
-        inboxTasksToMove.add(row.id);
-      }
-    }
-
-    // If no tasks to move, exit early
-    if (inboxTasksToMove.size === 0) {
-      return;
-    }
-
-    // Store old data for undo
-    const oldData = [...data];
-
-    // Copy the set for closure capture
-    const tasksToMove = new Set(inboxTasksToMove);
-
-    // Create command for sort inbox operation
-    const command = {
-      execute: () => {
-        setData(prevData => {
-          const newData = [];
-          // Create fresh copies of the maps for this execution to avoid mutation issues
-          const generalTasksCopy = new Map(generalTasksByProject);
-          const unscheduledTasksCopy = new Map(unscheduledTasksByProject);
-
-          prevData.forEach((row) => {
-            // Skip tasks that are being moved from inbox
-            if (tasksToMove.has(row.id)) {
-              return;
-            }
-
-            // Add the current row
-            newData.push(row);
-
-            // If this is a projectGeneral row, insert general tasks for this project
-            if (row._rowType === 'projectGeneral') {
-              const projectKey = normalizeProjectKey(row.projectNickname);
-              const tasksToInsert = generalTasksCopy.get(projectKey);
-
-              if (tasksToInsert && tasksToInsert.length > 0) {
-                tasksToInsert.forEach(task => {
-                  newData.push(task);
-                });
-                generalTasksCopy.delete(projectKey);
-              }
-            }
-
-            // If this is a projectUnscheduled row, insert unscheduled tasks for this project
-            if (row._rowType === 'projectUnscheduled') {
-              const projectKey = normalizeProjectKey(row.projectNickname);
-              const tasksToInsert = unscheduledTasksCopy.get(projectKey);
-
-              if (tasksToInsert && tasksToInsert.length > 0) {
-                tasksToInsert.forEach(task => {
-                  newData.push(task);
-                });
-                unscheduledTasksCopy.delete(projectKey);
-              }
-            }
-          });
-
-          return newData;
-        });
-      },
-      undo: () => {
-        setData(oldData);
-      },
-    };
-
-    executeCommand(command);
   }, [data, selectedSortStatuses, executeCommand]);
 
   const handleArchiveWeek = useCallback(() => {
