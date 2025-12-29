@@ -426,6 +426,29 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     });
   }, [dailyTotals, totalDays]);
 
+  // Update archive week rows with calculated totals
+  useEffect(() => {
+    if (!archiveTotals || !archiveTotals.weekTotals) return;
+
+    setData(prevData => {
+      let hasChanges = false;
+      const updatedData = prevData.map(row => {
+        // Update archive week rows with totals
+        if (row._rowType === 'archiveRow' && archiveTotals.weekTotals[row.id]) {
+          const weekTotal = archiveTotals.weekTotals[row.id];
+          if (row.archiveTotalHours !== weekTotal.totalHours) {
+            hasChanges = true;
+            return { ...row, archiveTotalHours: weekTotal.totalHours };
+          }
+        }
+        return row;
+      });
+
+      // Only return new data if there were actual changes
+      return hasChanges ? updatedData : prevData;
+    });
+  }, [archiveTotals]);
+
   // Update daily min/max rows when bounds change or toggle changes
   useEffect(() => {
     if (!dailyMinValues || !dailyMaxValues) return;

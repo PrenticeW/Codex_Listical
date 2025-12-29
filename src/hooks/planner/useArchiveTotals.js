@@ -91,14 +91,16 @@ export const useArchivedProjectTotals = (data, totalDays = 84) => {
  * Sums up all archived projects and tasks under each archive week
  *
  * @param {object[]} data - Data array
+ * @param {object} archivedProjectTotals - Totals for each archived project
  * @param {number} totalDays - Total number of days
  * @returns {object} Map of archive week ID to { totalHours, dayTotals }
  */
-export const useArchivedWeekTotals = (data, totalDays = 84) => {
+export const useArchivedWeekTotals = (data, archivedProjectTotals, totalDays = 84) => {
   return useMemo(() => {
     const totals = {};
 
     let currentArchiveWeek = null;
+    let currentWeekProjects = [];
     let currentWeekTasks = [];
 
     data.forEach((row, index) => {
@@ -106,14 +108,10 @@ export const useArchivedWeekTotals = (data, totalDays = 84) => {
       if (row._rowType === 'archiveRow') {
         // Save totals for previous week if any
         if (currentArchiveWeek) {
-          const totalHours = currentWeekTasks.reduce((sum, task) => {
-            // Only count Scheduled and Done tasks (exclude Abandoned)
-            const status = task.status || '';
-            if (status === 'Scheduled' || status === 'Done') {
-              const timeValue = parseFloat(task.timeValue) || 0;
-              return sum + timeValue;
-            }
-            return sum;
+          // Sum up all archived project totals for this week
+          const totalHours = currentWeekProjects.reduce((sum, projectId) => {
+            const projectTotal = parseFloat(archivedProjectTotals[projectId]) || 0;
+            return sum + projectTotal;
           }, 0);
 
           // Filter tasks for day totals - only Scheduled and Done
@@ -131,7 +129,12 @@ export const useArchivedWeekTotals = (data, totalDays = 84) => {
 
         // Start tracking new archive week
         currentArchiveWeek = row;
+        currentWeekProjects = [];
         currentWeekTasks = [];
+      }
+      // Track archived project headers that belong to current archive week
+      else if (currentArchiveWeek && row._rowType === 'archivedProjectHeader' && row.parentGroupId === currentArchiveWeek.id) {
+        currentWeekProjects.push(row.id);
       }
       // Collect tasks that belong to current archive week
       else if (currentArchiveWeek && row.parentGroupId === currentArchiveWeek.id) {
@@ -143,14 +146,9 @@ export const useArchivedWeekTotals = (data, totalDays = 84) => {
       // We've moved past this archive week
       else if (currentArchiveWeek && row._rowType === 'archiveRow') {
         // Save totals for previous week
-        const totalHours = currentWeekTasks.reduce((sum, task) => {
-          // Only count Scheduled and Done tasks (exclude Abandoned)
-          const status = task.status || '';
-          if (status === 'Scheduled' || status === 'Done') {
-            const timeValue = parseFloat(task.timeValue) || 0;
-            return sum + timeValue;
-          }
-          return sum;
+        const totalHours = currentWeekProjects.reduce((sum, projectId) => {
+          const projectTotal = parseFloat(archivedProjectTotals[projectId]) || 0;
+          return sum + projectTotal;
         }, 0);
 
         // Filter tasks for day totals - only Scheduled and Done
@@ -167,20 +165,16 @@ export const useArchivedWeekTotals = (data, totalDays = 84) => {
 
         // Start new week
         currentArchiveWeek = row;
+        currentWeekProjects = [];
         currentWeekTasks = [];
       }
     });
 
     // Save totals for last archive week if we ended while still in one
     if (currentArchiveWeek) {
-      const totalHours = currentWeekTasks.reduce((sum, task) => {
-        // Only count Scheduled and Done tasks (exclude Abandoned)
-        const status = task.status || '';
-        if (status === 'Scheduled' || status === 'Done') {
-          const timeValue = parseFloat(task.timeValue) || 0;
-          return sum + timeValue;
-        }
-        return sum;
+      const totalHours = currentWeekProjects.reduce((sum, projectId) => {
+        const projectTotal = parseFloat(archivedProjectTotals[projectId]) || 0;
+        return sum + projectTotal;
       }, 0);
 
       // Filter tasks for day totals - only Scheduled and Done
@@ -197,7 +191,7 @@ export const useArchivedWeekTotals = (data, totalDays = 84) => {
     }
 
     return totals;
-  }, [data, totalDays]);
+  }, [data, archivedProjectTotals, totalDays]);
 };
 
 /**
@@ -209,7 +203,7 @@ export const useArchivedWeekTotals = (data, totalDays = 84) => {
  */
 export const useArchiveTotals = (data, totalDays = 84) => {
   const projectTotals = useArchivedProjectTotals(data, totalDays);
-  const weekTotals = useArchivedWeekTotals(data, totalDays);
+  const weekTotals = useArchivedWeekTotals(data, projectTotals, totalDays);
 
   return {
     projectTotals,

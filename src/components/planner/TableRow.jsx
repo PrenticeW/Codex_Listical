@@ -500,7 +500,25 @@ export default function TableRow({
             if (isArchiveWeekRow && ['task', 'recurring', 'estimate', 'timeValue'].includes(columnId)) {
               // Column E (task) shows the date range
               const dateRange = row.original.archiveLabel || '';
-              const cellContent = columnId === 'task' ? dateRange : '\u00A0';
+              // Column G (estimate) shows the weekly total hours
+              const weeklyTotal = row.original.archiveTotalHours || '0.00';
+              // Column H (timeValue) shows the weekly min and max
+              const weeklyMin = row.original.archiveWeeklyMin || '0.00';
+              const weeklyMax = row.original.archiveWeeklyMax || '0.00';
+
+              let cellContent = '\u00A0';
+              let justifyContent = 'flex-start';
+              let fontStyle = 'normal';
+
+              if (columnId === 'task') {
+                cellContent = dateRange;
+              } else if (columnId === 'estimate') {
+                cellContent = weeklyTotal;
+                justifyContent = 'flex-end';
+              } else if (columnId === 'timeValue') {
+                cellContent = `of ${weeklyMin} - ${weeklyMax}`;
+                fontStyle = 'italic';
+              }
 
               return (
                 <td
@@ -524,6 +542,8 @@ export default function TableRow({
                       fontSize: `${cellFontSize}px`,
                       paddingLeft: '3px',
                       paddingRight: '3px',
+                      justifyContent: justifyContent,
+                      fontStyle: fontStyle,
                     }}
                   >
                     {cellContent}
