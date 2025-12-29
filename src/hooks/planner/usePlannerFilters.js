@@ -63,6 +63,7 @@ export default function usePlannerFilters() {
 
   // Create filter states for each filter type using the custom hook
   const projectFilter = useFilter();
+  const subprojectFilter = useFilter();
   const statusFilter = useFilter();
   const recurringFilter = useFilter();
   const estimateFilter = useFilter();
@@ -95,6 +96,15 @@ export default function usePlannerFilters() {
     handleProjectFilterSelect: projectFilter.handleFilterSelect,
     handleProjectFilterButtonClick: projectFilter.handleFilterButtonClick,
     closeProjectFilterMenu: projectFilter.closeFilterMenu,
+
+    // Subproject filter
+    subprojectFilterMenu: subprojectFilter.filterMenu,
+    subprojectFilterMenuRef: subprojectFilter.filterMenuRef,
+    subprojectFilterButtonRef: subprojectFilter.filterButtonRef,
+    selectedSubprojectFilters: subprojectFilter.selectedFilters,
+    handleSubprojectFilterSelect: subprojectFilter.handleFilterSelect,
+    handleSubprojectFilterButtonClick: subprojectFilter.handleFilterButtonClick,
+    closeSubprojectFilterMenu: subprojectFilter.closeFilterMenu,
 
     // Status filter
     statusFilterMenu: statusFilter.filterMenu,

@@ -9,6 +9,13 @@ const FilterPanel = React.memo(function FilterPanel({
   selectedProjectFilters,
   handleProjectFilterSelect,
   closeProjectFilterMenu,
+  subprojectFilterMenu,
+  subprojectFilterMenuRef,
+  subprojectFilterButtonRef,
+  subprojectNames,
+  selectedSubprojectFilters,
+  handleSubprojectFilterSelect,
+  closeSubprojectFilterMenu,
   statusFilterMenu,
   statusFilterMenuRef,
   statusFilterButtonRef,
@@ -37,6 +44,13 @@ const FilterPanel = React.memo(function FilterPanel({
     menuRef: projectFilterMenuRef,
     buttonRef: projectFilterButtonRef,
     onClose: closeProjectFilterMenu,
+  });
+
+  useClickOutside({
+    isOpen: subprojectFilterMenu.open,
+    menuRef: subprojectFilterMenuRef,
+    buttonRef: subprojectFilterButtonRef,
+    onClose: closeSubprojectFilterMenu,
   });
 
   useClickOutside({
@@ -83,6 +97,33 @@ const FilterPanel = React.memo(function FilterPanel({
                 >
                   <span>{name}</span>
                   {selectedProjectFilters.has(name) ? <span>✓</span> : null}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+      {subprojectFilterMenu.open && (
+        <div
+          ref={subprojectFilterMenuRef}
+          className="fixed z-50 mt-1 min-w-[200px] overflow-hidden rounded border border-[#ced3d0] bg-white text-[12px] shadow-lg"
+          style={{ top: subprojectFilterMenu.top, left: subprojectFilterMenu.left }}
+        >
+          <div className="max-h-64 overflow-y-auto">
+            {subprojectNames.length === 0 ? (
+              <div className="px-3 py-2 text-slate-600">No subprojects available</div>
+            ) : (
+              subprojectNames.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  className={`flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-100 ${
+                    selectedSubprojectFilters.has(name) ? 'font-semibold text-slate-900' : 'text-slate-800'
+                  }`}
+                  onClick={() => handleSubprojectFilterSelect(name)}
+                >
+                  <span>{name}</span>
+                  {selectedSubprojectFilters.has(name) ? <span>✓</span> : null}
                 </button>
               ))
             )}

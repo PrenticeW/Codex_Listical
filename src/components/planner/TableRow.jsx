@@ -43,7 +43,21 @@ export default function TableRow({
   projectTotals,
   dayColumnFilters,
   handleDayColumnFilterToggle,
+  filters = {},
+  onProjectFilterButtonClick,
+  onSubprojectFilterButtonClick,
+  onStatusFilterButtonClick,
+  onRecurringFilterButtonClick,
+  onEstimateFilterButtonClick,
 }) {
+  // Destructure filter states to avoid accessing during render
+  const {
+    selectedProjectFilters = new Set(),
+    selectedSubprojectFilters = new Set(),
+    selectedStatusFilters = new Set(),
+    selectedRecurringFilters = new Set(),
+    selectedEstimateFilters = new Set(),
+  } = filters;
   const rowId = row.original.id;
   const isDragging = Array.isArray(draggedRowId) && draggedRowId.includes(rowId);
   const isDropTarget = dropTargetRowId === rowId;
@@ -546,8 +560,28 @@ export default function TableRow({
 
         // For fixed columns
         if (['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].includes(columnId)) {
-          // Columns that need filter buttons: B (project), C (subproject), D (status), F (recurring), G (estimate)
+          // Columns that need filter buttons: B (project), D (status), F (recurring), G (estimate)
+          // Note: subproject is excluded as we don't have a filter for it yet
           const hasFilter = ['project', 'subproject', 'status', 'recurring', 'estimate'].includes(columnId);
+
+          // Map column ID to the appropriate click handler
+          const getFilterClickHandler = () => {
+            if (columnId === 'project' && onProjectFilterButtonClick) return onProjectFilterButtonClick;
+            if (columnId === 'subproject' && onSubprojectFilterButtonClick) return onSubprojectFilterButtonClick;
+            if (columnId === 'status' && onStatusFilterButtonClick) return onStatusFilterButtonClick;
+            if (columnId === 'recurring' && onRecurringFilterButtonClick) return onRecurringFilterButtonClick;
+            if (columnId === 'estimate' && onEstimateFilterButtonClick) return onEstimateFilterButtonClick;
+            return null;
+          };
+
+          const filterClickHandler = getFilterClickHandler();
+          const isFilterActive = (
+            (columnId === 'project' && selectedProjectFilters.size > 0) ||
+            (columnId === 'subproject' && selectedSubprojectFilters.size > 0) ||
+            (columnId === 'status' && selectedStatusFilters.size > 0) ||
+            (columnId === 'recurring' && selectedRecurringFilters.size > 0) ||
+            (columnId === 'estimate' && selectedEstimateFilters.size > 0)
+          );
 
           return (
             <td
@@ -572,8 +606,24 @@ export default function TableRow({
                   paddingRight: hasFilter ? '2px' : '0'
                 }}
               >
-                {hasFilter && (
-                  <ListFilter size={14} className="text-gray-400" />
+                {hasFilter && filterClickHandler && (
+                  isFilterActive ? (
+                    <Filter
+                      size={14}
+                      className="cursor-pointer"
+                      onClick={filterClickHandler}
+                      title={`Filter ${columnId}`}
+                      style={{ fill: '#065f46', stroke: '#065f46' }}
+                    />
+                  ) : (
+                    <ListFilter
+                      size={14}
+                      className="cursor-pointer"
+                      onClick={filterClickHandler}
+                      title={`Filter ${columnId}`}
+                      style={{ fill: 'none', stroke: 'black' }}
+                    />
+                  )
                 )}
               </div>
             </td>

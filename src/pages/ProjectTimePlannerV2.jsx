@@ -11,11 +11,13 @@ import usePlannerColumns from '../hooks/planner/usePlannerColumns';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
 import useTacticsMetrics from '../hooks/planner/useTacticsMetrics';
+import usePlannerFilters from '../hooks/planner/usePlannerFilters';
 import { MonthRow, WeekRow } from '../components/planner/rows';
 import TableRow from '../components/planner/TableRow';
 import NavigationBar from '../components/planner/NavigationBar';
 import ProjectListicalMenu from '../components/planner/ProjectListicalMenu';
 import PlannerTable from '../components/planner/PlannerTable';
+import FilterPanel from '../components/planner/FilterPanel';
 import { createInitialData } from '../utils/planner/dataCreators';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../constants/planner/rowTypes';
 import { mapDailyBoundsToTimeline } from '../utils/planner/dailyBoundsMapper';
@@ -103,6 +105,48 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
 
   // Filter state for day columns - tracks which day columns should filter out rows without values
   const [dayColumnFilters, setDayColumnFilters] = useState(new Set()); // Set of day column IDs that are active
+
+  // Use the planner filters hook for project, status, recurring, and estimate filters
+  const filters = usePlannerFilters();
+  const {
+    activeFilterColumns,
+    toggleFilterColumn,
+    selectedProjectFilters,
+    selectedSubprojectFilters,
+    selectedStatusFilters,
+    selectedRecurringFilters,
+    selectedEstimateFilters,
+    projectFilterMenu,
+    projectFilterMenuRef,
+    projectFilterButtonRef,
+    handleProjectFilterSelect,
+    handleProjectFilterButtonClick,
+    closeProjectFilterMenu,
+    subprojectFilterMenu,
+    subprojectFilterMenuRef,
+    subprojectFilterButtonRef,
+    handleSubprojectFilterSelect,
+    handleSubprojectFilterButtonClick,
+    closeSubprojectFilterMenu,
+    statusFilterMenu,
+    statusFilterMenuRef,
+    statusFilterButtonRef,
+    handleStatusFilterSelect,
+    handleStatusFilterButtonClick,
+    closeStatusFilterMenu,
+    recurringFilterMenu,
+    recurringFilterMenuRef,
+    recurringFilterButtonRef,
+    handleRecurringFilterSelect,
+    handleRecurringFilterButtonClick,
+    closeRecurringFilterMenu,
+    estimateFilterMenu,
+    estimateFilterMenuRef,
+    estimateFilterButtonRef,
+    handleEstimateFilterSelect,
+    handleEstimateFilterButtonClick,
+    closeEstimateFilterMenu,
+  } = filters;
 
   // Listical menu state
   const [isListicalMenuOpen, setIsListicalMenuOpen] = useState(false);
@@ -240,17 +284,195 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     return null;
   }, []);
 
-  // Filter data based on day column filters
+  // Collect unique values for filter dropdowns from the data
+  const { projectNames, subprojectNames, statusNames, recurringNames, estimateNames } = useMemo(() => {
+    const projects = new Set();
+    const subprojects = new Set();
+    const statuses = new Set();
+    const recurring = new Set(['Recurring', 'Not Recurring']); // Fixed options
+    const estimates = new Set();
+
+    computedData.forEach(row => {
+      // Skip special rows - only collect from regular task rows
+      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
+          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
+          row._isFilterRow || row._isInboxRow || row._isArchiveRow || row._rowType) {
+        return;
+      }
+
+      // Collect project values (including empty/dash)
+      if (row.project && row.project.trim() !== '') {
+        projects.add(row.project);
+      } else {
+        projects.add('-'); // Add dash for empty projects
+      }
+
+      // Collect subproject values (including empty/dash)
+      if (row.subproject && row.subproject.trim() !== '') {
+        subprojects.add(row.subproject);
+      } else {
+        subprojects.add('-'); // Add dash for empty subprojects
+      }
+
+      // Collect status values (including dash)
+      if (row.status && row.status.trim() !== '') {
+        statuses.add(row.status);
+      } else {
+        statuses.add('-'); // Add dash for empty status
+      }
+
+      // Collect estimate values (including dash)
+      if (row.estimate && row.estimate.trim() !== '') {
+        estimates.add(row.estimate);
+      } else {
+        estimates.add('-'); // Add dash for empty estimates
+      }
+    });
+
+    return {
+      projectNames: Array.from(projects).sort(),
+      subprojectNames: Array.from(subprojects).sort(),
+      statusNames: Array.from(statuses).sort(),
+      recurringNames: Array.from(recurring).sort(),
+      estimateNames: Array.from(estimates).sort(),
+    };
+  }, [computedData]);
+
+  // Wrap filter button click handlers with menu state
+  const onProjectFilterButtonClick = useCallback(
+    (event) => handleProjectFilterButtonClick(event, projectFilterMenu),
+    [handleProjectFilterButtonClick, projectFilterMenu]
+  );
+
+  const onSubprojectFilterButtonClick = useCallback(
+    (event) => handleSubprojectFilterButtonClick(event, subprojectFilterMenu),
+    [handleSubprojectFilterButtonClick, subprojectFilterMenu]
+  );
+
+  const onStatusFilterButtonClick = useCallback(
+    (event) => handleStatusFilterButtonClick(event, statusFilterMenu),
+    [handleStatusFilterButtonClick, statusFilterMenu]
+  );
+
+  const onRecurringFilterButtonClick = useCallback(
+    (event) => handleRecurringFilterButtonClick(event, recurringFilterMenu),
+    [handleRecurringFilterButtonClick, recurringFilterMenu]
+  );
+
+  const onEstimateFilterButtonClick = useCallback(
+    (event) => handleEstimateFilterButtonClick(event, estimateFilterMenu),
+    [handleEstimateFilterButtonClick, estimateFilterMenu]
+  );
+
+  // Filter data based on day column filters AND project/status/recurring/estimate filters
   // Only hide regular task rows that don't have numeric values in ALL filtered day columns
   const filteredData = useMemo(() => {
+    // Helper functions to match filters (from main branch implementation)
+    const matchesProjectFilter = (row) => {
+      if (!selectedProjectFilters.size) return true;
+      // Always show timeline header rows (they should never be filtered)
+      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
+          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
+          row._isFilterRow) {
+        return true;
+      }
+      // Hide section dividers (Inbox/Archive) and project rows when filtering
+      if (row._isInboxRow || row._isArchiveRow || row._rowType) {
+        return false;
+      }
+      // Filter regular task rows by project (treat empty as '-')
+      const projectValue = (row.project && row.project.trim() !== '') ? row.project : '-';
+      return selectedProjectFilters.has(projectValue);
+    };
+
+    const matchesSubprojectFilter = (row) => {
+      if (!selectedSubprojectFilters.size) return true;
+      // Always show timeline header rows
+      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
+          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
+          row._isFilterRow) {
+        return true;
+      }
+      // Hide section dividers and project rows when filtering
+      if (row._isInboxRow || row._isArchiveRow || row._rowType) {
+        return false;
+      }
+      // Filter regular task rows by subproject (treat empty as '-')
+      const subprojectValue = (row.subproject && row.subproject.trim() !== '') ? row.subproject : '-';
+      return selectedSubprojectFilters.has(subprojectValue);
+    };
+
+    const matchesStatusFilter = (row) => {
+      if (!selectedStatusFilters.size) return true;
+      // Always show timeline header rows
+      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
+          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
+          row._isFilterRow) {
+        return true;
+      }
+      // Hide section dividers and project rows when filtering
+      if (row._isInboxRow || row._isArchiveRow || row._rowType) {
+        return false;
+      }
+      // Filter regular task rows by status (treat empty as '-')
+      const statusValue = (row.status && row.status.trim() !== '') ? row.status : '-';
+      return selectedStatusFilters.has(statusValue);
+    };
+
+    const matchesRecurringFilter = (row) => {
+      if (!selectedRecurringFilters.size) return true;
+      // Always show timeline header rows
+      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
+          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
+          row._isFilterRow) {
+        return true;
+      }
+      // Hide section dividers and project rows when filtering
+      if (row._isInboxRow || row._isArchiveRow || row._rowType) {
+        return false;
+      }
+      // Filter regular task rows by recurring
+      const value = row.recurring === 'Recurring' ? 'Recurring' : 'Not Recurring';
+      return selectedRecurringFilters.has(value);
+    };
+
+    const matchesEstimateFilter = (row) => {
+      if (!selectedEstimateFilters.size) return true;
+      // Always show timeline header rows
+      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
+          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
+          row._isFilterRow) {
+        return true;
+      }
+      // Hide section dividers and project rows when filtering
+      if (row._isInboxRow || row._isArchiveRow || row._rowType) {
+        return false;
+      }
+      // Filter regular task rows by estimate (treat empty as '-')
+      const estimateValue = (row.estimate && row.estimate.trim() !== '') ? row.estimate : '-';
+      return selectedEstimateFilters.has(estimateValue);
+    };
+
     // If no filters are active, return all data
-    if (dayColumnFilters.size === 0) {
+    if (dayColumnFilters.size === 0 &&
+        !selectedProjectFilters.size &&
+        !selectedSubprojectFilters.size &&
+        !selectedStatusFilters.size &&
+        !selectedRecurringFilters.size &&
+        !selectedEstimateFilters.size) {
       return computedData;
     }
 
     const filtered = computedData.filter(row => {
+      // Apply project/status/recurring/estimate filters first
+      if (!matchesProjectFilter(row)) return false;
+      if (!matchesSubprojectFilter(row)) return false;
+      if (!matchesStatusFilter(row)) return false;
+      if (!matchesRecurringFilter(row)) return false;
+      if (!matchesEstimateFilter(row)) return false;
+
       // Always show timeline header rows (month, week, day headers, filter row, daily min/max)
-      // These are NOT filterable - they should always be visible
+      // These are NOT filterable by day columns - they should always be visible
       if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
           row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
           row._isFilterRow) {
@@ -271,7 +493,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     });
 
     return filtered;
-  }, [computedData, dayColumnFilters, coerceNumber]);
+  }, [computedData, dayColumnFilters, selectedProjectFilters, selectedSubprojectFilters, selectedStatusFilters, selectedRecurringFilters, selectedEstimateFilters, coerceNumber]);
 
   // Calculate dates array from startDate
   const dates = useMemo(() => {
@@ -2207,8 +2429,51 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         projectTotals={projectTotals}
         dayColumnFilters={dayColumnFilters}
         handleDayColumnFilterToggle={handleDayColumnFilterToggle}
+        filters={filters}
+        onProjectFilterButtonClick={onProjectFilterButtonClick}
+        onSubprojectFilterButtonClick={onSubprojectFilterButtonClick}
+        onStatusFilterButtonClick={onStatusFilterButtonClick}
+        onRecurringFilterButtonClick={onRecurringFilterButtonClick}
+        onEstimateFilterButtonClick={onEstimateFilterButtonClick}
       />
       </div>
+      <FilterPanel
+        projectFilterMenu={projectFilterMenu}
+        projectFilterMenuRef={projectFilterMenuRef}
+        projectFilterButtonRef={projectFilterButtonRef}
+        projectNames={projectNames}
+        selectedProjectFilters={selectedProjectFilters}
+        handleProjectFilterSelect={handleProjectFilterSelect}
+        closeProjectFilterMenu={closeProjectFilterMenu}
+        subprojectFilterMenu={subprojectFilterMenu}
+        subprojectFilterMenuRef={subprojectFilterMenuRef}
+        subprojectFilterButtonRef={subprojectFilterButtonRef}
+        subprojectNames={subprojectNames}
+        selectedSubprojectFilters={selectedSubprojectFilters}
+        handleSubprojectFilterSelect={handleSubprojectFilterSelect}
+        closeSubprojectFilterMenu={closeSubprojectFilterMenu}
+        statusFilterMenu={statusFilterMenu}
+        statusFilterMenuRef={statusFilterMenuRef}
+        statusFilterButtonRef={statusFilterButtonRef}
+        statusNames={statusNames}
+        selectedStatusFilters={selectedStatusFilters}
+        handleStatusFilterSelect={handleStatusFilterSelect}
+        closeStatusFilterMenu={closeStatusFilterMenu}
+        recurringFilterMenu={recurringFilterMenu}
+        recurringFilterMenuRef={recurringFilterMenuRef}
+        recurringFilterButtonRef={recurringFilterButtonRef}
+        recurringNames={recurringNames}
+        selectedRecurringFilters={selectedRecurringFilters}
+        handleRecurringFilterSelect={handleRecurringFilterSelect}
+        closeRecurringFilterMenu={closeRecurringFilterMenu}
+        estimateFilterMenu={estimateFilterMenu}
+        estimateFilterMenuRef={estimateFilterMenuRef}
+        estimateFilterButtonRef={estimateFilterButtonRef}
+        estimateNames={estimateNames}
+        selectedEstimateFilters={selectedEstimateFilters}
+        handleEstimateFilterSelect={handleEstimateFilterSelect}
+        closeEstimateFilterMenu={closeEstimateFilterMenu}
+      />
       </div>
     </div>
   );

@@ -45,6 +45,12 @@ function PlannerTable({
   projectTotals,
   dayColumnFilters,
   handleDayColumnFilterToggle,
+  filters,
+  onProjectFilterButtonClick,
+  onSubprojectFilterButtonClick,
+  onStatusFilterButtonClick,
+  onRecurringFilterButtonClick,
+  onEstimateFilterButtonClick,
 }) {
   return (
     <div className="flex-1 flex flex-col min-h-0 gap-4 overflow-hidden">
@@ -212,6 +218,12 @@ function PlannerTable({
                   projectTotals={projectTotals}
                   dayColumnFilters={dayColumnFilters}
                   handleDayColumnFilterToggle={handleDayColumnFilterToggle}
+                  filters={filters}
+                  onProjectFilterButtonClick={onProjectFilterButtonClick}
+                  onSubprojectFilterButtonClick={onSubprojectFilterButtonClick}
+                  onStatusFilterButtonClick={onStatusFilterButtonClick}
+                  onRecurringFilterButtonClick={onRecurringFilterButtonClick}
+                  onEstimateFilterButtonClick={onEstimateFilterButtonClick}
                 />
               );
             })}
@@ -276,6 +288,12 @@ function PlannerTable({
                   projectTotals={projectTotals}
                   dayColumnFilters={dayColumnFilters}
                   handleDayColumnFilterToggle={handleDayColumnFilterToggle}
+                  filters={filters}
+                  onProjectFilterButtonClick={onProjectFilterButtonClick}
+                  onSubprojectFilterButtonClick={onSubprojectFilterButtonClick}
+                  onStatusFilterButtonClick={onStatusFilterButtonClick}
+                  onRecurringFilterButtonClick={onRecurringFilterButtonClick}
+                  onEstimateFilterButtonClick={onEstimateFilterButtonClick}
                 />
               );
             })}
