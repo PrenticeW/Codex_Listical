@@ -101,6 +101,9 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   const [dropTargetRowId, setDropTargetRowId] = useState(null); // Track drop target
   const tableBodyRef = useRef(null);
 
+  // Filter state for day columns - tracks which day columns should filter out rows without values
+  const [dayColumnFilters, setDayColumnFilters] = useState(new Set()); // Set of day column IDs that are active
+
   // Listical menu state
   const [isListicalMenuOpen, setIsListicalMenuOpen] = useState(false);
   const [addTasksCount, setAddTasksCount] = useState('');
@@ -223,6 +226,52 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
       return hasChanges ? updatedData : prevData;
     });
   }, [computedData]);
+
+  // Helper function to check if a value is a valid number (matches main branch coerceNumber)
+  const coerceNumber = useCallback((value) => {
+    if (value == null) return null;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    if (typeof value === 'string') {
+      const normalized = value.trim().replace(',', '.');
+      if (!normalized) return null;
+      const parsed = parseFloat(normalized);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }, []);
+
+  // Filter data based on day column filters
+  // Only hide regular task rows that don't have numeric values in ALL filtered day columns
+  const filteredData = useMemo(() => {
+    // If no filters are active, return all data
+    if (dayColumnFilters.size === 0) {
+      return computedData;
+    }
+
+    const filtered = computedData.filter(row => {
+      // Always show timeline header rows (month, week, day headers, filter row, daily min/max)
+      // These are NOT filterable - they should always be visible
+      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
+          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
+          row._isFilterRow) {
+        return true;
+      }
+
+      // For all other rows (regular tasks, project rows, inbox/archive dividers), apply day column filtering
+      // In main branch, FILTERABLE_ROW_TYPES includes: projectTask, inboxItem, projectHeader, projectGeneral, projectUnscheduled
+      // Inbox and Archive rows should be filtered just like project rows
+      const hasAllFilteredValues = Array.from(dayColumnFilters).every(dayColumnId => {
+        const value = row[dayColumnId];
+        const numericValue = coerceNumber(value);
+        // Check if this column has a valid numeric value
+        return numericValue !== null;
+      });
+
+      return hasAllFilteredValues;
+    });
+
+    return filtered;
+  }, [computedData, dayColumnFilters, coerceNumber]);
 
   // Calculate dates array from startDate
   const dates = useMemo(() => {
@@ -668,6 +717,19 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
 
   // Helper to create cell key
   const getCellKey = (rowId, columnId) => `${rowId}|${columnId}`;
+
+  // Handler to toggle day column filters
+  const handleDayColumnFilterToggle = useCallback((dayColumnId) => {
+    setDayColumnFilters(prev => {
+      const next = new Set(prev);
+      if (next.has(dayColumnId)) {
+        next.delete(dayColumnId);
+      } else {
+        next.add(dayColumnId);
+      }
+      return next;
+    });
+  }, []);
 
   // Drag and drop handlers
   const handleDragStart = useCallback((e, rowId) => {
@@ -1875,10 +1937,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         // The project section rows store the nickname, use that as our key
         const nickname = normalizeProjectKey(row.projectNickname);
         nicknameMap.set(nickname, row.projectNickname);
-        console.log('[DEBUG] Found project section:', row._rowType, 'nickname:', row.projectNickname, 'normalized:', nickname);
       }
     });
-    console.log('[DEBUG] Nickname map has', nicknameMap.size, 'entries:', Array.from(nicknameMap.keys()));
 
     // Find inbox section boundaries
     const inboxStartIndex = data.findIndex(row => row._isInboxRow);
@@ -1906,19 +1966,15 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         continue;
       }
 
-      console.log('[DEBUG] Inbox row:', i, 'id:', row.id, 'task:', row.task, 'project:', row.project, 'status:', row.status);
-
       // Check if this task should be sorted
       const status = row.status || '';
       if (!selectedSortStatuses.has(status)) {
-        console.log('[DEBUG] Status not selected:', status);
         continue;
       }
 
       // Determine target section
       const target = SORT_INBOX_TARGET_MAP[status];
       if (!target) {
-        console.log('[DEBUG] No target for status:', status);
         continue;
       }
 
@@ -1928,11 +1984,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
 
       // Check if this nickname exists in our project sections
       if (!nicknameMap.has(taskProjectNickname)) {
-        console.log('[DEBUG] No match for project nickname:', row.project, 'normalized:', taskProjectNickname);
         continue;
       }
-
-      console.log('[DEBUG] ✓ Matched! project:', row.project, 'target:', target);
 
       // Use the normalized nickname as the map key
       const projectKey = taskProjectNickname;
@@ -1952,10 +2005,6 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         inboxTasksToMove.add(row.id);
       }
     }
-
-    console.log('[DEBUG] Tasks to move:', inboxTasksToMove.size);
-    console.log('[DEBUG] General tasks:', Array.from(generalTasksByProject.entries()).map(([k, v]) => `${k}: ${v.length}`));
-    console.log('[DEBUG] Unscheduled tasks:', Array.from(unscheduledTasksByProject.entries()).map(([k, v]) => `${k}: ${v.length}`));
 
     // If no tasks to move, exit early
     if (inboxTasksToMove.size === 0) {
@@ -1977,12 +2026,9 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
           const generalTasksCopy = new Map(generalTasksByProject);
           const unscheduledTasksCopy = new Map(unscheduledTasksByProject);
 
-          console.log('[DEBUG EXECUTE] Starting, prevData length:', prevData.length, 'tasks to skip:', tasksToMove.size);
-
-          prevData.forEach((row, idx) => {
+          prevData.forEach((row) => {
             // Skip tasks that are being moved from inbox
             if (tasksToMove.has(row.id)) {
-              console.log('[DEBUG EXECUTE] Skipping row', idx, 'id:', row.id);
               return;
             }
 
@@ -1993,10 +2039,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
             if (row._rowType === 'projectGeneral') {
               const projectKey = normalizeProjectKey(row.projectNickname);
               const tasksToInsert = generalTasksCopy.get(projectKey);
-              console.log('[DEBUG EXECUTE] At projectGeneral, nickname:', row.projectNickname, 'key:', projectKey, 'tasks:', tasksToInsert?.length || 0);
 
               if (tasksToInsert && tasksToInsert.length > 0) {
-                console.log('[DEBUG EXECUTE] Inserting', tasksToInsert.length, 'tasks into General');
                 tasksToInsert.forEach(task => {
                   newData.push(task);
                 });
@@ -2008,10 +2052,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
             if (row._rowType === 'projectUnscheduled') {
               const projectKey = normalizeProjectKey(row.projectNickname);
               const tasksToInsert = unscheduledTasksCopy.get(projectKey);
-              console.log('[DEBUG EXECUTE] At projectUnscheduled, nickname:', row.projectNickname, 'key:', projectKey, 'tasks:', tasksToInsert?.length || 0);
 
               if (tasksToInsert && tasksToInsert.length > 0) {
-                console.log('[DEBUG EXECUTE] Inserting', tasksToInsert.length, 'tasks into Unscheduled');
                 tasksToInsert.forEach(task => {
                   newData.push(task);
                 });
@@ -2020,7 +2062,6 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
             }
           });
 
-          console.log('[DEBUG EXECUTE] Done, newData length:', newData.length);
           return newData;
         });
       },
@@ -2046,7 +2087,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   const columns = usePlannerColumns({ totalDays });
 
   const table = useReactTable({
-    data: computedData,
+    data: filteredData,
     columns,
     getCoreRowModel: getCoreRowModel(),
     enableColumnResizing: true,
@@ -2164,6 +2205,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         totalDays={totalDays}
         projectWeeklyQuotas={projectWeeklyQuotas}
         projectTotals={projectTotals}
+        dayColumnFilters={dayColumnFilters}
+        handleDayColumnFilterToggle={handleDayColumnFilterToggle}
       />
       </div>
       </div>

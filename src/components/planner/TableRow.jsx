@@ -1,4 +1,4 @@
-import { GripVertical, ListFilter } from 'lucide-react';
+import { GripVertical, ListFilter, Filter } from 'lucide-react';
 import { MonthRow, WeekRow } from './rows';
 import TaskRow from './rows/TaskRow';
 import ProjectRow from './rows/ProjectRow';
@@ -41,6 +41,8 @@ export default function TableRow({
   totalDays,
   projectWeeklyQuotas,
   projectTotals,
+  dayColumnFilters,
+  handleDayColumnFilterToggle,
 }) {
   const rowId = row.original.id;
   const isDragging = Array.isArray(draggedRowId) && draggedRowId.includes(rowId);
@@ -582,6 +584,7 @@ export default function TableRow({
         const value = row.original[columnId] || '';
         const dayIndex = parseInt(columnId.split('-')[1]);
         const isLastDayOfWeek = (dayIndex + 1) % 7 === 0;
+        const isFilterActive = dayColumnFilters && dayColumnFilters.has(columnId);
 
         return (
           <td
@@ -608,7 +611,35 @@ export default function TableRow({
               }}
             >
               <span className="text-xs">{value}</span>
-              <ListFilter size={10} className="text-gray-400" style={{ position: 'absolute', right: '2px' }} />
+              {isFilterActive ? (
+                <Filter
+                  size={10}
+                  fill="#065f46"
+                  className="cursor-pointer transition-colors"
+                  style={{ position: 'absolute', right: '2px', color: '#065f46' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (handleDayColumnFilterToggle) {
+                      handleDayColumnFilterToggle(columnId);
+                    }
+                  }}
+                  title="Filter active"
+                />
+              ) : (
+                <ListFilter
+                  size={10}
+                  strokeWidth={2}
+                  className="cursor-pointer transition-colors text-gray-400 hover:text-gray-600"
+                  style={{ position: 'absolute', right: '2px' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (handleDayColumnFilterToggle) {
+                      handleDayColumnFilterToggle(columnId);
+                    }
+                  }}
+                  title="Add filter"
+                />
+              )}
             </div>
           </td>
         );

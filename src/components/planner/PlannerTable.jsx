@@ -43,6 +43,8 @@ function PlannerTable({
   totalDays,
   projectWeeklyQuotas,
   projectTotals,
+  dayColumnFilters,
+  handleDayColumnFilterToggle,
 }) {
   return (
     <div className="flex-1 flex flex-col min-h-0 gap-4 overflow-hidden">
@@ -208,6 +210,8 @@ function PlannerTable({
                   totalDays={totalDays}
                   projectWeeklyQuotas={projectWeeklyQuotas}
                   projectTotals={projectTotals}
+                  dayColumnFilters={dayColumnFilters}
+                  handleDayColumnFilterToggle={handleDayColumnFilterToggle}
                 />
               );
             })}
@@ -270,6 +274,8 @@ function PlannerTable({
                   totalDays={totalDays}
                   projectWeeklyQuotas={projectWeeklyQuotas}
                   projectTotals={projectTotals}
+                  dayColumnFilters={dayColumnFilters}
+                  handleDayColumnFilterToggle={handleDayColumnFilterToggle}
                 />
               );
             })}
