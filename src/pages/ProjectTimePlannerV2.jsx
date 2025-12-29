@@ -46,6 +46,20 @@ import {
   handlePasteOperation,
 } from '../utils/planner/clipboardOperations';
 import { createSortInboxCommand } from '../utils/planner/sortInbox';
+import {
+  calculateWeekRange,
+  calculateWeekNumber,
+  createArchiveWeekRow,
+  createArchivedProjectStructure,
+  collectTasksForArchive,
+  snapshotRecurringTask,
+  insertArchiveRow,
+  insertArchivedProjects,
+  moveTasksToArchive,
+  insertRecurringSnapshots,
+  resetRecurringTasks,
+} from '../utils/planner/archiveHelpers';
+import { useArchiveTotals } from '../hooks/planner/useArchiveTotals';
 
 // Sortable status values for the "Sort Inbox" feature
 const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned'];
@@ -115,6 +129,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   const [dragStartCell, setDragStartCell] = useState(null); // { rowId, columnId }
   const [draggedRowId, setDraggedRowId] = useState(null); // Track which row is being dragged
   const [dropTargetRowId, setDropTargetRowId] = useState(null); // Track drop target
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set()); // Set of groupIds that are collapsed
   const tableBodyRef = useRef(null);
 
   // Filter state for day columns - tracks which day columns should filter out rows without values
@@ -321,8 +336,9 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     [handleEstimateFilterButtonClick, estimateFilterMenu]
   );
 
-  // Filter data based on day column filters AND project/status/recurring/estimate filters
+  // Filter data based on day column filters AND project/status/recurring/estimate filters AND collapsed groups
   // Only hide regular task rows that don't have numeric values in ALL filtered day columns
+  // Also hide rows that belong to collapsed archive groups
   const filteredData = useFilteredData({
     computedData,
     dayColumnFilters,
@@ -331,6 +347,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     selectedStatusFilters,
     selectedRecurringFilters,
     selectedEstimateFilters,
+    collapsedGroups,
     coerceNumber,
   });
 
@@ -354,6 +371,9 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
 
   // Calculate daily totals for each day column (sum of all regular task rows, ignoring filters)
   const dailyTotals = useDailyTotals({ computedData, totalDays });
+
+  // Calculate archive totals (for archived projects and archive weeks)
+  const archiveTotals = useArchiveTotals(computedData, totalDays);
 
   // Update filter row (row 7) with daily totals
   useEffect(() => {
@@ -472,25 +492,44 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     });
   }, [dailyMinValues, dailyMaxValues, showMaxMinRows, totalDays]);
 
-  // Insert Inbox and Archive divider rows
+  // Insert Inbox and Archive header rows
   useEffect(() => {
     setData(prevData => {
       // Find the filter row index
       const filterRowIndex = prevData.findIndex(row => row._isFilterRow);
       if (filterRowIndex === -1) return prevData;
 
-      // Check if inbox row already exists
-      const hasInboxRow = prevData.some(row => row._isInboxRow);
-      // Check if archive row already exists
-      const hasArchiveRow = prevData.some(row => row._isArchiveRow);
+      let newData = [...prevData];
 
-      // If both exist, nothing to do
-      if (hasInboxRow && hasArchiveRow) return prevData;
+      // FIRST: Clean up any duplicates or legacy rows
 
-      const newData = [...prevData];
+      // Remove legacy archive divider if it exists
+      newData = newData.filter(row => !row._isArchiveRow);
+
+      // Remove ALL duplicate archive headers (keep only the first one with id 'archive-header')
+      let archiveHeadersFound = 0;
+      newData = newData.filter(row => {
+        if (row._rowType === 'archiveHeader') {
+          archiveHeadersFound++;
+          // Keep only the first one AND ensure it has the correct ID
+          if (archiveHeadersFound === 1) {
+            row.id = 'archive-header'; // Ensure correct ID
+            return true;
+          }
+          return false; // Remove all other archive headers
+        }
+        return true;
+      });
+
+      // THEN: Check what we need to create
+      const currentHasArchiveHeader = newData.some(row => row._rowType === 'archiveHeader');
+      const currentHasInboxRow = newData.some(row => row._isInboxRow);
+
+      // If both exist, nothing more to do
+      if (currentHasInboxRow && currentHasArchiveHeader) return newData;
 
       // Create "Inbox" divider row (if it doesn't exist)
-      if (!hasInboxRow) {
+      if (!currentHasInboxRow) {
         // Find where to insert inbox row (after project rows or after filter row)
         let insertIndex = filterRowIndex + 1;
 
@@ -521,15 +560,14 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         newData.splice(insertIndex, 0, inboxRow);
       }
 
-      // Create "Archive" divider row 20 rows below inbox (if it doesn't exist)
-      if (!hasArchiveRow) {
+      // Create "Archive" header row 20 rows below inbox (if it doesn't exist)
+      if (!currentHasArchiveHeader) {
         // Find the inbox row index in newData
         const inboxIndex = newData.findIndex(row => row._isInboxRow);
-        console.log('Archive row creation - inboxIndex:', inboxIndex, 'hasArchiveRow:', hasArchiveRow);
         if (inboxIndex !== -1) {
-          const archiveRow = {
-            id: 'archive-divider',
-            _isArchiveRow: true,
+          const archiveHeaderRow = {
+            id: 'archive-header',
+            _rowType: 'archiveHeader',
             rowNum: '',
             checkbox: '',
             project: '',
@@ -543,8 +581,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
           };
           // Insert 20 rows after inbox
           const archiveInsertIndex = Math.min(inboxIndex + 21, newData.length);
-          console.log('Inserting archive row at index:', archiveInsertIndex, 'newData.length:', newData.length);
-          newData.splice(archiveInsertIndex, 0, archiveRow);
+          newData.splice(archiveInsertIndex, 0, archiveHeaderRow);
         }
       }
 
@@ -787,6 +824,19 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         next.delete(dayColumnId);
       } else {
         next.add(dayColumnId);
+      }
+      return next;
+    });
+  }, []);
+
+  // Handler to toggle collapsed groups (for archive weeks)
+  const toggleGroupCollapse = useCallback((groupId) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
       }
       return next;
     });
@@ -1300,10 +1350,77 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
 
   const handleArchiveWeek = useCallback(() => {
     setIsListicalMenuOpen(false);
-    // Placeholder for Archive Week functionality
-    // In V2, this feature may not be applicable yet
-    console.log('Archive Week clicked - not yet implemented in V2');
-  }, []);
+
+    // Step 1: Calculate week metadata
+    const weekRange = calculateWeekRange(dates);
+    const weekNumber = calculateWeekNumber(startDate, new Date());
+
+    // Step 2: Create archive week row with grouping
+    const archiveWeekRow = createArchiveWeekRow({
+      weekRange,
+      weekNumber,
+      dailyMinValues,
+      dailyMaxValues,
+      totalDays,
+    });
+
+    // Step 3: Copy project structure as archived
+    const projectRows = data.filter(row =>
+      row._rowType === 'projectHeader' ||
+      row._rowType === 'projectGeneral' ||
+      row._rowType === 'projectUnscheduled'
+    );
+    const archivedProjects = createArchivedProjectStructure(projectRows, archiveWeekRow.id, totalDays);
+
+    // Step 4: Collect non-recurring Done/Abandoned tasks
+    const nonRecurringTasks = collectTasksForArchive(data, task =>
+      ['Done', 'Abandoned'].includes(task.status) && !task.recurring
+    );
+
+    // Step 5: Snapshot recurring Done/Abandoned tasks
+    const recurringTasks = collectTasksForArchive(data, task =>
+      ['Done', 'Abandoned'].includes(task.status) && task.recurring
+    );
+    const recurringSnapshots = recurringTasks.map(snapshotRecurringTask);
+
+    // Step 6: Store original data for undo
+    const originalData = data;
+    const originalCollapsedGroups = collapsedGroups;
+
+    // Step 7: Create command for undo/redo support
+    const archiveCommand = {
+      execute: () => {
+        setData(prevData => {
+          // Insert archive week row
+          let newData = insertArchiveRow(prevData, archiveWeekRow);
+
+          // Insert archived project structure
+          newData = insertArchivedProjects(newData, archivedProjects, archiveWeekRow.id);
+
+          // IMPORTANT: Reset recurring tasks BEFORE inserting snapshots
+          // This ensures the original recurring tasks are reset but snapshots keep their status
+          newData = resetRecurringTasks(newData, totalDays);
+
+          // Move non-recurring tasks to archive (already removed from original positions)
+          newData = moveTasksToArchive(newData, nonRecurringTasks, archiveWeekRow.id);
+
+          // Insert recurring task snapshots (these preserve their original status)
+          newData = insertRecurringSnapshots(newData, recurringSnapshots, archiveWeekRow.id);
+
+          return newData;
+        });
+
+        // Collapse archive week group by default
+        setCollapsedGroups(prev => new Set([...prev, archiveWeekRow.id]));
+      },
+      undo: () => {
+        setData(originalData);
+        setCollapsedGroups(originalCollapsedGroups);
+      }
+    };
+
+    executeCommand(archiveCommand);
+  }, [data, dates, startDate, dailyMinValues, dailyMaxValues, totalDays, executeCommand, collapsedGroups]);
 
   // Checkbox input class for menu
   const checkboxInputClass = 'h-4 w-4 cursor-pointer rounded border-gray-300 text-emerald-700 focus:ring-emerald-600';
@@ -1438,6 +1555,9 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         onStatusFilterButtonClick={onStatusFilterButtonClick}
         onRecurringFilterButtonClick={onRecurringFilterButtonClick}
         onEstimateFilterButtonClick={onEstimateFilterButtonClick}
+        collapsedGroups={collapsedGroups}
+        toggleGroupCollapse={toggleGroupCollapse}
+        archiveTotals={archiveTotals}
       />
       </div>
       <FilterPanel

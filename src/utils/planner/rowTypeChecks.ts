@@ -25,14 +25,14 @@ export const isMetricsRow = (row: any): boolean => {
 };
 
 /**
- * Check if row is a section divider (Inbox or Archive)
+ * Check if row is a section divider (Inbox or Archive divider - legacy)
  */
 export const isSectionDivider = (row: any): boolean => {
   return !!(row._isInboxRow || row._isArchiveRow);
 };
 
 /**
- * Check if row is a special row (timeline, filter, metrics, or divider)
+ * Check if row is a special row (timeline, filter, metrics, divider, or archive)
  */
 export const isSpecialRow = (row: any): boolean => {
   return !!(
@@ -41,7 +41,8 @@ export const isSpecialRow = (row: any): boolean => {
     row._isArchiveRow ||
     row._rowType ||
     isTimelineRow(row) ||
-    isMetricsRow(row)
+    isMetricsRow(row) ||
+    isAnyArchiveRow(row)
   );
 };
 
@@ -85,6 +86,65 @@ export const isProjectTask = (row: any): boolean => {
 };
 
 /**
+ * Check if row is an archive header row
+ */
+export const isArchiveHeader = (row: any): boolean => {
+  return row._rowType === 'archiveHeader';
+};
+
+/**
+ * Check if row is an archive week row
+ */
+export const isArchiveWeekRow = (row: any): boolean => {
+  return row._rowType === 'archiveRow';
+};
+
+/**
+ * Check if row is an archived project header
+ */
+export const isArchivedProjectHeader = (row: any): boolean => {
+  return row._rowType === 'archivedProjectHeader';
+};
+
+/**
+ * Check if row is an archived project general section
+ */
+export const isArchivedProjectGeneral = (row: any): boolean => {
+  return row._rowType === 'archivedProjectGeneral';
+};
+
+/**
+ * Check if row is an archived project unscheduled section
+ */
+export const isArchivedProjectUnscheduled = (row: any): boolean => {
+  return row._rowType === 'archivedProjectUnscheduled';
+};
+
+/**
+ * Check if row is any archive-related row
+ */
+export const isAnyArchiveRow = (row: any): boolean => {
+  return (
+    isArchiveHeader(row) ||
+    isArchiveWeekRow(row) ||
+    isArchivedProjectHeader(row) ||
+    isArchivedProjectGeneral(row) ||
+    isArchivedProjectUnscheduled(row)
+  );
+};
+
+/**
+ * Check if row is an archived project structure row
+ */
+export const isArchivedProjectStructure = (row: any): boolean => {
+  return (
+    isArchivedProjectHeader(row) ||
+    isArchivedProjectGeneral(row) ||
+    isArchivedProjectUnscheduled(row)
+  );
+};
+
+/**
  * Check if row is editable (not a special row or project structure row)
  */
 export const isEditableRow = (row: any): boolean => {
@@ -93,32 +153,37 @@ export const isEditableRow = (row: any): boolean => {
 
 /**
  * Check if row should be excluded from filtering
- * (timeline rows, filter row, inbox/archive dividers, project structure rows)
+ * (timeline rows, filter row, inbox/archive dividers, project structure rows, archive rows)
  */
 export const shouldBypassFilters = (row: any): boolean => {
   return (
     isTimelineRow(row) ||
     row._isFilterRow ||
     isSectionDivider(row) ||
-    isProjectStructureRow(row)
+    isProjectStructureRow(row) ||
+    isAnyArchiveRow(row) ||
+    isArchivedProjectStructure(row)
   );
 };
 
 /**
  * Check if row can be dragged and reordered
+ * Archive rows and archived project structure rows cannot be dragged
  */
 export const isDraggableRow = (row: any): boolean => {
-  return !isSpecialRow(row) && !isProjectStructureRow(row);
+  return !isSpecialRow(row) && !isProjectStructureRow(row) && !isAnyArchiveRow(row) && !isArchivedProjectStructure(row);
 };
 
 /**
  * Check if row can be a drop target for dragging
+ * Cannot drop on timeline rows, filter row, section dividers, or archive rows
  */
 export const isValidDropTarget = (row: any): boolean => {
-  // Cannot drop on timeline rows, filter row, or section dividers
   return !(
     isTimelineRow(row) ||
     row._isFilterRow ||
-    isSectionDivider(row)
+    isSectionDivider(row) ||
+    isAnyArchiveRow(row) ||
+    isArchivedProjectStructure(row)
   );
 };

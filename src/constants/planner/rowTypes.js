@@ -88,3 +88,48 @@ export const formatMinutesToHHmm = (minutes) => {
   const mins = minutes % 60;
   return `${hours}.${mins.toString().padStart(2, '0')}`;
 };
+
+// ============================================================
+// ARCHIVE ROW TYPES
+// ============================================================
+
+/**
+ * Archive row type identifiers
+ */
+export const ARCHIVE_ROW_TYPES = {
+  ARCHIVE_HEADER: 'archiveHeader',
+  ARCHIVE_WEEK: 'archiveRow',
+  ARCHIVED_PROJECT_HEADER: 'archivedProjectHeader',
+  ARCHIVED_PROJECT_GENERAL: 'archivedProjectGeneral',
+  ARCHIVED_PROJECT_UNSCHEDULED: 'archivedProjectUnscheduled',
+};
+
+/**
+ * Archive row styling constants
+ */
+export const ARCHIVE_ROW_STYLE = {
+  backgroundColor: '#d9f6e0', // Light green
+  color: '#000000',
+};
+
+export const ARCHIVE_HEADER_STYLE = {
+  backgroundColor: '#000000', // Black
+  color: '#ffffff', // White
+};
+
+export const ARCHIVED_PROJECT_HEADER_STYLE = {
+  backgroundColor: '#d5a6bd', // Pink
+  color: '#000000',
+};
+
+export const ARCHIVED_PROJECT_SUB_STYLE = {
+  backgroundColor: '#f2e5eb', // Light pink
+  color: '#000000',
+};
+
+/**
+ * Archive row ID prefixes for generating unique IDs
+ */
+export const ARCHIVE_WEEK_ID_PREFIX = 'archive-week-';
+export const ARCHIVED_ROW_ID_PREFIX = 'archived-';
+export const ARCHIVE_HEADER_ID = 'archive-header';

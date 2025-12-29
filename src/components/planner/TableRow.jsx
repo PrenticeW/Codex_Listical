@@ -1,7 +1,13 @@
-import { GripVertical, ListFilter, Filter } from 'lucide-react';
+import { GripVertical, ListFilter, Filter, ChevronRight, ChevronDown } from 'lucide-react';
 import { MonthRow, WeekRow } from './rows';
 import TaskRow from './rows/TaskRow';
 import ProjectRow from './rows/ProjectRow';
+import {
+  ARCHIVE_ROW_STYLE,
+  ARCHIVE_HEADER_STYLE,
+  ARCHIVED_PROJECT_HEADER_STYLE,
+  ARCHIVED_PROJECT_SUB_STYLE,
+} from '../../constants/planner/rowTypes';
 
 /**
  * TableRow Component
@@ -49,6 +55,9 @@ export default function TableRow({
   onStatusFilterButtonClick,
   onRecurringFilterButtonClick,
   onEstimateFilterButtonClick,
+  collapsedGroups = new Set(),
+  toggleGroupCollapse = () => {},
+  archiveTotals = {},
 }) {
   // Destructure filter states to avoid accessing during render
   const {
@@ -87,7 +96,12 @@ export default function TableRow({
   const isDailyMaxRow = row.original._isDailyMaxRow;
   const isFilterRow = row.original._isFilterRow;
   const isInboxRow = row.original._isInboxRow;
-  const isArchiveRow = row.original._isArchiveRow;
+  const isArchiveRow = row.original._isArchiveRow; // Legacy archive divider
+  const isArchiveHeader = row.original._rowType === 'archiveHeader';
+  const isArchiveWeekRow = row.original._rowType === 'archiveRow';
+  const isArchivedProjectHeader = row.original._rowType === 'archivedProjectHeader';
+  const isArchivedProjectGeneral = row.original._rowType === 'archivedProjectGeneral';
+  const isArchivedProjectUnscheduled = row.original._rowType === 'archivedProjectUnscheduled';
   const isProjectRow = row.original._rowType === 'projectHeader' || row.original._rowType === 'projectGeneral' || row.original._rowType === 'projectUnscheduled';
 
   // Delegate to ProjectRow for project/section rows
@@ -115,8 +129,34 @@ export default function TableRow({
     );
   }
 
+  // Delegate to ProjectRow for archived project rows (they render similarly)
+  if (isArchivedProjectHeader || isArchivedProjectGeneral || isArchivedProjectUnscheduled) {
+    return (
+      <ProjectRow
+        row={row}
+        virtualRow={virtualRow}
+        isRowSelected={isRowSelected}
+        handleRowNumberClick={handleRowNumberClick}
+        handleDragStart={handleDragStart}
+        handleDragEnd={handleDragEnd}
+        handleDragOver={handleDragOver}
+        handleDrop={handleDrop}
+        draggedRowId={draggedRowId}
+        dropTargetRowId={dropTargetRowId}
+        rowHeight={rowHeight}
+        cellFontSize={cellFontSize}
+        headerFontSize={headerFontSize}
+        gripIconSize={gripIconSize}
+        totalDays={totalDays}
+        projectWeeklyQuotas={projectWeeklyQuotas}
+        projectTotals={archiveTotals.projectTotals || {}}
+        isArchived={true}
+      />
+    );
+  }
+
   // Delegate to TaskRow for regular task rows
-  if (!isMonthRow && !isWeekRow && !isDayRow && !isDayOfWeekRow && !isDailyMinRow && !isDailyMaxRow && !isFilterRow && !isInboxRow && !isArchiveRow) {
+  if (!isMonthRow && !isWeekRow && !isDayRow && !isDayOfWeekRow && !isDailyMinRow && !isDailyMaxRow && !isFilterRow && !isInboxRow && !isArchiveRow && !isArchiveHeader && !isArchiveWeekRow) {
     return (
       <TaskRow
         row={row}
@@ -203,7 +243,7 @@ export default function TableRow({
           handleDragStart={handleDragStart}
           handleDragEnd={handleDragEnd}
         />
-      ) : isDayRow || isDayOfWeekRow || isDailyMinRow || isDailyMaxRow || isInboxRow || isArchiveRow ? (
+      ) : isDayRow || isDayOfWeekRow || isDailyMinRow || isDailyMaxRow || isInboxRow || isArchiveRow || isArchiveHeader || isArchiveWeekRow ? (
         // Render day/day-of-week/daily-min/daily-max/inbox/archive rows with centered calendar cells
         (() => {
           let mergedCellRendered = false;
@@ -348,7 +388,109 @@ export default function TableRow({
                 </td>
               );
             } else if (isArchiveRow) {
-              // Skip all other columns for archive row
+              // Skip all other columns for legacy archive row
+              return null;
+            }
+
+            // For archive header row, merge ALL cells (fixed columns AND day columns)
+            if (isArchiveHeader && !mergedCellRendered) {
+              mergedCellRendered = true;
+
+              // Calculate total width of all columns except rowNum
+              const allColumns = ['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'];
+              const visibleFixedColumns = allColumns.filter(colId => table.getColumn(colId).getIsVisible());
+              const totalFixedWidth = visibleFixedColumns.reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0);
+
+              // Add all day columns widths
+              const dayColumnsWidth = Array.from({ length: totalDays }, (_, i) => `day-${i}`)
+                .reduce((sum, dayColId) => sum + table.getColumn(dayColId).getSize(), 0);
+
+              const totalWidth = totalFixedWidth + dayColumnsWidth;
+
+              return (
+                <td
+                  key="merged-all-cols-archive-header"
+                  style={{
+                    width: `${totalWidth}px`,
+                    flexShrink: 0,
+                    flexGrow: 0,
+                    height: `${rowHeight}px`,
+                    boxSizing: 'border-box',
+                  }}
+                  className="p-0"
+                >
+                  <div
+                    className="h-full flex items-center"
+                    style={{
+                      minHeight: `${rowHeight}px`,
+                      ...ARCHIVE_HEADER_STYLE,
+                      borderBottom: '1.5px solid black',
+                      borderRight: '1.5px solid black',
+                      fontWeight: '600',
+                      fontSize: `${cellFontSize}px`,
+                      paddingLeft: '8px',
+                    }}
+                  >
+                    Archive
+                  </div>
+                </td>
+              );
+            } else if (isArchiveHeader) {
+              // Skip all other columns for archive header row
+              return null;
+            }
+
+            // For archive week row, merge ALL cells and show collapse/expand icon
+            if (isArchiveWeekRow && !mergedCellRendered) {
+              mergedCellRendered = true;
+
+              const isCollapsed = collapsedGroups.has(row.original.groupId);
+              const weekLabel = row.original.archiveWeekLabel || '';
+              const dateRange = row.original.archiveLabel || '';
+
+              // Calculate total width of all columns except rowNum
+              const allColumns = ['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'];
+              const visibleFixedColumns = allColumns.filter(colId => table.getColumn(colId).getIsVisible());
+              const totalFixedWidth = visibleFixedColumns.reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0);
+
+              // Add all day columns widths
+              const dayColumnsWidth = Array.from({ length: totalDays }, (_, i) => `day-${i}`)
+                .reduce((sum, dayColId) => sum + table.getColumn(dayColId).getSize(), 0);
+
+              const totalWidth = totalFixedWidth + dayColumnsWidth;
+
+              return (
+                <td
+                  key="merged-all-cols-archive-week"
+                  style={{
+                    width: `${totalWidth}px`,
+                    flexShrink: 0,
+                    flexGrow: 0,
+                    height: `${rowHeight}px`,
+                    boxSizing: 'border-box',
+                  }}
+                  className="p-0"
+                >
+                  <div
+                    className="h-full flex items-center gap-2 cursor-pointer"
+                    style={{
+                      minHeight: `${rowHeight}px`,
+                      ...ARCHIVE_ROW_STYLE,
+                      borderBottom: '1px solid #d3d3d3',
+                      borderRight: '1px solid #d3d3d3',
+                      fontWeight: '600',
+                      fontSize: `${cellFontSize}px`,
+                      paddingLeft: '8px',
+                    }}
+                    onClick={() => toggleGroupCollapse(row.original.groupId)}
+                  >
+                    {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                    <span>{weekLabel} ({dateRange})</span>
+                  </div>
+                </td>
+              );
+            } else if (isArchiveWeekRow) {
+              // Skip all other columns for archive week row
               return null;
             }
 

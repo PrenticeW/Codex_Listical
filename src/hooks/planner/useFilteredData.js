@@ -9,7 +9,7 @@ import { getNormalizedColumnValue } from '../../utils/planner/valueNormalizers';
 
 /**
  * Custom hook for filtering planner data
- * Handles both column filters (project, status, etc.) and day column filters
+ * Handles both column filters (project, status, etc.), day column filters, and collapsed groups
  *
  * @param {Object} params - Configuration object
  * @param {Array} params.computedData - The computed data to filter
@@ -19,6 +19,7 @@ import { getNormalizedColumnValue } from '../../utils/planner/valueNormalizers';
  * @param {Set} params.selectedStatusFilters - Selected status filters
  * @param {Set} params.selectedRecurringFilters - Selected recurring filters
  * @param {Set} params.selectedEstimateFilters - Selected estimate filters
+ * @param {Set} params.collapsedGroups - Set of groupIds that are collapsed (optional)
  * @param {Function} params.coerceNumber - Function to coerce values to numbers
  * @returns {Array} Filtered data
  */
@@ -30,9 +31,21 @@ export const useFilteredData = ({
   selectedStatusFilters,
   selectedRecurringFilters,
   selectedEstimateFilters,
+  collapsedGroups = new Set(),
   coerceNumber,
 }) => {
   return useMemo(() => {
+    // If no filters and no collapsed groups, return all data
+    if (dayColumnFilters.size === 0 &&
+        !selectedProjectFilters.size &&
+        !selectedSubprojectFilters.size &&
+        !selectedStatusFilters.size &&
+        !selectedRecurringFilters.size &&
+        !selectedEstimateFilters.size &&
+        collapsedGroups.size === 0) {
+      return computedData;
+    }
+
     // Helper functions to match filters
     const matchesProjectFilter = (row) => {
       if (!selectedProjectFilters.size) return true;
@@ -75,17 +88,23 @@ export const useFilteredData = ({
       return selectedEstimateFilters.has(getNormalizedColumnValue(row, 'estimate'));
     };
 
-    // If no filters are active, return all data
-    if (dayColumnFilters.size === 0 &&
-        !selectedProjectFilters.size &&
-        !selectedSubprojectFilters.size &&
-        !selectedStatusFilters.size &&
-        !selectedRecurringFilters.size &&
-        !selectedEstimateFilters.size) {
-      return computedData;
-    }
-
     const filtered = computedData.filter(row => {
+      // Filter out rows that belong to collapsed groups (archive weeks)
+      if (row.parentGroupId && collapsedGroups.has(row.parentGroupId)) {
+        return false;
+      }
+
+      // If no other filters are active and no collapsed groups, include all rows
+      if (dayColumnFilters.size === 0 &&
+          !selectedProjectFilters.size &&
+          !selectedSubprojectFilters.size &&
+          !selectedStatusFilters.size &&
+          !selectedRecurringFilters.size &&
+          !selectedEstimateFilters.size) {
+        return true;
+      }
+
+      // Continue with regular filtering...
       // Apply project/status/recurring/estimate filters first
       if (!matchesProjectFilter(row)) return false;
       if (!matchesSubprojectFilter(row)) return false;
@@ -121,6 +140,7 @@ export const useFilteredData = ({
     selectedStatusFilters,
     selectedRecurringFilters,
     selectedEstimateFilters,
+    collapsedGroups,
     coerceNumber,
   ]);
 };

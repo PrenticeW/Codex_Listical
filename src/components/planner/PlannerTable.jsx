@@ -51,6 +51,9 @@ function PlannerTable({
   onStatusFilterButtonClick,
   onRecurringFilterButtonClick,
   onEstimateFilterButtonClick,
+  collapsedGroups,
+  toggleGroupCollapse,
+  archiveTotals,
 }) {
   return (
     <div className="flex-1 flex flex-col min-h-0 gap-4 overflow-hidden">
@@ -224,6 +227,9 @@ function PlannerTable({
                   onStatusFilterButtonClick={onStatusFilterButtonClick}
                   onRecurringFilterButtonClick={onRecurringFilterButtonClick}
                   onEstimateFilterButtonClick={onEstimateFilterButtonClick}
+                  collapsedGroups={collapsedGroups}
+                  toggleGroupCollapse={toggleGroupCollapse}
+                  archiveTotals={archiveTotals}
                 />
               );
             })}
@@ -294,6 +300,9 @@ function PlannerTable({
                   onStatusFilterButtonClick={onStatusFilterButtonClick}
                   onRecurringFilterButtonClick={onRecurringFilterButtonClick}
                   onEstimateFilterButtonClick={onEstimateFilterButtonClick}
+                  collapsedGroups={collapsedGroups}
+                  toggleGroupCollapse={toggleGroupCollapse}
+                  archiveTotals={archiveTotals}
                 />
               );
             })}

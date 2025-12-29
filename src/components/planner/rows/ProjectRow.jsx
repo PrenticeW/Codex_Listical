@@ -27,9 +27,10 @@ export default function ProjectRow({
   totalDays,
   projectWeeklyQuotas = new Map(),
   projectTotals = {},
+  isArchived = false,
 }) {
   const rowId = row.original.id;
-  const rowType = row.original._rowType; // 'projectHeader', 'projectGeneral', or 'projectUnscheduled'
+  const rowType = row.original._rowType; // 'projectHeader', 'projectGeneral', 'projectUnscheduled', or archived variants
   const projectNickname = row.original.projectNickname || '';
   const projectName = row.original.projectName || '';
 
@@ -41,12 +42,14 @@ export default function ProjectRow({
   const isPinnedRow = row.index < 7;
   const rowNumZIndex = isPinnedRow ? 15 : 10;
 
-  // Determine row styling based on type
-  const isHeader = rowType === 'projectHeader';
+  // Determine row styling based on type and archived status
+  const isHeader = rowType === 'projectHeader' || rowType === 'archivedProjectHeader';
   const bgColor = isHeader ? '#d5a6bd' : '#f2e5eb'; // Dark pink for header, light pink for sections
 
   // Get section label for non-header rows
-  const sectionLabel = rowType === 'projectGeneral' ? 'General' : rowType === 'projectUnscheduled' ? 'Unscheduled' : '';
+  const sectionLabel =
+    rowType === 'projectGeneral' || rowType === 'archivedProjectGeneral' ? 'General' :
+    rowType === 'projectUnscheduled' || rowType === 'archivedProjectUnscheduled' ? 'Unscheduled' : '';
 
   // Get project label (use full project name)
   const projectLabel = projectName;
