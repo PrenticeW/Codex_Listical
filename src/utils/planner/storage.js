@@ -13,6 +13,8 @@ import {
   SHOW_MAX_MIN_ROWS_KEY_TEMPLATE,
   SORT_STATUSES_KEY_TEMPLATE,
   TASK_ROWS_KEY_TEMPLATE,
+  TOTAL_DAYS_KEY_TEMPLATE,
+  VISIBLE_DAY_COLUMNS_KEY_TEMPLATE,
   DEFAULT_PROJECT_ID,
 } from '../../constants/plannerStorageKeys';
 
@@ -331,6 +333,101 @@ export const saveTaskRows = (taskRows, projectId = DEFAULT_PROJECT_ID) => {
     window.localStorage.setItem(key, JSON.stringify(taskRows));
   } catch (error) {
     console.error('Failed to save task rows', error);
+  }
+};
+
+// ============================================================
+// TOTAL DAYS
+// ============================================================
+
+/**
+ * Reads total days (timeline length) for a project
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ * @returns {number} Total days (defaults to 84 = 12 weeks)
+ */
+export const readTotalDays = (projectId = DEFAULT_PROJECT_ID) => {
+  if (!isBrowserEnvironment()) return 84;
+  try {
+    const key = getProjectKey(TOTAL_DAYS_KEY_TEMPLATE, projectId);
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return 84;
+    const parsed = parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 84;
+  } catch (error) {
+    console.error('Failed to read total days', error);
+    return 84;
+  }
+};
+
+/**
+ * Saves total days (timeline length) for a project
+ * @param {number} totalDays - Total days value
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ */
+export const saveTotalDays = (totalDays, projectId = DEFAULT_PROJECT_ID) => {
+  if (!isBrowserEnvironment()) return;
+  try {
+    const key = getProjectKey(TOTAL_DAYS_KEY_TEMPLATE, projectId);
+    window.localStorage.setItem(key, totalDays.toString());
+  } catch (error) {
+    console.error('Failed to save total days', error);
+  }
+};
+
+// ============================================================
+// VISIBLE DAY COLUMNS
+// ============================================================
+
+/**
+ * Reads visible day columns for a project
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ * @param {number} totalDays - Total days to initialize if no saved state (defaults to 84)
+ * @returns {Object} Object mapping day column IDs to visibility booleans
+ */
+export const readVisibleDayColumns = (projectId = DEFAULT_PROJECT_ID, totalDays = 84) => {
+  if (!isBrowserEnvironment()) {
+    // Default: all columns visible
+    const visible = {};
+    for (let i = 0; i < totalDays; i++) {
+      visible[`day-${i}`] = true;
+    }
+    return visible;
+  }
+  try {
+    const key = getProjectKey(VISIBLE_DAY_COLUMNS_KEY_TEMPLATE, projectId);
+    const raw = window.localStorage.getItem(key);
+    if (!raw) {
+      // Default: all columns visible
+      const visible = {};
+      for (let i = 0; i < totalDays; i++) {
+        visible[`day-${i}`] = true;
+      }
+      return visible;
+    }
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed ? parsed : {};
+  } catch (error) {
+    console.error('Failed to read visible day columns', error);
+    const visible = {};
+    for (let i = 0; i < totalDays; i++) {
+      visible[`day-${i}`] = true;
+    }
+    return visible;
+  }
+};
+
+/**
+ * Saves visible day columns for a project
+ * @param {Object} visibleDayColumns - Object mapping day column IDs to visibility booleans
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ */
+export const saveVisibleDayColumns = (visibleDayColumns, projectId = DEFAULT_PROJECT_ID) => {
+  if (!isBrowserEnvironment()) return;
+  try {
+    const key = getProjectKey(VISIBLE_DAY_COLUMNS_KEY_TEMPLATE, projectId);
+    window.localStorage.setItem(key, JSON.stringify(visibleDayColumns));
+  } catch (error) {
+    console.error('Failed to save visible day columns', error);
   }
 };
 

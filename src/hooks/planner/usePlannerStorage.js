@@ -21,6 +21,10 @@ import {
   saveSortStatuses,
   readTaskRows,
   saveTaskRows,
+  readTotalDays,
+  saveTotalDays,
+  readVisibleDayColumns,
+  saveVisibleDayColumns,
 } from '../../utils/planner/storage';
 import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
 
@@ -36,6 +40,9 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID } = {
   // Track if this is the initial mount to avoid saving default values on load
   const isInitialMount = useRef(true);
 
+  // Initialize totalDays first since it's needed for visibleDayColumns
+  const [totalDays, setTotalDays] = useState(() => readTotalDays(projectId));
+
   // Initialize from storage
   const [columnSizing, setColumnSizing] = useState(() => readColumnSizing(projectId));
   const [sizeScale, setSizeScale] = useState(() => readSizeScale(projectId));
@@ -45,6 +52,7 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID } = {
   const [showMaxMinRows, setShowMaxMinRows] = useState(() => readShowMaxMinRows(projectId));
   const [selectedSortStatuses, setSelectedSortStatuses] = useState(() => readSortStatuses(projectId));
   const [taskRows, setTaskRows] = useState(() => readTaskRows(projectId));
+  const [visibleDayColumns, setVisibleDayColumns] = useState(() => readVisibleDayColumns(projectId, totalDays));
 
   // Mark initial mount as complete after first render
   useEffect(() => {
@@ -107,6 +115,20 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID } = {
     }
   }, [taskRows, projectId]);
 
+  // Auto-save total days to localStorage when it changes (skip initial mount)
+  useEffect(() => {
+    if (!isInitialMount.current) {
+      saveTotalDays(totalDays, projectId);
+    }
+  }, [totalDays, projectId]);
+
+  // Auto-save visible day columns to localStorage when it changes (skip initial mount)
+  useEffect(() => {
+    if (!isInitialMount.current && Object.keys(visibleDayColumns).length > 0) {
+      saveVisibleDayColumns(visibleDayColumns, projectId);
+    }
+  }, [visibleDayColumns, projectId]);
+
   return {
     columnSizing,
     setColumnSizing,
@@ -124,5 +146,9 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID } = {
     setSelectedSortStatuses,
     taskRows,
     setTaskRows,
+    totalDays,
+    setTotalDays,
+    visibleDayColumns,
+    setVisibleDayColumns,
   };
 }

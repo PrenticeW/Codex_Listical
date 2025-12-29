@@ -86,12 +86,17 @@ function MonthRow({
 
       {/* Merged month cells */}
       {row.original._monthSpans.map((span, idx) => {
-        // Calculate total width of merged cells
+        // Calculate total width of merged cells (only for visible columns)
         let totalWidth = 0;
         for (let i = 0; i < span.span; i++) {
           const colId = `day-${span.startDay + i}`;
-          totalWidth += table.getColumn(colId).getSize();
+          const column = table.getColumn(colId);
+          if (!column || !column.getIsVisible()) continue; // Skip if column doesn't exist or is hidden
+          totalWidth += column.getSize();
         }
+
+        // Skip this span if no valid visible columns were found
+        if (totalWidth === 0) return null;
 
         // Last month span gets thicker right border
         const isLastMonth = idx === row.original._monthSpans.length - 1;

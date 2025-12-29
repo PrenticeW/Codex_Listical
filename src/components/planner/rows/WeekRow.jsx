@@ -86,12 +86,17 @@ function WeekRow({
 
       {/* Merged week cells */}
       {row.original._weekSpans.map((span, idx) => {
-        // Calculate total width of merged cells
+        // Calculate total width of merged cells (only for visible columns)
         let totalWidth = 0;
         for (let i = 0; i < span.span; i++) {
           const colId = `day-${span.startDay + i}`;
-          totalWidth += table.getColumn(colId).getSize();
+          const column = table.getColumn(colId);
+          if (!column || !column.getIsVisible()) continue; // Skip if column doesn't exist or is hidden
+          totalWidth += column.getSize();
         }
+
+        // Skip this span if no valid visible columns were found
+        if (totalWidth === 0) return null;
 
         return (
           <td

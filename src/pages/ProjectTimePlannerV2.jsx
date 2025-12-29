@@ -77,9 +77,6 @@ const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On 
  */
 
 export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = () => {} }) {
-  // Timeline configuration
-  const totalDays = 84; // 12 weeks
-
   // Storage management (all persistent settings)
   const {
     columnSizing,
@@ -98,6 +95,10 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     setSelectedSortStatuses,
     taskRows,
     setTaskRows,
+    totalDays,
+    setTotalDays,
+    visibleDayColumns,
+    setVisibleDayColumns,
   } = usePlannerStorage();
 
   // Initialize data from storage or create new
@@ -381,6 +382,107 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
       return date;
     });
   }, [startDate, totalDays]);
+
+  // Update month/week spans and day row when totalDays changes
+  useEffect(() => {
+    setData(prevData => {
+      const monthRowIndex = prevData.findIndex(row => row._isMonthRow);
+      const weekRowIndex = prevData.findIndex(row => row._isWeekRow);
+      const dayRowIndex = prevData.findIndex(row => row._isDayRow);
+
+      if (monthRowIndex === -1 || weekRowIndex === -1 || dayRowIndex === -1) return prevData;
+
+      // Check if update is needed by comparing current spans length with totalDays
+      const currentMonthRow = prevData[monthRowIndex];
+
+      // Calculate expected number of days from current spans
+      const currentDaysInSpans = currentMonthRow._monthSpans?.reduce((sum, span) => sum + span.span, 0) || 0;
+
+      // If the spans already match totalDays, no update needed
+      if (currentDaysInSpans === totalDays) {
+        return prevData;
+      }
+
+      const newData = [...prevData];
+
+      // Update month row spans
+      const monthRow = { ...newData[monthRowIndex] };
+      monthRow._monthSpans = [];
+      let currentMonth = null;
+      let currentSpan = 0;
+      let spanStartDay = 0;
+
+      dates.forEach((date, i) => {
+        const monthLabel = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        if (monthLabel !== currentMonth) {
+          if (currentMonth !== null) {
+            monthRow._monthSpans.push({
+              startDay: spanStartDay,
+              span: currentSpan,
+              label: currentMonth.split(' ')[0].toUpperCase()
+            });
+          }
+          currentMonth = monthLabel;
+          currentSpan = 1;
+          spanStartDay = i;
+        } else {
+          currentSpan++;
+        }
+        if (i === dates.length - 1) {
+          monthRow._monthSpans.push({
+            startDay: spanStartDay,
+            span: currentSpan,
+            label: monthLabel.split(' ')[0].toUpperCase()
+          });
+        }
+      });
+      newData[monthRowIndex] = monthRow;
+
+      // Update week row spans
+      const weekRow = { ...newData[weekRowIndex] };
+      weekRow._weekSpans = [];
+      let currentWeek = null;
+      currentSpan = 0;
+      spanStartDay = 0;
+
+      dates.forEach((_, i) => {
+        const weekNumber = Math.floor(i / 7) + 1;
+        if (weekNumber !== currentWeek) {
+          if (currentWeek !== null) {
+            weekRow._weekSpans.push({
+              startDay: spanStartDay,
+              span: currentSpan,
+              label: `Week ${currentWeek}`
+            });
+          }
+          currentWeek = weekNumber;
+          currentSpan = 1;
+          spanStartDay = i;
+        } else {
+          currentSpan++;
+        }
+        if (i === dates.length - 1) {
+          weekRow._weekSpans.push({
+            startDay: spanStartDay,
+            span: currentSpan,
+            label: `Week ${weekNumber}`
+          });
+        }
+      });
+      newData[weekRowIndex] = weekRow;
+
+      // Update day row to DD-MMM format
+      const dayRow = { ...newData[dayRowIndex] };
+      dates.forEach((date, i) => {
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = date.toLocaleDateString('en-US', { month: 'short' });
+        dayRow[`day-${i}`] = `${day}-${month}`;
+      });
+      newData[dayRowIndex] = dayRow;
+
+      return newData;
+    });
+  }, [dates, totalDays]);
 
   // Map daily bounds to timeline dates
   const { dailyMinValues, dailyMaxValues } = useMemo(() => {
@@ -1495,6 +1597,50 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     executeCommand(archiveCommand);
   }, [data, dates, startDate, dailyMinValues, dailyMaxValues, totalDays, executeCommand, collapsedGroups]);
 
+  const handleHideWeek = useCallback(() => {
+    setIsListicalMenuOpen(false);
+
+    // Hide the leftmost 7 visible day columns (closest to columns A-H)
+    setVisibleDayColumns(prev => {
+      const newVisible = { ...prev };
+      const visibleDays = Object.entries(newVisible)
+        .filter(([_, isVisible]) => isVisible)
+        .map(([colId]) => parseInt(colId.replace('day-', '')))
+        .sort((a, b) => a - b); // Sort ascending to get leftmost first
+
+      // Hide up to 7 days, but ensure at least 7 days remain visible
+      const daysToHide = Math.min(7, visibleDays.length - 7);
+      if (daysToHide > 0) {
+        for (let i = 0; i < daysToHide; i++) {
+          newVisible[`day-${visibleDays[i]}`] = false;
+        }
+      }
+
+      return newVisible;
+    });
+  }, []);
+
+  const handleShowWeek = useCallback(() => {
+    setIsListicalMenuOpen(false);
+
+    // Show the leftmost 7 hidden day columns
+    setVisibleDayColumns(prev => {
+      const newVisible = { ...prev };
+      const hiddenDays = Object.entries(newVisible)
+        .filter(([_, isVisible]) => !isVisible)
+        .map(([colId]) => parseInt(colId.replace('day-', '')))
+        .sort((a, b) => a - b); // Sort ascending to get leftmost first
+
+      // Show up to 7 hidden days
+      const daysToShow = Math.min(7, hiddenDays.length);
+      for (let i = 0; i < daysToShow; i++) {
+        newVisible[`day-${hiddenDays[i]}`] = true;
+      }
+
+      return newVisible;
+    });
+  }, []);
+
   // Checkbox input class for menu
   const checkboxInputClass = 'h-4 w-4 cursor-pointer rounded border-gray-300 text-emerald-700 focus:ring-emerald-600';
 
@@ -1514,6 +1660,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
       },
       columnVisibility: {
         recurring: showRecurring,
+        ...visibleDayColumns,
       },
     },
     onColumnSizingChange: setColumnSizing,
@@ -1567,6 +1714,8 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
             onToggleSortStatus={toggleSortStatus}
             handleSortInbox={handleSortInbox}
             handleArchiveWeek={handleArchiveWeek}
+            handleHideWeek={handleHideWeek}
+            handleShowWeek={handleShowWeek}
             checkboxInputClass={checkboxInputClass}
             sortableStatuses={SORTABLE_STATUSES}
             sizeScale={sizeScale}

@@ -86,6 +86,22 @@ export const SORT_STATUSES_KEY_TEMPLATE = 'planner-v2-{projectId}-sort-statuses'
  */
 export const TASK_ROWS_KEY_TEMPLATE = 'planner-v2-{projectId}-task-rows';
 
+/**
+ * Total days storage key template
+ * Stores the number of days displayed in the timeline (84 = 12 weeks by default)
+ *
+ * Example: planner-v2-project-1-total-days
+ */
+export const TOTAL_DAYS_KEY_TEMPLATE = 'planner-v2-{projectId}-total-days';
+
+/**
+ * Visible day columns storage key template
+ * Stores object mapping day column IDs to visibility booleans
+ *
+ * Example: planner-v2-project-1-visible-day-columns
+ */
+export const VISIBLE_DAY_COLUMNS_KEY_TEMPLATE = 'planner-v2-{projectId}-visible-day-columns';
+
 // ============================================================
 // LEGACY KEYS (Backward Compatibility)
 // ============================================================

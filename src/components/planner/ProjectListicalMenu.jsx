@@ -19,6 +19,8 @@ export default function ProjectListicalMenu({
   onToggleSortStatus,
   handleSortInbox,
   handleArchiveWeek,
+  handleHideWeek,
+  handleShowWeek,
   checkboxInputClass,
   sortableStatuses,
   sizeScale,
@@ -201,6 +203,24 @@ export default function ProjectListicalMenu({
               </div>
             </div>
             <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="flex-1 rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
+                  onClick={handleShowWeek}
+                  title="Show the previous 7 days"
+                >
+                  Show Week
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
+                  onClick={handleHideWeek}
+                  title="Hide the next 7 days"
+                >
+                  Hide Week
+                </button>
+              </div>
               <button
                 type="button"
                 className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
