@@ -25,7 +25,7 @@ const generateUniqueId = (prefix) => {
 /**
  * Calculate week range string from dates array
  * @param {Date[]} dates - Array of dates
- * @returns {string} Week range (e.g., "Dec 29, 2025 - Jan 4, 2026")
+ * @returns {string} Week range (e.g., "Dec 29 - Jan 4")
  */
 export const calculateWeekRange = (dates) => {
   if (!dates || dates.length === 0) return '';
@@ -36,8 +36,7 @@ export const calculateWeekRange = (dates) => {
   const formatDate = (date) => {
     return date.toLocaleDateString('en-US', {
       month: 'short',
-      day: 'numeric',
-      year: 'numeric'
+      day: 'numeric'
     });
   };
 

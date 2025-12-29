@@ -444,30 +444,69 @@ export default function TableRow({
               return null;
             }
 
-            // For archive week row, merge ALL cells and show collapse/expand icon
-            if (isArchiveWeekRow && !mergedCellRendered) {
-              mergedCellRendered = true;
+            // For archive week row, merge columns A-D (checkbox through status)
+            // Similar to project section rows (General/Unscheduled)
+            const archiveWeekColumnsToMerge = ['checkbox', 'project', 'subproject', 'status'];
+            if (isArchiveWeekRow && archiveWeekColumnsToMerge.includes(columnId)) {
+              if (!mergedCellRendered) {
+                mergedCellRendered = true;
 
-              const isCollapsed = collapsedGroups.has(row.original.groupId);
-              const weekLabel = row.original.archiveWeekLabel || '';
+                const isCollapsed = collapsedGroups.has(row.original.groupId);
+                const weekLabel = row.original.archiveWeekLabel || '';
+
+                // Calculate total width of columns A-D
+                const totalWidth = archiveWeekColumnsToMerge.reduce((sum, colId) => {
+                  const column = table.getColumn(colId);
+                  return sum + (column ? column.getSize() : 0);
+                }, 0);
+
+                return (
+                  <td
+                    key="merged-archive-week-a-to-d"
+                    style={{
+                      width: `${totalWidth}px`,
+                      flexShrink: 0,
+                      flexGrow: 0,
+                      height: `${rowHeight}px`,
+                      boxSizing: 'border-box',
+                    }}
+                    className="p-0"
+                  >
+                    <div
+                      className="h-full flex items-center gap-2 cursor-pointer"
+                      style={{
+                        minHeight: `${rowHeight}px`,
+                        ...ARCHIVE_ROW_STYLE,
+                        borderBottom: '1px solid #d3d3d3',
+                        borderRight: '1px solid #d3d3d3',
+                        fontWeight: '400',
+                        fontSize: `${cellFontSize}px`,
+                        paddingLeft: '8px',
+                      }}
+                      onClick={() => toggleGroupCollapse(row.original.groupId)}
+                    >
+                      {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                      <span>{weekLabel}</span>
+                    </div>
+                  </td>
+                );
+              } else {
+                // Skip merged columns
+                return null;
+              }
+            }
+
+            // For archive week row, render unmerged columns E, F, G, H
+            if (isArchiveWeekRow && ['task', 'recurring', 'estimate', 'timeValue'].includes(columnId)) {
+              // Column E (task) shows the date range
               const dateRange = row.original.archiveLabel || '';
-
-              // Calculate total width of all columns except rowNum
-              const allColumns = ['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'];
-              const visibleFixedColumns = allColumns.filter(colId => table.getColumn(colId).getIsVisible());
-              const totalFixedWidth = visibleFixedColumns.reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0);
-
-              // Add all day columns widths
-              const dayColumnsWidth = Array.from({ length: totalDays }, (_, i) => `day-${i}`)
-                .reduce((sum, dayColId) => sum + table.getColumn(dayColId).getSize(), 0);
-
-              const totalWidth = totalFixedWidth + dayColumnsWidth;
+              const cellContent = columnId === 'task' ? dateRange : '\u00A0';
 
               return (
                 <td
-                  key="merged-all-cols-archive-week"
+                  key={cell.id}
                   style={{
-                    width: `${totalWidth}px`,
+                    width: `${cell.column.getSize()}px`,
                     flexShrink: 0,
                     flexGrow: 0,
                     height: `${rowHeight}px`,
@@ -476,26 +515,56 @@ export default function TableRow({
                   className="p-0"
                 >
                   <div
-                    className="h-full flex items-center gap-2 cursor-pointer"
+                    className="h-full flex items-center"
                     style={{
                       minHeight: `${rowHeight}px`,
                       ...ARCHIVE_ROW_STYLE,
                       borderBottom: '1px solid #d3d3d3',
-                      borderRight: '1px solid #d3d3d3',
-                      fontWeight: '600',
+                      borderRight: columnId === 'timeValue' ? '1.5px solid black' : '1px solid #d3d3d3',
                       fontSize: `${cellFontSize}px`,
-                      paddingLeft: '8px',
+                      paddingLeft: '3px',
+                      paddingRight: '3px',
                     }}
-                    onClick={() => toggleGroupCollapse(row.original.groupId)}
                   >
-                    {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-                    <span>{weekLabel} ({dateRange})</span>
+                    {cellContent}
                   </div>
                 </td>
               );
-            } else if (isArchiveWeekRow) {
-              // Skip all other columns for archive week row
-              return null;
+            }
+
+            // For archive week row, render day columns with transparent background
+            if (isArchiveWeekRow && columnId.startsWith('day-')) {
+              const dayIndex = parseInt(columnId.split('-')[1]);
+              const isLastDayOfWeek = (dayIndex + 1) % 7 === 0;
+
+              return (
+                <td
+                  key={cell.id}
+                  style={{
+                    width: `${cell.column.getSize()}px`,
+                    flexShrink: 0,
+                    flexGrow: 0,
+                    height: `${rowHeight}px`,
+                    boxSizing: 'border-box',
+                  }}
+                  className="p-0"
+                >
+                  <div
+                    className="h-full flex items-center"
+                    style={{
+                      minHeight: `${rowHeight}px`,
+                      backgroundColor: 'transparent',
+                      borderBottom: '1px solid #d3d3d3',
+                      borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3',
+                      fontSize: `${cellFontSize}px`,
+                      paddingLeft: '3px',
+                      paddingRight: '3px',
+                    }}
+                  >
+                    {'\u00A0'}
+                  </div>
+                </td>
+              );
             }
 
             // For fixed columns, show empty cells (or label for daily min/max)
