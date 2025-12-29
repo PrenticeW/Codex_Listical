@@ -43,14 +43,15 @@ export const useArchivedProjectTotals = (data, totalDays = 84) => {
         currentProjectTasks = [];
       }
       // Collect tasks that belong to current archived project
-      else if (currentArchivedProject && row.parentGroupId === currentArchivedProject.parentGroupId) {
+      // Tasks have parentGroupId = archived project's groupId
+      else if (currentArchivedProject && row.parentGroupId === currentArchivedProject.groupId) {
         // Only count regular task rows (not project general/unscheduled section rows)
         if (!row._rowType && row.task) {
           currentProjectTasks.push(row);
         }
       }
-      // We've moved past archived projects
-      else if (currentArchivedProject && !row.parentGroupId) {
+      // We've moved past archived projects (hit another archived project or end of archive)
+      else if (currentArchivedProject && (row._rowType === 'archivedProjectHeader' || !row._rowType?.startsWith('archived'))) {
         // Save totals for last project
         const total = currentProjectTasks.reduce((sum, task) => {
           // Only count Scheduled and Done tasks (exclude Abandoned)

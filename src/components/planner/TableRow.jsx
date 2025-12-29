@@ -125,6 +125,8 @@ export default function TableRow({
         totalDays={totalDays}
         projectWeeklyQuotas={projectWeeklyQuotas}
         projectTotals={projectTotals}
+        collapsedGroups={collapsedGroups}
+        toggleGroupCollapse={toggleGroupCollapse}
       />
     );
   }
@@ -151,6 +153,8 @@ export default function TableRow({
         projectWeeklyQuotas={projectWeeklyQuotas}
         projectTotals={archiveTotals.projectTotals || {}}
         isArchived={true}
+        collapsedGroups={collapsedGroups}
+        toggleGroupCollapse={toggleGroupCollapse}
       />
     );
   }

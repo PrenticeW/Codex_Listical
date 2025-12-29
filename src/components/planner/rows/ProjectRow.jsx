@@ -1,4 +1,4 @@
-import { GripVertical } from 'lucide-react';
+import { GripVertical, ChevronRight, ChevronDown } from 'lucide-react';
 
 /**
  * ProjectRow Component
@@ -28,11 +28,14 @@ export default function ProjectRow({
   projectWeeklyQuotas = new Map(),
   projectTotals = {},
   isArchived = false,
+  collapsedGroups = new Set(),
+  toggleGroupCollapse = () => {},
 }) {
   const rowId = row.original.id;
   const rowType = row.original._rowType; // 'projectHeader', 'projectGeneral', 'projectUnscheduled', or archived variants
   const projectNickname = row.original.projectNickname || '';
   const projectName = row.original.projectName || '';
+  const groupId = row.original.groupId; // For project headers
 
   // Check if this row is being dragged or is a drop target
   const isDragging = Array.isArray(draggedRowId) && draggedRowId.includes(rowId);
@@ -45,6 +48,9 @@ export default function ProjectRow({
   // Determine row styling based on type and archived status
   const isHeader = rowType === 'projectHeader' || rowType === 'archivedProjectHeader';
   const bgColor = isHeader ? '#d5a6bd' : '#f2e5eb'; // Dark pink for header, light pink for sections
+
+  // Check if this project group is collapsed
+  const isCollapsed = isHeader && groupId && collapsedGroups.has(groupId);
 
   // Get section label for non-header rows
   const sectionLabel =
@@ -178,7 +184,7 @@ export default function ProjectRow({
                   className="p-0"
                 >
                   <div
-                    className="h-full flex items-center"
+                    className={`h-full flex items-center gap-2 ${isHeader && groupId ? 'cursor-pointer' : ''}`}
                     style={{
                       fontSize: `${cellFontSize}px`,
                       minHeight: `${rowHeight}px`,
@@ -189,8 +195,15 @@ export default function ProjectRow({
                       paddingRight: '3px',
                       fontWeight: isHeader ? '600' : '400',
                     }}
+                    onClick={isHeader && groupId ? () => {
+                      console.log('ProjectRow chevron clicked:', { rowType, groupId, projectNickname });
+                      toggleGroupCollapse(groupId);
+                    } : undefined}
                   >
-                    {isHeader ? projectLabel : '\u00A0'}
+                    {isHeader && groupId && (
+                      isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />
+                    )}
+                    <span>{isHeader ? projectLabel : '\u00A0'}</span>
                   </div>
                 </td>
               );

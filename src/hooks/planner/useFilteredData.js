@@ -46,6 +46,23 @@ export const useFilteredData = ({
       return computedData;
     }
 
+    // Helper: Check if a row or any of its ancestors are collapsed
+    // This handles nested grouping (e.g., archive week > archived project > sections)
+    const isInCollapsedGroup = (row) => {
+      if (!row.parentGroupId) return false;
+
+      // Check if this row's direct parent is collapsed
+      if (collapsedGroups.has(row.parentGroupId)) return true;
+
+      // Check if any ancestor is collapsed by finding the parent row
+      const parentRow = computedData.find(r => r.groupId === row.parentGroupId);
+      if (parentRow) {
+        return isInCollapsedGroup(parentRow);
+      }
+
+      return false;
+    };
+
     // Helper functions to match filters
     const matchesProjectFilter = (row) => {
       if (!selectedProjectFilters.size) return true;
@@ -89,8 +106,9 @@ export const useFilteredData = ({
     };
 
     const filtered = computedData.filter(row => {
-      // Filter out rows that belong to collapsed groups (archive weeks)
-      if (row.parentGroupId && collapsedGroups.has(row.parentGroupId)) {
+      // Filter out rows that belong to collapsed groups (archive weeks and projects)
+      // Use recursive check to handle nested groups (e.g., archive week > project > sections)
+      if (isInCollapsedGroup(row)) {
         return false;
       }
 

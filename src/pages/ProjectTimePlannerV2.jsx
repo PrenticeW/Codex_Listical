@@ -191,9 +191,23 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   // This ensures timeValue is always in sync with estimate without manual updates
   // Also computes day column values that are linked to timeValue
   // Also auto-updates status based on task and time values
+  // Also assigns parentGroupId to tasks based on their position under project sections
   const computedData = useMemo(() => {
-    return data.map(row => {
+    let currentProjectGroupId = null;
+
+    const result = data.map(row => {
+      // Track current project group as we iterate
+      if (row._rowType === 'projectHeader') {
+        currentProjectGroupId = row.groupId || null;
+      }
+
+      // When we hit Inbox or Archive, clear the project group
+      if (row._isInboxRow || row._rowType === 'archiveHeader') {
+        currentProjectGroupId = null;
+      }
+
       // Skip special rows (first 7 rows) and project rows - they don't need computation
+      // BUT: preserve their existing parentGroupId if they have one
       if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
           row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow || row._isFilterRow ||
           row._isInboxRow || row._isArchiveRow ||
@@ -272,8 +286,15 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         }
       }
 
+      // Assign parentGroupId if we're under a project group
+      if (currentProjectGroupId) {
+        updatedRow.parentGroupId = currentProjectGroupId;
+      }
+
       return updatedRow;
     });
+
+    return result;
   }, [data, totalDays]);
 
   // Sync computed status changes back to actual data
@@ -622,10 +643,14 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
             // Get full project name from the map (projectKey might be a nickname)
             const fullProjectName = projectNamesMap[projectKey] || projectKey;
 
-            // Create project header row
+            // Create a unique group ID for this project
+            const projectGroupId = `project-${projectKey}`;
+
+            // Create project header row with groupId
             const projectHeaderRow = {
               id: `${projectKey}-header`,
               _rowType: 'projectHeader',
+              groupId: projectGroupId,
               projectName: fullProjectName,
               projectNickname: projectKey,
               rowNum: '',
@@ -641,10 +666,11 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
             };
             newData.splice(insertIndex++, 0, projectHeaderRow);
 
-            // Create "General" section row
+            // Create "General" section row with parentGroupId
             const generalRow = {
               id: `${projectKey}-general`,
               _rowType: 'projectGeneral',
+              parentGroupId: projectGroupId,
               projectName: fullProjectName,
               projectNickname: projectKey,
               rowNum: '',
@@ -660,10 +686,11 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
             };
             newData.splice(insertIndex++, 0, generalRow);
 
-            // Create "Unscheduled" section row
+            // Create "Unscheduled" section row with parentGroupId
             const unscheduledRow = {
               id: `${projectKey}-unscheduled`,
               _rowType: 'projectUnscheduled',
+              parentGroupId: projectGroupId,
               projectName: fullProjectName,
               projectNickname: projectKey,
               rowNum: '',
@@ -829,7 +856,30 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     });
   }, []);
 
-  // Handler to toggle collapsed groups (for archive weeks)
+  // Debug: Log archive structure once on mount
+  useEffect(() => {
+    const archiveRows = data.filter(row =>
+      row._rowType === 'archiveHeader' ||
+      row._rowType === 'archiveRow' ||
+      row._rowType === 'archivedProjectHeader' ||
+      row._rowType === 'archivedProjectGeneral' ||
+      row._rowType === 'archivedProjectUnscheduled'
+    );
+    if (archiveRows.length > 0) {
+      console.log('=== ARCHIVE STRUCTURE ===');
+      archiveRows.forEach((row, i) => {
+        console.log(`${i}: ${row._rowType}`, {
+          id: row.id,
+          projectNickname: row.projectNickname,
+          groupId: row.groupId,
+          parentGroupId: row.parentGroupId,
+        });
+      });
+      console.log('=== END ARCHIVE STRUCTURE ===');
+    }
+  }, []);
+
+  // Handler to toggle collapsed groups (for archive weeks and projects)
   const toggleGroupCollapse = useCallback((groupId) => {
     setCollapsedGroups(prev => {
       const next = new Set(prev);

@@ -166,8 +166,7 @@ export const createArchivedProjectStructure = (projectRows, archiveWeekId, total
         ...generalRow,
         id: generateUniqueId(`${ARCHIVED_ROW_ID_PREFIX}${generalRow.id}-`),
         _rowType: ARCHIVE_ROW_TYPES.ARCHIVED_PROJECT_GENERAL,
-        parentGroupId: archiveWeekId,
-        groupId: groupId,
+        parentGroupId: groupId, // Point to the archived project header's groupId
         isGroupHeader: false,
       };
       archivedRows.push(archivedGeneral);
@@ -179,8 +178,7 @@ export const createArchivedProjectStructure = (projectRows, archiveWeekId, total
         ...unscheduledRow,
         id: generateUniqueId(`${ARCHIVED_ROW_ID_PREFIX}${unscheduledRow.id}-`),
         _rowType: ARCHIVE_ROW_TYPES.ARCHIVED_PROJECT_UNSCHEDULED,
-        parentGroupId: archiveWeekId,
-        groupId: groupId,
+        parentGroupId: groupId, // Point to the archived project header's groupId
         isGroupHeader: false,
       };
       archivedRows.push(archivedUnscheduled);
@@ -320,23 +318,38 @@ export const moveTasksToArchive = (data, tasksToArchive, archiveWeekId) => {
 
   // Insert tasks into their archived sections
   Object.entries(tasksByProject).forEach(([projectKey, sections]) => {
+    // Find the archived project header to get its groupId
+    const archivedProjectHeader = newData.find(row =>
+      row._rowType === ARCHIVE_ROW_TYPES.ARCHIVED_PROJECT_HEADER &&
+      row.projectNickname === projectKey &&
+      row.parentGroupId === archiveWeekId
+    );
+
+    if (!archivedProjectHeader) return;
+
+    const archivedProjectGroupId = archivedProjectHeader.groupId;
+
     // Find the archived general section for this project
     const generalSectionIndex = newData.findIndex(row =>
       row._rowType === ARCHIVE_ROW_TYPES.ARCHIVED_PROJECT_GENERAL &&
       row.projectNickname === projectKey &&
-      row.parentGroupId === archiveWeekId
+      row.parentGroupId === archivedProjectGroupId
     );
 
     // Find the archived unscheduled section for this project
     const unscheduledSectionIndex = newData.findIndex(row =>
       row._rowType === ARCHIVE_ROW_TYPES.ARCHIVED_PROJECT_UNSCHEDULED &&
       row.projectNickname === projectKey &&
-      row.parentGroupId === archiveWeekId
+      row.parentGroupId === archivedProjectGroupId
     );
 
-    // Insert general tasks
+    // Insert general tasks with correct parentGroupId
     if (generalSectionIndex !== -1 && sections.general.length > 0) {
-      newData.splice(generalSectionIndex + 1, 0, ...sections.general);
+      const tasksWithCorrectParent = sections.general.map(task => ({
+        ...task,
+        parentGroupId: archivedProjectGroupId, // Point to archived project, not archive week
+      }));
+      newData.splice(generalSectionIndex + 1, 0, ...tasksWithCorrectParent);
     }
 
     // Insert unscheduled tasks (need to recalculate index after general insertion)
@@ -344,10 +357,14 @@ export const moveTasksToArchive = (data, tasksToArchive, archiveWeekId) => {
       const newUnscheduledIndex = newData.findIndex(row =>
         row._rowType === ARCHIVE_ROW_TYPES.ARCHIVED_PROJECT_UNSCHEDULED &&
         row.projectNickname === projectKey &&
-        row.parentGroupId === archiveWeekId
+        row.parentGroupId === archivedProjectGroupId
       );
       if (newUnscheduledIndex !== -1) {
-        newData.splice(newUnscheduledIndex + 1, 0, ...sections.unscheduled);
+        const tasksWithCorrectParent = sections.unscheduled.map(task => ({
+          ...task,
+          parentGroupId: archivedProjectGroupId, // Point to archived project, not archive week
+        }));
+        newData.splice(newUnscheduledIndex + 1, 0, ...tasksWithCorrectParent);
       }
     }
   });
