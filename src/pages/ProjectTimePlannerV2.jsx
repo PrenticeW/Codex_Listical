@@ -14,6 +14,8 @@ import useTacticsMetrics from '../hooks/planner/useTacticsMetrics';
 import usePlannerFilters from '../hooks/planner/usePlannerFilters';
 import { useFilteredData, useFilterValues } from '../hooks/planner/useFilteredData';
 import { useProjectTotals, useDailyTotals } from '../hooks/planner/useTotalsCalculation';
+import useSpreadsheetSelection from '../hooks/planner/useSpreadsheetSelection';
+import useKeyboardHandlers from '../hooks/planner/useKeyboardHandlers';
 import { MonthRow, WeekRow } from '../components/planner/rows';
 import TableRow from '../components/planner/TableRow';
 import NavigationBar from '../components/planner/NavigationBar';
@@ -746,8 +748,36 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     return [...fixed, ...days];
   }, [totalDays]);
 
-  // Helper to create cell key
-  const getCellKey = (rowId, columnId) => `${rowId}|${columnId}`;
+  // Cell and row selection handlers
+  const selection = useSpreadsheetSelection({
+    data,
+    allColumnIds,
+    selectedCells,
+    setSelectedCells,
+    selectedRows,
+    setSelectedRows,
+    anchorCell,
+    setAnchorCell,
+    anchorRow,
+    setAnchorRow,
+    isDragging,
+    setIsDragging,
+    dragStartCell,
+    setDragStartCell,
+    setEditingCell,
+  });
+
+  const {
+    getCellKey,
+    isCellSelected,
+    getRowRange,
+    getCellRange,
+    handleRowNumberClick,
+    handleCellMouseDown,
+    handleCellMouseEnter,
+    handleMouseUp,
+    handleCellDoubleClick,
+  } = selection;
 
   // Handler to toggle day column filters
   const handleDayColumnFilterToggle = useCallback((dayColumnId) => {
@@ -913,64 +943,6 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     setDropTargetRowId(null);
   }, []);
 
-  // Helper to check if cell is selected
-  const isCellSelected = useCallback((rowId, columnId) => {
-    return selectedCells.has(getCellKey(rowId, columnId));
-  }, [selectedCells]);
-
-  // Helper to get range of rows between two rowIds
-  const getRowRange = useCallback((startRowId, endRowId) => {
-    const startIndex = data.findIndex(r => r.id === startRowId);
-    const endIndex = data.findIndex(r => r.id === endRowId);
-
-    if (startIndex === -1 || endIndex === -1) return new Set();
-
-    const minIndex = Math.min(startIndex, endIndex);
-    const maxIndex = Math.max(startIndex, endIndex);
-
-    const range = new Set();
-    for (let i = minIndex; i <= maxIndex; i++) {
-      range.add(data[i].id);
-    }
-
-    return range;
-  }, [data]);
-
-  // Helper to get rectangular range of cells between two cells
-  const getCellRange = useCallback((startCell, endCell) => {
-    if (!startCell || !endCell) return new Set();
-
-    // Get row indices
-    const startRowIndex = data.findIndex(r => r.id === startCell.rowId);
-    const endRowIndex = data.findIndex(r => r.id === endCell.rowId);
-
-    // Get column indices
-    const startColIndex = allColumnIds.indexOf(startCell.columnId);
-    const endColIndex = allColumnIds.indexOf(endCell.columnId);
-
-    if (startRowIndex === -1 || endRowIndex === -1 || startColIndex === -1 || endColIndex === -1) {
-      return new Set();
-    }
-
-    // Calculate min/max for the range
-    const minRow = Math.min(startRowIndex, endRowIndex);
-    const maxRow = Math.max(startRowIndex, endRowIndex);
-    const minCol = Math.min(startColIndex, endColIndex);
-    const maxCol = Math.max(startColIndex, endColIndex);
-
-    // Generate all cells in the range
-    const range = new Set();
-    for (let r = minRow; r <= maxRow; r++) {
-      for (let c = minCol; c <= maxCol; c++) {
-        const rowId = data[r].id;
-        const columnId = allColumnIds[c];
-        range.add(getCellKey(rowId, columnId));
-      }
-    }
-
-    return range;
-  }, [data, allColumnIds]);
-
   // Edit handlers
   const handleEditComplete = useCallback((rowId, columnId, newValue) => {
     // Get the old value before updating
@@ -1127,99 +1099,6 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     }
   }, [handleEditComplete]);
 
-  // Row number click handler - selects entire row
-  const handleRowNumberClick = useCallback((e, rowId) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (e.shiftKey && anchorRow) {
-      // Shift-click: select range of rows from anchor to current
-      const range = getRowRange(anchorRow, rowId);
-      setSelectedRows(range);
-      setSelectedCells(new Set()); // Clear cell selections
-      // Don't update anchor - keep it for next shift-click
-    } else if (e.metaKey || e.ctrlKey) {
-      // Cmd/Ctrl-click: toggle row selection
-      setSelectedRows(prev => {
-        const next = new Set(prev);
-        if (next.has(rowId)) {
-          next.delete(rowId);
-        } else {
-          next.add(rowId);
-        }
-        return next;
-      });
-      setSelectedCells(new Set()); // Clear cell selections
-      setAnchorRow(rowId); // Update anchor for next shift-click
-    } else {
-      // Normal click: select single row
-      setSelectedRows(new Set([rowId]));
-      setSelectedCells(new Set()); // Clear cell selections
-      setAnchorRow(rowId); // Set as anchor for shift-click
-    }
-    setEditingCell(null);
-  }, [anchorRow, getRowRange]);
-
-  // Cell interaction handlers
-  const handleCellMouseDown = useCallback((e, rowId, columnId) => {
-    if (columnId === 'rowNum') return; // Don't select row number column
-
-    // Prevent default to avoid text selection
-    e.preventDefault();
-
-    const cellKey = getCellKey(rowId, columnId);
-
-    // Clear row selections when selecting cells
-    setSelectedRows(new Set());
-
-    if (e.shiftKey && anchorCell) {
-      // Shift-click: range selection from anchor
-      const range = getCellRange(anchorCell, { rowId, columnId });
-      setSelectedCells(range);
-      setEditingCell(null);
-    } else if (e.metaKey || e.ctrlKey) {
-      // Cmd/Ctrl-click: toggle selection
-      setSelectedCells(prev => {
-        const next = new Set(prev);
-        if (next.has(cellKey)) {
-          next.delete(cellKey);
-        } else {
-          next.add(cellKey);
-        }
-        return next;
-      });
-      setAnchorCell({ rowId, columnId });
-      setEditingCell(null);
-    } else {
-      // Normal mouse down: start drag selection
-      setSelectedCells(new Set([cellKey]));
-      setAnchorCell({ rowId, columnId });
-      setDragStartCell({ rowId, columnId });
-      setIsDragging(true);
-      setEditingCell(null);
-    }
-  }, [anchorCell, getCellRange]);
-
-  const handleCellMouseEnter = useCallback((e, rowId, columnId) => {
-    if (!isDragging || !dragStartCell || columnId === 'rowNum') return;
-
-    // Update selection to include range from drag start to current cell
-    const range = getCellRange(dragStartCell, { rowId, columnId });
-    setSelectedCells(range);
-  }, [isDragging, dragStartCell, getCellRange]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-    setDragStartCell(null);
-  }, []);
-
-  const handleCellDoubleClick = useCallback((rowId, columnId, value) => {
-    if (columnId === 'rowNum') return;
-
-    setEditingCell({ rowId, columnId });
-    setEditValue(value);
-  }, []);
-
   // Track the last copied columns (to detect if copying from timeValue)
   const lastCopiedColumnsRef = useRef([]);
 
@@ -1322,198 +1201,24 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     executeCommand(command);
   }, [selectedRows, data, executeCommand]);
 
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      // Undo: Cmd/Ctrl+Z (not while editing)
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey && !editingCell) {
-        e.preventDefault();
-        undo();
-        return;
-      }
-
-      // Redo: Cmd/Ctrl+Shift+Z (not while editing)
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey && !editingCell) {
-        e.preventDefault();
-        redo();
-        return;
-      }
-
-      // Don't interfere if we're editing
-      if (editingCell) return;
-
-      // Copy: Cmd/Ctrl+C (handled by copy event listener)
-      // Paste: Cmd/Ctrl+V (handled by paste event listener)
-
-      // Cmd/Ctrl+Backspace to delete rows entirely
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Backspace') {
-        e.preventDefault();
-        if (selectedRows.size > 0) {
-          handleDeleteRows();
-        }
-        return;
-      }
-
-      // Delete/Backspace to clear cells or rows
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        e.preventDefault();
-
-        // ROW CLEAR MODE: If rows are selected, clear all cells in those rows
-        if (selectedRows.size > 0) {
-          // Store old values for undo
-          const oldValues = new Map(); // Map<rowId, Map<columnId, value>>
-
-          selectedRows.forEach(rowId => {
-            const row = data.find(r => r.id === rowId);
-            if (!row) return;
-
-            const rowOldValues = new Map();
-            allColumnIds.forEach(columnId => {
-              rowOldValues.set(columnId, row[columnId] || '');
-            });
-
-            oldValues.set(rowId, rowOldValues);
-          });
-
-          // Create command for row clear operation
-          const command = {
-            execute: () => {
-              setData(prev => prev.map(row => {
-                if (selectedRows.has(row.id)) {
-                  // Clear all columns in this row
-                  const rowUpdates = {};
-                  allColumnIds.forEach(columnId => {
-                    rowUpdates[columnId] = '';
-                  });
-                  return { ...row, ...rowUpdates };
-                }
-                return row;
-              }));
-            },
-            undo: () => {
-              setData(prev => {
-                const newData = [...prev];
-
-                oldValues.forEach((rowOldValues, rowId) => {
-                  const rowIndex = newData.findIndex(r => r.id === rowId);
-                  if (rowIndex === -1) return;
-
-                  const rowUpdates = {};
-                  rowOldValues.forEach((value, columnId) => {
-                    rowUpdates[columnId] = value;
-                  });
-
-                  newData[rowIndex] = { ...newData[rowIndex], ...rowUpdates };
-                });
-
-                return newData;
-              });
-            },
-          };
-
-          executeCommand(command);
-          return;
-        }
-
-        // CELL DELETE MODE: Clear selected cells
-        // Store old values for undo
-        const oldValues = new Map(); // Map<rowId, Map<columnId, value>>
-
-        selectedCells.forEach(cellKey => {
-          const [rowId, columnId] = cellKey.split('|');
-          if (columnId === 'rowNum') return;
-
-          const row = data.find(r => r.id === rowId);
-          if (!row) return;
-
-          if (!oldValues.has(rowId)) {
-            oldValues.set(rowId, new Map());
-          }
-          oldValues.get(rowId).set(columnId, row[columnId] || '');
-        });
-
-        // Create command for delete operation
-        const command = {
-          execute: () => {
-            setData(prev => prev.map(row => {
-              const rowUpdates = {};
-              let hasUpdates = false;
-
-              selectedCells.forEach(cellKey => {
-                const [rowId, columnId] = cellKey.split('|');
-                if (row.id === rowId && columnId !== 'rowNum') {
-                  rowUpdates[columnId] = '';
-                  hasUpdates = true;
-                }
-              });
-
-              return hasUpdates ? { ...row, ...rowUpdates } : row;
-            }));
-          },
-          undo: () => {
-            setData(prev => {
-              const newData = [...prev];
-
-              oldValues.forEach((rowOldValues, rowId) => {
-                const rowIndex = newData.findIndex(r => r.id === rowId);
-                if (rowIndex === -1) return;
-
-                const rowUpdates = {};
-                rowOldValues.forEach((value, columnId) => {
-                  rowUpdates[columnId] = value;
-                });
-
-                newData[rowIndex] = { ...newData[rowIndex], ...rowUpdates };
-              });
-
-              return newData;
-            });
-          },
-        };
-
-        executeCommand(command);
-      }
-
-      // Arrow key navigation and typing to edit only work with cell selection
-      if (selectedCells.size > 0) {
-        const firstCellKey = Array.from(selectedCells)[0];
-        const [currentRowId, currentColumnId] = firstCellKey.split('|');
-
-        // Arrow key navigation (TODO: implement navigation logic)
-        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-          e.preventDefault();
-          console.log('Arrow key pressed:', e.key, 'Current cell:', currentRowId, currentColumnId);
-        }
-
-        // Start typing to edit (if alphanumeric) - only if not already editing
-        if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !editingCell) {
-          e.preventDefault();
-          const row = data.find(r => r.id === currentRowId);
-          const currentValue = row ? row[currentColumnId] || '' : '';
-
-          // For dropdown columns (project, subproject, status, estimate), start editing with current value
-          if (currentColumnId === 'project' || currentColumnId === 'subproject' || currentColumnId === 'status' || currentColumnId === 'estimate') {
-            setEditingCell({ rowId: currentRowId, columnId: currentColumnId });
-            setEditValue(currentValue);
-          } else {
-            // For regular columns, start editing with the typed character
-            setEditingCell({ rowId: currentRowId, columnId: currentColumnId });
-            setEditValue(e.key);
-          }
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('copy', handleCopy);
-    window.addEventListener('paste', handlePaste);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('copy', handleCopy);
-      window.removeEventListener('paste', handlePaste);
-    };
-  }, [selectedCells, selectedRows, editingCell, handleCopy, handlePaste, undo, redo, data, executeCommand, allColumnIds, handleDeleteRows]);
+  // Keyboard event handlers (undo/redo, delete, edit mode)
+  useKeyboardHandlers({
+    selectedCells,
+    selectedRows,
+    editingCell,
+    data,
+    allColumnIds,
+    totalDays,
+    undo,
+    redo,
+    executeCommand,
+    setData,
+    setEditingCell,
+    setEditValue,
+    handleDeleteRows,
+    handleCopy,
+    handlePaste,
+  });
 
   // Listical menu handlers
   const toggleSortStatus = useCallback((status) => {
