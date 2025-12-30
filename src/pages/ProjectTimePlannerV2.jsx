@@ -813,6 +813,28 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     return [...fixed, ...days];
   }, [totalDays]);
 
+  // IMPORTANT: Edit state hook must be called BEFORE useSpreadsheetSelection
+  // because useSpreadsheetSelection needs setEditingCell and setEditValue
+  const {
+    editingCell,
+    editValue,
+    setEditingCell,
+    setEditValue,
+    handleEditComplete,
+    handleEditCancel,
+    handleEditKeyDown,
+  } = useEditState({
+    data,
+    setData,
+    totalDays,
+    executeCommand,
+    // getCellKey is defined below, but we need to pass it somehow
+    // For now, create a temporary function that will be replaced
+    getCellKey: (rowId, columnId) => `${rowId}|${columnId}`,
+    setSelectedCells,
+    setAnchorCell,
+  });
+
   // Cell and row selection handlers
   const selection = useSpreadsheetSelection({
     data,
@@ -844,25 +866,6 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     handleMouseUp,
     handleCellDoubleClick,
   } = selection;
-
-  // Edit state hook
-  const {
-    editingCell,
-    editValue,
-    setEditingCell,
-    setEditValue,
-    handleEditComplete,
-    handleEditCancel,
-    handleEditKeyDown,
-  } = useEditState({
-    data,
-    setData,
-    totalDays,
-    executeCommand,
-    getCellKey,
-    setSelectedCells,
-    setAnchorCell,
-  });
 
   // Drag and drop hook
   const {
