@@ -14,6 +14,7 @@ export default function ProjectListicalMenu({
   onAddTasksCountChange,
   handleAddTasks,
   handleNewSubproject,
+  handleDuplicateRow,
   startDate,
   onStartDateChange,
   selectedSortStatuses,
@@ -229,6 +230,14 @@ export default function ProjectListicalMenu({
                 title="Create a new subproject under the selected row"
               >
                 New Subproject
+              </button>
+              <button
+                type="button"
+                className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
+                onClick={handleDuplicateRow}
+                title="Duplicate the highlighted row"
+              >
+                Duplicate Row
               </button>
               <button
                 type="button"

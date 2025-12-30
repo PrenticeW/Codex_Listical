@@ -1726,6 +1726,65 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     executeCommand(command);
   }, [selectedRows, data, totalDays, executeCommand]);
 
+  const handleDuplicateRow = useCallback(() => {
+    setIsListicalMenuOpen(false);
+
+    // Find the selected row
+    if (selectedRows.size === 0) {
+      // No row selected, do nothing
+      return;
+    }
+
+    // Get the first (or only) selected row
+    const selectedRowId = Array.from(selectedRows)[0];
+    const selectedRowIndex = data.findIndex(r => r.id === selectedRowId);
+
+    if (selectedRowIndex === -1) return;
+
+    const selectedRow = data[selectedRowIndex];
+
+    // Don't duplicate special rows (headers, filters, etc.)
+    if (selectedRow._isMonthRow || selectedRow._isWeekRow || selectedRow._isDayRow ||
+        selectedRow._isDayOfWeekRow || selectedRow._isDailyMinRow || selectedRow._isDailyMaxRow ||
+        selectedRow._isFilterRow || selectedRow._isInboxRow || selectedRow._isArchiveRow ||
+        selectedRow._rowType === 'projectHeader' || selectedRow._rowType === 'projectGeneral' ||
+        selectedRow._rowType === 'projectUnscheduled' || selectedRow._rowType === 'archiveHeader' ||
+        selectedRow._rowType === 'subprojectHeader' || selectedRow._rowType === 'subprojectGeneral' ||
+        selectedRow._rowType === 'subprojectUnscheduled') {
+      // Can't duplicate special rows
+      return;
+    }
+
+    // Create a duplicate of the row with a new unique ID
+    const duplicatedRow = {
+      ...selectedRow,
+      id: `row-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+    };
+
+    // Store the insertion index for undo (insert right after the selected row)
+    const insertIndex = selectedRowIndex + 1;
+
+    // Create command for undo/redo support
+    const command = {
+      execute: () => {
+        setData(prev => {
+          const newData = [...prev];
+          newData.splice(insertIndex, 0, duplicatedRow);
+          return newData;
+        });
+      },
+      undo: () => {
+        setData(prev => {
+          const newData = [...prev];
+          newData.splice(insertIndex, 1);
+          return newData;
+        });
+      },
+    };
+
+    executeCommand(command);
+  }, [selectedRows, data, executeCommand]);
+
   // Checkbox input class for menu
   const checkboxInputClass = 'h-4 w-4 cursor-pointer rounded border-gray-300 text-emerald-700 focus:ring-emerald-600';
 
@@ -1791,6 +1850,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
             onAddTasksCountChange={(value) => setAddTasksCount(value)}
             handleAddTasks={handleAddTasks}
             handleNewSubproject={handleNewSubproject}
+            handleDuplicateRow={handleDuplicateRow}
             startDate={startDate}
             onStartDateChange={(value) => {
               setStartDate(value);
