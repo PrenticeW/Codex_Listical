@@ -272,6 +272,7 @@ export default function ProjectTimePlannerV2() {
       const monthRowIndex = prevData.findIndex(row => row._isMonthRow);
       const weekRowIndex = prevData.findIndex(row => row._isWeekRow);
       const dayRowIndex = prevData.findIndex(row => row._isDayRow);
+      const dayOfWeekRowIndex = prevData.findIndex(row => row._isDayOfWeekRow);
 
       if (monthRowIndex === -1 || weekRowIndex === -1 || dayRowIndex === -1) return prevData;
 
@@ -362,6 +363,17 @@ export default function ProjectTimePlannerV2() {
         dayRow[`day-${i}`] = `${day}-${month}`;
       });
       newData[dayRowIndex] = dayRow;
+
+      // Update day of week row (M, T, W, T, F, S, S)
+      if (dayOfWeekRowIndex !== -1) {
+        const dayOfWeekRow = { ...newData[dayOfWeekRowIndex] };
+        dates.forEach((date, i) => {
+          const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+          // Convert to single letter: Mon->M, Tue->T, Wed->W, Thu->T, Fri->F, Sat->S, Sun->S
+          dayOfWeekRow[`day-${i}`] = dayName.charAt(0);
+        });
+        newData[dayOfWeekRowIndex] = dayOfWeekRow;
+      }
 
       return newData;
     });
@@ -1372,6 +1384,13 @@ export default function ProjectTimePlannerV2() {
     executeCommand(command);
   }, [selectedRows, data, executeCommand]);
 
+  const handleAddWeek = useCallback(() => {
+    setIsListicalMenuOpen(false);
+
+    // Add 7 days to totalDays
+    setTotalDays(prev => prev + 7);
+  }, [setTotalDays]);
+
   // Checkbox input class for menu
   const checkboxInputClass = 'h-4 w-4 cursor-pointer rounded border-gray-300 text-emerald-700 focus:ring-emerald-600';
 
@@ -1471,6 +1490,7 @@ export default function ProjectTimePlannerV2() {
             handleAddTasks={handleAddTasks}
             handleNewSubproject={handleNewSubproject}
             handleDuplicateRow={handleDuplicateRow}
+            handleAddWeek={handleAddWeek}
             startDate={startDate}
             onStartDateChange={(value) => {
               setStartDate(value);

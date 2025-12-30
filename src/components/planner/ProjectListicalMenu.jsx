@@ -18,6 +18,7 @@ export default function ProjectListicalMenu({
   handleAddTasks,
   handleNewSubproject,
   handleDuplicateRow,
+  handleAddWeek,
   startDate,
   onStartDateChange,
   selectedSortStatuses,
@@ -149,6 +150,14 @@ export default function ProjectListicalMenu({
                     title="Duplicate the highlighted row"
                   >
                     Duplicate Row
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left"
+                    onClick={handleAddWeek}
+                    title="Add 7 more days to the end of the calendar"
+                  >
+                    Add Week
                   </button>
                 </div>
               )}
