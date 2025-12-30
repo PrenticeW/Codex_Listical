@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 export default function ProjectListicalMenu({
   isOpen,
@@ -36,6 +36,20 @@ export default function ProjectListicalMenu({
 }) {
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
+  const [expandedSections, setExpandedSections] = useState({
+    viewControls: true,
+    history: false,
+    timeline: false,
+    rowOps: false,
+    batchOps: false,
+  });
+
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -71,188 +85,285 @@ export default function ProjectListicalMenu({
       {isOpen && (
         <div
           ref={menuRef}
-          className="absolute z-20 mt-2 w-[36rem] rounded border border-[#ced3d0] bg-[#f2fdf6] p-4 shadow-lg"
+          className="absolute z-20 mt-2 rounded border border-[#ced3d0] bg-[#f2fdf6] shadow-lg"
+          style={{ width: '600px' }}
         >
-          <div className="flex flex-col gap-3 text-[12px] text-slate-800">
-            {/* Page Size Controls */}
-            <div className="flex items-center gap-3 rounded border border-[#ced3d0] bg-white/60 p-3">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Page Size</span>
-              <div className="flex gap-1 items-center">
-                <button
-                  onClick={decreaseSize}
-                  className="px-2 py-0.5 rounded text-sm font-medium bg-white border border-[#ced3d0] text-[#065f46] hover:bg-[#e6f7ed] transition-colors"
-                  title="Decrease size"
-                >
-                  -
-                </button>
-                <span className="text-xs text-slate-700 font-mono min-w-[3ch] text-center">{Math.round(sizeScale * 100)}%</span>
-                <button
-                  onClick={increaseSize}
-                  className="px-2 py-0.5 rounded text-sm font-medium bg-white border border-[#ced3d0] text-[#065f46] hover:bg-[#e6f7ed] transition-colors"
-                  title="Increase size"
-                >
-                  +
-                </button>
-                <button
-                  onClick={resetSize}
-                  className="px-2 py-0.5 rounded text-xs font-medium bg-white border border-[#ced3d0] text-[#065f46] hover:bg-[#e6f7ed] transition-colors ml-1"
-                  title="Reset to default size"
-                >
-                  Reset
-                </button>
-              </div>
+          <div className="flex flex-col text-[12px] text-slate-800" style={{ padding: '16px', gap: '16px' }}>
+            {/* View Controls Section */}
+            <div className="border border-[#ced3d0] rounded overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleSection('viewControls')}
+                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/40 transition-colors"
+              >
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                  View Controls
+                </span>
+                <span className="text-slate-500 text-sm">
+                  {expandedSections.viewControls ? '▼' : '▶'}
+                </span>
+              </button>
+              {expandedSections.viewControls && (
+                <div className="px-4 py-3 flex flex-col bg-white/20" style={{ gap: '12px' }}>
+                  {/* Page Size Section */}
+                  <div className="flex flex-col border-b border-[#ced3d0]/30" style={{ paddingBottom: '12px', paddingTop: '12px', gap: '8px' }}>
+                    <span className="text-[13px] font-bold text-slate-700">Page Size</span>
+                    <div className="flex flex-col ml-4" style={{ gap: '8px' }}>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={decreaseSize}
+                          className="px-4 py-2 rounded text-sm font-semibold bg-white border border-[#ced3d0] text-[#065f46] hover:bg-[#e6f7ed] transition-colors"
+                          title="Decrease size"
+                        >
+                          Smaller
+                        </button>
+                        <div className="text-2xl font-bold text-[#065f46] min-w-[70px] text-center">
+                          {Math.round(sizeScale * 100)}%
+                        </div>
+                        <button
+                          onClick={increaseSize}
+                          className="px-4 py-2 rounded text-sm font-semibold bg-white border border-[#ced3d0] text-[#065f46] hover:bg-[#e6f7ed] transition-colors"
+                          title="Increase size"
+                        >
+                          Larger
+                        </button>
+                      </div>
+                      <button
+                        onClick={resetSize}
+                        className="px-3 py-1 rounded text-xs font-medium bg-white border border-[#ced3d0] text-slate-600 hover:bg-gray-100 transition-colors self-start"
+                        title="Reset to default size"
+                      >
+                        Reset to 100%
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Start Date Section */}
+                  <div className="flex flex-col" style={{ gap: '8px' }}>
+                    <span className="text-[13px] font-bold text-slate-700">Start Date</span>
+                    <div className="ml-4">
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => onStartDateChange(e.target.value)}
+                        className="rounded border border-[#ced3d0] px-2 py-1.5 text-[12px] text-slate-800 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* View Toggles Section */}
+                  <div className="flex flex-col" style={{ gap: '8px' }}>
+                    <span className="text-[13px] font-bold text-slate-700">Display Options</span>
+                    <div className="flex flex-col ml-4">
+                      <div className="flex flex-col" style={{ gap: '3px' }}>
+                        <label className="flex items-center gap-2 font-semibold">
+                          <input
+                            type="checkbox"
+                            className={checkboxInputClass}
+                            checked={showRecurring}
+                            onChange={onToggleShowRecurring}
+                          />
+                          Show Recurring
+                        </label>
+                        <label className="flex items-center gap-2 font-semibold">
+                          <input
+                            type="checkbox"
+                            className={checkboxInputClass}
+                            checked={showSubprojects}
+                            onChange={onToggleShowSubprojects}
+                          />
+                          Show Subprojects
+                        </label>
+                        <label className="flex items-center gap-2 font-semibold">
+                          <input
+                            type="checkbox"
+                            className={checkboxInputClass}
+                            checked={showMaxMinRows}
+                            onChange={onToggleShowMaxMinRows}
+                          />
+                          Toggle Max/Min Hours
+                        </label>
+                      </div>
+                      <div className="flex flex-col" style={{ gap: '6px', marginTop: '8px' }}>
+                        <button
+                          type="button"
+                          className="rounded border border-[#ced3d0] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left"
+                          onClick={handleHideWeek}
+                          title="Hide the next 7 days"
+                        >
+                          Hide Week
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded border border-[#ced3d0] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left"
+                          onClick={handleShowWeek}
+                          title="Show the previous 7 days"
+                        >
+                          Show Week
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Undo/Redo Controls */}
-            <div className="flex items-center gap-2 rounded border border-[#ced3d0] bg-white/60 p-3">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">History</span>
+            {/* History Section */}
+            <div className="border border-[#ced3d0] rounded overflow-hidden">
               <button
-                onClick={undo}
-                disabled={undoStack.length === 0}
-                className={`px-3 py-1 rounded text-[12px] font-semibold transition-colors ${
-                  undoStack.length === 0
-                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
-                    : 'bg-white text-[#065f46] hover:bg-[#e6f7ed] border border-[#ced3d0]'
-                }`}
-                title={`Undo (${undoStack.length === 0 ? 'No actions' : `${undoStack.length} action${undoStack.length > 1 ? 's' : ''}`})`}
+                type="button"
+                onClick={() => toggleSection('history')}
+                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/40 transition-colors"
               >
-                ↶ Undo
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                  History
+                </span>
+                <span className="text-slate-500 text-sm">
+                  {expandedSections.history ? '▼' : '▶'}
+                </span>
               </button>
-              <button
-                onClick={redo}
-                disabled={redoStack.length === 0}
-                className={`px-3 py-1 rounded text-[12px] font-semibold transition-colors ${
-                  redoStack.length === 0
-                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
-                    : 'bg-white text-[#065f46] hover:bg-[#e6f7ed] border border-[#ced3d0]'
-                }`}
-                title={`Redo (${redoStack.length === 0 ? 'No actions' : `${redoStack.length} action${redoStack.length > 1 ? 's' : ''}`})`}
-              >
-                ↷ Redo
-              </button>
+              {expandedSections.history && (
+                <div className="px-4 bg-white/20" style={{ paddingTop: '12px', paddingBottom: '12px' }}>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={undo}
+                      disabled={undoStack.length === 0}
+                      className={`flex-1 px-3 py-1.5 rounded text-[12px] font-semibold transition-colors ${
+                        undoStack.length === 0
+                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
+                          : 'bg-white text-[#065f46] hover:bg-[#e6f7ed] border border-[#ced3d0]'
+                      }`}
+                      title={`Undo (⌘Z) - ${undoStack.length === 0 ? 'No actions' : `${undoStack.length} action${undoStack.length > 1 ? 's' : ''}`}`}
+                    >
+                      ↶ Undo
+                    </button>
+                    <button
+                      onClick={redo}
+                      disabled={redoStack.length === 0}
+                      className={`flex-1 px-3 py-1.5 rounded text-[12px] font-semibold transition-colors ${
+                        redoStack.length === 0
+                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
+                          : 'bg-white text-[#065f46] hover:bg-[#e6f7ed] border border-[#ced3d0]'
+                      }`}
+                      title={`Redo (⌘⇧Z) - ${redoStack.length === 0 ? 'No actions' : `${redoStack.length} action${redoStack.length > 1 ? 's' : ''}`}`}
+                    >
+                      ↷ Redo
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <label className="flex items-center gap-2 font-semibold">
-              <input
-                type="checkbox"
-                className={checkboxInputClass}
-                checked={showRecurring}
-                onChange={onToggleShowRecurring}
-              />
-              Show Recurring
-            </label>
-            <label className="flex items-center gap-2 font-semibold">
-              <input
-                type="checkbox"
-                className={checkboxInputClass}
-                checked={showSubprojects}
-                onChange={onToggleShowSubprojects}
-              />
-              Show Subprojects
-            </label>
-            <label className="flex items-center gap-2 font-semibold">
-              <input
-                type="checkbox"
-                className={checkboxInputClass}
-                checked={showMaxMinRows}
-                onChange={onToggleShowMaxMinRows}
-              />
-              Toggle Max/Min Hours
-            </label>
-            <div className="flex items-center gap-3 font-semibold text-slate-800">
-              <span className="text-[11px] uppercase tracking-wide text-slate-600">Add Tasks</span>
-              <input
-                type="number"
-                min="0"
-                value={addTasksCount}
-                onChange={(e) => onAddTasksCountChange(e.target.value)}
-                className="w-24 rounded border border-[#ced3d0] px-2 py-1 text-[12px] font-normal uppercase tracking-normal text-slate-800"
-                placeholder="0"
-              />
+            {/* Row Operations Section */}
+            <div className="border border-[#ced3d0] rounded overflow-hidden">
               <button
                 type="button"
-                className="rounded border border-[#ced3d0] bg-white px-4 py-1 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-                onClick={handleAddTasks}
+                onClick={() => toggleSection('rowOps')}
+                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/40 transition-colors"
               >
-                Ok
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                  Row Operations
+                </span>
+                <span className="text-slate-500 text-sm">
+                  {expandedSections.rowOps ? '▼' : '▶'}
+                </span>
               </button>
+              {expandedSections.rowOps && (
+                <div className="px-4 py-3 flex flex-col gap-3 bg-white/20">
+                  {/* Add Tasks */}
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[11px] text-slate-600">Add Tasks</span>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        min="0"
+                        value={addTasksCount}
+                        onChange={(e) => onAddTasksCountChange(e.target.value)}
+                        className="flex-1 rounded border border-[#ced3d0] px-2 py-1.5 text-[12px] text-slate-800"
+                        placeholder="0"
+                      />
+                      <button
+                        type="button"
+                        className="rounded border border-[#ced3d0] bg-white px-4 py-1.5 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
+                        onClick={handleAddTasks}
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                  {/* Action Buttons */}
+                  <button
+                    type="button"
+                    className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left"
+                    onClick={handleNewSubproject}
+                    title="Create a new subproject under the selected row"
+                  >
+                    New Subproject
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left"
+                    onClick={handleDuplicateRow}
+                    title="Duplicate the highlighted row"
+                  >
+                    Duplicate Row
+                  </button>
+                </div>
+              )}
             </div>
-            <label className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-              <span>Start Date</span>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => onStartDateChange(e.target.value)}
-                className="flex-1 rounded border border-[#ced3d0] px-2 py-1 text-[12px] font-normal uppercase tracking-normal text-slate-800"
-              />
-            </label>
-            <div className="flex flex-col gap-2 rounded border border-[#ced3d0] bg-white/60 p-3">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                Sort Inbox: Move statuses
-              </span>
-              <div className="flex flex-wrap gap-3">
-                {sortableStatuses.map((status) => (
-                  <label key={status} className="flex items-center gap-2 text-[12px] font-semibold">
-                    <input
-                      type="checkbox"
-                      className={checkboxInputClass}
-                      checked={selectedSortStatuses.has(status)}
-                      onChange={() => onToggleSortStatus(status)}
-                    />
-                    <span>{status}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="flex flex-col gap-2">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="flex-1 rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-                  onClick={handleShowWeek}
-                  title="Show the previous 7 days"
-                >
-                  Show Week
-                </button>
-                <button
-                  type="button"
-                  className="flex-1 rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-                  onClick={handleHideWeek}
-                  title="Hide the next 7 days"
-                >
-                  Hide Week
-                </button>
-              </div>
+
+            {/* Batch Operations Section */}
+            <div className="border border-[#ced3d0] rounded overflow-hidden">
               <button
                 type="button"
-                className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-                onClick={handleNewSubproject}
-                title="Create a new subproject under the selected row"
+                onClick={() => toggleSection('batchOps')}
+                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/40 transition-colors"
               >
-                New Subproject
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                  Batch Operations
+                </span>
+                <span className="text-slate-500 text-sm">
+                  {expandedSections.batchOps ? '▼' : '▶'}
+                </span>
               </button>
-              <button
-                type="button"
-                className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-                onClick={handleDuplicateRow}
-                title="Duplicate the highlighted row"
-              >
-                Duplicate Row
-              </button>
-              <button
-                type="button"
-                className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-                onClick={handleSortInbox}
-              >
-                Sort Inbox
-              </button>
-              <button
-                type="button"
-                className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-                onClick={handleArchiveWeek}
-              >
-                Archive Week
-              </button>
+              {expandedSections.batchOps && (
+                <div className="px-4 py-3 flex flex-col gap-3 bg-white/20">
+                  {/* Sort Inbox Configuration */}
+                  <div className="flex flex-col gap-3 rounded border border-[#ced3d0] bg-white p-2">
+                    <span className="text-[11px] text-slate-600">
+                      Sort Inbox: Move Statuses
+                    </span>
+                    <div className="flex flex-wrap gap-3">
+                      {sortableStatuses.map((status) => (
+                        <label key={status} className="flex items-center gap-1.5 text-[12px] font-semibold">
+                          <input
+                            type="checkbox"
+                            className={checkboxInputClass}
+                            checked={selectedSortStatuses.has(status)}
+                            onChange={() => onToggleSortStatus(status)}
+                          />
+                          <span>{status}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Batch Action Buttons */}
+                  <button
+                    type="button"
+                    className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left"
+                    onClick={handleSortInbox}
+                  >
+                    Sort Inbox
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left"
+                    onClick={handleArchiveWeek}
+                  >
+                    Archive Week
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
