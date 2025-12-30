@@ -2040,34 +2040,68 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     finishColorEdit,
   ]);
 
+  // Override global overflow:hidden to allow page scrolling
+  useEffect(() => {
+    const root = document.getElementById('root');
+    const html = document.documentElement;
+    const body = document.body;
+
+    // Store original values
+    const originalRootOverflow = root?.style.overflow;
+    const originalHtmlOverflow = html?.style.overflow;
+    const originalBodyOverflow = body?.style.overflow;
+    const originalRootHeight = root?.style.height;
+
+    // Set to visible/auto for scrolling - only body gets scrollbar to avoid double scrollbar
+    if (root) {
+      root.style.overflow = 'visible';
+      root.style.height = 'auto';
+    }
+    if (html) html.style.overflow = 'visible';
+    if (body) body.style.overflow = 'auto';
+
+    // Cleanup: restore original values when unmounting
+    return () => {
+      if (root) {
+        root.style.overflow = originalRootOverflow || '';
+        root.style.height = originalRootHeight || '';
+      }
+      if (html) html.style.overflow = originalHtmlOverflow || '';
+      if (body) body.style.overflow = originalBodyOverflow || '';
+    };
+  }, []);
+
   return (
     <div
-      className="min-h-screen bg-gray-100 text-slate-800 p-4"
+      className="w-full min-h-screen bg-gray-100 text-slate-800"
       onDragOver={handleRootDragOver}
       onDrop={handleRootDrop}
     >
-      <NavigationBar
-        currentPath={currentPath}
-        onNavigate={onNavigate}
-        listicalButton={
-          <ListicalMenu
-            incrementMinutes={incrementMinutes}
-            onIncrementChange={setIncrementMinutes}
-            onClearAllChips={handleClearAllChips}
-          />
-        }
-      />
-      <div className="mt-20">
-        <div
-          ref={tableContainerRef}
-          className="relative rounded border border-[#ced3d0] bg-white p-4 shadow-sm"
-          onDrop={handleTableDrop}
-          onDragOver={handleTableDragOver}
-        >
+      <div className="p-4 space-y-4">
+        <NavigationBar
+          currentPath={currentPath}
+          onNavigate={onNavigate}
+          listicalButton={
+            <ListicalMenu
+              incrementMinutes={incrementMinutes}
+              onIncrementChange={setIncrementMinutes}
+              onClearAllChips={handleClearAllChips}
+            />
+          }
+        />
+        <div className="rounded border border-[#ced3d0] bg-white shadow-sm">
+          <div
+            ref={tableContainerRef}
+            className="p-4"
+            onDrop={handleTableDrop}
+            onDragOver={handleTableDragOver}
+            style={{ display: 'block', paddingBottom: '440px' }}
+          >
           {renderDragOutline()}
           <table
             ref={tableElementRef}
             className="w-full border-collapse text-[11px] text-slate-800"
+            style={{ display: 'table' }}
           >
             <tbody>
               <tr className="grid text-sm" style={{ gridTemplateColumns }}>
@@ -2709,6 +2743,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
           </tbody>
         </table>
           {renderCellProjectMenu()}
+          </div>
         </div>
       </div>
     </div>
