@@ -954,6 +954,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     dragStartCell,
     setDragStartCell,
     setEditingCell,
+    setEditValue,
   });
 
   const {

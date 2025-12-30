@@ -30,6 +30,16 @@ export default function ProjectRow({
   isArchived = false,
   collapsedGroups = new Set(),
   toggleGroupCollapse = () => {},
+  isCellSelected,
+  editingCell,
+  editValue,
+  setEditValue,
+  handleCellMouseDown,
+  handleCellMouseEnter,
+  handleCellDoubleClick,
+  handleEditComplete,
+  handleEditCancel,
+  handleEditKeyDown,
 }) {
   const rowId = row.original.id;
   const rowType = row.original._rowType; // 'projectHeader', 'projectGeneral', 'projectUnscheduled', or archived variants
@@ -170,6 +180,11 @@ export default function ProjectRow({
                 return sum + (column ? column.getSize() : 0);
               }, 0);
 
+              // For project headers, the editable column is 'projectName' (stored in projectName field)
+              const editableColumnId = 'projectName';
+              const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === editableColumnId;
+              const isSelected = isCellSelected?.(rowId, editableColumnId);
+
               return (
                 <td
                   key={`merged-${isHeader ? 'a-to-e' : 'a-to-d'}`}
@@ -182,9 +197,24 @@ export default function ProjectRow({
                     boxSizing: 'border-box',
                   }}
                   className="p-0"
+                  onMouseDown={(e) => {
+                    if (isHeader && handleCellMouseDown) {
+                      handleCellMouseDown(e, rowId, editableColumnId);
+                    }
+                  }}
+                  onMouseEnter={(e) => {
+                    if (isHeader && handleCellMouseEnter) {
+                      handleCellMouseEnter(e, rowId, editableColumnId);
+                    }
+                  }}
+                  onDoubleClick={(e) => {
+                    if (isHeader && handleCellDoubleClick) {
+                      handleCellDoubleClick(rowId, editableColumnId, projectLabel);
+                    }
+                  }}
                 >
                   <div
-                    className={`h-full flex items-center gap-2 ${isHeader && groupId ? 'cursor-pointer' : ''}`}
+                    className={`h-full flex items-center gap-2 ${isHeader && groupId ? 'cursor-pointer' : ''} ${isSelected ? 'selected-cell' : ''}`}
                     style={{
                       fontSize: `${cellFontSize}px`,
                       minHeight: `${rowHeight}px`,
@@ -194,16 +224,54 @@ export default function ProjectRow({
                       paddingLeft: '8px',
                       paddingRight: '3px',
                       fontWeight: isHeader ? '600' : '400',
+                      outline: isEditing ? '2px solid black' : 'none',
+                      outlineOffset: '-2px',
                     }}
-                    onClick={isHeader && groupId ? () => {
-                      console.log('ProjectRow chevron clicked:', { rowType, groupId, projectNickname });
-                      toggleGroupCollapse(groupId);
-                    } : undefined}
+                    onClick={(e) => {
+                      if (isHeader && groupId && !isEditing) {
+                        console.log('ProjectRow chevron clicked:', { rowType, groupId, projectNickname });
+                        toggleGroupCollapse(groupId);
+                      }
+                    }}
                   >
                     {isHeader && groupId && (
                       isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />
                     )}
-                    <span>{isHeader ? projectLabel : '\u00A0'}</span>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editValue}
+                        onChange={(e) => {
+                          if (setEditValue) {
+                            setEditValue(e.target.value);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (handleEditKeyDown) {
+                            handleEditKeyDown(e, rowId, editableColumnId, e.target.value);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (handleEditComplete) {
+                            handleEditComplete(rowId, editableColumnId, editValue);
+                          }
+                        }}
+                        autoFocus
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          border: 'none',
+                          outline: 'none',
+                          background: 'transparent',
+                          fontSize: `${cellFontSize}px`,
+                          fontWeight: '600',
+                          padding: 0,
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span>{isHeader ? projectLabel : '\u00A0'}</span>
+                    )}
                   </div>
                 </td>
               );
@@ -213,8 +281,12 @@ export default function ProjectRow({
             }
           }
 
-          // For section rows, render task column (E) with section label
+          // For section rows, render task column (E) with section label (editable)
           if (!isHeader && columnId === 'task') {
+            const editableColumnId = 'task';
+            const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === editableColumnId;
+            const isSelected = isCellSelected?.(rowId, editableColumnId);
+
             return (
               <td
                 key={cell.id}
@@ -227,9 +299,24 @@ export default function ProjectRow({
                   boxSizing: 'border-box',
                 }}
                 className="p-0"
+                onMouseDown={(e) => {
+                  if (handleCellMouseDown) {
+                    handleCellMouseDown(e, rowId, editableColumnId);
+                  }
+                }}
+                onMouseEnter={(e) => {
+                  if (handleCellMouseEnter) {
+                    handleCellMouseEnter(e, rowId, editableColumnId);
+                  }
+                }}
+                onDoubleClick={(e) => {
+                  if (handleCellDoubleClick) {
+                    handleCellDoubleClick(rowId, editableColumnId, sectionLabel);
+                  }
+                }}
               >
                 <div
-                  className="h-full flex items-center"
+                  className={`h-full flex items-center ${isSelected ? 'selected-cell' : ''}`}
                   style={{
                     fontSize: `${cellFontSize}px`,
                     minHeight: `${rowHeight}px`,
@@ -239,9 +326,44 @@ export default function ProjectRow({
                     paddingLeft: '8px',
                     paddingRight: '3px',
                     fontWeight: '600',
+                    outline: isEditing ? '2px solid black' : 'none',
+                    outlineOffset: '-2px',
                   }}
                 >
-                  {sectionLabel}
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editValue}
+                      onChange={(e) => {
+                        if (setEditValue) {
+                          setEditValue(e.target.value);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (handleEditKeyDown) {
+                          handleEditKeyDown(e, rowId, editableColumnId, e.target.value);
+                        }
+                      }}
+                      onBlur={() => {
+                        if (handleEditComplete) {
+                          handleEditComplete(rowId, editableColumnId, editValue);
+                        }
+                      }}
+                      autoFocus
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        border: 'none',
+                        outline: 'none',
+                        background: 'transparent',
+                        fontSize: `${cellFontSize}px`,
+                        fontWeight: '600',
+                        padding: 0,
+                      }}
+                    />
+                  ) : (
+                    sectionLabel
+                  )}
                 </div>
               </td>
             );

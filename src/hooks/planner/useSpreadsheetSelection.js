@@ -23,6 +23,7 @@ export const useSpreadsheetSelection = ({
   dragStartCell,
   setDragStartCell,
   setEditingCell,
+  setEditValue,
 }) => {
   // Helper to create cell key
   const getCellKey = useCallback((rowId, columnId) => {
@@ -176,8 +177,13 @@ export const useSpreadsheetSelection = ({
   const handleCellDoubleClick = useCallback((rowId, columnId, value) => {
     if (columnId === 'rowNum') return;
 
+    // Get the current value from the data if not provided
+    const row = data.find(r => r.id === rowId);
+    const currentValue = value !== undefined ? value : (row ? row[columnId] || '' : '');
+
     setEditingCell({ rowId, columnId });
-  }, [setEditingCell]);
+    setEditValue(currentValue);
+  }, [setEditingCell, setEditValue, data]);
 
   return {
     getCellKey,

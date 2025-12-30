@@ -22,6 +22,7 @@ export default function TableRow({
   isCellSelected,
   editingCell,
   editValue,
+  setEditValue,
   handleRowNumberClick,
   handleCellMouseDown,
   handleCellMouseEnter,
@@ -127,6 +128,16 @@ export default function TableRow({
         projectTotals={projectTotals}
         collapsedGroups={collapsedGroups}
         toggleGroupCollapse={toggleGroupCollapse}
+        isCellSelected={isCellSelected}
+        editingCell={editingCell}
+        editValue={editValue}
+        setEditValue={setEditValue}
+        handleCellMouseDown={handleCellMouseDown}
+        handleCellMouseEnter={handleCellMouseEnter}
+        handleCellDoubleClick={handleCellDoubleClick}
+        handleEditComplete={handleEditComplete}
+        handleEditCancel={handleEditCancel}
+        handleEditKeyDown={handleEditKeyDown}
       />
     );
   }
@@ -155,6 +166,16 @@ export default function TableRow({
         isArchived={true}
         collapsedGroups={collapsedGroups}
         toggleGroupCollapse={toggleGroupCollapse}
+        isCellSelected={isCellSelected}
+        editingCell={editingCell}
+        editValue={editValue}
+        setEditValue={setEditValue}
+        handleCellMouseDown={handleCellMouseDown}
+        handleCellMouseEnter={handleCellMouseEnter}
+        handleCellDoubleClick={handleCellDoubleClick}
+        handleEditComplete={handleEditComplete}
+        handleEditCancel={handleEditCancel}
+        handleEditKeyDown={handleEditKeyDown}
       />
     );
   }
@@ -460,6 +481,7 @@ export default function TableRow({
                   return sum + (column ? column.getSize() : 0);
                 }, 0);
 
+                // This merged cell is not editable, but we keep it for consistency
                 return (
                   <td
                     key="merged-archive-week-a-to-d"
@@ -498,7 +520,7 @@ export default function TableRow({
 
             // For archive week row, render unmerged columns E, F, G, H
             if (isArchiveWeekRow && ['task', 'recurring', 'estimate', 'timeValue'].includes(columnId)) {
-              // Column E (task) shows the date range
+              // Column E (task) shows the date range - EDITABLE
               const dateRange = row.original.archiveLabel || '';
               // Column G (estimate) shows the weekly total hours
               const weeklyTotal = row.original.archiveTotalHours || '0.00';
@@ -520,6 +542,11 @@ export default function TableRow({
                 fontStyle = 'italic';
               }
 
+              // Make task column (E) editable
+              const isTaskColumn = columnId === 'task';
+              const isEditing = isTaskColumn && editingCell?.rowId === rowId && editingCell?.columnId === columnId;
+              const isSelected = isTaskColumn && isCellSelected?.(rowId, columnId);
+
               return (
                 <td
                   key={cell.id}
@@ -531,9 +558,24 @@ export default function TableRow({
                     boxSizing: 'border-box',
                   }}
                   className="p-0"
+                  onMouseDown={(e) => {
+                    if (isTaskColumn && handleCellMouseDown) {
+                      handleCellMouseDown(e, rowId, columnId);
+                    }
+                  }}
+                  onMouseEnter={(e) => {
+                    if (isTaskColumn && handleCellMouseEnter) {
+                      handleCellMouseEnter(e, rowId, columnId);
+                    }
+                  }}
+                  onDoubleClick={(e) => {
+                    if (isTaskColumn && handleCellDoubleClick) {
+                      handleCellDoubleClick(e, rowId, columnId);
+                    }
+                  }}
                 >
                   <div
-                    className="h-full flex items-center"
+                    className={`h-full flex items-center ${isSelected ? 'selected-cell' : ''}`}
                     style={{
                       minHeight: `${rowHeight}px`,
                       ...ARCHIVE_ROW_STYLE,
@@ -546,7 +588,39 @@ export default function TableRow({
                       fontStyle: fontStyle,
                     }}
                   >
-                    {cellContent}
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editValue}
+                        onChange={(e) => {
+                          if (setEditValue) {
+                            setEditValue(e.target.value);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (handleEditKeyDown) {
+                            handleEditKeyDown(e, rowId, columnId, e.target.value);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (handleEditComplete) {
+                            handleEditComplete(rowId, columnId, editValue);
+                          }
+                        }}
+                        autoFocus
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          border: 'none',
+                          outline: 'none',
+                          background: 'transparent',
+                          fontSize: `${cellFontSize}px`,
+                          padding: 0,
+                        }}
+                      />
+                    ) : (
+                      cellContent
+                    )}
                   </div>
                 </td>
               );
