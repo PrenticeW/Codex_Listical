@@ -123,9 +123,14 @@ export default function useComputedData({
         estimate = 'Multi';
       }
 
-      // Store _originalEstimate if we just changed to Multi and don't have it yet
+      // Clear _originalEstimate if no longer in Multi mode
+      // This happens when user manually changes estimate or deletes values
       let originalEstimateToStore = row._originalEstimate;
-      if (estimate === 'Multi' && !originalEstimateToStore) {
+      if (estimate !== 'Multi' && estimate !== 'Custom') {
+        // User changed estimate to a regular value, clear the stored original
+        originalEstimateToStore = undefined;
+      } else if (estimate === 'Multi' && !originalEstimateToStore) {
+        // Store _originalEstimate if we just changed to Multi and don't have it yet
         // Use the current row.estimate (before we changed it to Multi in this computation)
         // This preserves the original value before any Multi conversion
         originalEstimateToStore = row.estimate;
@@ -247,8 +252,15 @@ export default function useComputedData({
         estimate,
         timeValue,
         status,
-        ...(originalEstimateToStore && { _originalEstimate: originalEstimateToStore })
       };
+
+      // Handle _originalEstimate: add if present, remove if should be cleared
+      if (originalEstimateToStore !== undefined) {
+        updatedRow._originalEstimate = originalEstimateToStore;
+      } else {
+        // Explicitly delete _originalEstimate if it should be cleared
+        delete (updatedRow as any)._originalEstimate;
+      }
 
       // Process all day columns
       for (let i = 0; i < totalDays; i++) {
@@ -308,14 +320,23 @@ export default function useComputedData({
 
           if (statusChanged || estimateChanged || timeValueChanged || dayColumnsChanged || originalEstimateChanged) {
             hasChanges = true;
-            return {
+            const updatedRow: any = {
               ...row,
               status: computedRow.status,
               estimate: computedRow.estimate,
               timeValue: computedRow.timeValue,
-              ...(computedRow._originalEstimate && { _originalEstimate: computedRow._originalEstimate }),
               ...dayColumnUpdates,
             };
+
+            // Handle _originalEstimate: add it if present, remove it if undefined
+            if (computedRow._originalEstimate !== undefined) {
+              updatedRow._originalEstimate = computedRow._originalEstimate;
+            } else {
+              // Explicitly delete _originalEstimate if it should be cleared
+              delete updatedRow._originalEstimate;
+            }
+
+            return updatedRow;
           }
         }
         return row;

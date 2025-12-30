@@ -10,7 +10,6 @@ export const STATUS_VALUES = ['-', 'Not Scheduled', 'Scheduled', 'Done', 'Blocke
 export const ESTIMATE_VALUES = [
   '-',
   'Custom',
-  'Multi',
   '1 Minute',
   '5 Minutes',
   '10 Minutes',
@@ -33,6 +32,7 @@ export const ESTIMATE_VALUES = [
   '8 Hours',
   '9 Hours',
   '10 Hours',
+  'Multi',
 ];
 
 // Status color styling
