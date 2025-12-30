@@ -4,24 +4,33 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useYear } from '../../contexts/YearContext';
 import { loadStagingState, STAGING_STORAGE_EVENT } from '../../lib/stagingStorage';
 
 /**
  * Hook to load projects and subprojects from Staging storage
- * Automatically updates when staging data changes
+ * Automatically updates when staging data changes or year changes
  *
  * @returns {Object} Projects and subprojects data
  */
 export default function useProjectsData() {
+  const { currentYear } = useYear();
+
   const [projectsData, setProjectsData] = useState(() => {
-    const { shortlist } = loadStagingState();
+    const { shortlist } = loadStagingState(currentYear);
     return extractProjectsData(shortlist);
   });
+
+  // Reload when year changes
+  useEffect(() => {
+    const { shortlist } = loadStagingState(currentYear);
+    setProjectsData(extractProjectsData(shortlist));
+  }, [currentYear]);
 
   // Listen for staging storage updates
   useEffect(() => {
     const handleStorageUpdate = (event) => {
-      const shortlist = event.detail?.shortlist || loadStagingState().shortlist;
+      const shortlist = event.detail?.shortlist || loadStagingState(currentYear).shortlist;
       setProjectsData(extractProjectsData(shortlist));
     };
 
@@ -31,7 +40,7 @@ export default function useProjectsData() {
         window.removeEventListener(STAGING_STORAGE_EVENT, handleStorageUpdate);
       };
     }
-  }, []);
+  }, [currentYear]);
 
   return projectsData;
 }

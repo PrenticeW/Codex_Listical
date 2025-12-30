@@ -23,7 +23,13 @@ export const useProjectTotals = (computedData) => {
         return;
       }
 
-      // Reset when we exit a project section (encounter another special row type)
+      // Reset when we encounter inbox, archive, or subproject headers - these signal end of project section
+      if (row._isInboxRow || row._isArchiveRow || row._rowType === 'subprojectHeader') {
+        currentProjectHeaderId = null;
+        return;
+      }
+
+      // Keep context when we're still within the project section
       if (row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled') {
         // Still within the project, don't reset
         return;
