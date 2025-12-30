@@ -269,27 +269,27 @@ export default function ProjectListicalMenu({
                 </span>
               </button>
               {expandedSections.rowOps && (
-                <div className="px-4 py-3 flex flex-col gap-3 bg-white/20">
+                <div className="px-4 bg-white/20" style={{ paddingTop: '12px', paddingBottom: '12px', gap: '12px', display: 'flex', flexDirection: 'column' }}>
                   {/* Add Tasks */}
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] text-slate-600">Add Tasks</span>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="number"
-                        min="0"
-                        value={addTasksCount}
-                        onChange={(e) => onAddTasksCountChange(e.target.value)}
-                        className="flex-1 rounded border border-[#ced3d0] px-2 py-1.5 text-[12px] text-slate-800"
-                        placeholder="0"
-                      />
-                      <button
-                        type="button"
-                        className="rounded border border-[#ced3d0] bg-white px-4 py-1.5 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-                        onClick={handleAddTasks}
-                      >
-                        Add
-                      </button>
-                    </div>
+                  <div className="flex items-center" style={{ gap: '4px' }}>
+                    <span className="text-[12px] font-semibold text-slate-800">Add Tasks</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="9999"
+                      value={addTasksCount}
+                      onChange={(e) => onAddTasksCountChange(e.target.value)}
+                      className="rounded border border-[#ced3d0] px-2 py-1.5 text-[12px] text-slate-800 bg-white"
+                      style={{ width: '80px' }}
+                      placeholder="0"
+                    />
+                    <button
+                      type="button"
+                      className="rounded border border-[#ced3d0] bg-white px-4 py-1.5 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
+                      onClick={handleAddTasks}
+                    >
+                      Add
+                    </button>
                   </div>
                   {/* Action Buttons */}
                   <button
