@@ -266,6 +266,7 @@ const buildProjectPlanSummary = (item) => {
   const needsQuestionRowCount = item.planNeedsQuestionRowCount ?? 1;
   const needsPlanRowCount = item.planNeedsPlanRowCount ?? 1;
   const subprojectRowCount = item.planSubprojectRowCount ?? 1;
+  const xxxRowCount = item.planXxxRowCount ?? 1;
   const outcomeHeadingRow = 2 + reasonRowCount;
   const outcomePromptStart = outcomeHeadingRow + 1;
   const outcomePromptEnd = outcomePromptStart + Math.max(outcomeRowCount - 1, 0);
@@ -278,6 +279,9 @@ const buildProjectPlanSummary = (item) => {
   const subprojectsHeadingRow = needsPlanStart + Math.max(needsPlanRowCount, 0);
   const subprojectsPromptRow = subprojectsHeadingRow + 1;
   const subprojectStart = subprojectsPromptRow + 1;
+  const xxxHeadingRow = subprojectStart + Math.max(subprojectRowCount, 0);
+  const xxxPromptRow = xxxHeadingRow + 1;
+  const xxxStart = xxxPromptRow + 1;
   const subprojects = [];
   for (let idx = 0; idx < Math.max(subprojectRowCount, 0); idx += 1) {
     const rowIdx = subprojectStart + idx;
@@ -455,6 +459,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           const needsQuestionCount = item.planNeedsQuestionRowCount ?? 1;
           const needsPlanCount = item.planNeedsPlanRowCount ?? 1;
           const subprojectCount = item.planSubprojectRowCount ?? 1;
+          const xxxCount = item.planXxxRowCount ?? 1;
           const planTableEntries = clonePlanTableEntries(item.planTableEntries);
           ensurePlanPairingMetadata({
             entries: planTableEntries,
@@ -479,6 +484,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
               planNeedsQuestionRowCount: needsQuestionCount,
               planNeedsPlanRowCount: needsPlanCount,
               planSubprojectRowCount: subprojectCount,
+              planXxxRowCount: xxxCount,
               planTableEntries,
             };
           }
@@ -495,6 +501,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
             planNeedsQuestionRowCount: needsQuestionCount,
             planNeedsPlanRowCount: needsPlanCount,
             planSubprojectRowCount: subprojectCount,
+            planXxxRowCount: xxxCount,
           };
         }),
       }));
@@ -527,6 +534,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           const needsQuestionCount = item.planNeedsQuestionRowCount ?? 1;
           const needsPlanCount = item.planNeedsPlanRowCount ?? 1;
           const subprojectCount = item.planSubprojectRowCount ?? 1;
+          const xxxCount = item.planXxxRowCount ?? 1;
           ensurePlanPairingMetadata({
             entries,
             reasonRowCount: reasonCount,
@@ -550,6 +558,10 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           const subprojectsPromptRow = subprojectsHeadingRow + 1;
           const subprojectStart = subprojectsPromptRow + 1;
           const subprojectEnd = subprojectStart + Math.max(subprojectCount - 1, 0);
+          const xxxHeadingRow = subprojectStart + Math.max(subprojectCount, 0);
+          const xxxPromptRow = xxxHeadingRow + 1;
+          const xxxStart = xxxPromptRow + 1;
+          const xxxEnd = xxxStart + Math.max(xxxCount - 1, 0);
           let insertIndex = afterRowIdx + 1;
           if (type === 'question') {
             if (outcomeCount > 0) {
@@ -564,6 +576,11 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           if (type === 'subproject') {
             const minIndex = Math.max(subprojectStart, 0);
             const maxIndex = Math.min(subprojectEnd + 1, entries.length);
+            insertIndex = Math.min(Math.max(insertIndex, minIndex), maxIndex);
+          }
+          if (type === 'xxx') {
+            const minIndex = Math.max(xxxStart, 0);
+            const maxIndex = Math.min(xxxEnd + 1, entries.length);
             insertIndex = Math.min(Math.max(insertIndex, minIndex), maxIndex);
           }
           entries.splice(insertIndex, 0, blankRow);
@@ -590,6 +607,9 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           }
           if (type === 'subproject') {
             nextState.planSubprojectRowCount = (item.planSubprojectRowCount ?? 1) + 1;
+          }
+          if (type === 'xxx') {
+            nextState.planXxxRowCount = (item.planXxxRowCount ?? 1) + 1;
           }
           nextFocus = {
             itemId,
@@ -729,6 +749,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           const needsQuestionCount = item.planNeedsQuestionRowCount ?? 1;
           const needsPlanCount = item.planNeedsPlanRowCount ?? 1;
           const subprojectCount = item.planSubprojectRowCount ?? 1;
+          const xxxCount = item.planXxxRowCount ?? 1;
           const reasonStart = 2;
           const reasonEnd = reasonStart + reasonCount; // exclusive limit
           const outcomeStart = reasonEnd + 1;
@@ -744,6 +765,10 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           const subprojectPromptRow = subprojectHeadingRow + 1;
           const subprojectStart = subprojectPromptRow + 1;
           const subprojectEnd = subprojectStart + subprojectCount;
+          const xxxHeadingRow = subprojectEnd;
+          const xxxPromptRow = xxxHeadingRow + 1;
+          const xxxStart = xxxPromptRow + 1;
+          const xxxEnd = xxxStart + xxxCount;
 
           const withinReason = rowIdx >= reasonStart && rowIdx < reasonEnd;
           const withinOutcome = rowIdx >= outcomeStart && rowIdx < outcomeEnd;
@@ -751,6 +776,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           const withinNeedsQuestion = rowIdx >= needsQuestionStart && rowIdx < needsQuestionEnd;
           const withinNeedsPlan = rowIdx >= needsPlanStart && rowIdx < needsPlanEnd;
           const withinSubproject = rowIdx >= subprojectStart && rowIdx < subprojectEnd;
+          const withinXxx = rowIdx >= xxxStart && rowIdx < xxxEnd;
 
           if (
             rowIdx < 2 ||
@@ -760,7 +786,8 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
             (type === 'question' && !withinQuestion) ||
             (type === 'needsQuestion' && !withinNeedsQuestion) ||
             (type === 'needsPlan' && !withinNeedsPlan) ||
-            (type === 'subproject' && !withinSubproject)
+            (type === 'subproject' && !withinSubproject) ||
+            (type === 'xxx' && !withinXxx)
           ) {
             return item;
           }
@@ -772,13 +799,15 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           const onlyNeedsQuestionRow = type === 'needsQuestion' && needsQuestionCount <= 1;
           const onlyNeedsPlanRow = type === 'needsPlan' && needsPlanCount <= 1;
           const onlySubprojectRow = type === 'subproject' && subprojectCount <= 1;
+          const onlyXxxRow = type === 'xxx' && xxxCount <= 1;
           if (
             onlyReasonRow ||
             onlyOutcomeRow ||
             onlyQuestionRow ||
             onlyNeedsQuestionRow ||
             onlyNeedsPlanRow ||
-            onlySubprojectRow
+            onlySubprojectRow ||
+            onlyXxxRow
           ) {
             entries[rowIdx] = blankRow;
             if (existingPairId) {
@@ -805,6 +834,9 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           }
           if (type === 'subproject') {
             nextState.planSubprojectRowCount = Math.max((item.planSubprojectRowCount ?? 1) - 1, 1);
+          }
+          if (type === 'xxx') {
+            nextState.planXxxRowCount = Math.max((item.planXxxRowCount ?? 1) - 1, 1);
           }
           return nextState;
         }),
@@ -908,6 +940,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                 const needsQuestionRowCount = item.planNeedsQuestionRowCount ?? 1;
                 const needsPlanRowCount = item.planNeedsPlanRowCount ?? 1;
                 const subprojectRowCount = item.planSubprojectRowCount ?? 1;
+                const xxxRowCount = item.planXxxRowCount ?? 1;
                 const reasonRowLimit = 2 + reasonRowCount;
                 const outcomeHeadingRow = reasonRowLimit;
                 const outcomePromptStart = outcomeHeadingRow + 1;
@@ -921,6 +954,9 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                 const subprojectsHeadingRow = needsPlanStart + Math.max(needsPlanRowCount, 0);
                 const subprojectsPromptRow = subprojectsHeadingRow + 1;
                 const subprojectStart = subprojectsPromptRow + 1;
+                const xxxHeadingRow = subprojectStart + Math.max(subprojectRowCount, 0);
+                const xxxPromptRow = xxxHeadingRow + 1;
+                const xxxStart = xxxPromptRow + 1;
                 const buildRowEntry = (rowIdx) => {
                   const rowValues =
                     planEntries[rowIdx] ?? Array.from({ length: PLAN_TABLE_COLS }, () => '');
@@ -1403,6 +1439,122 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                     </tr>
                   );
                 };
+                const renderXxxRow = (rowValues, rowIdx) => {
+                  const estimateValue = rowValues[3] || '-';
+                  const isCustomEstimate = estimateValue === 'Custom';
+                  const displayedTimeValue = rowValues[4] || '0.00';
+                  return (
+                    <tr key={`${item.id}-xxx-row-${rowIdx}`}>
+                      {rowValues.map((cellValue, cellIdx) => {
+                        const isPromptCell = cellIdx === 2;
+                        const isEstimateCell = cellIdx === 3;
+                        const isTimeValueCell = cellIdx === 4;
+                        const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
+                        const style = { backgroundColor: '#f9f3f6' };
+                        if (cellIdx === 0 || cellIdx === 1) {
+                          style.width = '120px';
+                          style.minWidth = '120px';
+                        }
+                        if (isEstimateCell) {
+                          style.width = '140px';
+                          style.minWidth = '140px';
+                        }
+                        if (isTimeValueCell) {
+                          style.width = '120px';
+                          style.minWidth = '120px';
+                          style.textAlign = 'right';
+                          style.paddingRight = '10px';
+                        }
+                        if (isDeleteCell) {
+                          style.width = '32px';
+                          style.minWidth = '32px';
+                          style.textAlign = 'center';
+                        }
+                        return (
+                          <td
+                            key={`${item.id}-xxx-row-${rowIdx}-${cellIdx}`}
+                            className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                            style={style}
+                          >
+                            {isPromptCell ? (
+                              <input
+                                type="text"
+                                value={cellValue}
+                                onChange={(e) =>
+                                  handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
+                                }
+                                placeholder="Cycle / Stage"
+                                className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
+                                data-plan-item={item.id}
+                                data-plan-row={rowIdx}
+                                data-plan-col={2}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' && !event.shiftKey) {
+                                    event.preventDefault();
+                                    addPlanPromptRow(item.id, rowIdx, 'xxx');
+                                  }
+                                }}
+                              />
+                            ) : isDeleteCell ? (
+                              <button
+                                type="button"
+                                aria-label="Delete cycle/stage row"
+                                className="text-[14px] font-semibold text-slate-800"
+                                onClick={() => removePlanPromptRow(item.id, rowIdx, 'xxx')}
+                              >
+                                X
+                              </button>
+                            ) : isEstimateCell ? (
+                              <select
+                                className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                                value={estimateValue}
+                                onChange={(e) =>
+                                  handlePlanEstimateChange(item.id, rowIdx, e.target.value)
+                                }
+                                data-plan-item={item.id}
+                                data-plan-row={rowIdx}
+                                data-plan-col={3}
+                              >
+                                {PLAN_ESTIMATE_OPTIONS.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : isTimeValueCell ? (
+                              <input
+                                type="text"
+                                value={displayedTimeValue}
+                                onChange={(e) => {
+                                  if (!isCustomEstimate) return;
+                                  handlePlanTableCellChange(item.id, rowIdx, 4, e.target.value);
+                                }}
+                                readOnly={!isCustomEstimate}
+                                className="w-full bg-transparent text-[14px] text-right focus:outline-none border-none"
+                                placeholder="0.00"
+                                data-plan-item={item.id}
+                                data-plan-row={rowIdx}
+                                data-plan-col={4}
+                              />
+                            ) : (
+                              <input
+                                type="text"
+                                value={cellValue}
+                                onChange={(e) =>
+                                  handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
+                                }
+                                className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                                data-plan-item={item.id}
+                                data-plan-row={rowIdx}
+                                data-plan-col={cellIdx}
+                              />
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                };
                 const reasonPromptEntries = Array.from({ length: reasonRowCount }, (_, idx) =>
                   buildRowEntry(2 + idx)
                 );
@@ -1432,6 +1584,10 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                 });
                 const subprojectEntries = Array.from({ length: Math.max(subprojectRowCount, 0) }, (_, idx) => {
                   const rowIdx = subprojectStart + idx;
+                  return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
+                });
+                const xxxEntries = Array.from({ length: Math.max(xxxRowCount, 0) }, (_, idx) => {
+                  const rowIdx = xxxStart + idx;
                   return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
                 });
                 const needsPlanTotalMinutes = needsPlanEntries.reduce((sum, entry) => {
@@ -1732,6 +1888,42 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                               </tr>
                               {subprojectEntries.map(({ rowIdx, rowValues }) =>
                                 renderSubprojectRow(rowValues, rowIdx)
+                              )}
+                              <tr key={`${item.id}-plan-row-xxx-header`}>
+                                <td
+                                  colSpan={PLAN_TABLE_COLS}
+                                  className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold text-[14px]"
+                                  style={{ backgroundColor: '#d5a6bd', color: '#1f2937' }}
+                                >
+                                  &nbsp;&nbsp;&nbsp;XXX
+                                </td>
+                              </tr>
+                              <tr key={`${item.id}-xxx-row-prompt`}>
+                                <td
+                                  className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                  style={{ width: '120px', minWidth: '120px', backgroundColor: '#ead1dc' }}
+                                ></td>
+                                <td
+                                  className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                  colSpan={PLAN_TABLE_COLS - 2}
+                                  style={{ backgroundColor: '#ead1dc' }}
+                                >
+                                  <span className="text-[14px] font-semibold text-slate-800">
+                                    What is the 12 week plan or weekly cycle?
+                                  </span>
+                                </td>
+                                <td
+                                  className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                  style={{
+                                    width: '32px',
+                                    minWidth: '32px',
+                                    textAlign: 'center',
+                                    backgroundColor: '#ead1dc',
+                                  }}
+                                ></td>
+                              </tr>
+                              {xxxEntries.map(({ rowIdx, rowValues }) =>
+                                renderXxxRow(rowValues, rowIdx)
                               )}
                             </tbody>
                           </table>
