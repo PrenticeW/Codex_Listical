@@ -542,10 +542,11 @@ export default function TableRow({
                 fontStyle = 'italic';
               }
 
-              // Make task column (E) editable
+              // Make task column (E) editable - but save to archiveLabel field
               const isTaskColumn = columnId === 'task';
-              const isEditing = isTaskColumn && editingCell?.rowId === rowId && editingCell?.columnId === columnId;
-              const isSelected = isTaskColumn && isCellSelected?.(rowId, columnId);
+              const editableColumnId = 'archiveLabel'; // Save to archiveLabel field
+              const isEditing = isTaskColumn && editingCell?.rowId === rowId && editingCell?.columnId === editableColumnId;
+              const isSelected = isTaskColumn && isCellSelected?.(rowId, editableColumnId);
 
               return (
                 <td
@@ -560,17 +561,17 @@ export default function TableRow({
                   className="p-0"
                   onMouseDown={(e) => {
                     if (isTaskColumn && handleCellMouseDown) {
-                      handleCellMouseDown(e, rowId, columnId);
+                      handleCellMouseDown(e, rowId, editableColumnId);
                     }
                   }}
                   onMouseEnter={(e) => {
                     if (isTaskColumn && handleCellMouseEnter) {
-                      handleCellMouseEnter(e, rowId, columnId);
+                      handleCellMouseEnter(e, rowId, editableColumnId);
                     }
                   }}
                   onDoubleClick={(e) => {
                     if (isTaskColumn && handleCellDoubleClick) {
-                      handleCellDoubleClick(e, rowId, columnId);
+                      handleCellDoubleClick(rowId, editableColumnId, dateRange);
                     }
                   }}
                 >
@@ -586,6 +587,8 @@ export default function TableRow({
                       paddingRight: '3px',
                       justifyContent: justifyContent,
                       fontStyle: fontStyle,
+                      outline: isEditing ? '2px solid black' : 'none',
+                      outlineOffset: '-2px',
                     }}
                   >
                     {isEditing ? (
@@ -599,12 +602,12 @@ export default function TableRow({
                         }}
                         onKeyDown={(e) => {
                           if (handleEditKeyDown) {
-                            handleEditKeyDown(e, rowId, columnId, e.target.value);
+                            handleEditKeyDown(e, rowId, editableColumnId, e.target.value);
                           }
                         }}
                         onBlur={() => {
                           if (handleEditComplete) {
-                            handleEditComplete(rowId, columnId, editValue);
+                            handleEditComplete(rowId, editableColumnId, editValue);
                           }
                         }}
                         autoFocus
