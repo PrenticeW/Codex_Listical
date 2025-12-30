@@ -10,6 +10,7 @@ export const STATUS_VALUES = ['-', 'Not Scheduled', 'Scheduled', 'Done', 'Blocke
 export const ESTIMATE_VALUES = [
   '-',
   'Custom',
+  'Multi',
   '1 Minute',
   '5 Minutes',
   '10 Minutes',
@@ -68,7 +69,7 @@ export const getStatusColorStyle = (status) => {
  */
 export const parseEstimateLabelToMinutes = (label) => {
   if (!label || label === '-') return null;
-  if (label === 'Custom') return null;
+  if (label === 'Custom' || label === 'Multi') return null;
 
   const minuteMatch = label.match(/^(\d+)\s+Minute/);
   if (minuteMatch) return parseInt(minuteMatch[1]);

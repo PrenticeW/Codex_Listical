@@ -8,16 +8,18 @@ import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../../constant
  * This hook handles all data transformations including:
  * - Computing timeValue from estimate column
  * - Auto-updating status based on task content and day column values
+ * - Habit tracker: Auto-setting estimate to "Multi" when >1 numeric value exists in any week
+ *   and computing timeValue (column H) as the sum of all day column values
  * - Replacing "=timeValue" placeholders with actual timeValue
  * - Assigning parentGroupId to tasks based on their position under project sections
- * - Syncing computed status changes back to the source data
+ * - Syncing computed status and estimate changes back to the source data
  *
- * CRITICAL: This hook includes a sync effect (lines 73-91) that writes computed status
+ * CRITICAL: This hook includes a sync effect that writes computed status and estimate
  * changes back to the source data. This creates a controlled circular dependency where:
- * data → computedData → status sync effect → data (with new status)
+ * data → computedData → status/estimate sync effect → data (with new status/estimate)
  *
  * @param data - The source planner data
- * @param setData - Setter for the source data (needed for status sync)
+ * @param setData - Setter for the source data (needed for status/estimate sync)
  * @param totalDays - Number of day columns
  * @returns Object with computedData
  */
@@ -55,16 +57,144 @@ export default function useComputedData({
       }
 
       // For regular task rows, compute timeValue from estimate
-      const estimate = row.estimate;
+      let estimate = row.estimate;
       let timeValue: string | undefined;
 
-      // If estimate is "Custom", preserve the manually entered timeValue
-      if (estimate === 'Custom') {
-        timeValue = row.timeValue;
+      // Store the original estimate BEFORE it was EVER changed to Multi
+      // This is used to resolve =timeValue placeholders during Multi summation
+      // If the row has _originalEstimate stored, use that; otherwise use current estimate
+      const originalEstimate = row._originalEstimate || estimate;
+
+      // Habit tracker: Check if row has > 1 numeric value in any week
+      // If true, auto-set estimate to "Multi"
+      let hasHabitPattern = false;
+      const numWeeks = Math.ceil(totalDays / 7);
+
+      for (let weekIndex = 0; weekIndex < numWeeks; weekIndex++) {
+        let numericValuesInWeek = 0;
+        const weekStart = weekIndex * 7;
+        const weekEnd = Math.min(weekStart + 7, totalDays);
+        const weekValues: string[] = [];
+
+        for (let i = weekStart; i < weekEnd; i++) {
+          const dayColumnId = `day-${i}` as `day-${number}`;
+          const dayValue = row[dayColumnId];
+
+          // Check if the value is numeric (handle both HH:mm format, decimal hours, and =timeValue placeholder)
+          if (dayValue && typeof dayValue === 'string' && dayValue.trim() !== '') {
+            const trimmedValue = dayValue.trim();
+            let isValidNumeric = false;
+
+            // Special case: =timeValue placeholder counts as a valid entry
+            if (trimmedValue === '=timeValue') {
+              isValidNumeric = true;
+            }
+            // Check if it's in HH:mm format
+            else if (trimmedValue.includes(':')) {
+              const [hours, minutes] = trimmedValue.split(':').map(part => parseInt(part, 10));
+              if (!isNaN(hours) && !isNaN(minutes) && (hours > 0 || minutes > 0)) {
+                isValidNumeric = true;
+              }
+            }
+            // Assume it's decimal hours
+            else {
+              const numValue = parseFloat(trimmedValue);
+              if (!isNaN(numValue) && numValue > 0) {
+                isValidNumeric = true;
+              }
+            }
+
+            if (isValidNumeric) {
+              numericValuesInWeek++;
+              weekValues.push(`day-${i}:${trimmedValue}`);
+            }
+          }
+        }
+
+        // If this week has more than 1 numeric value, it's a habit pattern
+        if (numericValuesInWeek > 1) {
+          hasHabitPattern = true;
+          break;
+        }
+      }
+
+      // Auto-set estimate to "Multi" if habit pattern detected
+      if (hasHabitPattern && estimate !== 'Multi') {
+        estimate = 'Multi';
+      }
+
+      // Store _originalEstimate if we just changed to Multi and don't have it yet
+      let originalEstimateToStore = row._originalEstimate;
+      if (estimate === 'Multi' && !originalEstimateToStore) {
+        // Use the current row.estimate (before we changed it to Multi in this computation)
+        // This preserves the original value before any Multi conversion
+        originalEstimateToStore = row.estimate;
+      }
+
+      // Compute timeValue from ORIGINAL estimate (before it was potentially changed to Multi)
+      // This is needed to resolve =timeValue placeholders
+      const originalEstimateMinutes = parseEstimateLabelToMinutes(originalEstimate);
+      const originalEstimateTimeValue = formatMinutesToHHmm(originalEstimateMinutes);
+
+      // If estimate is "Multi" or "Custom", calculate timeValue as sum of all day columns
+      if (estimate === 'Multi' || estimate === 'Custom') {
+        // Sum all numeric values across all day columns
+        // For =timeValue placeholders, use the originalEstimateTimeValue
+        let totalMinutes = 0;
+
+        for (let i = 0; i < totalDays; i++) {
+          const dayColumnId = `day-${i}` as `day-${number}`;
+          let dayValue = row[dayColumnId];
+
+          // Parse numeric values (handle HH:mm format, decimal hours, and =timeValue placeholder)
+          if (dayValue && typeof dayValue === 'string' && dayValue.trim() !== '') {
+            const trimmedValue = dayValue.trim();
+
+            // Special case: =timeValue placeholder - use the originalEstimateTimeValue
+            if (trimmedValue === '=timeValue') {
+              // Parse originalEstimateTimeValue (in HH.mm format) to minutes
+              const parts = originalEstimateTimeValue.split('.');
+              if (parts.length === 2) {
+                const hours = parseInt(parts[0], 10);
+                const mins = parseInt(parts[1], 10);
+                if (!isNaN(hours) && !isNaN(mins)) {
+                  totalMinutes += hours * 60 + mins;
+                }
+              }
+            }
+            // Check if it's in HH:mm format (colon-separated)
+            else if (trimmedValue.includes(':')) {
+              const [hours, minutes] = trimmedValue.split(':').map(part => parseInt(part, 10));
+              if (!isNaN(hours) && !isNaN(minutes)) {
+                totalMinutes += hours * 60 + minutes;
+              }
+            }
+            // Check if it's in HH.mm format (period-separated, used by formatMinutesToHHmm)
+            else if (trimmedValue.includes('.')) {
+              const parts = trimmedValue.split('.');
+              if (parts.length === 2) {
+                const hours = parseInt(parts[0], 10);
+                const mins = parseInt(parts[1], 10);
+                if (!isNaN(hours) && !isNaN(mins)) {
+                  totalMinutes += hours * 60 + mins;
+                }
+              }
+            }
+            // Otherwise, assume it's decimal hours (e.g., "1.5" means 1.5 hours)
+            else {
+              const numValue = parseFloat(trimmedValue);
+              if (!isNaN(numValue)) {
+                totalMinutes += numValue * 60;
+              }
+            }
+          }
+        }
+
+        // Format total as HH:mm
+        timeValue = formatMinutesToHHmm(totalMinutes);
       } else {
-        // Otherwise, compute timeValue from estimate
-        const minutes = parseEstimateLabelToMinutes(estimate);
-        timeValue = formatMinutesToHHmm(minutes);
+        // Otherwise, use the originalEstimateTimeValue
+        timeValue = originalEstimateTimeValue;
       }
 
       // Auto-update status based on task column content and day columns
@@ -112,7 +242,13 @@ export default function useComputedData({
 
       // Now compute day columns that are marked as linked to timeValue
       // A day column is marked as linked by storing "=timeValue" as the value
-      const updatedRow: PlannerRow = { ...row, timeValue, status };
+      const updatedRow: PlannerRow = {
+        ...row,
+        estimate,
+        timeValue,
+        status,
+        ...(originalEstimateToStore && { _originalEstimate: originalEstimateToStore })
+      };
 
       // Process all day columns
       for (let i = 0; i < totalDays; i++) {
@@ -136,8 +272,8 @@ export default function useComputedData({
     return result;
   }, [data, totalDays]);
 
-  // Sync computed status changes back to actual data
-  // This ensures that auto-computed status changes persist
+  // Sync computed status, estimate, and timeValue changes back to actual data
+  // This ensures that auto-computed status, estimate, and timeValue changes persist
   // CRITICAL: This effect creates a controlled circular dependency
   useEffect(() => {
     setData(prevData => {
@@ -145,13 +281,42 @@ export default function useComputedData({
       const updatedData = prevData.map((row, index) => {
         const computedRow = computedData[index];
 
-        // Only update if status has changed and it's not a special row or project row
-        if (computedRow && row.status !== computedRow.status && !row._isMonthRow &&
+        // Only update if status, estimate, or timeValue has changed and it's not a special row or project row
+        if (computedRow && !row._isMonthRow &&
             !row._isWeekRow && !row._isDayRow && !row._isDayOfWeekRow &&
             !row._isDailyMinRow && !row._isDailyMaxRow && !row._isFilterRow &&
             !row._rowType) {
-          hasChanges = true;
-          return { ...row, status: computedRow.status };
+
+          const statusChanged = row.status !== computedRow.status;
+          const estimateChanged = row.estimate !== computedRow.estimate;
+          const timeValueChanged = row.timeValue !== computedRow.timeValue;
+          const originalEstimateChanged = row._originalEstimate !== computedRow._originalEstimate;
+
+          // Check if any day columns changed (=timeValue was replaced)
+          // ONLY sync day columns if the original value was "=timeValue" (to prevent overwriting pasted values)
+          let dayColumnsChanged = false;
+          const dayColumnUpdates: Record<string, any> = {};
+
+          for (let i = 0; i < totalDays; i++) {
+            const dayColumnId = `day-${i}` as `day-${number}`;
+            // Only sync if the source value was "=timeValue" and it was replaced with a computed value
+            if (row[dayColumnId] === '=timeValue' && row[dayColumnId] !== computedRow[dayColumnId]) {
+              dayColumnsChanged = true;
+              dayColumnUpdates[dayColumnId] = computedRow[dayColumnId];
+            }
+          }
+
+          if (statusChanged || estimateChanged || timeValueChanged || dayColumnsChanged || originalEstimateChanged) {
+            hasChanges = true;
+            return {
+              ...row,
+              status: computedRow.status,
+              estimate: computedRow.estimate,
+              timeValue: computedRow.timeValue,
+              ...(computedRow._originalEstimate && { _originalEstimate: computedRow._originalEstimate }),
+              ...dayColumnUpdates,
+            };
+          }
         }
         return row;
       });

@@ -63,7 +63,14 @@ export const handleCopyOperation = (params: {
     // Use original data to preserve =timeValue formulas
     const row = data.find(r => r.id === rowId);
     if (row) {
-      cellsByRow.get(rowId).set(columnId, row[columnId] || '');
+      const cellValue = row[columnId] || '';
+      console.log('[COPY DEBUG] Copying cell', {
+        rowId,
+        columnId,
+        cellValue,
+        rowEstimate: row.estimate
+      });
+      cellsByRow.get(rowId).set(columnId, cellValue);
     }
   });
 
@@ -269,13 +276,14 @@ const createCellFillCommand = (params: {
         selectedCells.forEach(cellKey => {
           const [rowId, columnId] = cellKey.split('|');
           if (row.id === rowId && columnId !== 'rowNum') {
-            // If copying from timeValue to a day column, create a link
-            const isDayColumn = columnId.startsWith('day-');
-            if (copiedFromTimeValue && isDayColumn) {
-              rowUpdates[columnId] = '=timeValue';
-            } else {
-              rowUpdates[columnId] = pastedText;
-            }
+            // Always paste the literal value, don't create formula links
+            console.log('[PASTE DEBUG] Setting value', {
+              rowId,
+              columnId,
+              pastedText,
+              currentValue: row[columnId]
+            });
+            rowUpdates[columnId] = pastedText;
             hasUpdates = true;
           }
         });
@@ -358,15 +366,8 @@ const createCellRangeCommand = (params: {
             if (targetColIndex >= allColumnIds.length) return;
 
             const columnId = allColumnIds[targetColIndex];
-            const sourceColIndex = lastCopiedColumns[colOffset];
-
-            // If pasting from timeValue to a day column, create a link
-            const isDayColumn = columnId.startsWith('day-');
-            if (copiedFromTimeValue && sourceColIndex === 'timeValue' && isDayColumn) {
-              rowUpdates[columnId] = '=timeValue';
-            } else {
-              rowUpdates[columnId] = value;
-            }
+            // Always paste the literal value, don't create formula links
+            rowUpdates[columnId] = value;
           });
 
           newData[targetRowIndex] = { ...newData[targetRowIndex], ...rowUpdates };
