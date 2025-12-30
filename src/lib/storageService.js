@@ -5,11 +5,48 @@
  * This provides a single point of control for:
  * - Error handling
  * - Browser environment checks
+ * - User-scoped data isolation
  * - Future authentication integration
  * - Backend storage migration (e.g., Supabase)
  * - Logging and debugging
  * - Quota management
  */
+
+/**
+ * Current user ID for scoping storage keys
+ * This will be set by the auth system when a user logs in
+ */
+let currentUserId = null;
+
+/**
+ * Set the current user ID for scoped storage
+ * Called by AuthContext when user logs in/out
+ * @param {string|null} userId - User ID or null for anonymous
+ */
+export function setCurrentUserId(userId) {
+  currentUserId = userId;
+}
+
+/**
+ * Get the current user ID
+ * @returns {string|null} Current user ID or null
+ */
+export function getCurrentUserId() {
+  return currentUserId;
+}
+
+/**
+ * Generate a user-scoped storage key
+ * @param {string} key - Base storage key
+ * @param {boolean} global - If true, don't scope to user (for system-wide data)
+ * @returns {string} Scoped storage key
+ */
+function getScopedKey(key, global = false) {
+  if (global || !currentUserId) {
+    return key;
+  }
+  return `user:${currentUserId}:${key}`;
+}
 
 /**
  * Check if we're in a browser environment with localStorage available
@@ -44,16 +81,18 @@ export class StorageError extends Error {
 /**
  * Get an item from storage
  * @param {string} key - Storage key
+ * @param {boolean} global - If true, don't scope to user (for system-wide data)
  * @returns {string|null} The stored value or null if not found
  * @throws {StorageError} If storage is not available or other errors occur
  */
-export function getItem(key) {
+export function getItem(key, global = false) {
   if (!isBrowserEnvironment()) {
     return null;
   }
 
   try {
-    return window.localStorage.getItem(key);
+    const scopedKey = getScopedKey(key, global);
+    return window.localStorage.getItem(scopedKey);
   } catch (error) {
     console.error(`[StorageService] Failed to get item "${key}":`, error);
     throw new StorageError(
@@ -68,16 +107,18 @@ export function getItem(key) {
  * Set an item in storage
  * @param {string} key - Storage key
  * @param {string} value - Value to store
+ * @param {boolean} global - If true, don't scope to user (for system-wide data)
  * @throws {StorageError} If storage is not available or quota exceeded
  */
-export function setItem(key, value) {
+export function setItem(key, value, global = false) {
   if (!isBrowserEnvironment()) {
     console.warn('[StorageService] Attempted to set item in non-browser environment');
     return;
   }
 
   try {
-    window.localStorage.setItem(key, value);
+    const scopedKey = getScopedKey(key, global);
+    window.localStorage.setItem(scopedKey, value);
   } catch (error) {
     // Check for quota exceeded error
     if (
@@ -104,16 +145,18 @@ export function setItem(key, value) {
 /**
  * Remove an item from storage
  * @param {string} key - Storage key
+ * @param {boolean} global - If true, don't scope to user (for system-wide data)
  * @throws {StorageError} If storage is not available
  */
-export function removeItem(key) {
+export function removeItem(key, global = false) {
   if (!isBrowserEnvironment()) {
     console.warn('[StorageService] Attempted to remove item in non-browser environment');
     return;
   }
 
   try {
-    window.localStorage.removeItem(key);
+    const scopedKey = getScopedKey(key, global);
+    window.localStorage.removeItem(scopedKey);
   } catch (error) {
     console.error(`[StorageService] Failed to remove item "${key}":`, error);
     throw new StorageError(
@@ -151,11 +194,12 @@ export function clear() {
  * @template T
  * @param {string} key - Storage key
  * @param {T} [defaultValue=null] - Default value if key doesn't exist or parse fails
+ * @param {boolean} global - If true, don't scope to user (for system-wide data)
  * @returns {T} The parsed JSON value or default value
  */
-export function getJSON(key, defaultValue = null) {
+export function getJSON(key, defaultValue = null, global = false) {
   try {
-    const raw = getItem(key);
+    const raw = getItem(key, global);
     if (raw === null) {
       return defaultValue;
     }
@@ -175,12 +219,13 @@ export function getJSON(key, defaultValue = null) {
  * Set a JSON item in storage
  * @param {string} key - Storage key
  * @param {*} value - Value to store (will be JSON.stringify'd)
+ * @param {boolean} global - If true, don't scope to user (for system-wide data)
  * @throws {StorageError} If storage is not available or quota exceeded
  */
-export function setJSON(key, value) {
+export function setJSON(key, value, global = false) {
   try {
     const serialized = JSON.stringify(value);
-    setItem(key, serialized);
+    setItem(key, serialized, global);
   } catch (error) {
     if (error instanceof StorageError) {
       // Re-throw storage errors
@@ -199,11 +244,12 @@ export function setJSON(key, value) {
 /**
  * Check if a key exists in storage
  * @param {string} key - Storage key
+ * @param {boolean} global - If true, don't scope to user (for system-wide data)
  * @returns {boolean} True if the key exists
  */
-export function hasKey(key) {
+export function hasKey(key, global = false) {
   try {
-    return getItem(key) !== null;
+    return getItem(key, global) !== null;
   } catch (error) {
     console.error(`[StorageService] Failed to check key "${key}":`, error);
     return false;
@@ -271,6 +317,7 @@ export function isAvailable() {
  * Default export with all methods
  */
 export default {
+  // Core methods
   getItem,
   setItem,
   removeItem,
@@ -281,5 +328,11 @@ export default {
   getAllKeys,
   getStorageSize,
   isAvailable,
+
+  // User scoping methods
+  setCurrentUserId,
+  getCurrentUserId,
+
+  // Error types
   StorageErrorType,
 };

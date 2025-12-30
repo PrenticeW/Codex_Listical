@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { SquarePlus, Pencil } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { useLocation } from 'react-router-dom';
 import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
 import ColorSwatchGrid from '../components/staging/ColorSwatchGrid';
@@ -23,7 +24,9 @@ import { getRowPairId, buildPairedRowGroups } from '../utils/staging/rowPairing'
  *
  * Manages project shortlist and planning tables
  */
-export default function StagingPageV2({ currentPath = '/staging', onNavigate = () => {} }) {
+export default function StagingPageV2() {
+  const location = useLocation();
+  const currentPath = location.pathname;
   const { currentYear } = useYear();
 
   // Shortlist state management
@@ -633,8 +636,6 @@ export default function StagingPageV2({ currentPath = '/staging', onNavigate = (
     <>
       <div className="min-h-screen bg-gray-100 text-slate-800 p-4 relative">
         <NavigationBar
-          currentPath={currentPath}
-          onNavigate={onNavigate}
           listicalButton={
             <button
               type="button"

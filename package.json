@@ -14,7 +14,8 @@
     "@tanstack/react-virtual": "^3.13.13",
     "lucide-react": "^0.553.0",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^6.30.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",

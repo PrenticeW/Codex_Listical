@@ -5,6 +5,7 @@ import {
   flexRender,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { useLocation } from 'react-router-dom';
 import { Archive } from 'lucide-react';
 import { useYear } from '../contexts/YearContext';
 import usePlannerStorage from '../hooks/planner/usePlannerStorage';
@@ -79,7 +80,10 @@ const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On 
  * - Row virtualization
  */
 
-export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = () => {} }) {
+export default function ProjectTimePlannerV2() {
+  const location = useLocation();
+  const currentPath = location.pathname;
+
   // Year context for year-based storage
   const { currentYear, isCurrentYearArchived, activeYear, switchToActiveYear } = useYear();
 
@@ -1438,8 +1442,6 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
       )}
 
       <NavigationBar
-        currentPath={currentPath}
-        onNavigate={onNavigate}
         archiveButton={
           !isCurrentYearArchived && currentPath === '/' && (
             <button

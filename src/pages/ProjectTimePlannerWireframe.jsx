@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReactTable, getCoreRowModel } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { useLocation } from 'react-router-dom';
 import NavigationBar from '../components/planner/NavigationBar';
 import useTimelineRows from '../timeline/useTimelineRows';
 import useCellSelection from '../hooks/planner/useCellSelection';
@@ -57,7 +58,9 @@ import {
   normalizeProjectKey,
 } from '../utils/plannerStyles';
 
-export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavigate = () => {} }) {
+export default function ProjectTimePlannerWireframe() {
+  const location = useLocation();
+  const currentPath = location.pathname;
   const storedSettings = readStoredSettings();
   const defaultStartDate = useMemo(() => formatDateForInput(new Date()), []);
   const [showRecurring, setShowRecurring] = useState(storedSettings?.showRecurring ?? true);
@@ -1641,8 +1644,6 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
     <div ref={tableContainerRef} className="relative overflow-x-auto p-4 text-[12px] bg-gray-100">
       <DragBadge isDragging={isDragging} count={selectedRowIds.length} mousePosition={mousePosition} />
       <NavigationBar
-        currentPath={currentPath}
-        onNavigate={onNavigate}
         listicalButton={
           <ProjectListicalMenu
             isOpen={isListicalMenuOpen}

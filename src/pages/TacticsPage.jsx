@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
 import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '../lib/stagingStorage';
@@ -207,7 +208,9 @@ const dedupeChipsById = (chips = []) => {
   return result;
 };
 
-export default function TacticsPage({ currentPath = '/tactics', onNavigate = () => {} }) {
+export default function TacticsPage() {
+  const location = useLocation();
+  const currentPath = location.pathname;
   const { currentYear } = useYear();
   const initialTacticsSettings = useMemo(() => loadTacticsSettings(), []);
   const [startDay, setStartDay] = useState(DAYS_OF_WEEK[0]);
@@ -297,9 +300,15 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     return [startDay, ...sequence].slice(0, 7);
   }, [startDay, sequence]);
   const visibleColumnCount = displayedWeekDays.length || DAY_COLUMN_COUNT;
-  const [projectChips, setProjectChips] = useState(() =>
-    buildInitialSleepBlocks(displayedWeekDays)
-  );
+  const [projectChips, setProjectChips] = useState(() => {
+    // Load saved chips from storage first
+    const chipState = loadTacticsChipsState(currentYear);
+    if (chipState.projectChips) {
+      return dedupeChipsById(chipState.projectChips);
+    }
+    // Fall back to initial sleep blocks if no saved state
+    return buildInitialSleepBlocks(displayedWeekDays);
+  });
   const [selectedBlockId, setSelectedBlockId] = useState(null);
   const [resizingBlockId, setResizingBlockId] = useState(null);
   const [rowMetrics, setRowMetrics] = useState({});
@@ -341,7 +350,11 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
   const [colorEditorProjectId, setColorEditorProjectId] = useState(null);
   const [colorEditorColor, setColorEditorColor] = useState('#c9daf8');
   const colorInputRef = useRef(null);
-  const [customProjects, setCustomProjects] = useState([]);
+  const [customProjects, setCustomProjects] = useState(() => {
+    // Load saved custom projects from storage first
+    const chipState = loadTacticsChipsState(currentYear);
+    return chipState.customProjects || [];
+  });
   const highlightedProjects = useMemo(() => {
     if (!stagingProjects.length) return [];
     return stagingProjects
@@ -466,32 +479,44 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       }
     };
   }, [setSelectedBlockId]);
-  // Load initial state when component mounts or year changes
+  // Load initial state when year changes (not on first mount, since state initializers handle that)
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    // Skip on first mount - state initializers already loaded the data
+    if (!hasLoadedInitialState.current) {
+      hasLoadedInitialState.current = true;
+
+      // Load staging projects on first mount
+      const state = loadStagingState(currentYear);
+      setStagingProjects(Array.isArray(state?.shortlist) ? state.shortlist : []);
+      return;
+    }
 
     const readProjects = () => {
       const state = loadStagingState(currentYear);
       setStagingProjects(Array.isArray(state?.shortlist) ? state.shortlist : []);
     };
 
-    // Load tactics chips for current year (reload when year changes)
+    // Load tactics chips for current year when year changes
     const chipState = loadTacticsChipsState(currentYear);
     if (chipState.projectChips) {
       const dedupedChips = dedupeChipsById(chipState.projectChips);
       updateChipSequenceFromList(dedupedChips);
       setProjectChips(dedupedChips);
-    } else if (!hasLoadedInitialState.current) {
-      // On first mount with no saved chips, initialize empty
-      hasLoadedInitialState.current = true;
+    } else {
+      // Reset to initial sleep blocks if no saved chips for this year
+      setProjectChips(buildInitialSleepBlocks(displayedWeekDays));
     }
     if (chipState.customProjects) {
       setCustomProjects(chipState.customProjects);
+    } else {
+      setCustomProjects([]);
     }
 
     // Always reload projects for current year
     readProjects();
-  }, [currentYear]);
+  }, [currentYear, displayedWeekDays]);
 
   // Set up storage event listeners
   useEffect(() => {
@@ -2117,8 +2142,6 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     >
       <div className="p-4 space-y-4">
         <NavigationBar
-          currentPath={currentPath}
-          onNavigate={onNavigate}
           listicalButton={
             <ListicalMenu
               incrementMinutes={incrementMinutes}

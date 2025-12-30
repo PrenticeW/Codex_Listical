@@ -1,95 +1,25 @@
-import { useCallback, useEffect, useState } from "react";
-import ProjectTimePlannerWireframe from "./pages/ProjectTimePlannerWireframe";
-import ProjectTimePlannerV2 from "./pages/ProjectTimePlannerV2";
-import StagingPageV2 from "./pages/StagingPageV2";
-import TacticsPage from "./pages/TacticsPage";
-import { YearProvider } from "./contexts/YearContext";
-import { needsMigration, migrateToYearSystem } from "./utils/yearMigration";
+import { RouterProvider } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { UserProvider } from './contexts/UserContext';
+import router from './routes';
 
-const isBrowser = () => typeof window !== "undefined";
-
+/**
+ * App Component
+ *
+ * Root application component that sets up:
+ * - Authentication context (AuthProvider)
+ * - User data context (UserProvider)
+ * - Routing (RouterProvider)
+ *
+ * Note: Migration handling has been moved to user-specific flow in Layout component.
+ * The app no longer blocks on global migration checks.
+ */
 export default function App() {
-  const [currentPath, setCurrentPath] = useState(() =>
-    isBrowser() ? window.location.pathname : "/"
-  );
-  const [isMigrated, setIsMigrated] = useState(false);
-
-  // Run migration on first load
-  useEffect(() => {
-    if (!isBrowser()) return;
-
-    if (needsMigration()) {
-      console.log('[App] Running year system migration...');
-      const result = migrateToYearSystem();
-      if (result.success) {
-        console.log('[App] Migration successful:', result.migratedData);
-      } else {
-        console.error('[App] Migration failed:', result.error);
-      }
-    }
-    setIsMigrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isBrowser()) return undefined;
-
-    const handlePopState = () => setCurrentPath(window.location.pathname);
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
-
-  const navigate = useCallback((nextPath) => {
-    if (!isBrowser()) {
-      setCurrentPath(nextPath);
-      return;
-    }
-
-    if (window.location.pathname !== nextPath) {
-      window.history.pushState({}, "", nextPath);
-    }
-    setCurrentPath(nextPath);
-  }, []);
-
-  // Wait for migration to complete before rendering
-  if (!isMigrated) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Initializing...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <YearProvider>
-      {currentPath === "/staging" && (
-        <StagingPageV2
-          currentPath={currentPath}
-          onNavigate={navigate}
-        />
-      )}
-
-      {currentPath === "/tactics" && (
-        <TacticsPage
-          currentPath={currentPath}
-          onNavigate={navigate}
-        />
-      )}
-
-      {currentPath === "/v1" && (
-        <div className="p-4">
-          <ProjectTimePlannerWireframe
-            currentPath={currentPath}
-            onNavigate={navigate}
-          />
-        </div>
-      )}
-
-      {currentPath !== "/staging" && currentPath !== "/tactics" && currentPath !== "/v1" && (
-        <ProjectTimePlannerV2 currentPath={currentPath} onNavigate={navigate} />
-      )}
-    </YearProvider>
+    <AuthProvider>
+      <UserProvider>
+        <RouterProvider router={router} />
+      </UserProvider>
+    </AuthProvider>
   );
 }

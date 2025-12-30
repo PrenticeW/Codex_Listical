@@ -1,13 +1,16 @@
 import React from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import YearSelector from '../YearSelector';
 
 export default function NavigationBar({
-  currentPath = '/',
-  onNavigate = () => {},
   listicalButton = null,
   yearSelector = null,
   archiveButton = null,
 }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentPath = location.pathname;
+
   const navItems = [
     { label: 'Goals', path: '/staging' },
     { label: 'Plan', path: '/tactics' },
@@ -28,7 +31,7 @@ export default function NavigationBar({
               key={item.path}
               type="button"
               className={buttonClasses(currentPath === item.path)}
-              onClick={() => onNavigate(item.path)}
+              onClick={() => navigate(item.path)}
             >
               {item.label}
             </button>
