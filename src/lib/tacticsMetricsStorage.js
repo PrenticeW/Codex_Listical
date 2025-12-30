@@ -1,7 +1,7 @@
+import storage from './storageService';
+
 const TACTICS_METRICS_STORAGE_KEY_TEMPLATE = 'tactics-year-{yearNumber}-metrics-state';
 export const TACTICS_METRICS_STORAGE_EVENT = 'tactics-metrics-state-update';
-
-const getBrowserWindow = () => (typeof window !== 'undefined' ? window : null);
 
 /**
  * Get storage key for a specific year
@@ -16,13 +16,9 @@ const getStorageKey = (yearNumber = null) => {
 };
 
 const loadTacticsMetrics = (yearNumber = null) => {
-  const win = getBrowserWindow();
-  if (!win) return null;
   try {
     const key = getStorageKey(yearNumber);
-    const raw = win.localStorage.getItem(key);
-    if (!raw) return null;
-    return JSON.parse(raw);
+    return storage.getJSON(key, null);
   } catch (error) {
     console.error('Failed to read tactics metrics', error);
     return null;
@@ -30,17 +26,17 @@ const loadTacticsMetrics = (yearNumber = null) => {
 };
 
 const saveTacticsMetrics = (payload, yearNumber = null) => {
-  const win = getBrowserWindow();
-  if (!win) return;
   try {
     const key = getStorageKey(yearNumber);
-    win.localStorage.setItem(key, JSON.stringify(payload));
+    storage.setJSON(key, payload);
 
     // Dispatch custom event for reactive updates
-    const event = typeof CustomEvent === 'function'
-      ? new CustomEvent(TACTICS_METRICS_STORAGE_EVENT, { detail: payload })
-      : new Event(TACTICS_METRICS_STORAGE_EVENT);
-    win.dispatchEvent(event);
+    if (typeof window !== 'undefined') {
+      const event = typeof CustomEvent === 'function'
+        ? new CustomEvent(TACTICS_METRICS_STORAGE_EVENT, { detail: payload })
+        : new Event(TACTICS_METRICS_STORAGE_EVENT);
+      window.dispatchEvent(event);
+    }
   } catch (error) {
     console.error('Failed to save tactics metrics', error);
   }

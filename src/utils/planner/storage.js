@@ -3,7 +3,7 @@
  * Handles all localStorage operations with multi-project support
  */
 
-import isBrowserEnvironment from '../isBrowserEnvironment';
+import storage from '../../lib/storageService';
 import {
   COLUMN_SIZING_KEY_TEMPLATE,
   SIZE_SCALE_KEY_TEMPLATE,
@@ -55,12 +55,9 @@ const getProjectKey = (template, projectId = DEFAULT_PROJECT_ID, yearNumber = nu
  * @returns {Object} Column sizing object (e.g., { "project": 120, "status": 150 })
  */
 export const readColumnSizing = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return {};
   try {
     const key = getProjectKey(COLUMN_SIZING_KEY_TEMPLATE, projectId, yearNumber);
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
+    const parsed = storage.getJSON(key, {});
     return typeof parsed === 'object' && parsed ? parsed : {};
   } catch (error) {
     console.error('Failed to read column sizing', error);
@@ -75,10 +72,9 @@ export const readColumnSizing = (projectId = DEFAULT_PROJECT_ID, yearNumber = nu
  * @param {number|null} yearNumber - Year number (null for year-agnostic)
  */
 export const saveColumnSizing = (columnSizing, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return;
   try {
     const key = getProjectKey(COLUMN_SIZING_KEY_TEMPLATE, projectId, yearNumber);
-    window.localStorage.setItem(key, JSON.stringify(columnSizing));
+    storage.setJSON(key, columnSizing);
   } catch (error) {
     console.error('Failed to save column sizing', error);
   }
@@ -95,10 +91,9 @@ export const saveColumnSizing = (columnSizing, projectId = DEFAULT_PROJECT_ID, y
  * @returns {number} Size scale (defaults to 1.0, range: 0.5 to 3.0)
  */
 export const readSizeScale = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return 1.0;
   try {
     const key = getProjectKey(SIZE_SCALE_KEY_TEMPLATE, projectId, yearNumber);
-    const raw = window.localStorage.getItem(key);
+    const raw = storage.getItem(key);
     if (!raw) return 1.0;
     const parsed = parseFloat(raw);
     return Number.isFinite(parsed) ? parsed : 1.0;
@@ -115,10 +110,9 @@ export const readSizeScale = (projectId = DEFAULT_PROJECT_ID, yearNumber = null)
  * @param {number|null} yearNumber - Year number (null for year-agnostic)
  */
 export const saveSizeScale = (sizeScale, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return;
   try {
     const key = getProjectKey(SIZE_SCALE_KEY_TEMPLATE, projectId, yearNumber);
-    window.localStorage.setItem(key, sizeScale.toString());
+    storage.setItem(key, sizeScale.toString());
   } catch (error) {
     console.error('Failed to save size scale', error);
   }
@@ -135,22 +129,14 @@ export const saveSizeScale = (sizeScale, projectId = DEFAULT_PROJECT_ID, yearNum
  * @returns {string} Start date in YYYY-MM-DD format, or today's date if not set
  */
 export const readStartDate = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  }
+  const today = new Date().toISOString().split('T')[0];
   try {
     const key = getProjectKey(START_DATE_KEY_TEMPLATE, projectId, yearNumber);
-    const raw = window.localStorage.getItem(key);
-    if (!raw) {
-      const today = new Date();
-      return today.toISOString().split('T')[0];
-    }
-    return raw;
+    const raw = storage.getItem(key);
+    return raw || today;
   } catch (error) {
     console.error('Failed to read start date', error);
-    const today = new Date();
-    return today.toISOString().split('T')[0];
+    return today;
   }
 };
 
@@ -161,10 +147,9 @@ export const readStartDate = (projectId = DEFAULT_PROJECT_ID, yearNumber = null)
  * @param {number|null} yearNumber - Year number (null for year-agnostic)
  */
 export const saveStartDate = (startDate, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return;
   try {
     const key = getProjectKey(START_DATE_KEY_TEMPLATE, projectId, yearNumber);
-    window.localStorage.setItem(key, startDate);
+    storage.setItem(key, startDate);
   } catch (error) {
     console.error('Failed to save start date', error);
   }
@@ -181,10 +166,9 @@ export const saveStartDate = (startDate, projectId = DEFAULT_PROJECT_ID, yearNum
  * @returns {boolean} Show recurring column (defaults to true)
  */
 export const readShowRecurring = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return true;
   try {
     const key = getProjectKey(SHOW_RECURRING_KEY_TEMPLATE, projectId, yearNumber);
-    const raw = window.localStorage.getItem(key);
+    const raw = storage.getItem(key);
     if (raw === null) return true;
     return raw === 'true';
   } catch (error) {
@@ -200,10 +184,9 @@ export const readShowRecurring = (projectId = DEFAULT_PROJECT_ID, yearNumber = n
  * @param {number|null} yearNumber - Year number (null for year-agnostic)
  */
 export const saveShowRecurring = (showRecurring, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return;
   try {
     const key = getProjectKey(SHOW_RECURRING_KEY_TEMPLATE, projectId, yearNumber);
-    window.localStorage.setItem(key, showRecurring.toString());
+    storage.setItem(key, showRecurring.toString());
   } catch (error) {
     console.error('Failed to save show recurring', error);
   }
@@ -216,10 +199,9 @@ export const saveShowRecurring = (showRecurring, projectId = DEFAULT_PROJECT_ID,
  * @returns {boolean} Show subprojects column (defaults to true)
  */
 export const readShowSubprojects = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return true;
   try {
     const key = getProjectKey(SHOW_SUBPROJECTS_KEY_TEMPLATE, projectId, yearNumber);
-    const raw = window.localStorage.getItem(key);
+    const raw = storage.getItem(key);
     if (raw === null) return true;
     return raw === 'true';
   } catch (error) {
@@ -235,10 +217,9 @@ export const readShowSubprojects = (projectId = DEFAULT_PROJECT_ID, yearNumber =
  * @param {number|null} yearNumber - Year number (null for year-agnostic)
  */
 export const saveShowSubprojects = (showSubprojects, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return;
   try {
     const key = getProjectKey(SHOW_SUBPROJECTS_KEY_TEMPLATE, projectId, yearNumber);
-    window.localStorage.setItem(key, showSubprojects.toString());
+    storage.setItem(key, showSubprojects.toString());
   } catch (error) {
     console.error('Failed to save show subprojects', error);
   }
@@ -251,10 +232,9 @@ export const saveShowSubprojects = (showSubprojects, projectId = DEFAULT_PROJECT
  * @returns {boolean} Show max/min rows (defaults to true)
  */
 export const readShowMaxMinRows = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return true;
   try {
     const key = getProjectKey(SHOW_MAX_MIN_ROWS_KEY_TEMPLATE, projectId, yearNumber);
-    const raw = window.localStorage.getItem(key);
+    const raw = storage.getItem(key);
     if (raw === null) return true;
     return raw === 'true';
   } catch (error) {
@@ -270,10 +250,9 @@ export const readShowMaxMinRows = (projectId = DEFAULT_PROJECT_ID, yearNumber = 
  * @param {number|null} yearNumber - Year number (null for year-agnostic)
  */
 export const saveShowMaxMinRows = (showMaxMinRows, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return;
   try {
     const key = getProjectKey(SHOW_MAX_MIN_ROWS_KEY_TEMPLATE, projectId, yearNumber);
-    window.localStorage.setItem(key, showMaxMinRows.toString());
+    storage.setItem(key, showMaxMinRows.toString());
   } catch (error) {
     console.error('Failed to save show max/min rows', error);
   }
@@ -290,16 +269,12 @@ export const saveShowMaxMinRows = (showMaxMinRows, projectId = DEFAULT_PROJECT_I
  * @returns {Set<string>} Set of selected status values (defaults to all sortable statuses)
  */
 export const readSortStatuses = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) {
-    return new Set(['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned']);
-  }
   try {
     const key = getProjectKey(SORT_STATUSES_KEY_TEMPLATE, projectId, yearNumber);
-    const raw = window.localStorage.getItem(key);
-    if (!raw) {
+    const parsed = storage.getJSON(key, null);
+    if (!parsed) {
       return new Set(['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned']);
     }
-    const parsed = JSON.parse(raw);
     return new Set(Array.isArray(parsed) ? parsed : []);
   } catch (error) {
     console.error('Failed to read sort statuses', error);
@@ -314,11 +289,10 @@ export const readSortStatuses = (projectId = DEFAULT_PROJECT_ID, yearNumber = nu
  * @param {number|null} yearNumber - Year number (null for year-agnostic)
  */
 export const saveSortStatuses = (sortStatuses, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return;
   try {
     const key = getProjectKey(SORT_STATUSES_KEY_TEMPLATE, projectId, yearNumber);
     const statusArray = Array.from(sortStatuses);
-    window.localStorage.setItem(key, JSON.stringify(statusArray));
+    storage.setJSON(key, statusArray);
   } catch (error) {
     console.error('Failed to save sort statuses', error);
   }
@@ -335,12 +309,9 @@ export const saveSortStatuses = (sortStatuses, projectId = DEFAULT_PROJECT_ID, y
  * @returns {Array} Array of task row objects (empty array if not found)
  */
 export const readTaskRows = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return [];
   try {
     const key = getProjectKey(TASK_ROWS_KEY_TEMPLATE, projectId, yearNumber);
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
+    const parsed = storage.getJSON(key, []);
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
     console.error('Failed to read task rows', error);
@@ -355,10 +326,9 @@ export const readTaskRows = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) 
  * @param {number|null} yearNumber - Year number (null for year-agnostic)
  */
 export const saveTaskRows = (taskRows, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return;
   try {
     const key = getProjectKey(TASK_ROWS_KEY_TEMPLATE, projectId, yearNumber);
-    window.localStorage.setItem(key, JSON.stringify(taskRows));
+    storage.setJSON(key, taskRows);
   } catch (error) {
     console.error('Failed to save task rows', error);
   }
@@ -375,10 +345,9 @@ export const saveTaskRows = (taskRows, projectId = DEFAULT_PROJECT_ID, yearNumbe
  * @returns {number} Total days (defaults to 84 = 12 weeks)
  */
 export const readTotalDays = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return 84;
   try {
     const key = getProjectKey(TOTAL_DAYS_KEY_TEMPLATE, projectId, yearNumber);
-    const raw = window.localStorage.getItem(key);
+    const raw = storage.getItem(key);
     if (!raw) return 84;
     const parsed = parseInt(raw, 10);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 84;
@@ -395,10 +364,9 @@ export const readTotalDays = (projectId = DEFAULT_PROJECT_ID, yearNumber = null)
  * @param {number|null} yearNumber - Year number (null for year-agnostic)
  */
 export const saveTotalDays = (totalDays, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return;
   try {
     const key = getProjectKey(TOTAL_DAYS_KEY_TEMPLATE, projectId, yearNumber);
-    window.localStorage.setItem(key, totalDays.toString());
+    storage.setItem(key, totalDays.toString());
   } catch (error) {
     console.error('Failed to save total days', error);
   }
@@ -416,26 +384,18 @@ export const saveTotalDays = (totalDays, projectId = DEFAULT_PROJECT_ID, yearNum
  * @returns {Object} Object mapping day column IDs to visibility booleans
  */
 export const readVisibleDayColumns = (projectId = DEFAULT_PROJECT_ID, totalDays = 84, yearNumber = null) => {
-  if (!isBrowserEnvironment()) {
-    // Default: all columns visible
-    const visible = {};
-    for (let i = 0; i < totalDays; i++) {
-      visible[`day-${i}`] = true;
-    }
-    return visible;
-  }
+
   try {
     const key = getProjectKey(VISIBLE_DAY_COLUMNS_KEY_TEMPLATE, projectId, yearNumber);
-    const raw = window.localStorage.getItem(key);
-    if (!raw) {
+    const parsed = storage.getJSON(key, null);
+    if (!parsed) {
       // Default: all columns visible
-      const visible = {};
+const visible = {};
       for (let i = 0; i < totalDays; i++) {
         visible[`day-${i}`] = true;
       }
       return visible;
     }
-    const parsed = JSON.parse(raw);
     return typeof parsed === 'object' && parsed ? parsed : {};
   } catch (error) {
     console.error('Failed to read visible day columns', error);
@@ -454,10 +414,9 @@ export const readVisibleDayColumns = (projectId = DEFAULT_PROJECT_ID, totalDays 
  * @param {number|null} yearNumber - Year number (null for year-agnostic)
  */
 export const saveVisibleDayColumns = (visibleDayColumns, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  if (!isBrowserEnvironment()) return;
   try {
     const key = getProjectKey(VISIBLE_DAY_COLUMNS_KEY_TEMPLATE, projectId, yearNumber);
-    window.localStorage.setItem(key, JSON.stringify(visibleDayColumns));
+    storage.setJSON(key, visibleDayColumns);
   } catch (error) {
     console.error('Failed to save visible day columns', error);
   }

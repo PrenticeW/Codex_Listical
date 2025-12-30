@@ -1,21 +1,18 @@
 /**
  * Planner Storage Utilities
- * Functions for reading and writing planner data to localStorage
+ * Functions for reading and writing planner data to storage
  */
 
-import isBrowserEnvironment from './isBrowserEnvironment';
+import storage from '../lib/storageService';
 import { SETTINGS_STORAGE_KEY, TASK_ROWS_STORAGE_KEY, TASK_ROW_TYPES } from '../constants/plannerConstants';
 
 /**
- * Reads stored planner settings from localStorage
+ * Reads stored planner settings from storage
  * @returns {Object|null} Settings object or null if not found/invalid
  */
 export const readStoredSettings = () => {
-  if (!isBrowserEnvironment()) return null;
   try {
-    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
+    const parsed = storage.getJSON(SETTINGS_STORAGE_KEY, null);
     if (!parsed || typeof parsed !== 'object') return null;
     return {
       columnWidths: typeof parsed.columnWidths === 'object' && parsed.columnWidths ? parsed.columnWidths : {},
@@ -30,15 +27,12 @@ export const readStoredSettings = () => {
 };
 
 /**
- * Reads stored task rows from localStorage
+ * Reads stored task rows from storage
  * @returns {Object} Task rows data object (empty object if not found)
  */
 export const readStoredTaskRows = () => {
-  if (!isBrowserEnvironment()) return {};
   try {
-    const raw = window.localStorage.getItem(TASK_ROWS_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
+    const parsed = storage.getJSON(TASK_ROWS_STORAGE_KEY, {});
     if (!parsed || typeof parsed !== 'object') return {};
     return parsed;
   } catch (error) {
@@ -48,24 +42,22 @@ export const readStoredTaskRows = () => {
 };
 
 /**
- * Saves planner settings to localStorage
+ * Saves planner settings to storage
  * @param {Object} settings - Settings object with columnWidths, startDate, showRecurring, showSubprojects
  */
 export const saveSettings = (settings) => {
-  if (!isBrowserEnvironment()) return;
   try {
-    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    storage.setJSON(SETTINGS_STORAGE_KEY, settings);
   } catch (error) {
     console.error('Failed to save Listical settings', error);
   }
 };
 
 /**
- * Saves task rows to localStorage (only rows with user interaction)
+ * Saves task rows to storage (only rows with user interaction)
  * @param {Array} rows - Array of row objects to save
  */
 export const saveTaskRows = (rows) => {
-  if (!isBrowserEnvironment()) return;
   try {
     // Only save task rows with user interaction
     const taskRowsData = {};
@@ -83,7 +75,7 @@ export const saveTaskRows = (rows) => {
         };
       }
     });
-    window.localStorage.setItem(TASK_ROWS_STORAGE_KEY, JSON.stringify(taskRowsData));
+    storage.setJSON(TASK_ROWS_STORAGE_KEY, taskRowsData);
   } catch (error) {
     console.error('Failed to save task rows', error);
   }

@@ -16,6 +16,7 @@ import DragBadge from '../components/DragBadge';
 import isBrowserEnvironment from '../utils/isBrowserEnvironment';
 import { loadTacticsMetrics } from '../lib/tacticsMetricsStorage';
 import { loadStagingState, STAGING_STORAGE_EVENT } from '../lib/stagingStorage';
+import storage from '../lib/storageService';
 import {
   DAYS_OF_WEEK,
   TASK_ROW_TYPES,
@@ -75,25 +76,26 @@ export default function ProjectTimePlannerWireframe({ currentPath = '/', onNavig
   });
   const [projectWeeklyQuotas, setProjectWeeklyQuotas] = useState(() => new Map());
   const [collapsedGroups, setCollapsedGroups] = useState(() => {
-    // Load from localStorage if available
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('planner-collapsed-groups');
-      if (stored) {
-        try {
-          return new Set(JSON.parse(stored));
-        } catch (e) {
-          return new Set();
-        }
+    // Load from storage if available
+    try {
+      const stored = storage.getJSON('planner-collapsed-groups', null);
+      if (stored && Array.isArray(stored)) {
+        return new Set(stored);
       }
+    } catch (e) {
+      console.error('Failed to load collapsed groups:', e);
     }
     return new Set();
   });
   const totalDays = 84;
 
-  // Persist collapsed groups to localStorage
+  // Persist collapsed groups to storage
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem('planner-collapsed-groups', JSON.stringify(Array.from(collapsedGroups)));
+    try {
+      storage.setJSON('planner-collapsed-groups', Array.from(collapsedGroups));
+    } catch (e) {
+      console.error('Failed to save collapsed groups:', e);
+    }
   }, [collapsedGroups]);
 
   useEffect(() => {

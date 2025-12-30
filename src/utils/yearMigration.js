@@ -5,6 +5,7 @@
  * This is a one-time migration that runs automatically on first load.
  */
 
+import storage from '../lib/storageService';
 import {
   readYearMetadata,
   initializeYearMetadata,
@@ -166,9 +167,13 @@ export function cleanupLegacyKeys() {
 
   let cleanedCount = 0;
   legacyKeys.forEach(key => {
-    if (window.localStorage.getItem(key) !== null) {
-      window.localStorage.removeItem(key);
-      cleanedCount++;
+    try {
+      if (storage.hasKey(key)) {
+        storage.removeItem(key);
+        cleanedCount++;
+      }
+    } catch (e) {
+      console.error(`Failed to remove legacy key ${key}:`, e);
     }
   });
 

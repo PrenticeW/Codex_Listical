@@ -11,6 +11,7 @@ import NavigationBar from '../components/planner/NavigationBar';
 import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '../lib/stagingStorage';
 import { saveTacticsMetrics } from '../lib/tacticsMetricsStorage';
 import { buildSubprojectLayout } from '../SubprojectChips';
+import storage from '../lib/storageService';
 
 const DAYS_OF_WEEK = [
   'Sunday',
@@ -52,7 +53,6 @@ const logDragDebug = (...args) => console.log('[drag-debug]', ...args);
 
 const TACTICS_STORAGE_KEY = 'tactics-page-settings';
 const TACTICS_CHIPS_STORAGE_KEY_TEMPLATE = 'tactics-year-{yearNumber}-chips-state';
-const getBrowserWindow = () => (typeof window !== 'undefined' ? window : null);
 
 /**
  * Get year-specific storage key for tactics chips
@@ -65,12 +65,9 @@ const getTacticsChipsStorageKey = (yearNumber) => {
 };
 
 const loadTacticsSettings = () => {
-  const win = getBrowserWindow();
-  if (!win) return { startHour: '', startMinute: '', incrementMinutes: 60 };
   try {
-    const raw = win.localStorage.getItem(TACTICS_STORAGE_KEY);
-    if (!raw) return { startHour: '', startMinute: '', incrementMinutes: 60 };
-    const parsed = JSON.parse(raw);
+    const parsed = storage.getJSON(TACTICS_STORAGE_KEY, null);
+    if (!parsed) return { startHour: '', startMinute: '', incrementMinutes: 60 };
     return {
       startHour: typeof parsed?.startHour === 'string' ? parsed.startHour : '',
       startMinute: typeof parsed?.startMinute === 'string' ? parsed.startMinute : '',
@@ -85,13 +82,10 @@ const loadTacticsSettings = () => {
   }
 };
 const loadTacticsChipsState = (yearNumber = null) => {
-  const win = getBrowserWindow();
-  if (!win) return { projectChips: null, customProjects: null };
   try {
     const key = getTacticsChipsStorageKey(yearNumber);
-    const raw = win.localStorage.getItem(key);
-    if (!raw) return { projectChips: null, customProjects: null };
-    const parsed = JSON.parse(raw);
+    const parsed = storage.getJSON(key, null);
+    if (!parsed) return { projectChips: null, customProjects: null };
     return {
       projectChips: Array.isArray(parsed?.projectChips) ? parsed.projectChips : null,
       customProjects: Array.isArray(parsed?.customProjects) ? parsed.customProjects : null,
@@ -102,20 +96,16 @@ const loadTacticsChipsState = (yearNumber = null) => {
   }
 };
 const saveTacticsSettings = (payload) => {
-  const win = getBrowserWindow();
-  if (!win) return;
   try {
-    win.localStorage.setItem(TACTICS_STORAGE_KEY, JSON.stringify(payload));
+    storage.setJSON(TACTICS_STORAGE_KEY, payload);
   } catch (error) {
     console.error('Failed to save tactics settings', error);
   }
 };
 const saveTacticsChipsState = (payload, yearNumber = null) => {
-  const win = getBrowserWindow();
-  if (!win) return;
   try {
     const key = getTacticsChipsStorageKey(yearNumber);
-    win.localStorage.setItem(key, JSON.stringify(payload));
+    storage.setJSON(key, payload);
   } catch (error) {
     console.error('Failed to save tactics chip state', error);
   }

@@ -1,7 +1,7 @@
+import storage from './storageService';
+
 const STORAGE_KEY_TEMPLATE = 'staging-year-{yearNumber}-shortlist';
 export const STAGING_STORAGE_EVENT = 'staging-state-update';
-
-const getWindowRef = () => (typeof window !== 'undefined' ? window : null);
 
 /**
  * Get storage key for a specific year
@@ -16,17 +16,14 @@ const getStorageKey = (yearNumber = null) => {
 };
 
 export const loadStagingState = (yearNumber = null) => {
-  const win = getWindowRef();
-  if (!win) {
-    return { shortlist: [], archived: [] };
-  }
   try {
     const key = getStorageKey(yearNumber);
-    const raw = win.localStorage.getItem(key);
-    if (!raw) {
+    const parsed = storage.getJSON(key, null);
+
+    if (!parsed) {
       return { shortlist: [], archived: [] };
     }
-    const parsed = JSON.parse(raw);
+
     return {
       shortlist: Array.isArray(parsed?.shortlist) ? parsed.shortlist : [],
       archived: Array.isArray(parsed?.archived) ? parsed.archived : [],
@@ -38,16 +35,17 @@ export const loadStagingState = (yearNumber = null) => {
 };
 
 export const saveStagingState = (payload, yearNumber = null) => {
-  const win = getWindowRef();
-  if (!win) return;
   try {
     const key = getStorageKey(yearNumber);
-    win.localStorage.setItem(key, JSON.stringify(payload));
-    const event =
-      typeof CustomEvent === 'function'
+    storage.setJSON(key, payload);
+
+    // Dispatch custom event for cross-tab sync
+    if (typeof window !== 'undefined') {
+      const event = typeof CustomEvent === 'function'
         ? new CustomEvent(STAGING_STORAGE_EVENT, { detail: payload })
         : new Event(STAGING_STORAGE_EVENT);
-    win.dispatchEvent(event);
+      window.dispatchEvent(event);
+    }
   } catch (error) {
     console.error('Failed to save staging shortlist', error);
   }

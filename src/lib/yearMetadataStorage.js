@@ -5,6 +5,8 @@
  * Each "year" represents a complete 12-week planning cycle.
  */
 
+import storage from './storageService';
+
 const YEAR_METADATA_KEY = 'app-year-metadata';
 
 /**
@@ -25,44 +27,32 @@ const YEAR_METADATA_KEY = 'app-year-metadata';
  */
 
 /**
- * Check if we're in a browser environment
- */
-function isBrowserEnvironment() {
-  return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
-}
-
-/**
- * Read year metadata from localStorage
+ * Read year metadata from storage
  * @returns {YearMetadata|null}
  */
 export function readYearMetadata() {
-  if (!isBrowserEnvironment()) return null;
-
-  const data = localStorage.getItem(YEAR_METADATA_KEY);
-  if (!data) return null;
-
   try {
-    return JSON.parse(data);
+    return storage.getJSON(YEAR_METADATA_KEY, null);
   } catch (error) {
-    console.error('Failed to parse year metadata:', error);
+    console.error('Failed to read year metadata:', error);
     return null;
   }
 }
 
 /**
- * Write year metadata to localStorage
+ * Write year metadata to storage
  * @param {YearMetadata} metadata
  */
 export function saveYearMetadata(metadata) {
-  if (!isBrowserEnvironment()) return;
-
   try {
-    localStorage.setItem(YEAR_METADATA_KEY, JSON.stringify(metadata));
+    storage.setJSON(YEAR_METADATA_KEY, metadata);
 
     // Dispatch custom event for cross-tab sync
-    window.dispatchEvent(new CustomEvent('yearMetadataStorage', {
-      detail: metadata
-    }));
+    if (typeof window !== 'undefined' && typeof CustomEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('yearMetadataStorage', {
+        detail: metadata
+      }));
+    }
   } catch (error) {
     console.error('Failed to save year metadata:', error);
   }
