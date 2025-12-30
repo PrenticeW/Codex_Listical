@@ -124,6 +124,7 @@ export interface UseDragAndDropRowsReturn {
 
 export interface UseCollapsibleGroupsReturn {
   collapsedGroups: Set<string>;
+  setCollapsedGroups: React.Dispatch<React.SetStateAction<Set<string>>>;
   toggleGroupCollapse: (groupId: string) => void;
   isCollapsed: (groupId: string) => boolean;
 }

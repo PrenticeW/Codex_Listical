@@ -17,6 +17,11 @@ import { useFilteredData, useFilterValues } from '../hooks/planner/useFilteredDa
 import { useProjectTotals, useDailyTotals } from '../hooks/planner/useTotalsCalculation';
 import useSpreadsheetSelection from '../hooks/planner/useSpreadsheetSelection';
 import useKeyboardHandlers from '../hooks/planner/useKeyboardHandlers';
+import useEditState from '../hooks/planner/useEditState';
+import useDragAndDropRows from '../hooks/planner/useDragAndDropRows';
+import useComputedData from '../hooks/planner/useComputedData';
+import useCollapsibleGroups from '../hooks/planner/useCollapsibleGroups';
+import useDayColumnFilters from '../hooks/planner/useDayColumnFilters';
 import { MonthRow, WeekRow } from '../components/planner/rows';
 import TableRow from '../components/planner/TableRow';
 import NavigationBar from '../components/planner/NavigationBar';
@@ -28,10 +33,6 @@ import { createInitialData } from '../utils/planner/dataCreators';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../constants/planner/rowTypes';
 import { mapDailyBoundsToTimeline } from '../utils/planner/dailyBoundsMapper';
 import { createEmptyTaskRows } from '../utils/planner/taskRowGenerator';
-import {
-  isDraggableRow,
-  isValidDropTarget,
-} from '../utils/planner/rowTypeChecks';
 import {
   getDayColumnId,
   forEachDayColumn,
@@ -132,17 +133,9 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   const [selectedRows, setSelectedRows] = useState(new Set()); // Set of rowIds for row highlight
   const [anchorRow, setAnchorRow] = useState(null); // For shift-click row range selection
   const [anchorCell, setAnchorCell] = useState(null); // For shift-click range selection
-  const [editingCell, setEditingCell] = useState(null); // { rowId, columnId }
-  const [editValue, setEditValue] = useState('');
   const [isDragging, setIsDragging] = useState(false); // Track if user is dragging to select
   const [dragStartCell, setDragStartCell] = useState(null); // { rowId, columnId }
-  const [draggedRowId, setDraggedRowId] = useState(null); // Track which row is being dragged
-  const [dropTargetRowId, setDropTargetRowId] = useState(null); // Track drop target
-  const [collapsedGroups, setCollapsedGroups] = useState(new Set()); // Set of groupIds that are collapsed
   const tableBodyRef = useRef(null);
-
-  // Filter state for day columns - tracks which day columns should filter out rows without values
-  const [dayColumnFilters, setDayColumnFilters] = useState(new Set()); // Set of day column IDs that are active
 
   // Use the planner filters hook for project, status, recurring, and estimate filters
   const filters = usePlannerFilters();
@@ -196,140 +189,17 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   // Load daily bounds and project weekly quotas from Tactics page
   const { dailyBounds, projectWeeklyQuotas } = useTacticsMetrics();
 
-  // Compute data with timeValue derived from estimate column
-  // This ensures timeValue is always in sync with estimate without manual updates
-  // Also computes day column values that are linked to timeValue
-  // Also auto-updates status based on task and time values
-  // Also assigns parentGroupId to tasks based on their position under project sections
-  const computedData = useMemo(() => {
-    let currentProjectGroupId = null;
+  // Command pattern for undo/redo
+  const { undoStack, redoStack, executeCommand, undo, redo } = useCommandPattern();
 
-    const result = data.map(row => {
-      // Track current project group as we iterate
-      if (row._rowType === 'projectHeader') {
-        currentProjectGroupId = row.groupId || null;
-      }
+  // Day column filters hook
+  const { dayColumnFilters, toggleDayFilter: handleDayColumnFilterToggle, isDayFiltered, clearAllDayFilters } = useDayColumnFilters();
 
-      // When we hit Inbox or Archive, clear the project group
-      if (row._isInboxRow || row._rowType === 'archiveHeader') {
-        currentProjectGroupId = null;
-      }
+  // Collapsible groups hook
+  const { collapsedGroups, setCollapsedGroups, toggleGroupCollapse, isCollapsed } = useCollapsibleGroups();
 
-      // Skip special rows (first 7 rows), project rows, and subproject rows - they don't need computation
-      // BUT: preserve their existing parentGroupId if they have one
-      if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
-          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow || row._isFilterRow ||
-          row._isInboxRow || row._isArchiveRow ||
-          row._rowType === 'projectHeader' || row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled' ||
-          row._rowType === 'subprojectHeader' || row._rowType === 'subprojectGeneral' || row._rowType === 'subprojectUnscheduled') {
-        return row;
-      }
-
-      // For regular task rows, compute timeValue from estimate
-      const estimate = row.estimate;
-      let timeValue;
-
-      // If estimate is "Custom", preserve the manually entered timeValue
-      if (estimate === 'Custom') {
-        timeValue = row.timeValue;
-      } else {
-        // Otherwise, compute timeValue from estimate
-        const minutes = parseEstimateLabelToMinutes(estimate);
-        timeValue = formatMinutesToHHmm(minutes);
-      }
-
-      // Auto-update status based on task column content and day columns
-      const taskContent = row.task || '';
-      let status = row.status;
-
-      // Check if any day column has a time value (including '0.00')
-      let hasScheduledTime = false;
-      for (let i = 0; i < totalDays; i++) {
-        const dayColumnId = `day-${i}`;
-        const dayValue = row[dayColumnId];
-
-        // Check if day has any time value
-        // Consider '=timeValue' as scheduled (it will be computed to actual value)
-        // Consider any non-empty value (including '0.00') as scheduled
-        if (dayValue && dayValue !== '') {
-          hasScheduledTime = true;
-          break;
-        }
-      }
-
-      // If task is empty or only whitespace, set status to '-'
-      // If task has content and day columns have time values, set status to 'Scheduled'
-      // If task has content but no time values, set status to 'Not Scheduled' (always)
-      if (taskContent.trim() === '') {
-        if (status !== '-') {
-          status = '-';
-        }
-      } else {
-        // Task has content
-        if (hasScheduledTime) {
-          // Auto-update to Scheduled if status is '-', 'Not Scheduled', or 'Abandoned'
-          // Don't override 'Done', 'Blocked', or 'On Hold'
-          if (status === '-' || status === 'Not Scheduled' || status === 'Abandoned') {
-            status = 'Scheduled';
-          }
-        } else {
-          // No scheduled time - set to 'Not Scheduled', unless status is 'Abandoned'
-          // Abandoned tasks can exist without scheduled time
-          if (status !== 'Abandoned') {
-            status = 'Not Scheduled';
-          }
-        }
-      }
-
-      // Now compute day columns that are marked as linked to timeValue
-      // A day column is marked as linked by storing "=timeValue" as the value
-      const updatedRow = { ...row, timeValue, status };
-
-      // Process all day columns
-      for (let i = 0; i < totalDays; i++) {
-        const dayColumnId = `day-${i}`;
-        const dayValue = row[dayColumnId];
-
-        // If the day column has "=timeValue", replace it with the computed timeValue
-        if (dayValue === '=timeValue') {
-          updatedRow[dayColumnId] = timeValue;
-        }
-      }
-
-      // Assign parentGroupId if we're under a project group
-      if (currentProjectGroupId) {
-        updatedRow.parentGroupId = currentProjectGroupId;
-      }
-
-      return updatedRow;
-    });
-
-    return result;
-  }, [data, totalDays]);
-
-  // Sync computed status changes back to actual data
-  // This ensures that auto-computed status changes persist
-  useEffect(() => {
-    setData(prevData => {
-      let hasChanges = false;
-      const updatedData = prevData.map((row, index) => {
-        const computedRow = computedData[index];
-
-        // Only update if status has changed and it's not a special row or project row
-        if (computedRow && row.status !== computedRow.status && !row._isMonthRow &&
-            !row._isWeekRow && !row._isDayRow && !row._isDayOfWeekRow &&
-            !row._isDailyMinRow && !row._isDailyMaxRow && !row._isFilterRow &&
-            !row._rowType) {
-          hasChanges = true;
-          return { ...row, status: computedRow.status };
-        }
-        return row;
-      });
-
-      // Only return new data if there were actual changes
-      return hasChanges ? updatedData : prevData;
-    });
-  }, [computedData]);
+  // Compute data with timeValue derived from estimate column (with status sync effect)
+  const { computedData } = useComputedData({ data, setData, totalDays });
 
   // Note: coerceNumber is now imported from valueNormalizers as coerceToNumber
   // We keep this wrapper for backward compatibility with existing code
@@ -935,9 +805,6 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   const decreaseSize = () => setSizeScale(prev => Math.max(prev - 0.1, 0.5));
   const resetSize = () => setSizeScale(1.0);
 
-  // Command pattern for undo/redo
-  const { undoStack, redoStack, executeCommand, undo, redo } = useCommandPattern();
-
   // All column IDs in order (used throughout the component)
   // Fixed columns (A-H) + day columns (starting from I)
   const allColumnIds = useMemo(() => {
@@ -978,342 +845,45 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     handleCellDoubleClick,
   } = selection;
 
-  // Handler to toggle day column filters
-  const handleDayColumnFilterToggle = useCallback((dayColumnId) => {
-    setDayColumnFilters(prev => {
-      const next = new Set(prev);
-      if (next.has(dayColumnId)) {
-        next.delete(dayColumnId);
-      } else {
-        next.add(dayColumnId);
-      }
-      return next;
-    });
-  }, []);
+  // Edit state hook
+  const {
+    editingCell,
+    editValue,
+    setEditingCell,
+    setEditValue,
+    handleEditComplete,
+    handleEditCancel,
+    handleEditKeyDown,
+  } = useEditState({
+    data,
+    setData,
+    totalDays,
+    executeCommand,
+    getCellKey,
+    setSelectedCells,
+    setAnchorCell,
+  });
 
+  // Drag and drop hook
+  const {
+    draggedRowId,
+    dropTargetRowId,
+    setDraggedRowId,
+    setDropTargetRowId,
+    handleDragStart,
+    handleDragOver,
+    handleDrop,
+    handleDragEnd,
+  } = useDragAndDropRows({
+    data,
+    setData,
+    selectedRows,
+    executeCommand,
+  });
 
-  // Handler to toggle collapsed groups (for archive weeks and projects)
-  const toggleGroupCollapse = useCallback((groupId) => {
-    setCollapsedGroups(prev => {
-      const next = new Set(prev);
-      if (next.has(groupId)) {
-        next.delete(groupId);
-      } else {
-        next.add(groupId);
-      }
-      return next;
-    });
-  }, []);
+  // Note: Old drag and drop handlers removed - now using useDragAndDropRows hook
 
-  // Drag and drop handlers
-  const handleDragStart = useCallback((e, rowId) => {
-    // If the dragged row is part of selected rows, drag all selected rows
-    // Otherwise, just drag the single row
-    if (selectedRows.has(rowId)) {
-      // Dragging multiple selected rows
-      setDraggedRowId(Array.from(selectedRows));
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', JSON.stringify(Array.from(selectedRows)));
-    } else {
-      // Dragging a single row
-      setDraggedRowId([rowId]);
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', JSON.stringify([rowId]));
-    }
-  }, [selectedRows]);
-
-  const handleDragOver = useCallback((e, rowId) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-
-    if (draggedRowId && Array.isArray(draggedRowId) && !draggedRowId.includes(rowId)) {
-      // Check if target row is a special header row (but allow project rows for organization)
-      const targetRow = data.find(r => r.id === rowId);
-      if (targetRow && (
-        targetRow._isMonthRow || targetRow._isWeekRow || targetRow._isDayRow ||
-        targetRow._isDayOfWeekRow || targetRow._isDailyMinRow ||
-        targetRow._isDailyMaxRow || targetRow._isFilterRow
-      )) {
-        // Don't allow dropping on header rows (but project rows are OK)
-        setDropTargetRowId(null);
-        return;
-      }
-
-      setDropTargetRowId(rowId);
-    }
-  }, [draggedRowId, data]);
-
-  const handleDrop = useCallback((e, targetRowId) => {
-    e.preventDefault();
-
-    if (!draggedRowId || !Array.isArray(draggedRowId) || draggedRowId.includes(targetRowId)) {
-      setDraggedRowId(null);
-      setDropTargetRowId(null);
-      return;
-    }
-
-    const draggedRowIds = draggedRowId;
-
-    // Find target index
-    const targetIndex = data.findIndex(r => r.id === targetRowId);
-    if (targetIndex === -1) {
-      setDraggedRowId(null);
-      setDropTargetRowId(null);
-      return;
-    }
-
-    // Prevent dropping on special header rows (but allow project rows)
-    const targetRow = data[targetIndex];
-    if (targetRow && (
-      targetRow._isMonthRow || targetRow._isWeekRow || targetRow._isDayRow ||
-      targetRow._isDayOfWeekRow || targetRow._isDailyMinRow ||
-      targetRow._isDailyMaxRow || targetRow._isFilterRow
-    )) {
-      setDraggedRowId(null);
-      setDropTargetRowId(null);
-      return;
-    }
-
-    // Get the indices of all dragged rows in their current positions
-    const draggedIndices = draggedRowIds
-      .map(id => data.findIndex(r => r.id === id))
-      .filter(idx => idx !== -1)
-      .sort((a, b) => a - b);
-
-    if (draggedIndices.length === 0) {
-      setDraggedRowId(null);
-      setDropTargetRowId(null);
-      return;
-    }
-
-    // Store original positions for undo
-    const originalPositions = draggedRowIds.map(id => {
-      const index = data.findIndex(r => r.id === id);
-      return { id, index };
-    });
-
-    // Create reorder command
-    const reorderCommand = {
-      execute: () => {
-        setData(prevData => {
-          const newData = [...prevData];
-
-          // Extract the dragged rows
-          const draggedRows = draggedIndices.map(idx => newData[idx]);
-
-          // Remove dragged rows (in reverse order to maintain indices)
-          for (let i = draggedIndices.length - 1; i >= 0; i--) {
-            newData.splice(draggedIndices[i], 1);
-          }
-
-          // Calculate new insert position
-          // Count how many dragged rows were before the target
-          const rowsBeforeTarget = draggedIndices.filter(idx => idx < targetIndex).length;
-          const adjustedTargetIndex = targetIndex - rowsBeforeTarget;
-
-          // Insert all dragged rows at the target position
-          newData.splice(adjustedTargetIndex, 0, ...draggedRows);
-
-          return newData;
-        });
-      },
-      undo: () => {
-        setData(prevData => {
-          const newData = [...prevData];
-
-          // Remove the moved rows from their current positions
-          draggedRowIds.forEach(id => {
-            const idx = newData.findIndex(r => r.id === id);
-            if (idx !== -1) {
-              newData.splice(idx, 1);
-            }
-          });
-
-          // Restore rows to their original positions (in order)
-          originalPositions
-            .sort((a, b) => a.index - b.index)
-            .forEach(({ id, index }) => {
-              const row = prevData.find(r => r.id === id);
-              if (row) {
-                newData.splice(index, 0, row);
-              }
-            });
-
-          return newData;
-        });
-      }
-    };
-
-    executeCommand(reorderCommand);
-
-    // Clear drag state
-    setDraggedRowId(null);
-    setDropTargetRowId(null);
-  }, [draggedRowId, data, executeCommand]);
-
-  const handleDragEnd = useCallback(() => {
-    setDraggedRowId(null);
-    setDropTargetRowId(null);
-  }, []);
-
-  // Edit handlers
-  const handleEditComplete = useCallback((rowId, columnId, newValue) => {
-    // Get the old value before updating
-    const row = data.find(r => r.id === rowId);
-
-    // For subproject section rows with custom labels, save to subprojectLabel field
-    const actualColumnId = (columnId === 'task' && row?.subprojectLabel) ? 'subprojectLabel' : columnId;
-    const oldValue = row?.[actualColumnId] || '';
-
-    // Don't create command if value hasn't changed
-    if (oldValue === newValue) {
-      setEditingCell(null);
-      setEditValue('');
-      return;
-    }
-
-    // Special handling for status column when set to "Abandoned"
-    if (columnId === 'status' && newValue === 'Abandoned') {
-      // Store old day column values for undo
-      const oldDayValues = {};
-      for (let i = 0; i < totalDays; i++) {
-        const dayColumnId = `day-${i}`;
-        oldDayValues[dayColumnId] = row?.[dayColumnId] || '';
-      }
-
-      // Create command that updates status and clears day columns with values
-      const command = {
-        execute: () => {
-          setData(prev => prev.map(row => {
-            if (row.id === rowId) {
-              const updates = { status: newValue };
-              // Clear day columns that have time values
-              for (let i = 0; i < totalDays; i++) {
-                const dayColumnId = `day-${i}`;
-                const currentValue = row[dayColumnId];
-                // Only clear if there's a value present
-                if (currentValue && currentValue !== '') {
-                  updates[dayColumnId] = '';
-                }
-              }
-              return { ...row, ...updates };
-            }
-            return row;
-          }));
-        },
-        undo: () => {
-          setData(prev => prev.map(row => {
-            if (row.id === rowId) {
-              const updates = { status: oldValue };
-              // Restore all day columns
-              for (let i = 0; i < totalDays; i++) {
-                updates[`day-${i}`] = oldDayValues[`day-${i}`];
-              }
-              return { ...row, ...updates };
-            }
-            return row;
-          }));
-        },
-      };
-
-      executeCommand(command);
-      setEditingCell(null);
-      setEditValue('');
-      return;
-    }
-
-    // Special handling for timeValue column
-    if (columnId === 'timeValue') {
-      const currentEstimate = row?.estimate || '';
-      const oldEstimate = currentEstimate;
-
-      // Calculate what the timeValue should be based on current estimate
-      const minutes = parseEstimateLabelToMinutes(currentEstimate);
-      const computedTimeValue = formatMinutesToHHmm(minutes);
-
-      // If the new value doesn't match the computed value, set estimate to "Custom"
-      const shouldSetToCustom = newValue !== computedTimeValue && currentEstimate !== 'Custom';
-
-      // Create command that updates both timeValue and potentially estimate
-      const command = {
-        execute: () => {
-          setData(prev => prev.map(row => {
-            if (row.id === rowId) {
-              if (shouldSetToCustom) {
-                return { ...row, timeValue: newValue, estimate: 'Custom' };
-              } else {
-                return { ...row, timeValue: newValue };
-              }
-            }
-            return row;
-          }));
-        },
-        undo: () => {
-          setData(prev => prev.map(row => {
-            if (row.id === rowId) {
-              if (shouldSetToCustom) {
-                return { ...row, timeValue: oldValue, estimate: oldEstimate };
-              } else {
-                return { ...row, timeValue: oldValue };
-              }
-            }
-            return row;
-          }));
-        },
-      };
-
-      executeCommand(command);
-      setEditingCell(null);
-      setEditValue('');
-      return;
-    }
-
-    // Create command for regular edits
-    const command = {
-      execute: () => {
-        setData(prev => prev.map(row => {
-          if (row.id === rowId) {
-            return { ...row, [actualColumnId]: newValue };
-          }
-          return row;
-        }));
-      },
-      undo: () => {
-        setData(prev => prev.map(row => {
-          if (row.id === rowId) {
-            return { ...row, [actualColumnId]: oldValue };
-          }
-          return row;
-        }));
-      },
-    };
-
-    executeCommand(command);
-
-    setEditingCell(null);
-    setEditValue('');
-  }, [data, executeCommand, totalDays]);
-
-  const handleEditCancel = useCallback((rowId, columnId) => {
-    // Exit edit mode and keep cell selected
-    setEditingCell(null);
-    setEditValue('');
-    // Ensure the cell remains selected
-    const cellKey = getCellKey(rowId, columnId);
-    setSelectedCells(new Set([cellKey]));
-    setAnchorCell({ rowId, columnId });
-  }, []);
-
-  const handleEditKeyDown = useCallback((e, rowId, columnId, currentValue) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleEditComplete(rowId, columnId, currentValue);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      setEditingCell(null);
-      setEditValue('');
-    }
-  }, [handleEditComplete]);
+  // Note: Old edit handlers removed - now using useEditState hook
 
   // Track the last copied columns (to detect if copying from timeValue)
   const lastCopiedColumnsRef = useRef([]);

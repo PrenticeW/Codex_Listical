@@ -32,6 +32,7 @@ export default function useCollapsibleGroups(): UseCollapsibleGroupsReturn {
 
   return {
     collapsedGroups,
+    setCollapsedGroups, // Export setter for advanced operations (like undo/redo)
     toggleGroupCollapse,
     isCollapsed,
   };
