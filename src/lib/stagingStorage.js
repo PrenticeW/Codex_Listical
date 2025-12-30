@@ -1,15 +1,28 @@
-const STORAGE_KEY = 'staging-shortlist';
+const STORAGE_KEY_TEMPLATE = 'staging-year-{yearNumber}-shortlist';
 export const STAGING_STORAGE_EVENT = 'staging-state-update';
 
 const getWindowRef = () => (typeof window !== 'undefined' ? window : null);
 
-export const loadStagingState = () => {
+/**
+ * Get storage key for a specific year
+ * @param {number|null} yearNumber - Year number (null for legacy key)
+ * @returns {string} Storage key
+ */
+const getStorageKey = (yearNumber = null) => {
+  if (yearNumber === null || yearNumber === undefined) {
+    return 'staging-shortlist'; // Legacy key for backward compatibility
+  }
+  return STORAGE_KEY_TEMPLATE.replace('{yearNumber}', yearNumber.toString());
+};
+
+export const loadStagingState = (yearNumber = null) => {
   const win = getWindowRef();
   if (!win) {
     return { shortlist: [], archived: [] };
   }
   try {
-    const raw = win.localStorage.getItem(STORAGE_KEY);
+    const key = getStorageKey(yearNumber);
+    const raw = win.localStorage.getItem(key);
     if (!raw) {
       return { shortlist: [], archived: [] };
     }
@@ -24,11 +37,12 @@ export const loadStagingState = () => {
   }
 };
 
-export const saveStagingState = (payload) => {
+export const saveStagingState = (payload, yearNumber = null) => {
   const win = getWindowRef();
   if (!win) return;
   try {
-    win.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    const key = getStorageKey(yearNumber);
+    win.localStorage.setItem(key, JSON.stringify(payload));
     const event =
       typeof CustomEvent === 'function'
         ? new CustomEvent(STAGING_STORAGE_EVENT, { detail: payload })
@@ -39,6 +53,7 @@ export const saveStagingState = (payload) => {
   }
 };
 
-export const getStagingShortlist = () => loadStagingState().shortlist;
+export const getStagingShortlist = (yearNumber = null) => loadStagingState(yearNumber).shortlist;
 
-export const STAGING_STORAGE_KEY = STORAGE_KEY;
+// Legacy export for backward compatibility
+export const STAGING_STORAGE_KEY = 'staging-shortlist';

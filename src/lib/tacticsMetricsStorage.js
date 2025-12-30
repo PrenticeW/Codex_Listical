@@ -1,13 +1,26 @@
-const TACTICS_METRICS_STORAGE_KEY = 'tactics-metrics-state';
+const TACTICS_METRICS_STORAGE_KEY_TEMPLATE = 'tactics-year-{yearNumber}-metrics-state';
 export const TACTICS_METRICS_STORAGE_EVENT = 'tactics-metrics-state-update';
 
 const getBrowserWindow = () => (typeof window !== 'undefined' ? window : null);
 
-const loadTacticsMetrics = () => {
+/**
+ * Get storage key for a specific year
+ * @param {number|null} yearNumber - Year number (null for legacy key)
+ * @returns {string} Storage key
+ */
+const getStorageKey = (yearNumber = null) => {
+  if (yearNumber === null || yearNumber === undefined) {
+    return 'tactics-metrics-state'; // Legacy key for backward compatibility
+  }
+  return TACTICS_METRICS_STORAGE_KEY_TEMPLATE.replace('{yearNumber}', yearNumber.toString());
+};
+
+const loadTacticsMetrics = (yearNumber = null) => {
   const win = getBrowserWindow();
   if (!win) return null;
   try {
-    const raw = win.localStorage.getItem(TACTICS_METRICS_STORAGE_KEY);
+    const key = getStorageKey(yearNumber);
+    const raw = win.localStorage.getItem(key);
     if (!raw) return null;
     return JSON.parse(raw);
   } catch (error) {
@@ -16,11 +29,12 @@ const loadTacticsMetrics = () => {
   }
 };
 
-const saveTacticsMetrics = (payload) => {
+const saveTacticsMetrics = (payload, yearNumber = null) => {
   const win = getBrowserWindow();
   if (!win) return;
   try {
-    win.localStorage.setItem(TACTICS_METRICS_STORAGE_KEY, JSON.stringify(payload));
+    const key = getStorageKey(yearNumber);
+    win.localStorage.setItem(key, JSON.stringify(payload));
 
     // Dispatch custom event for reactive updates
     const event = typeof CustomEvent === 'function'
