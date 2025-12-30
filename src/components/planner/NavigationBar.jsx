@@ -2,9 +2,9 @@ import React from 'react';
 
 export default function NavigationBar({ currentPath = '/', onNavigate = () => {}, listicalButton = null }) {
   const navItems = [
-    { label: 'Projects', path: '/' },
-    { label: 'Staging', path: '/staging' },
-    { label: 'Tactics', path: '/tactics' },
+    { label: 'Goals', path: '/staging' },
+    { label: 'Plan', path: '/tactics' },
+    { label: 'System', path: '/' },
   ];
 
   const buttonClasses = (active) =>
