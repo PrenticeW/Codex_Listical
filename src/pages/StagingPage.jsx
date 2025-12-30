@@ -265,8 +265,8 @@ const buildProjectPlanSummary = (item) => {
   const questionRowCount = item.planOutcomeQuestionRowCount ?? 1;
   const needsQuestionRowCount = item.planNeedsQuestionRowCount ?? 1;
   const needsPlanRowCount = item.planNeedsPlanRowCount ?? 1;
-  const subprojectRowCount = item.planSubprojectRowCount ?? 1;
-  const xxxRowCount = item.planXxxRowCount ?? 1;
+  const scheduleRowCount = item.planSubprojectRowCount ?? 1; // Changed from subprojectRowCount
+  const subprojectRowCount = item.planXxxRowCount ?? 1; // Changed from xxxRowCount
   const outcomeHeadingRow = 2 + reasonRowCount;
   const outcomePromptStart = outcomeHeadingRow + 1;
   const outcomePromptEnd = outcomePromptStart + Math.max(outcomeRowCount - 1, 0);
@@ -276,13 +276,14 @@ const buildProjectPlanSummary = (item) => {
   const needsQuestionStart = needsHeadingRow + 1;
   const needsQuestionEnd = needsQuestionStart + Math.max(needsQuestionRowCount - 1, 0);
   const needsPlanStart = needsQuestionEnd + 1;
-  const subprojectsHeadingRow = needsPlanStart + Math.max(needsPlanRowCount, 0);
-  const subprojectsPromptRow = subprojectsHeadingRow + 1;
-  const subprojectStart = subprojectsPromptRow + 1;
-  const xxxHeadingRow = subprojectStart + Math.max(subprojectRowCount, 0);
-  const xxxPromptRow = xxxHeadingRow + 1;
-  const xxxStart = xxxPromptRow + 1;
+  const scheduleHeadingRow = needsPlanStart + Math.max(needsPlanRowCount, 0); // Changed from subprojectsHeadingRow
+  const schedulePromptRow = scheduleHeadingRow + 1; // Changed from subprojectsPromptRow
+  const scheduleStart = schedulePromptRow + 1; // Changed from subprojectStart
+  const subprojectsHeadingRow = scheduleStart + Math.max(scheduleRowCount, 0); // Changed from xxxHeadingRow
+  const subprojectsPromptRow = subprojectsHeadingRow + 1; // Changed from xxxPromptRow
+  const subprojectStart = subprojectsPromptRow + 1; // Changed from xxxStart
   const subprojects = [];
+  // Now extracting from the new Subprojects section (formerly XXX)
   for (let idx = 0; idx < Math.max(subprojectRowCount, 0); idx += 1) {
     const rowIdx = subprojectStart + idx;
     const rowValues = entries[rowIdx] ?? Array.from({ length: PLAN_TABLE_COLS }, () => '');
@@ -298,12 +299,12 @@ const buildProjectPlanSummary = (item) => {
       return parseTimeValueToMinutes(rowValues[4] ?? '');
     }).reduce((sum, value) => sum + value, 0);
   const needsPlanTotalMinutes = calculateMinutes(needsPlanStart, needsPlanRowCount);
-  const subprojectTotalMinutes = calculateMinutes(subprojectStart, subprojectRowCount);
-  const projectTotalMinutes = needsPlanTotalMinutes + subprojectTotalMinutes;
+  const scheduleTotalMinutes = calculateMinutes(scheduleStart, scheduleRowCount); // Changed from subprojectTotalMinutes
+  const projectTotalMinutes = needsPlanTotalMinutes + scheduleTotalMinutes;
   return {
     subprojects,
     needsPlanTotalMinutes,
-    subprojectTotalMinutes,
+    scheduleTotalMinutes, // Changed from subprojectTotalMinutes
     totalHours: formatMinutesToHHmm(projectTotalMinutes),
   };
 };
@@ -939,8 +940,8 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                 const questionRowCount = item.planOutcomeQuestionRowCount ?? 1;
                 const needsQuestionRowCount = item.planNeedsQuestionRowCount ?? 1;
                 const needsPlanRowCount = item.planNeedsPlanRowCount ?? 1;
-                const subprojectRowCount = item.planSubprojectRowCount ?? 1;
-                const xxxRowCount = item.planXxxRowCount ?? 1;
+                const scheduleRowCount = item.planSubprojectRowCount ?? 1; // Changed from subprojectRowCount
+                const subprojectRowCount = item.planXxxRowCount ?? 1; // Changed from xxxRowCount
                 const reasonRowLimit = 2 + reasonRowCount;
                 const outcomeHeadingRow = reasonRowLimit;
                 const outcomePromptStart = outcomeHeadingRow + 1;
@@ -951,12 +952,12 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                 const needsQuestionStart = needsHeadingRow + 1;
                 const needsQuestionEnd = needsQuestionStart + Math.max(needsQuestionRowCount - 1, 0);
                 const needsPlanStart = needsQuestionEnd + 1;
-                const subprojectsHeadingRow = needsPlanStart + Math.max(needsPlanRowCount, 0);
-                const subprojectsPromptRow = subprojectsHeadingRow + 1;
-                const subprojectStart = subprojectsPromptRow + 1;
-                const xxxHeadingRow = subprojectStart + Math.max(subprojectRowCount, 0);
-                const xxxPromptRow = xxxHeadingRow + 1;
-                const xxxStart = xxxPromptRow + 1;
+                const scheduleHeadingRow = needsPlanStart + Math.max(needsPlanRowCount, 0); // Changed from subprojectsHeadingRow
+                const schedulePromptRow = scheduleHeadingRow + 1; // Changed from subprojectsPromptRow
+                const scheduleStart = schedulePromptRow + 1; // Changed from subprojectStart
+                const subprojectsHeadingRow = scheduleStart + Math.max(scheduleRowCount, 0); // Changed from xxxHeadingRow
+                const subprojectsPromptRow = subprojectsHeadingRow + 1; // Changed from xxxPromptRow
+                const subprojectStart = subprojectsPromptRow + 1; // Changed from xxxStart
                 const buildRowEntry = (rowIdx) => {
                   const rowValues =
                     planEntries[rowIdx] ?? Array.from({ length: PLAN_TABLE_COLS }, () => '');
@@ -1323,12 +1324,12 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                     </tr>
                   );
                 };
-                const renderSubprojectRow = (rowValues, rowIdx) => {
+                const renderScheduleRow = (rowValues, rowIdx) => {
                   const estimateValue = rowValues[3] || '-';
                   const isCustomEstimate = estimateValue === 'Custom';
                   const displayedTimeValue = rowValues[4] || '0.00';
                   return (
-                    <tr key={`${item.id}-subproject-row-${rowIdx}`}>
+                    <tr key={`${item.id}-schedule-row-${rowIdx}`}>
                       {rowValues.map((cellValue, cellIdx) => {
                         const isPromptCell = cellIdx === 2;
                         const isEstimateCell = cellIdx === 3;
@@ -1356,7 +1357,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                         }
                         return (
                           <td
-                            key={`${item.id}-subproject-row-${rowIdx}-${cellIdx}`}
+                            key={`${item.id}-schedule-row-${rowIdx}-${cellIdx}`}
                             className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
                             style={style}
                           >
@@ -1367,7 +1368,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                 onChange={(e) =>
                                   handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
                                 }
-                                placeholder="Subproject"
+                                placeholder="Schedule Item"
                                 className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
                                 data-plan-item={item.id}
                                 data-plan-row={rowIdx}
@@ -1382,7 +1383,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                             ) : isDeleteCell ? (
                               <button
                                 type="button"
-                                aria-label="Delete subproject row"
+                                aria-label="Delete schedule row"
                                 className="text-[14px] font-semibold text-slate-800"
                                 onClick={() => removePlanPromptRow(item.id, rowIdx, 'subproject')}
                               >
@@ -1439,42 +1440,39 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                     </tr>
                   );
                 };
-                const renderXxxRow = (rowValues, rowIdx) => {
-                  const estimateValue = rowValues[3] || '-';
-                  const isCustomEstimate = estimateValue === 'Custom';
-                  const displayedTimeValue = rowValues[4] || '0.00';
+                const renderSubprojectRow = (rowValues, rowIdx) => {
                   return (
-                    <tr key={`${item.id}-xxx-row-${rowIdx}`}>
+                    <tr key={`${item.id}-subproject-row-${rowIdx}`}>
                       {rowValues.map((cellValue, cellIdx) => {
-                        const isPromptCell = cellIdx === 2;
+                        // Skip estimate (column 3) and time value (column 4) cells for Subprojects
                         const isEstimateCell = cellIdx === 3;
                         const isTimeValueCell = cellIdx === 4;
+                        if (isEstimateCell || isTimeValueCell) {
+                          return null;
+                        }
+
+                        const isPromptCell = cellIdx === 2;
                         const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
                         const style = { backgroundColor: '#f9f3f6' };
                         if (cellIdx === 0 || cellIdx === 1) {
                           style.width = '120px';
                           style.minWidth = '120px';
                         }
-                        if (isEstimateCell) {
-                          style.width = '140px';
-                          style.minWidth = '140px';
-                        }
-                        if (isTimeValueCell) {
-                          style.width = '120px';
-                          style.minWidth = '120px';
-                          style.textAlign = 'right';
-                          style.paddingRight = '10px';
-                        }
                         if (isDeleteCell) {
                           style.width = '32px';
                           style.minWidth = '32px';
                           style.textAlign = 'center';
                         }
+
+                        // For the prompt cell, we need to span across the estimate and time value columns
+                        const colSpan = isPromptCell ? 3 : 1;
+
                         return (
                           <td
-                            key={`${item.id}-xxx-row-${rowIdx}-${cellIdx}`}
+                            key={`${item.id}-subproject-row-${rowIdx}-${cellIdx}`}
                             className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
                             style={style}
+                            colSpan={colSpan}
                           >
                             {isPromptCell ? (
                               <input
@@ -1483,7 +1481,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                 onChange={(e) =>
                                   handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
                                 }
-                                placeholder="Cycle / Stage"
+                                placeholder="Subproject"
                                 className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
                                 data-plan-item={item.id}
                                 data-plan-row={rowIdx}
@@ -1498,44 +1496,12 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                             ) : isDeleteCell ? (
                               <button
                                 type="button"
-                                aria-label="Delete cycle/stage row"
+                                aria-label="Delete subproject row"
                                 className="text-[14px] font-semibold text-slate-800"
                                 onClick={() => removePlanPromptRow(item.id, rowIdx, 'xxx')}
                               >
                                 X
                               </button>
-                            ) : isEstimateCell ? (
-                              <select
-                                className="w-full bg-transparent text-[14px] focus:outline-none border-none"
-                                value={estimateValue}
-                                onChange={(e) =>
-                                  handlePlanEstimateChange(item.id, rowIdx, e.target.value)
-                                }
-                                data-plan-item={item.id}
-                                data-plan-row={rowIdx}
-                                data-plan-col={3}
-                              >
-                                {PLAN_ESTIMATE_OPTIONS.map((option) => (
-                                  <option key={option} value={option}>
-                                    {option}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : isTimeValueCell ? (
-                              <input
-                                type="text"
-                                value={displayedTimeValue}
-                                onChange={(e) => {
-                                  if (!isCustomEstimate) return;
-                                  handlePlanTableCellChange(item.id, rowIdx, 4, e.target.value);
-                                }}
-                                readOnly={!isCustomEstimate}
-                                className="w-full bg-transparent text-[14px] text-right focus:outline-none border-none"
-                                placeholder="0.00"
-                                data-plan-item={item.id}
-                                data-plan-row={rowIdx}
-                                data-plan-col={4}
-                              />
                             ) : (
                               <input
                                 type="text"
@@ -1582,25 +1548,25 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                   const rowIdx = needsPlanStart + idx;
                   return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
                 });
-                const subprojectEntries = Array.from({ length: Math.max(subprojectRowCount, 0) }, (_, idx) => {
-                  const rowIdx = subprojectStart + idx;
+                const scheduleEntries = Array.from({ length: Math.max(scheduleRowCount, 0) }, (_, idx) => {
+                  const rowIdx = scheduleStart + idx;
                   return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
                 });
-                const xxxEntries = Array.from({ length: Math.max(xxxRowCount, 0) }, (_, idx) => {
-                  const rowIdx = xxxStart + idx;
+                const subprojectEntries = Array.from({ length: Math.max(subprojectRowCount, 0) }, (_, idx) => {
+                  const rowIdx = subprojectStart + idx;
                   return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
                 });
                 const needsPlanTotalMinutes = needsPlanEntries.reduce((sum, entry) => {
                   const value = entry.rowValues?.[4] ?? '';
                   return sum + parseTimeValueToMinutes(value);
                 }, 0);
-                const subprojectTotalMinutes = subprojectEntries.reduce((sum, entry) => {
+                const scheduleTotalMinutes = scheduleEntries.reduce((sum, entry) => {
                   const value = entry.rowValues?.[4] ?? '';
                   return sum + parseTimeValueToMinutes(value);
                 }, 0);
                 const needsPlanTimeTotal = formatMinutesToHHmm(needsPlanTotalMinutes);
                 const projectPlanTimeTotal = formatMinutesToHHmm(
-                  needsPlanTotalMinutes + subprojectTotalMinutes
+                  needsPlanTotalMinutes + scheduleTotalMinutes
                 );
                 const {
                   pairs: needsQuestionPlanGroups,
@@ -1853,16 +1819,16 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                               {leftoverNeedsPlanEntries.map(({ rowIdx, rowValues }) =>
                                 renderNeedsPlanRow(rowValues, rowIdx)
                               )}
-                              <tr key={`${item.id}-plan-row-subprojects-header`}>
+                              <tr key={`${item.id}-plan-row-schedule-header`}>
                                 <td
                                   colSpan={PLAN_TABLE_COLS}
                                   className="border border-[#e5e7eb] px-3 py-2 min-h-[44px] text-left font-semibold text-[14px]"
                                   style={{ backgroundColor: '#93c47d', color: '#1f2937', paddingLeft: '10px' }}
                                 >
-                                  Subprojects
+                                  Schedule
                                 </td>
                               </tr>
-                              <tr key={`${item.id}-subprojects-row-prompt`}>
+                              <tr key={`${item.id}-schedule-row-prompt`}>
                                 <td
                                   className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
                                   style={{ width: '120px', minWidth: '120px', backgroundColor: '#d9ead3' }}
@@ -1873,7 +1839,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                   style={{ backgroundColor: '#d9ead3' }}
                                 >
                                   <span className="text-[14px] font-semibold text-slate-800">
-                                    What are the stages or weekly habits required to make these outcomes happen?
+                                    Which activities need time alotted each week?
                                   </span>
                                 </td>
                                 <td
@@ -1886,19 +1852,19 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                   }}
                                 ></td>
                               </tr>
-                              {subprojectEntries.map(({ rowIdx, rowValues }) =>
-                                renderSubprojectRow(rowValues, rowIdx)
+                              {scheduleEntries.map(({ rowIdx, rowValues }) =>
+                                renderScheduleRow(rowValues, rowIdx)
                               )}
-                              <tr key={`${item.id}-plan-row-xxx-header`}>
+                              <tr key={`${item.id}-plan-row-subprojects-header`}>
                                 <td
                                   colSpan={PLAN_TABLE_COLS}
                                   className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold text-[14px]"
                                   style={{ backgroundColor: '#d5a6bd', color: '#1f2937' }}
                                 >
-                                  &nbsp;&nbsp;&nbsp;XXX
+                                  &nbsp;&nbsp;&nbsp;Subprojects
                                 </td>
                               </tr>
-                              <tr key={`${item.id}-xxx-row-prompt`}>
+                              <tr key={`${item.id}-subprojects-row-prompt`}>
                                 <td
                                   className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
                                   style={{ width: '120px', minWidth: '120px', backgroundColor: '#ead1dc' }}
@@ -1909,7 +1875,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                   style={{ backgroundColor: '#ead1dc' }}
                                 >
                                   <span className="text-[14px] font-semibold text-slate-800">
-                                    What is the 12 week plan or weekly cycle?
+                                    What are the stages or weekly habits required to make these outcomes happen?
                                   </span>
                                 </td>
                                 <td
@@ -1922,8 +1888,8 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                   }}
                                 ></td>
                               </tr>
-                              {xxxEntries.map(({ rowIdx, rowValues }) =>
-                                renderXxxRow(rowValues, rowIdx)
+                              {subprojectEntries.map(({ rowIdx, rowValues }) =>
+                                renderSubprojectRow(rowValues, rowIdx)
                               )}
                             </tbody>
                           </table>
