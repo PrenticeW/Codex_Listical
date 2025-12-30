@@ -114,13 +114,14 @@ export const createArchiveWeekRow = ({
 };
 
 /**
- * Create archived project structure (header + general + unscheduled)
+ * Create archived project structure (header + general + unscheduled + subproject sections)
  * @param {object[]} projectRows - Array of project rows (projectHeader, projectGeneral, projectUnscheduled)
+ * @param {object[]} subprojectRows - Array of subproject section rows (subprojectGeneral, subprojectUnscheduled)
  * @param {string} archiveWeekId - Archive week ID for grouping
  * @param {number} totalDays - Total number of days
- * @returns {object[]} Array of archived project rows
+ * @returns {object[]} Array of archived project rows (including subproject sections)
  */
-export const createArchivedProjectStructure = (projectRows, archiveWeekId, totalDays = 84) => {
+export const createArchivedProjectStructure = (projectRows, subprojectRows, archiveWeekId, totalDays = 84) => {
   const archivedRows = [];
 
   // Group rows by project
@@ -178,6 +179,23 @@ export const createArchivedProjectStructure = (projectRows, archiveWeekId, total
       };
       archivedRows.push(archivedUnscheduled);
     }
+
+    // Archive custom subproject section rows that belong to this project
+    const projectSubprojectRows = subprojectRows.filter(row => {
+      // Match by parentGroupId - subproject rows have parentGroupId pointing to their project's groupId
+      return row.parentGroupId === headerRow.groupId;
+    });
+
+    projectSubprojectRows.forEach(subRow => {
+      const archivedSubRow = {
+        ...subRow,
+        id: generateUniqueId(`${ARCHIVED_ROW_ID_PREFIX}${subRow.id}-`),
+        // Keep the original _rowType (subprojectGeneral or subprojectUnscheduled)
+        parentGroupId: groupId, // Point to the archived project header's groupId
+        isGroupHeader: false,
+      };
+      archivedRows.push(archivedSubRow);
+    });
   });
 
   return archivedRows;
@@ -187,18 +205,31 @@ export const createArchivedProjectStructure = (projectRows, archiveWeekId, total
  * Collect tasks matching filter criteria
  * @param {object[]} data - Data array
  * @param {function} filterFn - Filter function (task => boolean)
- * @returns {object[]} Array of matching tasks
+ * @returns {object[]} Array of matching tasks (including subproject section rows)
  */
 export const collectTasksForArchive = (data, filterFn) => {
   return data.filter(row => {
-    // Must be a regular task row (not a special row or project row)
+    // Exclude special header rows, but INCLUDE subproject section rows
     if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
         row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
-        row._isFilterRow || row._isInboxRow || row._isArchiveRow ||
-        row._rowType) {
+        row._isFilterRow || row._isInboxRow || row._isArchiveRow) {
       return false;
     }
 
+    // Exclude project structure rows (but keep subproject section rows)
+    if (row._rowType === 'projectHeader' ||
+        row._rowType === 'projectGeneral' ||
+        row._rowType === 'projectUnscheduled' ||
+        row._rowType === 'subprojectHeader' ||
+        row._rowType === 'archiveHeader' ||
+        row._rowType === 'archiveRow' ||
+        row._rowType === 'archivedProjectHeader' ||
+        row._rowType === 'archivedProjectGeneral' ||
+        row._rowType === 'archivedProjectUnscheduled') {
+      return false;
+    }
+
+    // Include subproject section rows (subprojectGeneral, subprojectUnscheduled) and regular task rows
     return filterFn(row);
   });
 };

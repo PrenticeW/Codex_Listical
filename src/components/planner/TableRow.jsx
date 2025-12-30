@@ -103,9 +103,9 @@ export default function TableRow({
   const isArchivedProjectHeader = row.original._rowType === 'archivedProjectHeader';
   const isArchivedProjectGeneral = row.original._rowType === 'archivedProjectGeneral';
   const isArchivedProjectUnscheduled = row.original._rowType === 'archivedProjectUnscheduled';
-  const isProjectRow = row.original._rowType === 'projectHeader' || row.original._rowType === 'projectGeneral' || row.original._rowType === 'projectUnscheduled';
+  const isProjectRow = row.original._rowType === 'projectHeader' || row.original._rowType === 'projectGeneral' || row.original._rowType === 'projectUnscheduled' || row.original._rowType === 'subprojectHeader' || row.original._rowType === 'subprojectGeneral' || row.original._rowType === 'subprojectUnscheduled';
 
-  // Delegate to ProjectRow for project/section rows
+  // Delegate to ProjectRow for project/section/subproject rows
   if (isProjectRow) {
     return (
       <ProjectRow

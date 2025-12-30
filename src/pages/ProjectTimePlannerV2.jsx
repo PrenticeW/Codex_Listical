@@ -207,12 +207,13 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         currentProjectGroupId = null;
       }
 
-      // Skip special rows (first 7 rows) and project rows - they don't need computation
+      // Skip special rows (first 7 rows), project rows, and subproject rows - they don't need computation
       // BUT: preserve their existing parentGroupId if they have one
       if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
           row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow || row._isFilterRow ||
           row._isInboxRow || row._isArchiveRow ||
-          row._rowType === 'projectHeader' || row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled') {
+          row._rowType === 'projectHeader' || row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled' ||
+          row._rowType === 'subprojectHeader' || row._rowType === 'subprojectGeneral' || row._rowType === 'subprojectUnscheduled') {
         return row;
       }
 
@@ -1151,7 +1152,10 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   const handleEditComplete = useCallback((rowId, columnId, newValue) => {
     // Get the old value before updating
     const row = data.find(r => r.id === rowId);
-    const oldValue = row?.[columnId] || '';
+
+    // For subproject section rows with custom labels, save to subprojectLabel field
+    const actualColumnId = (columnId === 'task' && row?.subprojectLabel) ? 'subprojectLabel' : columnId;
+    const oldValue = row?.[actualColumnId] || '';
 
     // Don't create command if value hasn't changed
     if (oldValue === newValue) {
@@ -1261,7 +1265,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
       execute: () => {
         setData(prev => prev.map(row => {
           if (row.id === rowId) {
-            return { ...row, [columnId]: newValue };
+            return { ...row, [actualColumnId]: newValue };
           }
           return row;
         }));
@@ -1269,7 +1273,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
       undo: () => {
         setData(prev => prev.map(row => {
           if (row.id === rowId) {
-            return { ...row, [columnId]: oldValue };
+            return { ...row, [actualColumnId]: oldValue };
           }
           return row;
         }));
@@ -1280,7 +1284,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
 
     setEditingCell(null);
     setEditValue('');
-  }, [data, executeCommand]);
+  }, [data, executeCommand, totalDays]);
 
   const handleEditCancel = useCallback((rowId, columnId) => {
     // Exit edit mode and keep cell selected
@@ -1532,13 +1536,17 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
       totalDays,
     });
 
-    // Step 3: Copy project structure as archived
+    // Step 3: Copy project structure as archived (including subproject sections)
     const projectRows = data.filter(row =>
       row._rowType === 'projectHeader' ||
       row._rowType === 'projectGeneral' ||
       row._rowType === 'projectUnscheduled'
     );
-    const archivedProjects = createArchivedProjectStructure(projectRows, archiveWeekRow.id, totalDays);
+    const subprojectRows = data.filter(row =>
+      row._rowType === 'subprojectGeneral' ||
+      row._rowType === 'subprojectUnscheduled'
+    );
+    const archivedProjects = createArchivedProjectStructure(projectRows, subprojectRows, archiveWeekRow.id, totalDays);
 
     // Step 4: Collect non-recurring Done/Abandoned tasks
     const nonRecurringTasks = collectTasksForArchive(data, task =>
@@ -1634,6 +1642,90 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     });
   }, []);
 
+  const handleNewSubproject = useCallback(() => {
+    setIsListicalMenuOpen(false);
+
+    // Find the selected row
+    if (selectedRows.size === 0) {
+      // No row selected, do nothing
+      return;
+    }
+
+    // Get the first (or only) selected row
+    const selectedRowId = Array.from(selectedRows)[0];
+    const selectedRowIndex = data.findIndex(r => r.id === selectedRowId);
+
+    if (selectedRowIndex === -1) return;
+
+    const selectedRow = data[selectedRowIndex];
+
+    // Determine the parent project group ID
+    // If the selected row is a project header, use its groupId
+    // Otherwise, use the row's parentGroupId
+    let projectGroupId = null;
+    let projectNickname = null;
+    let fullProjectName = null;
+
+    if (selectedRow._rowType === 'projectHeader') {
+      projectGroupId = selectedRow.groupId;
+      projectNickname = selectedRow.projectNickname;
+      fullProjectName = selectedRow.projectName;
+    } else if (selectedRow.parentGroupId) {
+      projectGroupId = selectedRow.parentGroupId;
+      // Extract project nickname from parentGroupId (format: "project-{nickname}")
+      projectNickname = selectedRow.parentGroupId.replace('project-', '');
+      // Try to find the project name from the project header
+      const projectHeader = data.find(r => r.groupId === projectGroupId && r._rowType === 'projectHeader');
+      fullProjectName = projectHeader?.projectName || projectNickname;
+    }
+
+    // Create unique ID for this subproject
+    const subprojectId = `subproject-${Date.now()}`;
+
+    // Create new subproject section row (light pink row like General/Unscheduled, with "New" label)
+    const newSubprojectRow = {
+      id: subprojectId,
+      _rowType: 'subprojectGeneral', // Use subproject section row type
+      parentGroupId: projectGroupId, // Associate with the project
+      projectNickname: projectNickname || '',
+      projectName: fullProjectName || '',
+      subprojectLabel: 'New', // Custom label that will be editable
+      rowNum: '',
+      checkbox: '',
+      project: '',
+      subproject: '',
+      status: '',
+      task: '', // Will show "New" label
+      recurring: '',
+      estimate: '',
+      timeValue: '',
+      ...createEmptyDayColumns(totalDays),
+    };
+
+    // Store the insertion index for undo
+    const insertIndex = selectedRowIndex + 1;
+
+    // Create command for undo/redo support
+    const command = {
+      execute: () => {
+        setData(prev => {
+          const newData = [...prev];
+          newData.splice(insertIndex, 0, newSubprojectRow);
+          return newData;
+        });
+      },
+      undo: () => {
+        setData(prev => {
+          const newData = [...prev];
+          newData.splice(insertIndex, 1);
+          return newData;
+        });
+      },
+    };
+
+    executeCommand(command);
+  }, [selectedRows, data, totalDays, executeCommand]);
+
   // Checkbox input class for menu
   const checkboxInputClass = 'h-4 w-4 cursor-pointer rounded border-gray-300 text-emerald-700 focus:ring-emerald-600';
 
@@ -1698,6 +1790,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
             addTasksCount={addTasksCount}
             onAddTasksCountChange={(value) => setAddTasksCount(value)}
             handleAddTasks={handleAddTasks}
+            handleNewSubproject={handleNewSubproject}
             startDate={startDate}
             onStartDateChange={(value) => {
               setStartDate(value);

@@ -42,10 +42,12 @@ export default function ProjectRow({
   handleEditKeyDown,
 }) {
   const rowId = row.original.id;
-  const rowType = row.original._rowType; // 'projectHeader', 'projectGeneral', 'projectUnscheduled', or archived variants
+  const rowType = row.original._rowType; // 'projectHeader', 'subprojectHeader', 'projectGeneral', 'projectUnscheduled', or archived variants
   const projectNickname = row.original.projectNickname || '';
   const projectName = row.original.projectName || '';
-  const groupId = row.original.groupId; // For project headers
+  const subprojectName = row.original.subprojectName || '';
+  const subprojectLabel = row.original.subprojectLabel || ''; // Custom label for new subproject rows
+  const groupId = row.original.groupId; // For project and subproject headers
 
   // Check if this row is being dragged or is a drop target
   const isDragging = Array.isArray(draggedRowId) && draggedRowId.includes(rowId);
@@ -57,18 +59,21 @@ export default function ProjectRow({
 
   // Determine row styling based on type and archived status
   const isHeader = rowType === 'projectHeader' || rowType === 'archivedProjectHeader';
-  const bgColor = isHeader ? '#d5a6bd' : '#f2e5eb'; // Dark pink for header, light pink for sections
+  const isSubprojectHeader = rowType === 'subprojectHeader';
+  const bgColor = isHeader ? '#d5a6bd' : '#f2e5eb'; // Dark pink for project header, light pink for sections and subproject headers
 
-  // Check if this project group is collapsed
-  const isCollapsed = isHeader && groupId && collapsedGroups.has(groupId);
+  // Check if this project/subproject group is collapsed
+  const isCollapsed = (isHeader || isSubprojectHeader) && groupId && collapsedGroups.has(groupId);
 
   // Get section label for non-header rows
+  // For subproject rows with custom label, use that; otherwise use standard labels
   const sectionLabel =
-    rowType === 'projectGeneral' || rowType === 'archivedProjectGeneral' ? 'General' :
-    rowType === 'projectUnscheduled' || rowType === 'archivedProjectUnscheduled' ? 'Unscheduled' : '';
+    subprojectLabel ? subprojectLabel : // Use custom label if present (e.g., "New")
+    rowType === 'projectGeneral' || rowType === 'archivedProjectGeneral' || rowType === 'subprojectGeneral' ? 'General' :
+    rowType === 'projectUnscheduled' || rowType === 'archivedProjectUnscheduled' || rowType === 'subprojectUnscheduled' ? 'Unscheduled' : '';
 
-  // Get project label (use full project name)
-  const projectLabel = projectName;
+  // Get label (project name for project headers, subproject name for subproject headers)
+  const displayLabel = isSubprojectHeader ? subprojectName : projectName;
 
   // Get weekly quota for this project (only for header rows)
   // Use nickname as key for quota lookup since that's how quotas are stored
@@ -163,11 +168,11 @@ export default function ProjectRow({
           }
 
           // Merge cells differently for header vs section rows
-          // Header rows: merge A through E (checkbox, project, subproject, status, task)
+          // Header rows (project and subproject): merge A through E (checkbox, project, subproject, status, task)
           // Section rows: merge A through D (checkbox, project, subproject, status)
           const columnsToMergeHeader = ['checkbox', 'project', 'subproject', 'status', 'task'];
           const columnsToMergeSection = ['checkbox', 'project', 'subproject', 'status'];
-          const columnsToMerge = isHeader ? columnsToMergeHeader : columnsToMergeSection;
+          const columnsToMerge = (isHeader || isSubprojectHeader) ? columnsToMergeHeader : columnsToMergeSection;
 
           if (columnsToMerge.includes(columnId)) {
             // Render merged cell on first occurrence
@@ -180,8 +185,9 @@ export default function ProjectRow({
                 return sum + (column ? column.getSize() : 0);
               }, 0);
 
-              // For project headers, the editable column is 'projectName' (stored in projectName field)
-              const editableColumnId = 'projectName';
+              // For project headers, the editable column is 'projectName'
+              // For subproject headers, the editable column is 'subprojectName'
+              const editableColumnId = isSubprojectHeader ? 'subprojectName' : 'projectName';
               const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === editableColumnId;
               const isSelected = isCellSelected?.(rowId, editableColumnId);
 
@@ -198,23 +204,23 @@ export default function ProjectRow({
                   }}
                   className="p-0"
                   onMouseDown={(e) => {
-                    if (isHeader && handleCellMouseDown) {
+                    if ((isHeader || isSubprojectHeader) && handleCellMouseDown) {
                       handleCellMouseDown(e, rowId, editableColumnId);
                     }
                   }}
                   onMouseEnter={(e) => {
-                    if (isHeader && handleCellMouseEnter) {
+                    if ((isHeader || isSubprojectHeader) && handleCellMouseEnter) {
                       handleCellMouseEnter(e, rowId, editableColumnId);
                     }
                   }}
                   onDoubleClick={(e) => {
-                    if (isHeader && handleCellDoubleClick) {
-                      handleCellDoubleClick(rowId, editableColumnId, projectLabel);
+                    if ((isHeader || isSubprojectHeader) && handleCellDoubleClick) {
+                      handleCellDoubleClick(rowId, editableColumnId, displayLabel);
                     }
                   }}
                 >
                   <div
-                    className={`h-full flex items-center gap-2 ${isHeader && groupId ? 'cursor-pointer' : ''} ${isSelected ? 'selected-cell' : ''}`}
+                    className={`h-full flex items-center gap-2 ${(isHeader || isSubprojectHeader) && groupId ? 'cursor-pointer' : ''} ${isSelected ? 'selected-cell' : ''}`}
                     style={{
                       fontSize: `${cellFontSize}px`,
                       minHeight: `${rowHeight}px`,
@@ -223,17 +229,17 @@ export default function ProjectRow({
                       borderRight: '1px solid #d3d3d3',
                       paddingLeft: '8px',
                       paddingRight: '3px',
-                      fontWeight: isHeader ? '600' : '400',
+                      fontWeight: (isHeader || isSubprojectHeader) ? '600' : '400',
                       outline: isEditing ? '2px solid black' : 'none',
                       outlineOffset: '-2px',
                     }}
                     onClick={(e) => {
-                      if (isHeader && groupId && !isEditing) {
+                      if ((isHeader || isSubprojectHeader) && groupId && !isEditing) {
                         toggleGroupCollapse(groupId);
                       }
                     }}
                   >
-                    {isHeader && groupId && (
+                    {(isHeader || isSubprojectHeader) && groupId && (
                       isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />
                     )}
                     {isEditing ? (
@@ -269,7 +275,7 @@ export default function ProjectRow({
                         onClick={(e) => e.stopPropagation()}
                       />
                     ) : (
-                      <span>{isHeader ? projectLabel : '\u00A0'}</span>
+                      <span>{(isHeader || isSubprojectHeader) ? displayLabel : '\u00A0'}</span>
                     )}
                   </div>
                 </td>
