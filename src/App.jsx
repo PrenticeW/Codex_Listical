@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import ProjectTimePlannerWireframe from "./pages/ProjectTimePlannerWireframe";
 import ProjectTimePlannerV2 from "./pages/ProjectTimePlannerV2";
-import StagingPage from "./pages/StagingPage";
+import StagingPageV2 from "./pages/StagingPageV2";
 import TacticsPage from "./pages/TacticsPage";
 import { YearProvider } from "./contexts/YearContext";
 import { needsMigration, migrateToYearSystem } from "./utils/yearMigration";
@@ -65,7 +65,7 @@ export default function App() {
   return (
     <YearProvider>
       {currentPath === "/staging" && (
-        <StagingPage
+        <StagingPageV2
           currentPath={currentPath}
           onNavigate={navigate}
         />

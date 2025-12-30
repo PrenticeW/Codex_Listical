@@ -51,8 +51,19 @@ const updateChipSequenceFromList = (chips = []) => {
 const logDragDebug = (...args) => console.log('[drag-debug]', ...args);
 
 const TACTICS_STORAGE_KEY = 'tactics-page-settings';
-const TACTICS_CHIPS_STORAGE_KEY = 'tactics-chips-state';
+const TACTICS_CHIPS_STORAGE_KEY_TEMPLATE = 'tactics-year-{yearNumber}-chips-state';
 const getBrowserWindow = () => (typeof window !== 'undefined' ? window : null);
+
+/**
+ * Get year-specific storage key for tactics chips
+ */
+const getTacticsChipsStorageKey = (yearNumber) => {
+  if (yearNumber === null || yearNumber === undefined) {
+    return 'tactics-chips-state'; // Legacy key for backward compatibility
+  }
+  return TACTICS_CHIPS_STORAGE_KEY_TEMPLATE.replace('{yearNumber}', yearNumber.toString());
+};
+
 const loadTacticsSettings = () => {
   const win = getBrowserWindow();
   if (!win) return { startHour: '', startMinute: '', incrementMinutes: 60 };
@@ -73,11 +84,12 @@ const loadTacticsSettings = () => {
     return { startHour: '', startMinute: '', incrementMinutes: 60 };
   }
 };
-const loadTacticsChipsState = () => {
+const loadTacticsChipsState = (yearNumber = null) => {
   const win = getBrowserWindow();
   if (!win) return { projectChips: null, customProjects: null };
   try {
-    const raw = win.localStorage.getItem(TACTICS_CHIPS_STORAGE_KEY);
+    const key = getTacticsChipsStorageKey(yearNumber);
+    const raw = win.localStorage.getItem(key);
     if (!raw) return { projectChips: null, customProjects: null };
     const parsed = JSON.parse(raw);
     return {
@@ -98,11 +110,12 @@ const saveTacticsSettings = (payload) => {
     console.error('Failed to save tactics settings', error);
   }
 };
-const saveTacticsChipsState = (payload) => {
+const saveTacticsChipsState = (payload, yearNumber = null) => {
   const win = getBrowserWindow();
   if (!win) return;
   try {
-    win.localStorage.setItem(TACTICS_CHIPS_STORAGE_KEY, JSON.stringify(payload));
+    const key = getTacticsChipsStorageKey(yearNumber);
+    win.localStorage.setItem(key, JSON.stringify(payload));
   } catch (error) {
     console.error('Failed to save tactics chip state', error);
   }
@@ -463,41 +476,63 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       }
     };
   }, [setSelectedBlockId]);
+  // Load initial state when component mounts or year changes
   useEffect(() => {
-    if (hasLoadedInitialState.current) return undefined;
-    hasLoadedInitialState.current = true;
-    if (typeof window === 'undefined') return undefined;
+    if (typeof window === 'undefined') return;
+
     const readProjects = () => {
       const state = loadStagingState(currentYear);
       setStagingProjects(Array.isArray(state?.shortlist) ? state.shortlist : []);
     };
-    const chipState = loadTacticsChipsState();
+
+    // Load tactics chips for current year (reload when year changes)
+    const chipState = loadTacticsChipsState(currentYear);
     if (chipState.projectChips) {
       const dedupedChips = dedupeChipsById(chipState.projectChips);
       updateChipSequenceFromList(dedupedChips);
       setProjectChips(dedupedChips);
+    } else if (!hasLoadedInitialState.current) {
+      // On first mount with no saved chips, initialize empty
+      hasLoadedInitialState.current = true;
     }
     if (chipState.customProjects) {
       setCustomProjects(chipState.customProjects);
     }
+
+    // Always reload projects for current year
     readProjects();
+  }, [currentYear]);
+
+  // Set up storage event listeners
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const readProjects = () => {
+      const state = loadStagingState(currentYear);
+      setStagingProjects(Array.isArray(state?.shortlist) ? state.shortlist : []);
+    };
+
     const handleStorage = (event) => {
-      if (event?.key && event.key !== STAGING_STORAGE_KEY) return;
+      // Check for year-specific staging keys (staging-year-{yearNumber}-shortlist) or legacy key
+      if (event?.key && !event.key.startsWith('staging-year-') && event.key !== STAGING_STORAGE_KEY) return;
       readProjects();
     };
+
     const handleVisibility = () => {
       if (document.hidden) return;
       readProjects();
     };
+
     window.addEventListener('storage', handleStorage);
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener(STAGING_STORAGE_EVENT, handleStorage);
+
     return () => {
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener(STAGING_STORAGE_EVENT, handleStorage);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [hasLoadedInitialState, setSelectedBlockId]);
+  }, [currentYear]);
   useEffect(() => {
     setProjectChips((prev) => {
       const nextBlocks = dedupeChipsById(prev);
@@ -1165,8 +1200,8 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     timelineRowIds,
   ]);
   useEffect(() => {
-    saveTacticsChipsState({ projectChips, customProjects });
-  }, [projectChips, customProjects]);
+    saveTacticsChipsState({ projectChips, customProjects }, currentYear);
+  }, [projectChips, customProjects, currentYear]);
   const handleRemoveSelectedChip = useCallback(() => {
     if (!removableBlockId) return;
     setProjectChips((prev) => dedupeChipsById(prev).filter((block) => block.id !== removableBlockId));
@@ -1541,9 +1576,19 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     return [...stagingColumnConfigs, ...placeholders];
   }, [stagingColumnConfigs, totalColumnCount]);
   const hasInitializedSubprojects = useRef(false);
+  // Track previous staging projects to detect changes
+  const prevStagingProjectsRef = useRef(null);
+
   useEffect(() => {
-    if (hasInitializedSubprojects.current) return;
+    // Check if staging projects have changed (by comparing JSON stringify)
+    const stagingProjectsKey = JSON.stringify(stagingProjects.map(p => ({ id: p.id, planSummary: p.planSummary })));
+    const hasProjectsChanged = prevStagingProjectsRef.current !== stagingProjectsKey;
+    prevStagingProjectsRef.current = stagingProjectsKey;
+
+    // Only run if we have data, and either it's first load OR projects changed
     if (!subprojectLayout?.subprojectsByProject || !timelineRowIds.length) return;
+    if (hasInitializedSubprojects.current && !hasProjectsChanged) return;
+
     setProjectChips((prev) => {
       const next = [...prev];
       const expectedIds = new Set();
@@ -1596,12 +1641,12 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     });
     hasInitializedSubprojects.current = true;
   }, [
-    hasInitializedSubprojects,
     stagingColumnConfigs,
     subprojectLayout,
     timelineRowIds,
     incrementMinutes,
     setProjectChips,
+    stagingProjects,
   ]);
   const handleClearAllChips = useCallback(() => {
     if (typeof window !== 'undefined') {
