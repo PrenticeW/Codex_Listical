@@ -1094,9 +1094,6 @@ export default function ProjectTimePlannerV2() {
   const handleArchiveWeek = useCallback(() => {
     setIsListicalMenuOpen(false);
 
-    // Step 1: Calculate week metadata
-    const weekRange = calculateWeekRange(dates);
-
     // Get the week number from the first VISIBLE week
     // Find the first visible day column
     let firstVisibleDayIndex = 0;
@@ -1109,6 +1106,11 @@ export default function ProjectTimePlannerV2() {
 
     // Calculate which week the first visible day belongs to (weeks are 0-indexed internally, but displayed as 1-indexed)
     const displayedWeekNumber = Math.floor(firstVisibleDayIndex / 7) + 1;
+
+    // Step 1: Calculate week metadata
+    // Use dates starting from the first visible day index to get the correct date range
+    const visibleDates = dates.slice(firstVisibleDayIndex);
+    const weekRange = calculateWeekRange(visibleDates);
 
     const weekNumber = calculateWeekNumber(startDate, new Date(), displayedWeekNumber, currentYear);
 
