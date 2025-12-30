@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Archive } from 'lucide-react';
+import { useYear } from '../../contexts/YearContext';
+import YearSelector from '../YearSelector';
 
 export default function ProjectListicalMenu({
   isOpen,
@@ -33,7 +36,9 @@ export default function ProjectListicalMenu({
   redoStack,
   undo,
   redo,
+  onOpenArchiveModal,
 }) {
+  const { currentYear, isCurrentYearArchived } = useYear();
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
   const [expandedSections, setExpandedSections] = useState({
@@ -43,6 +48,7 @@ export default function ProjectListicalMenu({
     rowOps: false,
     batchOps: false,
     archive: false,
+    manageYear: false,
   });
 
   const toggleSection = (section) => {
@@ -234,6 +240,42 @@ export default function ProjectListicalMenu({
                   >
                     Show Week
                   </button>
+                </div>
+              )}
+            </div>
+
+            {/* Manage Year Section */}
+            <div className="border border-[#ced3d0] rounded overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleSection('manageYear')}
+                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/40 transition-colors"
+              >
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                  Manage Year
+                </span>
+                <span className="text-slate-500 text-sm">
+                  {expandedSections.manageYear ? '▼' : '▶'}
+                </span>
+              </button>
+              {expandedSections.manageYear && (
+                <div className="px-4 bg-white/20" style={{ paddingTop: '12px', paddingBottom: '12px', gap: '12px', display: 'flex', flexDirection: 'column' }}>
+                  {!isCurrentYearArchived && (
+                    <button
+                      type="button"
+                      className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left flex items-center gap-2"
+                      onClick={onOpenArchiveModal}
+                    >
+                      <Archive className="w-4 h-4" />
+                      Archive Year {currentYear}
+                    </button>
+                  )}
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-600 mb-2 block">
+                      Year Selector
+                    </label>
+                    <YearSelector />
+                  </div>
                 </div>
               )}
             </div>

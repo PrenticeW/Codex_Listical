@@ -1,6 +1,13 @@
 import React from 'react';
+import YearSelector from '../YearSelector';
 
-export default function NavigationBar({ currentPath = '/', onNavigate = () => {}, listicalButton = null }) {
+export default function NavigationBar({
+  currentPath = '/',
+  onNavigate = () => {},
+  listicalButton = null,
+  yearSelector = null,
+  archiveButton = null,
+}) {
   const navItems = [
     { label: 'Goals', path: '/staging' },
     { label: 'Plan', path: '/tactics' },
@@ -13,20 +20,27 @@ export default function NavigationBar({ currentPath = '/', onNavigate = () => {}
     }`;
 
   return (
-    <div className="flex flex-wrap items-center gap-3 flex-shrink-0">
-      <div className="flex items-center gap-2">
-        {navItems.map((item) => (
-          <button
-            key={item.path}
-            type="button"
-            className={buttonClasses(currentPath === item.path)}
-            onClick={() => onNavigate(item.path)}
-          >
-            {item.label}
-          </button>
-        ))}
+    <div className="flex flex-wrap items-center justify-between gap-3 flex-shrink-0 w-full">
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {navItems.map((item) => (
+            <button
+              key={item.path}
+              type="button"
+              className={buttonClasses(currentPath === item.path)}
+              onClick={() => onNavigate(item.path)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        {listicalButton ? <div className="relative">{listicalButton}</div> : null}
       </div>
-      {listicalButton ? <div className="relative">{listicalButton}</div> : null}
+
+      <div className="flex items-center gap-3">
+        {archiveButton}
+        {yearSelector || <YearSelector />}
+      </div>
     </div>
   );
 }

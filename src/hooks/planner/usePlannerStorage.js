@@ -34,25 +34,26 @@ import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
  *
  * @param {Object} options - Hook options
  * @param {string} options.projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ * @param {number|null} options.yearNumber - Year number for year-based storage (null for legacy)
  * @returns {Object} Storage state and setters
  */
-export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID } = {}) {
+export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, yearNumber = null } = {}) {
   // Track if this is the initial mount to avoid saving default values on load
   const isInitialMount = useRef(true);
 
   // Initialize totalDays first since it's needed for visibleDayColumns
-  const [totalDays, setTotalDays] = useState(() => readTotalDays(projectId));
+  const [totalDays, setTotalDays] = useState(() => readTotalDays(projectId, yearNumber));
 
   // Initialize from storage
-  const [columnSizing, setColumnSizing] = useState(() => readColumnSizing(projectId));
-  const [sizeScale, setSizeScale] = useState(() => readSizeScale(projectId));
-  const [startDate, setStartDate] = useState(() => readStartDate(projectId));
-  const [showRecurring, setShowRecurring] = useState(() => readShowRecurring(projectId));
-  const [showSubprojects, setShowSubprojects] = useState(() => readShowSubprojects(projectId));
-  const [showMaxMinRows, setShowMaxMinRows] = useState(() => readShowMaxMinRows(projectId));
-  const [selectedSortStatuses, setSelectedSortStatuses] = useState(() => readSortStatuses(projectId));
-  const [taskRows, setTaskRows] = useState(() => readTaskRows(projectId));
-  const [visibleDayColumns, setVisibleDayColumns] = useState(() => readVisibleDayColumns(projectId, totalDays));
+  const [columnSizing, setColumnSizing] = useState(() => readColumnSizing(projectId, yearNumber));
+  const [sizeScale, setSizeScale] = useState(() => readSizeScale(projectId, yearNumber));
+  const [startDate, setStartDate] = useState(() => readStartDate(projectId, yearNumber));
+  const [showRecurring, setShowRecurring] = useState(() => readShowRecurring(projectId, yearNumber));
+  const [showSubprojects, setShowSubprojects] = useState(() => readShowSubprojects(projectId, yearNumber));
+  const [showMaxMinRows, setShowMaxMinRows] = useState(() => readShowMaxMinRows(projectId, yearNumber));
+  const [selectedSortStatuses, setSelectedSortStatuses] = useState(() => readSortStatuses(projectId, yearNumber));
+  const [taskRows, setTaskRows] = useState(() => readTaskRows(projectId, yearNumber));
+  const [visibleDayColumns, setVisibleDayColumns] = useState(() => readVisibleDayColumns(projectId, totalDays, yearNumber));
 
   // Mark initial mount as complete after first render
   useEffect(() => {
@@ -62,72 +63,72 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID } = {
   // Auto-save column sizing to localStorage when it changes (skip initial mount)
   useEffect(() => {
     if (!isInitialMount.current && Object.keys(columnSizing).length > 0) {
-      saveColumnSizing(columnSizing, projectId);
+      saveColumnSizing(columnSizing, projectId, yearNumber);
     }
-  }, [columnSizing, projectId]);
+  }, [columnSizing, projectId, yearNumber]);
 
   // Auto-save size scale to localStorage when it changes (skip initial mount)
   useEffect(() => {
     if (!isInitialMount.current) {
-      saveSizeScale(sizeScale, projectId);
+      saveSizeScale(sizeScale, projectId, yearNumber);
     }
-  }, [sizeScale, projectId]);
+  }, [sizeScale, projectId, yearNumber]);
 
   // Auto-save start date to localStorage when it changes (skip initial mount)
   useEffect(() => {
     if (!isInitialMount.current) {
-      saveStartDate(startDate, projectId);
+      saveStartDate(startDate, projectId, yearNumber);
     }
-  }, [startDate, projectId]);
+  }, [startDate, projectId, yearNumber]);
 
   // Auto-save show recurring to localStorage when it changes (skip initial mount)
   useEffect(() => {
     if (!isInitialMount.current) {
-      saveShowRecurring(showRecurring, projectId);
+      saveShowRecurring(showRecurring, projectId, yearNumber);
     }
-  }, [showRecurring, projectId]);
+  }, [showRecurring, projectId, yearNumber]);
 
   // Auto-save show subprojects to localStorage when it changes (skip initial mount)
   useEffect(() => {
     if (!isInitialMount.current) {
-      saveShowSubprojects(showSubprojects, projectId);
+      saveShowSubprojects(showSubprojects, projectId, yearNumber);
     }
-  }, [showSubprojects, projectId]);
+  }, [showSubprojects, projectId, yearNumber]);
 
   // Auto-save show max/min rows to localStorage when it changes (skip initial mount)
   useEffect(() => {
     if (!isInitialMount.current) {
-      saveShowMaxMinRows(showMaxMinRows, projectId);
+      saveShowMaxMinRows(showMaxMinRows, projectId, yearNumber);
     }
-  }, [showMaxMinRows, projectId]);
+  }, [showMaxMinRows, projectId, yearNumber]);
 
   // Auto-save sort statuses to localStorage when it changes (skip initial mount)
   useEffect(() => {
     if (!isInitialMount.current) {
-      saveSortStatuses(selectedSortStatuses, projectId);
+      saveSortStatuses(selectedSortStatuses, projectId, yearNumber);
     }
-  }, [selectedSortStatuses, projectId]);
+  }, [selectedSortStatuses, projectId, yearNumber]);
 
   // Auto-save task rows to localStorage when it changes (skip initial mount)
   useEffect(() => {
     if (!isInitialMount.current) {
-      saveTaskRows(taskRows, projectId);
+      saveTaskRows(taskRows, projectId, yearNumber);
     }
-  }, [taskRows, projectId]);
+  }, [taskRows, projectId, yearNumber]);
 
   // Auto-save total days to localStorage when it changes (skip initial mount)
   useEffect(() => {
     if (!isInitialMount.current) {
-      saveTotalDays(totalDays, projectId);
+      saveTotalDays(totalDays, projectId, yearNumber);
     }
-  }, [totalDays, projectId]);
+  }, [totalDays, projectId, yearNumber]);
 
   // Auto-save visible day columns to localStorage when it changes (skip initial mount)
   useEffect(() => {
     if (!isInitialMount.current && Object.keys(visibleDayColumns).length > 0) {
-      saveVisibleDayColumns(visibleDayColumns, projectId);
+      saveVisibleDayColumns(visibleDayColumns, projectId, yearNumber);
     }
-  }, [visibleDayColumns, projectId]);
+  }, [visibleDayColumns, projectId, yearNumber]);
 
   return {
     columnSizing,

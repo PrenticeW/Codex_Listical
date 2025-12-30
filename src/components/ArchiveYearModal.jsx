@@ -69,15 +69,24 @@ export function ArchiveYearModal({ isOpen, onClose, yearNumber }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <>
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black bg-opacity-50"
+        className="fixed inset-0 bg-black backdrop-blur-sm"
+        style={{
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          zIndex: 9998
+        }}
         onClick={handleCancel}
       />
 
-      {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+      {/* Modal Container */}
+      <div
+        className="fixed inset-0 flex items-center justify-center p-4 pointer-events-none"
+        style={{ zIndex: 9999 }}
+      >
+        {/* Modal */}
+        <div className="relative bg-white rounded-lg shadow-2xl max-w-md w-full p-6 pointer-events-auto">
         {/* Header */}
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2 bg-amber-100 rounded-lg">
@@ -175,8 +184,9 @@ export function ArchiveYearModal({ isOpen, onClose, yearNumber }) {
             {isArchiving ? 'Archiving...' : `Archive & Start Year ${yearNumber + 1}`}
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

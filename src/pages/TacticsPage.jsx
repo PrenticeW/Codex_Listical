@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
 import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '../lib/stagingStorage';
 import { saveTacticsMetrics } from '../lib/tacticsMetricsStorage';
@@ -204,6 +205,7 @@ const dedupeChipsById = (chips = []) => {
 };
 
 export default function TacticsPage({ currentPath = '/tactics', onNavigate = () => {} }) {
+  const { currentYear } = useYear();
   const initialTacticsSettings = useMemo(() => loadTacticsSettings(), []);
   const [startDay, setStartDay] = useState(DAYS_OF_WEEK[0]);
   const [incrementMinutes, setIncrementMinutes] = useState(
@@ -466,7 +468,7 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
     hasLoadedInitialState.current = true;
     if (typeof window === 'undefined') return undefined;
     const readProjects = () => {
-      const state = loadStagingState();
+      const state = loadStagingState(currentYear);
       setStagingProjects(Array.isArray(state?.shortlist) ? state.shortlist : []);
     };
     const chipState = loadTacticsChipsState();
@@ -1508,13 +1510,14 @@ export default function TacticsPage({ currentPath = '/tactics', onNavigate = () 
       projectWeeklyQuotas,
       dailyBounds,
       weeklyTotals,
-    });
+    }, currentYear);
   }, [
     availableColumnTotals,
     displayedWeekDays,
     projectSummaries,
     totalAvailableMinutes,
     totalWorkingMinutes,
+    currentYear,
     workingColumnTotals,
   ]);
   const stagingColumnConfigs = useMemo(() => {

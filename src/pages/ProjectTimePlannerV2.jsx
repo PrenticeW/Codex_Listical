@@ -5,7 +5,8 @@ import {
   flexRender,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { GripVertical, ListFilter } from 'lucide-react';
+import { Archive } from 'lucide-react';
+import { useYear } from '../contexts/YearContext';
 import usePlannerStorage from '../hooks/planner/usePlannerStorage';
 import usePlannerColumns from '../hooks/planner/usePlannerColumns';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
@@ -22,6 +23,7 @@ import NavigationBar from '../components/planner/NavigationBar';
 import ProjectListicalMenu from '../components/planner/ProjectListicalMenu';
 import PlannerTable from '../components/planner/PlannerTable';
 import FilterPanel from '../components/planner/FilterPanel';
+import ArchiveYearModal from '../components/ArchiveYearModal';
 import { createInitialData } from '../utils/planner/dataCreators';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../constants/planner/rowTypes';
 import { mapDailyBoundsToTimeline } from '../utils/planner/dailyBoundsMapper';
@@ -77,7 +79,13 @@ const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On 
  */
 
 export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = () => {} }) {
-  // Storage management (all persistent settings)
+  // Year context for year-based storage
+  const { currentYear, isCurrentYearArchived, activeYear, switchToActiveYear } = useYear();
+
+  // Archive modal state
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+
+  // Storage management (all persistent settings) - now year-aware
   const {
     columnSizing,
     setColumnSizing,
@@ -99,7 +107,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     setTotalDays,
     visibleDayColumns,
     setVisibleDayColumns,
-  } = usePlannerStorage();
+  } = usePlannerStorage({ yearNumber: currentYear });
 
   // Initialize data from storage or create new
   const [data, setData] = useState(() => {
@@ -1525,7 +1533,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     // Calculate which week the first visible day belongs to (weeks are 0-indexed internally, but displayed as 1-indexed)
     const displayedWeekNumber = Math.floor(firstVisibleDayIndex / 7) + 1;
 
-    const weekNumber = calculateWeekNumber(startDate, new Date(), displayedWeekNumber);
+    const weekNumber = calculateWeekNumber(startDate, new Date(), displayedWeekNumber, currentYear);
 
     // Step 2: Create archive week row with grouping
     const archiveWeekRow = createArchiveWeekRow({
@@ -1832,9 +1840,44 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
   return (
     <div className="w-full h-screen flex flex-col bg-gray-50 overflow-hidden">
       <div className="flex-1 flex flex-col p-4 gap-4 min-h-0 overflow-hidden">
+
+      {/* Archived Year Banner */}
+      {isCurrentYearArchived && (
+        <div className="flex items-center justify-between px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <div className="flex items-center gap-3">
+            <Archive className="w-5 h-5 text-amber-600" />
+            <div>
+              <p className="text-sm font-medium text-amber-900">
+                Viewing Year {currentYear} (Archived - Read Only)
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                This year has been archived and cannot be modified.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={switchToActiveYear}
+            className="px-4 py-2 text-sm font-medium text-amber-700 bg-white border border-amber-300 rounded-lg hover:bg-amber-50 transition-colors"
+          >
+            Return to Year {activeYear?.yearNumber}
+          </button>
+        </div>
+      )}
+
       <NavigationBar
         currentPath={currentPath}
         onNavigate={onNavigate}
+        archiveButton={
+          !isCurrentYearArchived && currentPath === '/' && (
+            <button
+              onClick={() => setIsArchiveModalOpen(true)}
+              className="px-4 py-2 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-300 rounded-lg hover:bg-amber-100 transition-colors flex items-center gap-2"
+            >
+              <Archive className="w-4 h-4" />
+              Archive Year {currentYear}
+            </button>
+          )
+        }
         listicalButton={
           <ProjectListicalMenu
             isOpen={isListicalMenuOpen}
@@ -1872,6 +1915,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
             redoStack={redoStack}
             undo={undo}
             redo={redo}
+            onOpenArchiveModal={() => setIsArchiveModalOpen(true)}
           />
         }
       />
@@ -1966,6 +2010,13 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
         closeEstimateFilterMenu={closeEstimateFilterMenu}
       />
       </div>
+
+      {/* Archive Year Modal */}
+      <ArchiveYearModal
+        isOpen={isArchiveModalOpen}
+        onClose={() => setIsArchiveModalOpen(false)}
+        yearNumber={currentYear}
+      />
     </div>
   );
 }

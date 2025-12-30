@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SquarePlus, Pencil } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
 import { loadStagingState, saveStagingState } from '../lib/stagingStorage';
 
@@ -310,8 +311,9 @@ const buildProjectPlanSummary = (item) => {
 };
 
 export default function StagingPage({ currentPath = '/staging', onNavigate = () => {} }) {
+  const { currentYear } = useYear();
   const [inputValue, setInputValue] = useState('');
-  const [{ shortlist, archived }, setState] = useState(() => loadStagingState());
+  const [{ shortlist, archived }, setState] = useState(() => loadStagingState(currentYear));
   const [planModal, setPlanModal] = useState({
     open: false,
     itemId: null,
@@ -361,8 +363,8 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
       ...item,
       planSummary: buildProjectPlanSummary(item),
     }));
-    saveStagingState({ shortlist: enrichedShortlist, archived });
-  }, [shortlist, archived]);
+    saveStagingState({ shortlist: enrichedShortlist, archived }, currentYear);
+  }, [shortlist, archived, currentYear]);
 
   useEffect(() => {
     if (!pendingFocusRequestRef.current) return;

@@ -48,11 +48,12 @@ export const calculateWeekRange = (dates) => {
  * @param {string} startDate - Start date in YYYY-MM-DD format (currently displayed first day)
  * @param {Date} currentDate - Current date (unused, kept for compatibility)
  * @param {number} displayedWeekNumber - The week number shown in the week row (from day columns)
+ * @param {number} yearNumber - The current year number (defaults to 1)
  * @returns {object} { year, week } - Year and week number
  */
-export const calculateWeekNumber = (startDate, currentDate, displayedWeekNumber = 1) => {
-  // Year is always 1 (placeholder)
-  const year = 1;
+export const calculateWeekNumber = (startDate, currentDate, displayedWeekNumber = 1, yearNumber = 1) => {
+  // Use the provided year number
+  const year = yearNumber;
 
   // Use the displayed week number from the timeline
   const week = displayedWeekNumber;
