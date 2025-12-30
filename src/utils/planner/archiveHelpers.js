@@ -45,23 +45,19 @@ export const calculateWeekRange = (dates) => {
 
 /**
  * Calculate week number from start date
- * @param {string} startDate - Start date in YYYY-MM-DD format
- * @param {Date} currentDate - Current date
+ * @param {string} startDate - Start date in YYYY-MM-DD format (currently displayed first day)
+ * @param {Date} currentDate - Current date (unused, kept for compatibility)
+ * @param {number} displayedWeekNumber - The week number shown in the week row (from day columns)
  * @returns {object} { year, week } - Year and week number
  */
-export const calculateWeekNumber = (startDate, currentDate) => {
-  const start = new Date(startDate);
-  const current = currentDate || new Date();
+export const calculateWeekNumber = (startDate, currentDate, displayedWeekNumber = 1) => {
+  // Year is always 1 (placeholder)
+  const year = 1;
 
-  const diffTime = current - start;
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  const weekNumber = Math.floor(diffDays / 7) + 1;
+  // Use the displayed week number from the timeline
+  const week = displayedWeekNumber;
 
-  // Calculate year (could be different from current year if start date is in previous year)
-  const year = Math.floor((weekNumber - 1) / 52) + 1;
-  const weekInYear = ((weekNumber - 1) % 52) + 1;
-
-  return { year, week: weekInYear };
+  return { year, week };
 };
 
 /**

@@ -229,7 +229,6 @@ export default function ProjectRow({
                     }}
                     onClick={(e) => {
                       if (isHeader && groupId && !isEditing) {
-                        console.log('ProjectRow chevron clicked:', { rowType, groupId, projectNickname });
                         toggleGroupCollapse(groupId);
                       }
                     }}

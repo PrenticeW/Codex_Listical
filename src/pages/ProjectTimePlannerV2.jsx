@@ -982,28 +982,6 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     });
   }, []);
 
-  // Debug: Log archive structure once on mount
-  useEffect(() => {
-    const archiveRows = data.filter(row =>
-      row._rowType === 'archiveHeader' ||
-      row._rowType === 'archiveRow' ||
-      row._rowType === 'archivedProjectHeader' ||
-      row._rowType === 'archivedProjectGeneral' ||
-      row._rowType === 'archivedProjectUnscheduled'
-    );
-    if (archiveRows.length > 0) {
-      console.log('=== ARCHIVE STRUCTURE ===');
-      archiveRows.forEach((row, i) => {
-        console.log(`${i}: ${row._rowType}`, {
-          id: row.id,
-          projectNickname: row.projectNickname,
-          groupId: row.groupId,
-          parentGroupId: row.parentGroupId,
-        });
-      });
-      console.log('=== END ARCHIVE STRUCTURE ===');
-    }
-  }, []);
 
   // Handler to toggle collapsed groups (for archive weeks and projects)
   const toggleGroupCollapse = useCallback((groupId) => {
@@ -1529,7 +1507,21 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
 
     // Step 1: Calculate week metadata
     const weekRange = calculateWeekRange(dates);
-    const weekNumber = calculateWeekNumber(startDate, new Date());
+
+    // Get the week number from the first VISIBLE week
+    // Find the first visible day column
+    let firstVisibleDayIndex = 0;
+    for (let i = 0; i < totalDays; i++) {
+      if (visibleDayColumns[`day-${i}`] !== false) {
+        firstVisibleDayIndex = i;
+        break;
+      }
+    }
+
+    // Calculate which week the first visible day belongs to (weeks are 0-indexed internally, but displayed as 1-indexed)
+    const displayedWeekNumber = Math.floor(firstVisibleDayIndex / 7) + 1;
+
+    const weekNumber = calculateWeekNumber(startDate, new Date(), displayedWeekNumber);
 
     // Step 2: Create archive week row with grouping
     const archiveWeekRow = createArchiveWeekRow({
@@ -1596,7 +1588,7 @@ export default function ProjectTimePlannerV2({ currentPath = '/', onNavigate = (
     };
 
     executeCommand(archiveCommand);
-  }, [data, dates, startDate, dailyMinValues, dailyMaxValues, totalDays, executeCommand, collapsedGroups]);
+  }, [data, dates, startDate, dailyMinValues, dailyMaxValues, totalDays, executeCommand, collapsedGroups, visibleDayColumns]);
 
   const handleHideWeek = useCallback(() => {
     setIsListicalMenuOpen(false);
