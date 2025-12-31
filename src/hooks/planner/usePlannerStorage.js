@@ -31,6 +31,32 @@ import {
 import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
 
 /**
+ * Get default column sizing based on column definitions
+ * @param {number} totalDays - Total number of day columns
+ * @returns {Object} Default column sizing object
+ */
+const getDefaultColumnSizing = (totalDays) => {
+  const sizing = {
+    rowNum: 36,
+    checkbox: 34,
+    project: 156,
+    subproject: 142,
+    status: 143,
+    task: 356,
+    recurring: 37,
+    estimate: 164,
+    timeValue: 117,
+  };
+
+  // Add day columns (default 59px each)
+  for (let i = 0; i < totalDays; i++) {
+    sizing[`day-${i}`] = 59;
+  }
+
+  return sizing;
+};
+
+/**
  * Hook to manage planner storage (all settings)
  * Automatically syncs with localStorage
  *
@@ -43,11 +69,18 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
   // Track if this is the initial mount to avoid saving default values on load
   const isInitialMount = useRef(true);
 
-  // Initialize totalDays first since it's needed for visibleDayColumns
+  // Initialize totalDays first since it's needed for visibleDayColumns and column sizing
   const [totalDays, setTotalDays] = useState(() => readTotalDays(projectId, yearNumber));
 
-  // Initialize from storage
-  const [columnSizing, setColumnSizing] = useState(() => readColumnSizing(projectId, yearNumber));
+  // Initialize from storage, with defaults for new users
+  const [columnSizing, setColumnSizing] = useState(() => {
+    const stored = readColumnSizing(projectId, yearNumber);
+    // If empty object (new user), return defaults
+    if (Object.keys(stored).length === 0) {
+      return getDefaultColumnSizing(totalDays);
+    }
+    return stored;
+  });
   const [sizeScale, setSizeScale] = useState(() => readSizeScale(projectId, yearNumber));
   const [startDate, setStartDate] = useState(() => readStartDate(projectId, yearNumber));
   const [showRecurring, setShowRecurring] = useState(() => readShowRecurring(projectId, yearNumber));
