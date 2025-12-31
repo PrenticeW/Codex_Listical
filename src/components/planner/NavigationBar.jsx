@@ -1,6 +1,8 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { LogOut } from 'lucide-react';
 import YearSelector from '../YearSelector';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function NavigationBar({
   listicalButton = null,
@@ -10,6 +12,7 @@ export default function NavigationBar({
   const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
+  const { logout, user } = useAuth();
 
   const navItems = [
     { label: 'Goals', path: '/staging' },
@@ -21,6 +24,11 @@ export default function NavigationBar({
     `rounded border border-[#ced3d0] px-3 py-2 text-[12px] font-semibold shadow-sm transition text-black ${
       active ? 'bg-white hover:bg-white' : 'bg-[#e5e7eb] hover:bg-[#dcdfe3]'
     }`;
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 flex-shrink-0 w-full">
@@ -43,6 +51,16 @@ export default function NavigationBar({
       <div className="flex items-center gap-3">
         {archiveButton}
         {yearSelector || <YearSelector />}
+        {user && (
+          <button
+            onClick={handleLogout}
+            className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+            title="Sign out"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign Out
+          </button>
+        )}
       </div>
     </div>
   );

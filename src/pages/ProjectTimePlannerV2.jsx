@@ -125,8 +125,8 @@ export default function ProjectTimePlannerV2() {
     if (taskRows && taskRows.length > 0) {
       return taskRows;
     }
-    // Otherwise create initial data
-    return createInitialData(100, totalDays, startDate);
+    // Otherwise create initial data with just 20 task rows (users can add more as needed)
+    return createInitialData(20, totalDays, startDate);
   });
 
   // Save data to storage when it changes
@@ -1679,7 +1679,7 @@ export default function ProjectTimePlannerV2() {
             startDate={startDate}
             onStartDateChange={(value) => {
               setStartDate(value);
-              setData(createInitialData(100, totalDays, value));
+              setData(createInitialData(20, totalDays, value));
             }}
             selectedSortStatuses={selectedSortStatuses}
             onToggleSortStatus={toggleSortStatus}
