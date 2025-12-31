@@ -4,7 +4,6 @@ import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
-import ColorSwatchGrid from '../components/staging/ColorSwatchGrid';
 import {
   useShortlistState,
   usePlanModal,
@@ -75,7 +74,7 @@ export default function StagingPageV2() {
     <tr key={`${item.id}-plan-question-row-${rowIdx}`}>
       <td
         className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-        style={{ width: '120px', minWidth: '120px', backgroundColor: '#d9ead3' }}
+        style={{ width: '120px', minWidth: '120px', backgroundColor: '#d9d9d9' }}
       >
         <input
           type="text"
@@ -90,7 +89,7 @@ export default function StagingPageV2() {
       <td
         className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
         colSpan={PLAN_TABLE_COLS - 2}
-        style={{ backgroundColor: '#d9ead3' }}
+        style={{ backgroundColor: '#d9d9d9' }}
       >
         <input
           type="text"
@@ -115,7 +114,7 @@ export default function StagingPageV2() {
           width: '32px',
           minWidth: '32px',
           textAlign: 'center',
-          backgroundColor: '#d9ead3',
+          backgroundColor: '#d9d9d9',
         }}
       >
         <button
@@ -133,7 +132,7 @@ export default function StagingPageV2() {
   const renderOutcomePromptRow = (item, rowValues, rowIdx) => (
     <tr key={`${item.id}-plan-row-${rowIdx}`}>
       {rowValues.map((cellValue, cellIdx) => {
-        const style = { backgroundColor: '#f1f7ee' };
+        const style = { backgroundColor: '#f3f3f3' };
         if (cellIdx === 0 || cellIdx === 1) {
           style.width = '120px';
           style.minWidth = '120px';
@@ -203,8 +202,8 @@ export default function StagingPageV2() {
       {rowValues.map((cellValue, cellIdx) => {
         const baseStyle =
           cellIdx === 0 || cellIdx === 1
-            ? { width: '120px', minWidth: '120px', backgroundColor: '#f9f3f6' }
-            : { backgroundColor: '#f9f3f6' };
+            ? { width: '120px', minWidth: '120px', backgroundColor: '#f3f3f3' }
+            : { backgroundColor: '#f3f3f3' };
         const isPromptCell = cellIdx === 2;
         const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
         if (isDeleteCell) {
@@ -261,7 +260,7 @@ export default function StagingPageV2() {
     <tr key={`${item.id}-needs-question-row-${rowIdx}`}>
       <td
         className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-        style={{ width: '120px', minWidth: '120px', backgroundColor: '#ead1dc' }}
+        style={{ width: '120px', minWidth: '120px', backgroundColor: '#d9d9d9' }}
       >
         <input
           type="text"
@@ -276,7 +275,7 @@ export default function StagingPageV2() {
       <td
         className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
         colSpan={PLAN_TABLE_COLS - 2}
-        style={{ backgroundColor: '#ead1dc' }}
+        style={{ backgroundColor: '#d9d9d9' }}
       >
         <input
           type="text"
@@ -301,7 +300,7 @@ export default function StagingPageV2() {
           width: '32px',
           minWidth: '32px',
           textAlign: 'center',
-          backgroundColor: '#ead1dc',
+          backgroundColor: '#d9d9d9',
         }}
       >
         <button
@@ -327,7 +326,7 @@ export default function StagingPageV2() {
           const isEstimateCell = cellIdx === 3;
           const isTimeValueCell = cellIdx === 4;
           const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
-          const style = { backgroundColor: '#f9f3f6' };
+          const style = { backgroundColor: '#f3f3f3' };
           if (cellIdx === 0 || cellIdx === 1) {
             style.width = '120px';
             style.minWidth = '120px';
@@ -444,7 +443,7 @@ export default function StagingPageV2() {
           const isEstimateCell = cellIdx === 3;
           const isTimeValueCell = cellIdx === 4;
           const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
-          const style = { backgroundColor: '#f1f7ee' };
+          const style = { backgroundColor: '#f3f3f3' };
           if (cellIdx === 0 || cellIdx === 1) {
             style.width = '120px';
             style.minWidth = '120px';
@@ -563,7 +562,7 @@ export default function StagingPageV2() {
 
           const isPromptCell = cellIdx === 2;
           const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
-          const style = { backgroundColor: '#f9f3f6' };
+          const style = { backgroundColor: '#f3f3f3' };
           if (cellIdx === 0 || cellIdx === 1) {
             style.width = '120px';
             style.minWidth = '120px';
@@ -646,14 +645,7 @@ export default function StagingPageV2() {
           }
         />
         <div className="space-y-6" style={{ marginTop: '75px' }}>
-          <div className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm" style={{ marginBottom: '10px' }}>
-            <label
-              className="block font-bold text-slate-700 mb-2 tracking-wide"
-              style={{ fontSize: '22px' }}
-              htmlFor="staging-input"
-            >
-              What would you like to get done?
-            </label>
+          <div className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm" style={{ marginBottom: '30px' }}>
             <input
               id="staging-input"
               type="text"
@@ -666,17 +658,14 @@ export default function StagingPageV2() {
                 }
               }}
               className="w-full rounded border border-[#ced3d0] px-3 py-2 text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-              style={{ fontSize: '18px', marginTop: '10px' }}
-              placeholder="Add to project shortlist and press Enter"
+              style={{ fontSize: '18px' }}
+              placeholder="What would you like to get done?"
             />
           </div>
 
           <div className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm">
-            {shortlist.length === 0 ? (
-              <p className="text-sm text-slate-600">No items yet. Add something above to get started.</p>
-            ) : (
-              <div className="grid gap-[5px]">
-                {shortlist.map((item) => {
+            <div className="grid gap-[5px]">
+              {shortlist.map((item) => {
                   const planEntries = clonePlanTableEntries(item.planTableEntries);
                   const reasonRowCount = item.planReasonRowCount ?? 1;
                   const outcomeRowCount = item.planOutcomeRowCount ?? 1;
@@ -864,14 +853,15 @@ export default function StagingPageV2() {
                               >
                                 <div className="space-y-3">
                                   <div className="space-y-2" style={{ paddingTop: '15px' }}>
-                                    <span className="text-sm font-semibold text-slate-700">Project colour</span>
-                                    <ColorSwatchGrid
-                                      selectedColor={planModal.color}
-                                      onSelect={(color) =>
-                                        updatePlanModal({ color })
-                                      }
-                                      buttonSize={28}
-                                      columns={4}
+                                    <label className="text-sm font-semibold text-slate-700" htmlFor="plan-color-inline">
+                                      Project colour
+                                    </label>
+                                    <input
+                                      id="plan-color-inline"
+                                      type="color"
+                                      className="h-10 w-full cursor-pointer rounded border border-[#ced3d0] p-1"
+                                      value={planModal.color || '#c9daf8'}
+                                      onChange={(e) => updatePlanModal({ color: e.target.value })}
                                     />
                                   </div>
                                   <div className="space-y-1" style={{ paddingTop: '15px' }}>
@@ -917,7 +907,7 @@ export default function StagingPageV2() {
                                         className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
                                         onClick={handlePlanNext}
                                       >
-                                        Next
+                                        Edit Project
                                       </button>
                                       <button
                                         type="button"
@@ -940,7 +930,7 @@ export default function StagingPageV2() {
                                     <td
                                       colSpan={PLAN_TABLE_COLS}
                                       className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold text-[14px]"
-                                      style={{ backgroundColor: '#d5a6bd', color: '#1f2937' }}
+                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937' }}
                                     >
                                       &nbsp;&nbsp;&nbsp;Reasons
                                     </td>
@@ -948,7 +938,7 @@ export default function StagingPageV2() {
                                   <tr key={`${item.id}-plan-row-1`}>
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-                                      style={{ width: '120px', minWidth: '120px', backgroundColor: '#ead1dc' }}
+                                      style={{ width: '120px', minWidth: '120px', backgroundColor: '#d9d9d9' }}
                                     >
                                       <input
                                         type="text"
@@ -963,7 +953,7 @@ export default function StagingPageV2() {
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
                                       colSpan={PLAN_TABLE_COLS - 1}
-                                      style={{ backgroundColor: '#ead1dc' }}
+                                      style={{ backgroundColor: '#d9d9d9' }}
                                     >
                                       <span className="text-[14px] font-semibold text-slate-800">
                                         Why do I want to start this?
@@ -977,7 +967,7 @@ export default function StagingPageV2() {
                                     <td
                                       colSpan={PLAN_TABLE_COLS}
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px] text-left font-semibold text-[14px]"
-                                      style={{ backgroundColor: '#93c47d', color: '#1f2937', paddingLeft: '10px' }}
+                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937', paddingLeft: '10px' }}
                                     >
                                       Outcomes
                                     </td>
@@ -1002,14 +992,14 @@ export default function StagingPageV2() {
                                     <td
                                       colSpan={PLAN_TABLE_COLS - 2}
                                       className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold text-[14px]"
-                                      style={{ backgroundColor: '#d5a6bd', color: '#1f2937' }}
+                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937' }}
                                     >
                                       &nbsp;&nbsp;&nbsp;Needs
                                     </td>
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 text-right text-[14px] font-semibold"
                                       style={{
-                                        backgroundColor: '#d5a6bd',
+                                        backgroundColor: '#b7b7b7',
                                         width: '120px',
                                         minWidth: '120px',
                                         color: '#1f2937',
@@ -1021,7 +1011,7 @@ export default function StagingPageV2() {
                                     <td
                                       className="border border-[#e5e7eb]"
                                       style={{
-                                        backgroundColor: '#d5a6bd',
+                                        backgroundColor: '#b7b7b7',
                                         width: '32px',
                                         minWidth: '32px',
                                       }}
@@ -1047,7 +1037,7 @@ export default function StagingPageV2() {
                                     <td
                                       colSpan={PLAN_TABLE_COLS}
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px] text-left font-semibold text-[14px]"
-                                      style={{ backgroundColor: '#93c47d', color: '#1f2937', paddingLeft: '10px' }}
+                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937', paddingLeft: '10px' }}
                                     >
                                       Schedule
                                     </td>
@@ -1055,12 +1045,12 @@ export default function StagingPageV2() {
                                   <tr key={`${item.id}-schedule-row-prompt`}>
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-                                      style={{ width: '120px', minWidth: '120px', backgroundColor: '#d9ead3' }}
+                                      style={{ width: '120px', minWidth: '120px', backgroundColor: '#d9d9d9' }}
                                     ></td>
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
                                       colSpan={PLAN_TABLE_COLS - 2}
-                                      style={{ backgroundColor: '#d9ead3' }}
+                                      style={{ backgroundColor: '#d9d9d9' }}
                                     >
                                       <span className="text-[14px] font-semibold text-slate-800">
                                         Which activities need time alotted each week?
@@ -1072,7 +1062,7 @@ export default function StagingPageV2() {
                                         width: '32px',
                                         minWidth: '32px',
                                         textAlign: 'center',
-                                        backgroundColor: '#d9ead3',
+                                        backgroundColor: '#d9d9d9',
                                       }}
                                     ></td>
                                   </tr>
@@ -1083,7 +1073,7 @@ export default function StagingPageV2() {
                                     <td
                                       colSpan={PLAN_TABLE_COLS}
                                       className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold text-[14px]"
-                                      style={{ backgroundColor: '#d5a6bd', color: '#1f2937' }}
+                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937' }}
                                     >
                                       &nbsp;&nbsp;&nbsp;Subprojects
                                     </td>
@@ -1091,12 +1081,12 @@ export default function StagingPageV2() {
                                   <tr key={`${item.id}-subprojects-row-prompt`}>
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-                                      style={{ width: '120px', minWidth: '120px', backgroundColor: '#ead1dc' }}
+                                      style={{ width: '120px', minWidth: '120px', backgroundColor: '#d9d9d9' }}
                                     ></td>
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
                                       colSpan={PLAN_TABLE_COLS - 2}
-                                      style={{ backgroundColor: '#ead1dc' }}
+                                      style={{ backgroundColor: '#d9d9d9' }}
                                     >
                                       <span className="text-[14px] font-semibold text-slate-800">
                                         What are the stages or weekly habits required to make these outcomes happen?
@@ -1108,7 +1098,7 @@ export default function StagingPageV2() {
                                         width: '32px',
                                         minWidth: '32px',
                                         textAlign: 'center',
-                                        backgroundColor: '#ead1dc',
+                                        backgroundColor: '#d9d9d9',
                                       }}
                                     ></td>
                                   </tr>
@@ -1124,8 +1114,7 @@ export default function StagingPageV2() {
                     </div>
                   );
                 })}
-              </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
@@ -1136,12 +1125,15 @@ export default function StagingPageV2() {
               <h3 className="text-lg font-bold text-slate-900 mb-4">Plan Project</h3>
               <div className="space-y-4">
                 <div className="space-y-2" style={{ paddingTop: '15px' }}>
-                  <span className="text-sm font-semibold text-slate-700">Project colour</span>
-                  <ColorSwatchGrid
-                    selectedColor={planModal.color}
-                    onSelect={(color) => updatePlanModal({ color })}
-                    buttonSize={34}
-                    columns={5}
+                  <label className="text-sm font-semibold text-slate-700" htmlFor="plan-color-modal">
+                    Project colour
+                  </label>
+                  <input
+                    id="plan-color-modal"
+                    type="color"
+                    className="h-10 w-full cursor-pointer rounded border border-[#ced3d0] p-1"
+                    value={planModal.color || '#c9daf8'}
+                    onChange={(e) => updatePlanModal({ color: e.target.value })}
                   />
                 </div>
                 <div className="space-y-1" style={{ paddingTop: '15px' }}>
@@ -1178,7 +1170,7 @@ export default function StagingPageV2() {
                   className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
                   onClick={handlePlanNext}
                 >
-                  Next
+                  Edit Project
                 </button>
               </div>
             </div>
