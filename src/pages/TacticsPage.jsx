@@ -1259,9 +1259,8 @@ export default function TacticsPage() {
         )
       );
       setColorEditorColor(value);
-      finishColorEdit();
     },
-    [colorEditorProjectId, finishColorEdit]
+    [colorEditorProjectId]
   );
   useEffect(() => {
     if (!cellMenu) return undefined;
@@ -1948,14 +1947,11 @@ export default function TacticsPage() {
         <div className="border-t border-[#e5e7eb] px-3 py-2">
           <button
             type="button"
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold text-slate-800 hover:bg-[#f2fdf6]"
+            className="w-full px-3 py-2 text-center text-[11px] font-semibold rounded-sm hover:opacity-80"
+            style={{ backgroundColor: '#c9daf8', color: '#ffffff' }}
             onClick={handleCreateCustomProject}
           >
-            <span
-              className="inline-flex h-3 w-3 flex-shrink-0 rounded-full"
-              style={{ backgroundColor: '#c9daf8' }}
-            ></span>
-            <span>CUSTOM</span>
+            CUSTOM
           </button>
         </div>
         {dropdownProjects.length ? (
@@ -1964,22 +1960,17 @@ export default function TacticsPage() {
                   const isCustom = project.id.startsWith('custom-');
                   return (
                     <li key={project.id}>
-                      <div className="flex items-center justify-between px-3 py-2">
+                      <div className="px-3 py-2">
                         <button
                           type="button"
-                          className="flex items-center gap-2 text-left text-[11px] font-semibold text-slate-800 hover:bg-[#f2fdf6]"
+                          className="w-full px-3 py-2 text-center text-[11px] font-semibold rounded-sm hover:opacity-80"
+                          style={{ backgroundColor: project.color || '#0f172a', color: '#ffffff' }}
                           onClick={() => handleProjectSelection(project.id)}
                         >
-                          <span
-                            className="inline-flex h-3 w-3 flex-shrink-0 rounded-full"
-                            style={{ backgroundColor: project.color || '#0f172a' }}
-                          ></span>
-                          <span>
-                            {isCustom ? project.label.toUpperCase() : project.label}
-                          </span>
+                          {isCustom ? project.label.toUpperCase() : project.label}
                         </button>
                         {isCustom ? (
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center justify-center gap-1 mt-1">
                             <button
                               type="button"
                               className="flex items-center gap-1 rounded border border-[#cbd5f5] px-2 py-1 text-[9px] font-semibold text-slate-700 hover:bg-[#eef2ff]"
@@ -2036,53 +2027,40 @@ export default function TacticsPage() {
         <div className="border-t border-[#e5e7eb] px-3 py-2">
           <button
             type="button"
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold text-slate-800 hover:bg-[#f2fdf6]"
+            className="w-full px-3 py-2 text-center text-[11px] font-semibold rounded-sm hover:opacity-80"
+            style={{ backgroundColor: '#d9d9d9', color: '#000000' }}
             onClick={() => handleProjectSelection('sleep')}
           >
-            <span
-              className="inline-flex h-3 w-3 flex-shrink-0 rounded-full"
-              style={{ backgroundColor: '#d9d9d9' }}
-            ></span>
-            <span>Sleep</span>
+            Sleep
           </button>
         </div>
         <div className="border-t border-[#e5e7eb] px-3 py-2">
           <button
             type="button"
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold text-slate-800 hover:bg-[#f2fdf6]"
+            className="w-full px-3 py-2 text-center text-[11px] font-semibold rounded-sm hover:opacity-80"
+            style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700 }}
             onClick={() => handleProjectSelection('rest')}
           >
-            <span
-              className="inline-flex h-3 w-3 flex-shrink-0 rounded-full"
-              style={{ backgroundColor: '#666666' }}
-            ></span>
-            <span>REST</span>
+            REST
           </button>
         </div>
         <div className="border-t border-[#e5e7eb] px-3 py-2">
           <button
             type="button"
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold text-slate-800 hover:bg-[#f2fdf6]"
+            className="w-full px-3 py-2 text-center text-[11px] font-semibold rounded-sm hover:opacity-80"
+            style={{ backgroundColor: '#fe8afe', color: '#ffffff', fontWeight: 700 }}
             onClick={() => handleProjectSelection('buffer')}
           >
-            <span
-              className="inline-flex h-3 w-3 flex-shrink-0 rounded-full"
-              style={{ backgroundColor: '#fe8afe' }}
-            ></span>
-            <span>BUFFER</span>
+            BUFFER
           </button>
         </div>
         <div className="border-t border-[#e5e7eb] px-3 py-2">
           <button
             type="button"
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold text-slate-800 hover:bg-[#f2fdf6] disabled:text-slate-400 disabled:hover:bg-transparent"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold text-red-600 hover:text-red-700 disabled:text-slate-400 disabled:cursor-not-allowed"
             onClick={handleRemoveSelectedChip}
             disabled={!removableBlockId}
           >
-            <span
-              className="inline-flex h-3 w-3 flex-shrink-0 rounded-full"
-              style={{ backgroundColor: removableBlockId ? '#ef4444' : '#d1d5db' }}
-            ></span>
             <span>Remove chip</span>
           </button>
         </div>
