@@ -1,0 +1,19 @@
+run = "npm run dev"
+hidden = [".config", "package-lock.json", "node_modules", "dist"]
+
+[nix]
+channel = "stable-22_11"
+
+[deployment]
+run = ["sh", "-c", "npm run build && npm run preview"]
+deploymentTarget = "cloudrun"
+
+[languages.javascript]
+pattern = "**/{*.js,*.jsx,*.ts,*.tsx}"
+
+[languages.javascript.languageServer]
+start = "typescript-language-server --stdio"
+
+[env]
+VITE_APP_ENV = "production"
+VITE_APP_URL = "https://$REPL_SLUG.$REPL_OWNER.repl.co"
