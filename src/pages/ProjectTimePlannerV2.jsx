@@ -30,6 +30,8 @@ import ProjectListicalMenu from '../components/planner/ProjectListicalMenu';
 import PlannerTable from '../components/planner/PlannerTable';
 import FilterPanel from '../components/planner/FilterPanel';
 import ArchiveYearModal from '../components/ArchiveYearModal';
+import ContextMenu from '../components/planner/ContextMenu';
+import useContextMenu from '../hooks/planner/useContextMenu';
 import { createInitialData } from '../utils/planner/dataCreators';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../constants/planner/rowTypes';
 import { mapDailyBoundsToTimeline } from '../utils/planner/dailyBoundsMapper';
@@ -204,6 +206,9 @@ export default function ProjectTimePlannerV2() {
 
   // Collapsible groups hook
   const { collapsedGroups, setCollapsedGroups, toggleGroupCollapse, isCollapsed } = useCollapsibleGroups();
+
+  // Context menu hook
+  const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
 
   // Compute data with timeValue derived from estimate column (with status sync effect)
   const { computedData } = useComputedData({ data, setData, totalDays });
@@ -886,6 +891,34 @@ export default function ProjectTimePlannerV2() {
     handleCellDoubleClick,
   } = selection;
 
+  // Wrap cell mouse down to handle right-click for context menu
+  const handleCellMouseDownWithContext = useCallback((e, rowId, columnId) => {
+    if (e.button === 2) { // Right-click
+      e.preventDefault();
+      handleContextMenu(e, {
+        rowId,
+        columnId,
+        cellKey: getCellKey(rowId, columnId),
+        selectedCells,
+        selectedRows,
+      });
+      return;
+    }
+    handleCellMouseDown(e, rowId, columnId);
+  }, [handleCellMouseDown, handleContextMenu, getCellKey, selectedCells, selectedRows]);
+
+  // Handle context menu event (right-click) to prevent default browser menu
+  const handleCellContextMenu = useCallback((e, rowId, columnId) => {
+    e.preventDefault();
+    handleContextMenu(e, {
+      rowId,
+      columnId,
+      cellKey: getCellKey(rowId, columnId),
+      selectedCells,
+      selectedRows,
+    });
+  }, [handleContextMenu, getCellKey, selectedCells, selectedRows]);
+
   // Drag and drop hook
   const {
     draggedRowId,
@@ -1420,6 +1453,129 @@ export default function ProjectTimePlannerV2() {
     setTotalDays(prev => prev + 7);
   }, [setTotalDays]);
 
+  // Context menu action handlers
+  const handleContextMenuAddTasks = useCallback(() => {
+    // Prompt for number of rows to add
+    const countInput = window.prompt('How many task rows would you like to add?', '5');
+
+    // User cancelled
+    if (countInput === null) return;
+
+    const count = parseInt(countInput, 10);
+
+    // Validate input
+    if (!Number.isFinite(count) || count <= 0) {
+      alert('Please enter a valid positive number');
+      return;
+    }
+
+    if (count > 100) {
+      if (!window.confirm(`You're about to add ${count} rows. This might affect performance. Continue?`)) {
+        return;
+      }
+    }
+
+    // Determine insertion position
+    let insertIndex = data.length;
+
+    if (selectedRows.size > 0) {
+      // Find the index of the last selected row
+      const selectedRowIds = Array.from(selectedRows);
+      const selectedIndices = selectedRowIds
+        .map(rowId => data.findIndex(r => r.id === rowId))
+        .filter(idx => idx !== -1)
+        .sort((a, b) => b - a);
+
+      if (selectedIndices.length > 0) {
+        insertIndex = selectedIndices[0] + 1;
+      }
+    } else if (contextMenu.rowId) {
+      // Insert after the right-clicked row
+      const rowIndex = data.findIndex(r => r.id === contextMenu.rowId);
+      if (rowIndex !== -1) {
+        insertIndex = rowIndex + 1;
+      }
+    }
+
+    // Create the new empty rows
+    const newRows = createEmptyTaskRows(count, totalDays);
+
+    const command = {
+      execute: () => {
+        setData(prev => {
+          const newData = [...prev];
+          newData.splice(insertIndex, 0, ...newRows);
+          return newData;
+        });
+      },
+      undo: () => {
+        setData(prev => {
+          const newData = [...prev];
+          newData.splice(insertIndex, count);
+          return newData;
+        });
+      },
+    };
+
+    executeCommand(command);
+  }, [selectedRows, contextMenu.rowId, data, totalDays, executeCommand]);
+
+  const handleInsertRowAbove = useCallback(() => {
+    if (!contextMenu.rowId) return;
+
+    const rowIndex = data.findIndex(r => r.id === contextMenu.rowId);
+    if (rowIndex === -1) return;
+
+    const newRow = createEmptyTaskRows(1, totalDays)[0];
+
+    const command = {
+      execute: () => {
+        setData(prev => {
+          const newData = [...prev];
+          newData.splice(rowIndex, 0, newRow);
+          return newData;
+        });
+      },
+      undo: () => {
+        setData(prev => {
+          const newData = [...prev];
+          newData.splice(rowIndex, 1);
+          return newData;
+        });
+      },
+    };
+
+    executeCommand(command);
+  }, [contextMenu.rowId, data, totalDays, executeCommand]);
+
+  const handleInsertRowBelow = useCallback(() => {
+    if (!contextMenu.rowId) return;
+
+    const rowIndex = data.findIndex(r => r.id === contextMenu.rowId);
+    if (rowIndex === -1) return;
+
+    const newRow = createEmptyTaskRows(1, totalDays)[0];
+
+    const command = {
+      execute: () => {
+        setData(prev => {
+          const newData = [...prev];
+          newData.splice(rowIndex + 1, 0, newRow);
+          return newData;
+        });
+      },
+      undo: () => {
+        setData(prev => {
+          const newData = [...prev];
+          newData.splice(rowIndex + 1, 1);
+          return newData;
+        });
+      },
+    };
+
+    executeCommand(command);
+  }, [contextMenu.rowId, data, totalDays, executeCommand]);
+
   // Checkbox input class for menu
   const checkboxInputClass = 'h-4 w-4 cursor-pointer rounded border-gray-300 text-emerald-700 focus:ring-emerald-600';
 
@@ -1563,9 +1719,10 @@ export default function ProjectTimePlannerV2() {
         editValue={editValue}
         setEditValue={setEditValue}
         handleRowNumberClick={handleRowNumberClick}
-        handleCellMouseDown={handleCellMouseDown}
+        handleCellMouseDown={handleCellMouseDownWithContext}
         handleCellMouseEnter={handleCellMouseEnter}
         handleCellDoubleClick={handleCellDoubleClick}
+        handleCellContextMenu={handleCellContextMenu}
         handleEditComplete={handleEditComplete}
         handleEditCancel={handleEditCancel}
         handleEditKeyDown={handleEditKeyDown}
@@ -1645,6 +1802,18 @@ export default function ProjectTimePlannerV2() {
         isOpen={isArchiveModalOpen}
         onClose={() => setIsArchiveModalOpen(false)}
         yearNumber={currentYear}
+      />
+
+      {/* Context Menu */}
+      <ContextMenu
+        contextMenu={contextMenu}
+        onClose={closeContextMenu}
+        onDeleteRows={handleDeleteRows}
+        onDuplicateRow={handleDuplicateRow}
+        onInsertRowAbove={handleInsertRowAbove}
+        onInsertRowBelow={handleInsertRowBelow}
+        onAddTasks={handleContextMenuAddTasks}
+        onAddSubproject={handleNewSubproject}
       />
     </div>
   );

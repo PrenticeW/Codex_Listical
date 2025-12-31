@@ -37,6 +37,7 @@ export default function ProjectRow({
   handleCellMouseDown,
   handleCellMouseEnter,
   handleCellDoubleClick,
+  handleCellContextMenu,
   handleEditComplete,
   handleEditCancel,
   handleEditKeyDown,
@@ -147,6 +148,7 @@ export default function ProjectRow({
                   className="h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-pointer"
                   style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#d9f6e0', color: '#065f46' }}
                   onClick={(e) => handleRowNumberClick(e, rowId)}
+                  onContextMenu={(e) => handleCellContextMenu?.(e, rowId, 'rowNum')}
                 >
                   <div
                     draggable
