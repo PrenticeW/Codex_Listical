@@ -3,9 +3,10 @@
  * Loads projects and subprojects from Staging storage
  */
 
-import { useState, useEffect } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useYear } from '../../contexts/YearContext';
 import { loadStagingState, STAGING_STORAGE_EVENT } from '../../lib/stagingStorage';
+import useStorageSync from '../common/useStorageSync';
 
 /**
  * Hook to load projects and subprojects from Staging storage
@@ -16,31 +17,25 @@ import { loadStagingState, STAGING_STORAGE_EVENT } from '../../lib/stagingStorag
 export default function useProjectsData() {
   const { currentYear } = useYear();
 
-  const [projectsData, setProjectsData] = useState(() => {
+  // Memoize the load function to prevent unnecessary recreations
+  const loadData = useCallback(() => {
     const { shortlist } = loadStagingState(currentYear);
     return extractProjectsData(shortlist);
+  }, [currentYear]);
+
+  // Memoize the extract function for storage sync
+  const extractData = useCallback((payload) => {
+    const shortlist = payload?.shortlist || loadStagingState(currentYear).shortlist;
+    return extractProjectsData(shortlist);
+  }, [currentYear]);
+
+  const [projectsData] = useStorageSync({
+    loadData,
+    customEventName: STAGING_STORAGE_EVENT,
+    storageKeys: [`staging-year-${currentYear}-state`, 'staging-state'],
+    extractData,
+    dependency: currentYear,
   });
-
-  // Reload when year changes
-  useEffect(() => {
-    const { shortlist } = loadStagingState(currentYear);
-    setProjectsData(extractProjectsData(shortlist));
-  }, [currentYear]);
-
-  // Listen for staging storage updates
-  useEffect(() => {
-    const handleStorageUpdate = (event) => {
-      const shortlist = event.detail?.shortlist || loadStagingState(currentYear).shortlist;
-      setProjectsData(extractProjectsData(shortlist));
-    };
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener(STAGING_STORAGE_EVENT, handleStorageUpdate);
-      return () => {
-        window.removeEventListener(STAGING_STORAGE_EVENT, handleStorageUpdate);
-      };
-    }
-  }, [currentYear]);
 
   return projectsData;
 }

@@ -20,9 +20,10 @@ import useSpreadsheetSelection from '../hooks/planner/useSpreadsheetSelection';
 import useKeyboardHandlers from '../hooks/planner/useKeyboardHandlers';
 import useEditState from '../hooks/planner/useEditState';
 import useDragAndDropRows from '../hooks/planner/useDragAndDropRows';
-import useComputedData from '../hooks/planner/useComputedData';
+import useComputedDataV2 from '../hooks/planner/useComputedDataV2';
 import useCollapsibleGroups from '../hooks/planner/useCollapsibleGroups';
 import useDayColumnFilters from '../hooks/planner/useDayColumnFilters';
+import useFilterButtonHandler from '../hooks/planner/useFilterButtonHandler';
 import { MonthRow, WeekRow } from '../components/planner/rows';
 import TableRow from '../components/planner/TableRow';
 import NavigationBar from '../components/planner/NavigationBar';
@@ -211,7 +212,7 @@ export default function ProjectTimePlannerV2() {
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
 
   // Compute data with timeValue derived from estimate column (with status sync effect)
-  const { computedData } = useComputedData({ data, setData, totalDays });
+  const { computedData } = useComputedDataV2({ data, setData, totalDays });
 
   // Note: coerceNumber is now imported from valueNormalizers as coerceToNumber
   // We keep this wrapper for backward compatibility with existing code
@@ -223,31 +224,12 @@ export default function ProjectTimePlannerV2() {
   // Collect unique values for filter dropdowns from the data
   const { projectNames, subprojectNames, statusNames, recurringNames, estimateNames } = useFilterValues(computedData);
 
-  // Wrap filter button click handlers with menu state
-  const onProjectFilterButtonClick = useCallback(
-    (event) => handleProjectFilterButtonClick(event, projectFilterMenu),
-    [handleProjectFilterButtonClick, projectFilterMenu]
-  );
-
-  const onSubprojectFilterButtonClick = useCallback(
-    (event) => handleSubprojectFilterButtonClick(event, subprojectFilterMenu),
-    [handleSubprojectFilterButtonClick, subprojectFilterMenu]
-  );
-
-  const onStatusFilterButtonClick = useCallback(
-    (event) => handleStatusFilterButtonClick(event, statusFilterMenu),
-    [handleStatusFilterButtonClick, statusFilterMenu]
-  );
-
-  const onRecurringFilterButtonClick = useCallback(
-    (event) => handleRecurringFilterButtonClick(event, recurringFilterMenu),
-    [handleRecurringFilterButtonClick, recurringFilterMenu]
-  );
-
-  const onEstimateFilterButtonClick = useCallback(
-    (event) => handleEstimateFilterButtonClick(event, estimateFilterMenu),
-    [handleEstimateFilterButtonClick, estimateFilterMenu]
-  );
+  // Wrap filter button click handlers with menu state (using generic hook to reduce duplication)
+  const onProjectFilterButtonClick = useFilterButtonHandler(handleProjectFilterButtonClick, projectFilterMenu);
+  const onSubprojectFilterButtonClick = useFilterButtonHandler(handleSubprojectFilterButtonClick, subprojectFilterMenu);
+  const onStatusFilterButtonClick = useFilterButtonHandler(handleStatusFilterButtonClick, statusFilterMenu);
+  const onRecurringFilterButtonClick = useFilterButtonHandler(handleRecurringFilterButtonClick, recurringFilterMenu);
+  const onEstimateFilterButtonClick = useFilterButtonHandler(handleEstimateFilterButtonClick, estimateFilterMenu);
 
   // Filter data based on day column filters AND project/status/recurring/estimate filters AND collapsed groups
   // Only hide regular task rows that don't have numeric values in ALL filtered day columns

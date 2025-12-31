@@ -341,4 +341,5 @@ function PlannerTable({
   );
 }
 
-export default PlannerTable;
+// Memoize to prevent unnecessary re-renders when parent re-renders
+export default React.memo(PlannerTable);

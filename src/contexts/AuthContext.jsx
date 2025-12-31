@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { setCurrentUserId } from '../lib/storageService';
+import useAsyncHandler from '../hooks/common/useAsyncHandler';
 
 /**
  * AuthContext
@@ -77,98 +78,76 @@ export function AuthProvider({ children }) {
     initializeAuth();
   }, []);
 
-  // Login function (mock - to be replaced by Loveable)
-  const login = async (email, password) => {
-    try {
-      setIsLoading(true);
+  // Core login logic (extracted from try-catch-finally wrapper)
+  const loginCore = useCallback(async (email, password) => {
+    // TODO: Replace with Supabase auth
+    // Example: const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
-      // TODO: Replace with Supabase auth
-      // Example: const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    // MOCK: Simulate successful login
+    const mockUser = {
+      id: 'mock-user-id-' + Date.now(),
+      email: email,
+      created_at: new Date().toISOString(),
+    };
 
-      // MOCK: Simulate successful login
-      const mockUser = {
-        id: 'mock-user-id-' + Date.now(),
-        email: email,
-        created_at: new Date().toISOString(),
-      };
+    localStorage.setItem('mock-session', JSON.stringify(mockUser));
 
-      localStorage.setItem('mock-session', JSON.stringify(mockUser));
+    setUser(mockUser);
+    setSession({ user: mockUser });
+    setIsAuthenticated(true);
 
-      setUser(mockUser);
-      setSession({ user: mockUser });
-      setIsAuthenticated(true);
+    // Set user ID in storage service for data scoping
+    setCurrentUserId(mockUser.id);
 
-      // Set user ID in storage service for data scoping
-      setCurrentUserId(mockUser.id);
+    return { user: mockUser, error: null };
+  }, []);
 
-      return { user: mockUser, error: null };
-    } catch (error) {
-      console.error('Login error:', error);
-      return { user: null, error };
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Core signup logic (extracted from try-catch-finally wrapper)
+  const signupCore = useCallback(async (email, password) => {
+    // TODO: Replace with Supabase auth
+    // Example: const { data, error } = await supabase.auth.signUp({ email, password })
 
-  // Signup function (mock - to be replaced by Loveable)
-  const signup = async (email, password) => {
-    try {
-      setIsLoading(true);
+    // MOCK: Simulate successful signup
+    const mockUser = {
+      id: 'mock-user-id-' + Date.now(),
+      email: email,
+      created_at: new Date().toISOString(),
+    };
 
-      // TODO: Replace with Supabase auth
-      // Example: const { data, error } = await supabase.auth.signUp({ email, password })
+    localStorage.setItem('mock-session', JSON.stringify(mockUser));
 
-      // MOCK: Simulate successful signup
-      const mockUser = {
-        id: 'mock-user-id-' + Date.now(),
-        email: email,
-        created_at: new Date().toISOString(),
-      };
+    setUser(mockUser);
+    setSession({ user: mockUser });
+    setIsAuthenticated(true);
 
-      localStorage.setItem('mock-session', JSON.stringify(mockUser));
+    // Set user ID in storage service for data scoping
+    setCurrentUserId(mockUser.id);
 
-      setUser(mockUser);
-      setSession({ user: mockUser });
-      setIsAuthenticated(true);
+    return { user: mockUser, error: null };
+  }, []);
 
-      // Set user ID in storage service for data scoping
-      setCurrentUserId(mockUser.id);
+  // Core logout logic (extracted from try-catch-finally wrapper)
+  const logoutCore = useCallback(async () => {
+    // TODO: Replace with Supabase auth
+    // Example: const { error } = await supabase.auth.signOut()
 
-      return { user: mockUser, error: null };
-    } catch (error) {
-      console.error('Signup error:', error);
-      return { user: null, error };
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    // MOCK: Clear session
+    localStorage.removeItem('mock-session');
 
-  // Logout function (mock - to be replaced by Loveable)
-  const logout = async () => {
-    try {
-      setIsLoading(true);
+    setUser(null);
+    setSession(null);
+    setIsAuthenticated(false);
 
-      // TODO: Replace with Supabase auth
-      // Example: const { error } = await supabase.auth.signOut()
+    // Clear user ID from storage service
+    setCurrentUserId(null);
 
-      // MOCK: Clear session
-      localStorage.removeItem('mock-session');
+    return { error: null };
+  }, []);
 
-      setUser(null);
-      setSession(null);
-      setIsAuthenticated(false);
-
-      // Clear user ID from storage service
-      setCurrentUserId(null);
-
-      return { error: null };
-    } catch (error) {
-      console.error('Logout error:', error);
-      return { error };
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Wrap async functions with loading state management (eliminates repetitive try-catch-finally)
+  const login = useAsyncHandler(loginCore, setIsLoading);
+  const signup = useAsyncHandler(signupCore, setIsLoading);
+  const logout = useAsyncHandler(logoutCore, setIsLoading);
 
   // Reset password function (mock - to be replaced by Loveable)
   const resetPassword = async (email) => {

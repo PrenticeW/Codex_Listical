@@ -1,3 +1,4 @@
+import React from 'react';
 import { GripVertical } from 'lucide-react';
 import EditableCell from '../EditableCell';
 import DropdownCell, { PILLBOX_COLORS } from '../DropdownCell';
@@ -12,8 +13,10 @@ import { ChevronDown } from 'lucide-react';
  * TaskRow Component
  * Renders a regular task data row (non-special rows like month, week, day, filter, etc.)
  * Handles all cell types: checkboxes, dropdowns, editable text, and day columns
+ *
+ * Memoized to prevent unnecessary re-renders
  */
-export default function TaskRow({
+const TaskRow = React.memo(function TaskRow({
   row,
   virtualRow,
   isRowSelected,
@@ -472,4 +475,6 @@ export default function TaskRow({
       </tr>
     </>
   );
-}
+});
+
+export default TaskRow;

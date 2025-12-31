@@ -1,3 +1,4 @@
+import React from 'react';
 import { GripVertical, ListFilter, Filter, ChevronRight, ChevronDown } from 'lucide-react';
 import { MonthRow, WeekRow } from './rows';
 import TaskRow from './rows/TaskRow';
@@ -14,8 +15,10 @@ import {
  * Routes row rendering to the appropriate specialized component based on row type
  * Handles special row types (month, week, day, filter, daily min/max) and delegates
  * regular task rows to the TaskRow component
+ *
+ * Memoized to prevent unnecessary re-renders when parent updates
  */
-export default function TableRow({
+const TableRow = React.memo(function TableRow({
   row,
   virtualRow,
   isRowSelected,
@@ -1016,4 +1019,6 @@ export default function TableRow({
     </tr>
     </>
   );
-}
+});
+
+export default TableRow;
