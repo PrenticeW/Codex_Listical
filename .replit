@@ -7,7 +7,7 @@ channel = "stable-22_11"
 [deployment]
 run = ["sh", "-c", "npm run build && npm run preview"]
 deploymentTarget = "cloudrun"
-deploymentBranch = "refactor/tanstack-table-google-sheets"
+deploymentBranch = "main"
 
 [languages.javascript]
 pattern = "**/{*.js,*.jsx,*.ts,*.tsx}"
