@@ -50,6 +50,7 @@ import {
   handlePasteOperation,
 } from '../utils/planner/clipboardOperations';
 import { createSortInboxCommand } from '../utils/planner/sortInbox';
+import { createSortPlannerCommand } from '../utils/planner/sortPlanner';
 import {
   calculateWeekRange,
   calculateWeekNumber,
@@ -106,6 +107,8 @@ export default function ProjectTimePlannerV2() {
     setShowMaxMinRows,
     selectedSortStatuses,
     setSelectedSortStatuses,
+    selectedSortPlannerStatuses,
+    setSelectedSortPlannerStatuses,
     taskRows,
     setTaskRows,
     totalDays,
@@ -1038,6 +1041,18 @@ export default function ProjectTimePlannerV2() {
     });
   }, []);
 
+  const toggleSortPlannerStatus = useCallback((status) => {
+    setSelectedSortPlannerStatuses(prev => {
+      const next = new Set(prev);
+      if (next.has(status)) {
+        next.delete(status);
+      } else {
+        next.add(status);
+      }
+      return next;
+    });
+  }, []);
+
   const handleAddTasks = useCallback(() => {
     setIsListicalMenuOpen(false);
     const count = parseInt(addTasksCount, 10);
@@ -1102,6 +1117,20 @@ export default function ProjectTimePlannerV2() {
       executeCommand(command);
     }
   }, [data, selectedSortStatuses, executeCommand]);
+
+  const handleSortPlanner = useCallback(() => {
+    setIsListicalMenuOpen(false);
+
+    const command = createSortPlannerCommand({
+      data,
+      selectedSortStatuses: selectedSortPlannerStatuses,
+      setData,
+    });
+
+    if (command) {
+      executeCommand(command);
+    }
+  }, [data, selectedSortPlannerStatuses, executeCommand]);
 
   const handleArchiveWeek = useCallback(() => {
     setIsListicalMenuOpen(false);
@@ -1498,7 +1527,10 @@ export default function ProjectTimePlannerV2() {
             }}
             selectedSortStatuses={selectedSortStatuses}
             onToggleSortStatus={toggleSortStatus}
+            selectedSortPlannerStatuses={selectedSortPlannerStatuses}
+            onToggleSortPlannerStatus={toggleSortPlannerStatus}
             handleSortInbox={handleSortInbox}
+            handleSortPlanner={handleSortPlanner}
             handleArchiveWeek={handleArchiveWeek}
             handleHideWeek={handleHideWeek}
             handleShowWeek={handleShowWeek}

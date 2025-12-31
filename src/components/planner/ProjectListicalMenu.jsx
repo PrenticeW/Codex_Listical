@@ -23,7 +23,10 @@ export default function ProjectListicalMenu({
   onStartDateChange,
   selectedSortStatuses,
   onToggleSortStatus,
+  selectedSortPlannerStatuses,
+  onToggleSortPlannerStatus,
   handleSortInbox,
+  handleSortPlanner,
   handleArchiveWeek,
   handleHideWeek,
   handleShowWeek,
@@ -203,6 +206,34 @@ export default function ProjectListicalMenu({
                         onClick={handleSortInbox}
                       >
                         Sort Inbox
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Sort Planner Section */}
+                  <div className="flex flex-col" style={{ gap: '8px' }}>
+                    <span className="text-[13px] font-bold text-slate-700">Sort Planner</span>
+                    <div className="ml-4 flex flex-col" style={{ gap: '8px' }}>
+                      <span className="text-[12px] font-semibold text-slate-800">Statuses to move:</span>
+                      <div className="flex flex-wrap gap-3">
+                        {sortableStatuses.map((status) => (
+                          <label key={`planner-${status}`} className="flex items-center gap-1.5 text-[12px] font-semibold">
+                            <input
+                              type="checkbox"
+                              className={checkboxInputClass}
+                              checked={selectedSortPlannerStatuses.has(status)}
+                              onChange={() => onToggleSortPlannerStatus(status)}
+                            />
+                            <span>{status}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left"
+                        onClick={handleSortPlanner}
+                      >
+                        Sort Planner
                       </button>
                     </div>
                   </div>

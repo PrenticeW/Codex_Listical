@@ -79,6 +79,14 @@ export const SHOW_MAX_MIN_ROWS_KEY_TEMPLATE = 'planner-v2-{projectId}-show-max-m
 export const SORT_STATUSES_KEY_TEMPLATE = 'planner-v2-{projectId}-sort-statuses';
 
 /**
+ * Selected sort planner statuses storage key template
+ * Stores array of selected status values for "Sort Planner" feature
+ *
+ * Example: planner-v2-project-1-sort-planner-statuses
+ */
+export const SORT_PLANNER_STATUSES_KEY_TEMPLATE = 'planner-v2-{projectId}-sort-planner-statuses';
+
+/**
  * Task rows data storage key template
  * Stores the actual task row data (spreadsheet content)
  *

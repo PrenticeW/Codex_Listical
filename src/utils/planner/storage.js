@@ -12,6 +12,7 @@ import {
   SHOW_SUBPROJECTS_KEY_TEMPLATE,
   SHOW_MAX_MIN_ROWS_KEY_TEMPLATE,
   SORT_STATUSES_KEY_TEMPLATE,
+  SORT_PLANNER_STATUSES_KEY_TEMPLATE,
   TASK_ROWS_KEY_TEMPLATE,
   TOTAL_DAYS_KEY_TEMPLATE,
   VISIBLE_DAY_COLUMNS_KEY_TEMPLATE,
@@ -295,6 +296,46 @@ export const saveSortStatuses = (sortStatuses, projectId = DEFAULT_PROJECT_ID, y
     storage.setJSON(key, statusArray);
   } catch (error) {
     console.error('Failed to save sort statuses', error);
+  }
+};
+
+// ============================================================
+// SORT PLANNER STATUSES
+// ============================================================
+
+/**
+ * Reads selected sort planner statuses for a project
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ * @param {number|null} yearNumber - Year number (null for year-agnostic)
+ * @returns {Set<string>} Set of selected status values (defaults to all sortable statuses)
+ */
+export const readSortPlannerStatuses = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+  try {
+    const key = getProjectKey(SORT_PLANNER_STATUSES_KEY_TEMPLATE, projectId, yearNumber);
+    const parsed = storage.getJSON(key, null);
+    if (!parsed) {
+      return new Set(['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned']);
+    }
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch (error) {
+    console.error('Failed to read sort planner statuses', error);
+    return new Set(['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned']);
+  }
+};
+
+/**
+ * Saves selected sort planner statuses for a project
+ * @param {Set<string>} sortPlannerStatuses - Set of selected status values
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ * @param {number|null} yearNumber - Year number (null for year-agnostic)
+ */
+export const saveSortPlannerStatuses = (sortPlannerStatuses, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+  try {
+    const key = getProjectKey(SORT_PLANNER_STATUSES_KEY_TEMPLATE, projectId, yearNumber);
+    const statusArray = Array.from(sortPlannerStatuses);
+    storage.setJSON(key, statusArray);
+  } catch (error) {
+    console.error('Failed to save sort planner statuses', error);
   }
 };
 

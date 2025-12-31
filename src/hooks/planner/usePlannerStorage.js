@@ -19,6 +19,8 @@ import {
   saveShowMaxMinRows,
   readSortStatuses,
   saveSortStatuses,
+  readSortPlannerStatuses,
+  saveSortPlannerStatuses,
   readTaskRows,
   saveTaskRows,
   readTotalDays,
@@ -52,6 +54,7 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
   const [showSubprojects, setShowSubprojects] = useState(() => readShowSubprojects(projectId, yearNumber));
   const [showMaxMinRows, setShowMaxMinRows] = useState(() => readShowMaxMinRows(projectId, yearNumber));
   const [selectedSortStatuses, setSelectedSortStatuses] = useState(() => readSortStatuses(projectId, yearNumber));
+  const [selectedSortPlannerStatuses, setSelectedSortPlannerStatuses] = useState(() => readSortPlannerStatuses(projectId, yearNumber));
   const [taskRows, setTaskRows] = useState(() => readTaskRows(projectId, yearNumber));
   const [visibleDayColumns, setVisibleDayColumns] = useState(() => readVisibleDayColumns(projectId, totalDays, yearNumber));
 
@@ -109,6 +112,13 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
     }
   }, [selectedSortStatuses, projectId, yearNumber]);
 
+  // Auto-save sort planner statuses to localStorage when it changes (skip initial mount)
+  useEffect(() => {
+    if (!isInitialMount.current) {
+      saveSortPlannerStatuses(selectedSortPlannerStatuses, projectId, yearNumber);
+    }
+  }, [selectedSortPlannerStatuses, projectId, yearNumber]);
+
   // Auto-save task rows to localStorage when it changes (skip initial mount)
   useEffect(() => {
     if (!isInitialMount.current) {
@@ -145,6 +155,8 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
     setShowMaxMinRows,
     selectedSortStatuses,
     setSelectedSortStatuses,
+    selectedSortPlannerStatuses,
+    setSelectedSortPlannerStatuses,
     taskRows,
     setTaskRows,
     totalDays,
