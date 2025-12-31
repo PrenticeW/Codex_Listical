@@ -1797,6 +1797,6 @@ export default function ProjectTimePlannerV2() {
         onAddTasks={handleContextMenuAddTasks}
         onAddSubproject={handleNewSubproject}
       />
-    </div>
+    </div> 
   );
 }
