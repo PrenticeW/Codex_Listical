@@ -117,25 +117,28 @@ export default function ProjectListicalMenu({
               {expandedSections.rowOps && (
                 <div className="px-4 bg-white/20" style={{ paddingTop: '12px', paddingBottom: '12px', gap: '12px', display: 'flex', flexDirection: 'column' }}>
                   {/* Add Tasks */}
-                  <div className="flex items-center" style={{ gap: '4px' }}>
-                    <span className="text-[12px] font-semibold text-slate-800">Add Tasks</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="9999"
-                      value={addTasksCount}
-                      onChange={(e) => onAddTasksCountChange(e.target.value)}
-                      className="rounded border border-[#ced3d0] px-2 py-1.5 text-[12px] text-slate-800 bg-white"
-                      style={{ width: '80px' }}
-                      placeholder="0"
-                    />
-                    <button
-                      type="button"
-                      className="rounded border border-[#ced3d0] bg-white px-4 py-1.5 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed]"
-                      onClick={handleAddTasks}
-                    >
-                      Add
-                    </button>
+                  <div className="flex flex-col bg-white rounded border border-[#ced3d0] p-3" style={{ gap: '8px' }}>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Add Tasks</span>
+                    <div className="flex items-center" style={{ gap: '8px' }}>
+                      <input
+                        type="number"
+                        min="1"
+                        max="9999"
+                        value={addTasksCount}
+                        onChange={(e) => onAddTasksCountChange(e.target.value)}
+                        className="flex-1 rounded border border-[#ced3d0] px-3 py-2 text-[13px] text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#065f46]/20 focus:border-[#065f46]"
+                        placeholder="Enter number of tasks..."
+                      />
+                      <button
+                        type="button"
+                        className="rounded border border-[#065f46] bg-[#065f46] px-6 py-2 text-[13px] font-semibold text-white transition hover:bg-[#047857] hover:border-[#047857] shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={handleAddTasks}
+                        disabled={!addTasksCount || addTasksCount === '0'}
+                        title={!addTasksCount || addTasksCount === '0' ? 'Enter a number of tasks to add' : `Add ${addTasksCount} task${addTasksCount > 1 ? 's' : ''}`}
+                      >
+                        Add
+                      </button>
+                    </div>
                   </div>
                   {/* Action Buttons */}
                   <button

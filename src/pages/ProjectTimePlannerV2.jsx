@@ -31,6 +31,7 @@ import ProjectListicalMenu from '../components/planner/ProjectListicalMenu';
 import PlannerTable from '../components/planner/PlannerTable';
 import FilterPanel from '../components/planner/FilterPanel';
 import ArchiveYearModal from '../components/ArchiveYearModal';
+import { AddTasksModal } from '../components/AddTasksModal';
 import ContextMenu from '../components/planner/ContextMenu';
 import useContextMenu from '../hooks/planner/useContextMenu';
 import { createInitialData } from '../utils/planner/dataCreators';
@@ -93,6 +94,9 @@ export default function ProjectTimePlannerV2() {
 
   // Archive modal state
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+
+  // Add tasks modal state
+  const [isAddTasksModalOpen, setIsAddTasksModalOpen] = useState(false);
 
   // Storage management (all persistent settings) - now year-aware
   const {
@@ -1435,28 +1439,8 @@ export default function ProjectTimePlannerV2() {
     setTotalDays(prev => prev + 7);
   }, [setTotalDays]);
 
-  // Context menu action handlers
-  const handleContextMenuAddTasks = useCallback(() => {
-    // Prompt for number of rows to add
-    const countInput = window.prompt('How many task rows would you like to add?', '5');
-
-    // User cancelled
-    if (countInput === null) return;
-
-    const count = parseInt(countInput, 10);
-
-    // Validate input
-    if (!Number.isFinite(count) || count <= 0) {
-      alert('Please enter a valid positive number');
-      return;
-    }
-
-    if (count > 100) {
-      if (!window.confirm(`You're about to add ${count} rows. This might affect performance. Continue?`)) {
-        return;
-      }
-    }
-
+  // Add tasks logic (separated from UI)
+  const addTasksWithCount = useCallback((count) => {
     // Determine insertion position
     let insertIndex = data.length;
 
@@ -1501,6 +1485,11 @@ export default function ProjectTimePlannerV2() {
 
     executeCommand(command);
   }, [selectedRows, contextMenu.rowId, data, totalDays, executeCommand]);
+
+  // Context menu action handlers
+  const handleContextMenuAddTasks = useCallback(() => {
+    setIsAddTasksModalOpen(true);
+  }, []);
 
   const handleInsertRowAbove = useCallback(() => {
     if (!contextMenu.rowId) return;
@@ -1787,6 +1776,13 @@ export default function ProjectTimePlannerV2() {
         isOpen={isArchiveModalOpen}
         onClose={() => setIsArchiveModalOpen(false)}
         yearNumber={currentYear}
+      />
+
+      {/* Add Tasks Modal */}
+      <AddTasksModal
+        isOpen={isAddTasksModalOpen}
+        onClose={() => setIsAddTasksModalOpen(false)}
+        onConfirm={addTasksWithCount}
       />
 
       {/* Context Menu */}
