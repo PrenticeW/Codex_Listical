@@ -1603,26 +1603,29 @@ export default function ProjectTimePlannerV2() {
   }, [rowHeight, rowVirtualizer]);
 
   return (
-    <div className="w-full h-screen flex flex-col bg-gray-50 overflow-hidden">
-      <div className="flex-1 flex flex-col p-4 gap-4 min-h-0 overflow-hidden">
+    <div className="w-full h-screen flex flex-col bg-slate-50 overflow-hidden">
+      {/* Modern professional styling */}
+      <div className="flex-1 flex flex-col p-6 gap-4 min-h-0 overflow-hidden">
 
       {/* Archived Year Banner */}
       {isCurrentYearArchived && (
-        <div className="flex items-center justify-between px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg">
-          <div className="flex items-center gap-3">
-            <Archive className="w-5 h-5 text-amber-600" />
+        <div className="flex items-center justify-between px-6 py-4 bg-linear-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="p-2 bg-white rounded-lg shadow-sm">
+              <Archive className="w-5 h-5 text-amber-600" />
+            </div>
             <div>
-              <p className="text-sm font-medium text-amber-900">
+              <p className="text-sm font-semibold text-amber-900">
                 Viewing Year {currentYear} (Archived - Read Only)
               </p>
-              <p className="text-xs text-amber-700 mt-0.5">
+              <p className="text-xs text-amber-700 mt-1">
                 This year has been archived and cannot be modified.
               </p>
             </div>
           </div>
           <button
             onClick={switchToActiveYear}
-            className="px-4 py-2 text-sm font-medium text-amber-700 bg-white border border-amber-300 rounded-lg hover:bg-amber-50 transition-colors"
+            className="px-5 py-2.5 text-sm font-semibold text-amber-700 bg-white border border-amber-300 rounded-lg hover:bg-amber-50 hover:border-amber-400 transition-all duration-200 shadow-sm"
           >
             Return to Year {activeYear?.yearNumber}
           </button>
@@ -1634,7 +1637,7 @@ export default function ProjectTimePlannerV2() {
           !isCurrentYearArchived && currentPath === '/' && (
             <button
               onClick={() => setIsArchiveModalOpen(true)}
-              className="px-4 py-2 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-300 rounded-lg hover:bg-amber-100 transition-colors flex items-center gap-2"
+              className="px-4 py-2.5 text-sm font-semibold text-amber-700 bg-amber-50 border border-amber-300 rounded-lg hover:bg-amber-100 hover:border-amber-400 transition-all duration-200 flex items-center gap-2 shadow-sm"
             >
               <Archive className="w-4 h-4" />
               Archive Year {currentYear}

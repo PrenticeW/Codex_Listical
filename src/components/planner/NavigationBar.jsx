@@ -21,8 +21,10 @@ export default function NavigationBar({
   ];
 
   const buttonClasses = (active) =>
-    `rounded border border-[#ced3d0] px-3 py-2 text-[12px] font-semibold shadow-sm transition text-black ${
-      active ? 'bg-white hover:bg-white' : 'bg-[#e5e7eb] hover:bg-[#dcdfe3]'
+    `rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-200 ${
+      active
+        ? 'bg-slate-900 text-white shadow-sm'
+        : 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900'
     }`;
 
   const handleLogout = async () => {
@@ -31,8 +33,8 @@ export default function NavigationBar({
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 flex-shrink-0 w-full">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-4 shrink-0 w-full bg-white px-6 py-4 rounded-lg border border-slate-200/60 shadow-sm">
+      <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           {navItems.map((item) => (
             <button
@@ -48,13 +50,13 @@ export default function NavigationBar({
         {listicalButton ? <div className="relative">{listicalButton}</div> : null}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4">
         {archiveButton}
         {yearSelector || <YearSelector />}
         {user && (
           <button
             onClick={handleLogout}
-            className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+            className="px-4 py-2 text-sm font-medium text-slate-600 bg-transparent rounded-lg hover:bg-slate-100 hover:text-slate-900 transition-all duration-200 flex items-center gap-2"
             title="Sign out"
           >
             <LogOut className="w-4 h-4" />

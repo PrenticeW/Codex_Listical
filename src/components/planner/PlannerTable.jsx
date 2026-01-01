@@ -60,11 +60,11 @@ function PlannerTable({
     <div className="flex-1 flex flex-col min-h-0 gap-4 overflow-hidden">
       <div
         ref={tableBodyRef}
-        className="flex-1 overflow-auto border border-gray-300 bg-white"
+        className="flex-1 overflow-auto border border-slate-200/60 bg-white rounded-lg shadow-sm"
         style={{ position: 'relative' }}
       >
         <table className="border-collapse" style={{ display: 'grid', borderSpacing: 0 }}>
-          <thead className="sticky top-0 bg-gray-100 z-10" style={{ display: 'grid', position: 'sticky', top: 0, zIndex: 1 }}>
+          <thead className="sticky top-0 bg-slate-50 z-10" style={{ display: 'grid', position: 'sticky', top: 0, zIndex: 1 }}>
             {timelineHeaderRows.map((headerRow) => (
               <tr key={headerRow.id} style={{ display: 'flex', height: `${rowHeight}px`, gap: 0 }}>
                 {headerRow.cells.map((cell) => {
@@ -91,13 +91,13 @@ function PlannerTable({
                         fontSize: `${headerFontSize}px`,
                         position: isPinned ? 'sticky' : 'relative',
                         left: isPinned ? `${pinnedOffset}px` : undefined,
-                        backgroundColor: '#d9f6e0',
-                        color: '#065f46',
+                        backgroundColor: '#f1f5f9',
+                        color: '#334155',
                         zIndex: isPinned ? 20 : 1,
-                        borderRight: '1px solid #d1d5db',
-                        borderBottom: '1px solid #d1d5db',
-                        paddingTop: '0.25rem',
-                        paddingBottom: '0.25rem',
+                        borderRight: '1px solid #e2e8f0',
+                        borderBottom: '1px solid #e2e8f0',
+                        paddingTop: '0.375rem',
+                        paddingBottom: '0.375rem',
                         textAlign: 'center',
                         fontWeight: 600,
                       }}
@@ -314,7 +314,7 @@ function PlannerTable({
       </div>
 
       {/* Debug info */}
-      <div className="p-2 bg-gray-100 rounded text-xs font-mono flex-shrink-0">
+      <div className="p-3 bg-slate-100 rounded-lg text-xs font-mono shrink-0 border border-slate-200">
         <div className="flex gap-4">
           <div>
             <span className="text-green-600 font-semibold">Virtualization:</span> Rendering {rowVirtualizer.getVirtualItems().length} of {data.length} rows
@@ -325,15 +325,15 @@ function PlannerTable({
         <div className="mt-1">
           <span>Editing: {editingCell ? `${editingCell.rowId} / ${editingCell.columnId}` : 'None'}</span>
           {' • '}
-          <span className={undoStack.length > 0 ? 'text-blue-600 font-semibold' : 'text-gray-400'}>
+          <span className={undoStack.length > 0 ? 'text-blue-600 font-semibold' : 'text-slate-400'}>
             Undo: {undoStack.length}
           </span>
           {' • '}
-          <span className={redoStack.length > 0 ? 'text-blue-600 font-semibold' : 'text-gray-400'}>
+          <span className={redoStack.length > 0 ? 'text-blue-600 font-semibold' : 'text-slate-400'}>
             Redo: {redoStack.length}
           </span>
         </div>
-        <div className="text-gray-500 mt-1">
+        <div className="text-slate-500 mt-1">
           Try: Click row # to select row • Click cell to select • Drag to select range • Shift+Click for range • Cmd/Ctrl+Click for multi • Double-click to edit • Delete/Backspace to clear cells/rows • Cmd/Ctrl+Backspace to delete rows entirely • Cmd/Ctrl+C to copy • Cmd/Ctrl+V to paste • Cmd/Ctrl+Z to undo • Cmd/Ctrl+Shift+Z to redo
         </div>
       </div>
