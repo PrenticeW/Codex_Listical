@@ -35,7 +35,7 @@ export default function NavigationBar({
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 shrink-0 w-full bg-white px-6 py-4 rounded-lg border border-slate-200/60 shadow-sm">
       <div className="flex items-center gap-4">
-        {listicalButton ? <div className="relative">{listicalButton}</div> : null}
+        {listicalButton ? <div className="relative z-10">{listicalButton}</div> : null}
         <div className="flex items-center gap-2">
           {navItems.map((item) => (
             <button

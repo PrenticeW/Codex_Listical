@@ -2966,7 +2966,7 @@ function ListicalMenu({ incrementMinutes, onIncrementChange, onClearAllChips }) 
       </button>
       {open ? (
         <div
-          className="absolute right-0 mt-3 w-80 rounded-lg border border-[#94a3b8] p-4 shadow-2xl z-50"
+          className="absolute left-0 mt-3 w-80 rounded-lg border border-[#94a3b8] p-4 shadow-2xl z-50"
           style={{ backgroundColor: 'rgba(255, 255, 255, 0.97)' }}
         >
           <div className="flex items-center" style={{ gap: '10px' }}>

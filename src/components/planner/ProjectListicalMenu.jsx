@@ -45,6 +45,7 @@ export default function ProjectListicalMenu({
   const { currentYear, isCurrentYearArchived } = useYear();
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
+  const [menuStyle, setMenuStyle] = useState({});
   const [expandedSections, setExpandedSections] = useState({
     viewControls: true,
     history: false,
@@ -63,7 +64,50 @@ export default function ProjectListicalMenu({
   };
 
   useEffect(() => {
-    if (!isOpen) return undefined;
+    console.log('=== MENU EFFECT RUNNING ===');
+    console.log('isOpen:', isOpen);
+    console.log('buttonRef.current:', buttonRef.current);
+
+    if (!isOpen) {
+      console.log('Menu is closed, clearing style');
+      setMenuStyle({});
+      return undefined;
+    }
+
+    console.log('Menu is open, calculating position...');
+
+    // Calculate position when menu opens
+    const updatePosition = () => {
+      console.log('updatePosition called, buttonRef.current:', buttonRef.current);
+
+      if (buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect();
+        console.log('Button position:', {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+          width: rect.width,
+        });
+
+        const calculatedLeft = Math.max(16, rect.left);
+        console.log('Calculated menu left:', calculatedLeft);
+        console.log('Viewport width:', window.innerWidth);
+
+        setMenuStyle({
+          width: '600px',
+          top: rect.bottom + 8,
+          left: calculatedLeft,
+        });
+      } else {
+        console.log('buttonRef.current is null!');
+      }
+    };
+
+    // Update immediately and after a short delay to ensure refs are ready
+    updatePosition();
+    const timer = setTimeout(updatePosition, 10);
+
     const handleClickOutside = (event) => {
       if (menuRef.current?.contains(event.target)) return;
       if (buttonRef.current?.contains(event.target)) return;
@@ -77,6 +121,7 @@ export default function ProjectListicalMenu({
     window.addEventListener('mousedown', handleClickOutside, true);
     window.addEventListener('keydown', handleKeyDown);
     return () => {
+      clearTimeout(timer);
       window.removeEventListener('mousedown', handleClickOutside, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
@@ -96,8 +141,8 @@ export default function ProjectListicalMenu({
       {isOpen && (
         <div
           ref={menuRef}
-          className="absolute z-20 mt-2 rounded border border-[#ced3d0] bg-[#f2fdf6] shadow-lg"
-          style={{ width: '600px' }}
+          className="fixed z-20 rounded border border-[#ced3d0] bg-[#f2fdf6] shadow-lg"
+          style={menuStyle}
         >
           <div className="flex flex-col text-[12px] text-slate-800" style={{ padding: '16px', gap: '16px' }}>
             {/* Row Operations Section */}
