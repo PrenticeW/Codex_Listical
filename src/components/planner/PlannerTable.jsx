@@ -175,7 +175,7 @@ function PlannerTable({
                               cursor: 'col-resize',
                               userSelect: 'none',
                               touchAction: 'none',
-                              backgroundColor: 'rgba(255, 0, 0, 0.3)',
+                              backgroundColor: 'transparent',
                               zIndex: 10000,
                               pointerEvents: 'all',
                             }}

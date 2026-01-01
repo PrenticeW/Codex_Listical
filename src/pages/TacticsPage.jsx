@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
@@ -68,7 +69,7 @@ const getTacticsChipsStorageKey = (yearNumber) => {
 const loadTacticsSettings = () => {
   try {
     const parsed = storage.getJSON(TACTICS_STORAGE_KEY, null);
-    if (!parsed) return { startHour: '', startMinute: '', incrementMinutes: 60 };
+    if (!parsed) return { startHour: '', startMinute: '', incrementMinutes: 60, textSizeScale: 1 };
     return {
       startHour: typeof parsed?.startHour === 'string' ? parsed.startHour : '',
       startMinute: typeof parsed?.startMinute === 'string' ? parsed.startMinute : '',
@@ -76,10 +77,14 @@ const loadTacticsSettings = () => {
         typeof parsed?.incrementMinutes === 'number' && Number.isFinite(parsed.incrementMinutes)
           ? parsed.incrementMinutes
           : 60,
+      textSizeScale:
+        typeof parsed?.textSizeScale === 'number' && Number.isFinite(parsed.textSizeScale)
+          ? parsed.textSizeScale
+          : 1,
     };
   } catch (error) {
     console.error('Failed to read tactics settings', error);
-    return { startHour: '', startMinute: '', incrementMinutes: 60 };
+    return { startHour: '', startMinute: '', incrementMinutes: 60, textSizeScale: 1 };
   }
 };
 const loadTacticsChipsState = (yearNumber = null) => {
@@ -217,6 +222,9 @@ export default function TacticsPage() {
   const [incrementMinutes, setIncrementMinutes] = useState(
     initialTacticsSettings.incrementMinutes
   );
+  const [textSizeScale, setTextSizeScale] = useState(
+    initialTacticsSettings.textSizeScale
+  );
   const hourOptions = useMemo(() => {
     const step = Math.max(1, incrementMinutes);
     const totalSteps = Math.ceil(MINUTES_IN_DAY / step);
@@ -242,9 +250,23 @@ export default function TacticsPage() {
     });
   }, [startHour, incrementMinutes]);
   const [startMinute, setStartMinute] = useState(initialTacticsSettings.startMinute);
+
+  // Text size control functions
+  const increaseTextSize = useCallback(() => {
+    setTextSizeScale(prev => Math.min(prev + 0.1, 2));
+  }, []);
+
+  const decreaseTextSize = useCallback(() => {
+    setTextSizeScale(prev => Math.max(prev - 0.1, 0.5));
+  }, []);
+
+  const resetTextSize = useCallback(() => {
+    setTextSizeScale(1);
+  }, []);
+
   useEffect(() => {
-    saveTacticsSettings({ startHour, startMinute, incrementMinutes });
-  }, [startHour, startMinute, incrementMinutes]);
+    saveTacticsSettings({ startHour, startMinute, incrementMinutes, textSizeScale });
+  }, [startHour, startMinute, incrementMinutes, textSizeScale]);
   const hourRows = useMemo(() => {
     if (!startHour || !startMinute) return [];
     const startMinutes = parseHour12ToMinutes(startHour);
@@ -1778,12 +1800,12 @@ export default function TacticsPage() {
     (rowKey, showHeaderLabel = false) =>
       extendedStagingColumnConfigs.map((column, extraIndex) => {
         const baseClass =
-          'border border-[#e5e7eb] px-3 py-2 text-center overflow-visible text-[11px]';
+          'border border-[#e5e7eb] px-3 py-2 text-center overflow-visible';
         // The grid has 9 columns before extra columns (0-8), so project columns start at index 9
         const columnIndex = 9 + extraIndex;
 
         if (column.type === 'empty' || column.type === 'placeholder') {
-          return <td key={`${rowKey}-${column.id}`} className={baseClass} style={{ position: 'relative' }} />;
+          return <td key={`${rowKey}-${column.id}`} className={baseClass} style={{ position: 'relative', fontSize: `${11 * textSizeScale}px` }} />;
         }
         const metadata = projectMetadata.get(column.project.id);
         if (showHeaderLabel) {
@@ -1794,8 +1816,8 @@ export default function TacticsPage() {
           return (
             <td
               key={`${rowKey}-${column.id}`}
-              className={`${baseClass} text-[10px] font-semibold uppercase`}
-              style={{ backgroundColor, color: textColor, position: 'relative' }}
+              className={`${baseClass} font-semibold uppercase`}
+              style={{ backgroundColor, color: textColor, position: 'relative', fontSize: `${10 * textSizeScale}px` }}
             >
               {label}
               {/* Add resize handle */}
@@ -1829,9 +1851,9 @@ export default function TacticsPage() {
             </td>
           );
         }
-        return <td key={`${rowKey}-${column.id}`} className={baseClass} />;
+        return <td key={`${rowKey}-${column.id}`} className={baseClass} style={{ fontSize: `${11 * textSizeScale}px` }} />;
       }),
-    [extendedStagingColumnConfigs, projectMetadata, columnWidths, handleColumnResize]
+    [extendedStagingColumnConfigs, projectMetadata, columnWidths, handleColumnResize, textSizeScale]
   );
   const renderProjectChip = useCallback(
     (chipId, rowId) => {
@@ -1885,7 +1907,7 @@ export default function TacticsPage() {
           }}
         >
             <div
-              className={`relative flex h-full w-full cursor-move select-none items-center justify-center rounded border border-transparent px-2 py-1 text-center text-[11px] font-semibold shadow-sm ${
+              className={`relative flex h-full w-full cursor-move select-none items-center justify-center rounded border border-transparent px-2 py-1 text-center font-semibold shadow-sm ${
                 isActive ? 'outline outline-[2px]' : ''
               }`}
               style={{
@@ -1894,6 +1916,7 @@ export default function TacticsPage() {
               color: textColor,
               fontWeight,
               border: '1px solid #ffffff',
+              fontSize: `${11 * textSizeScale}px`,
               ...(isActive ? { outlineColor: '#000', outlineOffset: 0 } : null),
             }}
             onClick={(event) => {
@@ -1909,7 +1932,8 @@ export default function TacticsPage() {
             {isEditing ? (
               <input
                 ref={editingInputRef}
-                className="w-full bg-white px-1 text-[11px] font-semibold text-slate-800 outline-none"
+                className="w-full bg-white px-1 font-semibold text-slate-800 outline-none"
+                style={{ fontSize: `${11 * textSizeScale}px` }}
                 value={editingChipLabel}
                 onChange={(event) =>
                   setEditingChipLabel(
@@ -1972,6 +1996,7 @@ export default function TacticsPage() {
       isDragging,
       setSelectedCell,
       dragPreview,
+      textSizeScale,
     ]
   );
   const renderDragOutline = useCallback(() => {
@@ -2208,6 +2233,10 @@ export default function TacticsPage() {
               incrementMinutes={incrementMinutes}
               onIncrementChange={setIncrementMinutes}
               onClearAllChips={handleClearAllChips}
+              textSizeScale={textSizeScale}
+              increaseTextSize={increaseTextSize}
+              decreaseTextSize={decreaseTextSize}
+              resetTextSize={resetTextSize}
             />
           }
         />
@@ -2348,7 +2377,8 @@ export default function TacticsPage() {
                   data-row-id-anchor="sleep-start"
                 >
                   <select
-                    className="w-full rounded border border-[#ced3d0] bg-white px-2 py-1 text-[11px] text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    className="w-full rounded border border-[#ced3d0] bg-white px-2 py-1 text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    style={{ fontSize: `${11 * textSizeScale}px` }}
                     value={startHour}
                     onChange={(event) => setStartHour(event.target.value)}
                   >
@@ -2428,6 +2458,7 @@ export default function TacticsPage() {
                   <td
                     className="border border-[#e5e7eb] px-3 py-2 font-semibold"
                     data-row-id-anchor={`hour-${hourValue}`}
+                    style={{ fontSize: `${13 * textSizeScale}px` }}
                   >
                     {formatHour12(hourValue)}
                   </td>
@@ -2501,7 +2532,8 @@ export default function TacticsPage() {
                   data-row-id-anchor="sleep-end"
                 >
                   <select
-                    className="w-full rounded border border-[#ced3d0] bg-white px-2 py-1 text-[11px] text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    className="w-full rounded border border-[#ced3d0] bg-white px-2 py-1 text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    style={{ fontSize: `${11 * textSizeScale}px` }}
                     value={startMinute}
                     onChange={(event) => setStartMinute(event.target.value)}
                     disabled={!startHour}
@@ -2582,6 +2614,7 @@ export default function TacticsPage() {
                   <td
                     className="border border-[#e5e7eb] px-3 py-2 font-semibold"
                     data-row-id-anchor={`trailing-${rowIdx}`}
+                    style={{ fontSize: `${13 * textSizeScale}px` }}
                   >
                     {formatHour12(
                       Math.floor(minutesValue / 60),
@@ -2679,7 +2712,7 @@ export default function TacticsPage() {
               >
                 <td
                   className="border border-[#e5e7eb] px-3 py-2 text-center"
-                  style={{ backgroundColor: '#d9d9d9', color: '#000', fontWeight: 700 }}
+                  style={{ backgroundColor: '#d9d9d9', color: '#000', fontWeight: 700, fontSize: `${13 * textSizeScale}px` }}
                 >
                   Sleep
                 </td>
@@ -2689,7 +2722,7 @@ export default function TacticsPage() {
                     <td
                       key={`sleep-row-${day}-${idx}`}
                       className="border border-[#e5e7eb] px-3 py-2 text-center"
-                      style={{ backgroundColor: '#efefef' }}
+                      style={{ backgroundColor: '#efefef', fontSize: `${13 * textSizeScale}px` }}
                     >
                       {formatDuration(minutes)}
                     </td>
@@ -2697,7 +2730,7 @@ export default function TacticsPage() {
                 })}
                 <td
                   className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
-                  style={{ backgroundColor: '#efefef' }}
+                  style={{ backgroundColor: '#efefef', fontSize: `${13 * textSizeScale}px` }}
                 >
                   {formatDuration(totalSleepMinutes)}
                 </td>
@@ -2731,6 +2764,7 @@ export default function TacticsPage() {
                         backgroundColor: summary.color || '#0f172a',
                         color: '#ffffff',
                         fontWeight: 700,
+                        fontSize: `${13 * textSizeScale}px`,
                       }}
                     >
                       {summary.label}
@@ -2738,15 +2772,15 @@ export default function TacticsPage() {
                     {displayedWeekDays.map((day, idx) => (
                       <td
                         key={`project-${summary.id}-${day}-${idx}`}
-                        className="border border-[#e5e7eb] px-3 py-2 text-center text-[11px]"
-                        style={{ backgroundColor: '#ffffff' }}
+                        className="border border-[#e5e7eb] px-3 py-2 text-center"
+                        style={{ backgroundColor: '#ffffff', fontSize: `${13 * textSizeScale}px` }}
                       >
                         {formatDuration(summary.columnTotals[idx] ?? 0)}
                       </td>
                     ))}
                     <td
-                      className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold text-[11px]"
-                      style={{ backgroundColor: '#ffffff' }}
+                      className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
+                      style={{ backgroundColor: '#ffffff', fontSize: `${13 * textSizeScale}px` }}
                     >
                       {formatDuration(summary.totalMinutes)}
                     </td>
@@ -2778,7 +2812,7 @@ export default function TacticsPage() {
               >
                 <td
                   className="border border-[#e5e7eb] px-3 py-2 text-center"
-                  style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700 }}
+                  style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700, fontSize: `${13 * textSizeScale}px` }}
                 >
                   REST
                 </td>
@@ -2786,14 +2820,14 @@ export default function TacticsPage() {
                   <td
                     key={`rest-row-${day}-${idx}`}
                     className="border border-[#e5e7eb] px-3 py-2 text-center"
-                    style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700 }}
+                    style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700, fontSize: `${13 * textSizeScale}px` }}
                   >
                     {formatDuration(restColumnTotals[idx] ?? 0)}
                   </td>
                 ))}
                 <td
                   className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
-                  style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700 }}
+                  style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700, fontSize: `${13 * textSizeScale}px` }}
                 >
                   {formatDuration(totalRestMinutes)}
                 </td>
@@ -2836,6 +2870,7 @@ export default function TacticsPage() {
                     backgroundColor: '#b6d7a8',
                     color: '#0f172a',
                     fontWeight: 700,
+                    fontSize: `${13 * textSizeScale}px`,
                   }}
                 >
                   Working Hours
@@ -2843,15 +2878,15 @@ export default function TacticsPage() {
                 {displayedWeekDays.map((day, idx) => (
                   <td
                     key={`working-row-${day}-${idx}`}
-                    className="border border-[#e5e7eb] px-3 py-2 text-center text-[11px]"
-                    style={{ backgroundColor: '#d9ead3' }}
+                    className="border border-[#e5e7eb] px-3 py-2 text-center"
+                    style={{ backgroundColor: '#d9ead3', fontSize: `${13 * textSizeScale}px` }}
                   >
                     {formatDuration(workingColumnTotals[idx] ?? 0)}
                   </td>
                 ))}
                 <td
-                  className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold text-[11px]"
-                  style={{ backgroundColor: '#d9ead3' }}
+                  className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
+                  style={{ backgroundColor: '#d9ead3', fontSize: `${13 * textSizeScale}px` }}
                   >
                     {formatDuration(totalWorkingMinutes)}
                   </td>
@@ -2880,6 +2915,7 @@ export default function TacticsPage() {
                     style={{
                       backgroundColor: '#ffffff',
                       fontWeight: 700,
+                      fontSize: `${13 * textSizeScale}px`,
                     }}
                   >
                     Buffer
@@ -2887,15 +2923,15 @@ export default function TacticsPage() {
                 {displayedWeekDays.map((day, idx) => (
                   <td
                     key={`buffer-row-${day}-${idx}`}
-                    className="border border-[#e5e7eb] px-3 py-2 text-center text-[11px]"
-                    style={{ backgroundColor: '#ffffff' }}
+                    className="border border-[#e5e7eb] px-3 py-2 text-center"
+                    style={{ backgroundColor: '#ffffff', fontSize: `${13 * textSizeScale}px` }}
                   >
                     {formatDuration(bufferColumnTotals[idx] ?? 0)}
                   </td>
                 ))}
                 <td
-                  className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold text-[11px]"
-                  style={{ backgroundColor: '#ffffff' }}
+                  className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
+                  style={{ backgroundColor: '#ffffff', fontSize: `${13 * textSizeScale}px` }}
                 >
                   {formatDuration(totalBufferMinutes)}
                 </td>
@@ -2921,22 +2957,22 @@ export default function TacticsPage() {
               >
                 <td
                   className="border border-[#e5e7eb] px-3 py-2 text-center"
-                  style={{ backgroundColor: '#ffffff', color: '#000000', fontWeight: 700 }}
+                  style={{ backgroundColor: '#ffffff', color: '#000000', fontWeight: 700, fontSize: `${13 * textSizeScale}px` }}
                 >
                   Available Hours
                 </td>
                 {displayedWeekDays.map((day, idx) => (
                   <td
                     key={`available-row-${day}-${idx}`}
-                    className="border border-[#e5e7eb] px-3 py-2 text-center text-[11px]"
-                    style={{ backgroundColor: '#ffffff' }}
+                    className="border border-[#e5e7eb] px-3 py-2 text-center"
+                    style={{ backgroundColor: '#ffffff', fontSize: `${13 * textSizeScale}px` }}
                   >
                     {formatDuration(availableColumnTotals[idx] ?? 0)}
                   </td>
                 ))}
               <td
-                className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold text-[11px]"
-                style={{ backgroundColor: '#ffffff' }}
+                className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
+                style={{ backgroundColor: '#ffffff', fontSize: `${13 * textSizeScale}px` }}
               >
                 {formatDuration(totalAvailableMinutes)}
               </td>
@@ -2952,22 +2988,68 @@ export default function TacticsPage() {
   );
 }
 
-function ListicalMenu({ incrementMinutes, onIncrementChange, onClearAllChips }) {
+function ListicalMenu({ incrementMinutes, onIncrementChange, onClearAllChips, textSizeScale, increaseTextSize, decreaseTextSize, resetTextSize }) {
   const [open, setOpen] = useState(false);
+  const buttonRef = useRef(null);
+  const menuRef = useRef(null);
+  const [menuStyle, setMenuStyle] = useState({});
+
+  useEffect(() => {
+    if (!open) {
+      setMenuStyle({});
+      return undefined;
+    }
+
+    const updatePosition = () => {
+      if (buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect();
+        const calculatedLeft = Math.max(16, rect.left);
+        setMenuStyle({
+          width: '320px',
+          top: rect.bottom + 8,
+          left: calculatedLeft,
+        });
+      }
+    };
+
+    updatePosition();
+    const timer = setTimeout(updatePosition, 10);
+
+    const handleClickOutside = (event) => {
+      if (menuRef.current?.contains(event.target)) return;
+      if (buttonRef.current?.contains(event.target)) return;
+      setOpen(false);
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', handleClickOutside, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('mousedown', handleClickOutside, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
 
   return (
-    <div className="relative inline-block">
+    <div>
       <button
         type="button"
+        ref={buttonRef}
         className="inline-flex items-center gap-2 rounded border border-[#ced3d0] bg-white px-3 py-2 font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6] hover:shadow-md"
         onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
       >
         <span>Listical</span>
       </button>
-      {open ? (
+      {open && createPortal(
         <div
-          className="absolute left-0 mt-3 w-80 rounded-lg border border-[#94a3b8] p-4 shadow-2xl z-50"
-          style={{ backgroundColor: 'rgba(255, 255, 255, 0.97)' }}
+          ref={menuRef}
+          className="fixed rounded-lg border border-[#94a3b8] p-4 shadow-2xl"
+          style={{ ...menuStyle, backgroundColor: 'rgba(255, 255, 255, 0.97)', zIndex: 999999 }}
         >
           <div className="flex items-center" style={{ gap: '10px' }}>
             <label
@@ -2988,7 +3070,36 @@ function ListicalMenu({ incrementMinutes, onIncrementChange, onClearAllChips }) 
               <option value={60}>1 hour</option>
             </select>
           </div>
-          <div className="mt-3">
+          <div className="mt-3 pt-3 border-t border-[#e2e8f0]">
+            <div className="text-xs font-semibold text-slate-700 mb-2">Text Size</div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={decreaseTextSize}
+                className="px-4 py-2 rounded text-sm font-semibold bg-white border border-[#ced3d0] text-[#065f46] hover:bg-[#e6f7ed] transition-colors"
+                title="Decrease text size"
+              >
+                Smaller
+              </button>
+              <div className="text-2xl font-bold text-[#065f46] min-w-[70px] text-center">
+                {Math.round(textSizeScale * 100)}%
+              </div>
+              <button
+                onClick={increaseTextSize}
+                className="px-4 py-2 rounded text-sm font-semibold bg-white border border-[#ced3d0] text-[#065f46] hover:bg-[#e6f7ed] transition-colors"
+                title="Increase text size"
+              >
+                Larger
+              </button>
+            </div>
+            <button
+              onClick={resetTextSize}
+              className="mt-2 px-3 py-1 rounded text-xs font-medium bg-white border border-[#ced3d0] text-slate-600 hover:bg-gray-100 transition-colors"
+              title="Reset to default size"
+            >
+              Reset to 100%
+            </button>
+          </div>
+          <div className="mt-3 pt-3 border-t border-[#e2e8f0]">
             <button
               type="button"
               className="w-full rounded border border-[#ef4444] bg-white px-3 py-2 text-xs font-semibold text-[#b91c1c] shadow-sm transition hover:bg-[#fef2f2] hover:shadow-md"
@@ -2997,8 +3108,9 @@ function ListicalMenu({ incrementMinutes, onIncrementChange, onClearAllChips }) 
               Clear all chips
             </button>
           </div>
-        </div>
-      ) : null}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
