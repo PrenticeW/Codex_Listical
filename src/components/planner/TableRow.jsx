@@ -674,31 +674,54 @@ const TableRow = React.memo(function TableRow({
 
             // For fixed columns, show empty cells (or label for daily min/max)
             if (['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].includes(columnId)) {
-              // For day of week row (row 4), merge all fixed columns
-              // For daily min/max rows, merge all fixed columns and show label
+              // For day row (row 3), render individual cells with labels
+              if (isDayRow) {
+                const labelMap = {
+                  'checkbox': '\u00A0\u00A0✓',
+                  'project': '\u00A0\u00A0Project',
+                  'subproject': '\u00A0\u00A0Subproject',
+                  'status': '\u00A0\u00A0Status',
+                  'task': '\u00A0\u00A0Task',
+                  'recurring': '\u00A0\u00A0Recurring',
+                  'estimate': '\u00A0\u00A0Estimate',
+                  'timeValue': '\u00A0\u00A0Time Value'
+                };
+
+                return (
+                  <td
+                    key={cell.id}
+                    style={{
+                      width: `${cell.column.getSize()}px`,
+                      flexShrink: 0,
+                      flexGrow: 0,
+                      height: `${rowHeight}px`,
+                      boxSizing: 'border-box',
+                    }}
+                    className="p-0"
+                  >
+                    <div
+                      className="h-full flex items-center"
+                      style={{
+                        minHeight: `${rowHeight}px`,
+                        backgroundColor: 'black',
+                        color: 'white',
+                        fontSize: `${cellFontSize}px`,
+                        fontWeight: 500,
+                        borderTop: '1.5px solid white',
+                        borderBottom: '1.5px solid white',
+                        borderLeft: (columnId === 'checkbox') ? '1.5px solid black' : '1px solid black',
+                        borderRight: '1px solid black'
+                      }}
+                    >
+                      {labelMap[columnId] || ''}
+                    </div>
+                  </td>
+                );
+              }
+
+              // For day of week row (row 4) and daily min/max rows (rows 5-6), merge all fixed columns
               if ((isDayOfWeekRow || isDailyMinRow || isDailyMaxRow) && !mergedCellRendered) {
                 mergedCellRendered = true;
-
-                // Determine background color and label
-                let bgColor = 'black';
-                let borderStyle = {
-                  borderTop: '3px solid white',
-                  borderBottom: '3px solid white',
-                  borderRight: '1.5px solid black',
-                };
-                let label = '';
-                let labelStyle = {};
-
-                if (isDailyMinRow || isDailyMaxRow) {
-                  // Daily min/max rows: black background for merged fixed columns
-                  bgColor = 'black';
-                  label = '';
-                  borderStyle = {
-                    borderBottom: '1px solid #d3d3d3',
-                    borderRight: '1.5px solid black',
-                  };
-                  labelStyle = {};
-                }
 
                 return (
                   <td
@@ -716,62 +739,22 @@ const TableRow = React.memo(function TableRow({
                       className="h-full flex items-center"
                       style={{
                         minHeight: `${rowHeight}px`,
-                        backgroundColor: bgColor,
-                        ...borderStyle,
-                        ...labelStyle,
+                        backgroundColor: 'black',
+                        borderTop: isDayOfWeekRow ? '1px solid black' : '1px solid black',
+                        borderBottom: isDailyMaxRow ? '1.5px solid white' : '1px solid black',
+                        borderRight: '1.5px solid black',
                       }}
                     >
-                      {label}
                     </div>
                   </td>
                 );
               } else if (isDayOfWeekRow || isDailyMinRow || isDailyMaxRow) {
-                // Skip subsequent fixed columns for day of week/daily min/max rows
+                // Skip subsequent fixed columns for day-of-week/daily min/max rows
                 return null;
               }
 
-              // For day row (row 3), render individual cells with labels
-              const labelMap = {
-                'checkbox': '\u00A0\u00A0✓',
-                'project': '\u00A0\u00A0Project',
-                'subproject': '\u00A0\u00A0Subproject',
-                'status': '\u00A0\u00A0Status',
-                'task': '\u00A0\u00A0Task',
-                'recurring': '\u00A0\u00A0Recurring',
-                'estimate': '\u00A0\u00A0Estimate',
-                'timeValue': '\u00A0\u00A0Time Value'
-              };
-
-              return (
-                <td
-                  key={cell.id}
-                  style={{
-                    width: `${cell.column.getSize()}px`,
-                    flexShrink: 0,
-                    flexGrow: 0,
-                    height: `${rowHeight}px`,
-                    boxSizing: 'border-box',
-                  }}
-                  className="p-0"
-                >
-                  <div
-                    className="h-full flex items-center"
-                    style={{
-                      minHeight: `${rowHeight}px`,
-                      backgroundColor: 'black',
-                      color: 'white',
-                      fontSize: `${cellFontSize}px`,
-                      fontWeight: 500,
-                      borderTop: '3px solid white',
-                      borderBottom: '3px solid white',
-                      borderLeft: (columnId === 'checkbox') ? '1px solid black' : 'none',
-                      borderRight: columnId === 'timeValue' ? '1.5px solid black' : 'none'
-                    }}
-                  >
-                    {labelMap[columnId] || ''}
-                  </div>
-                </td>
-              );
+              // This code should not be reached for special rows
+              return null;
             }
 
         // For day columns, determine if it's a weekend and apply appropriate background
@@ -820,8 +803,8 @@ const TableRow = React.memo(function TableRow({
                 fontSize: `${cellFontSize}px`,
                 backgroundColor: bgColor,
                 borderTop: isDayRow ? '1.5px solid black' : (isDayOfWeekRow ? '1.5px solid black' : undefined),
-                borderBottom: (isDayOfWeekRow || isDailyMaxRow) ? '1.5px solid black' : (isDailyMinRow ? 'none' : '1px solid #d3d3d3'),
-                borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3'
+                borderBottom: (isDayOfWeekRow || isDailyMaxRow) ? '1.5px solid black' : (isDailyMinRow ? 'none' : (isDayRow ? '1px solid black' : '1px solid #d3d3d3')),
+                borderRight: isLastDayOfWeek ? '1.5px solid black' : (isDayRow ? '1px solid black' : '1px solid #d3d3d3')
               }}
             >
               {value || '\u00A0'}

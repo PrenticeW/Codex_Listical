@@ -77,8 +77,8 @@ function MonthRow({
           style={{
             minHeight: `${rowHeight}px`,
             backgroundColor: 'black',
-            borderTop: '1.5px solid black',
-            borderBottom: '3px solid white',
+            borderTop: '1.5px solid white',
+            borderBottom: '1px solid black',
             borderRight: '1.5px solid black',
           }}
         />
@@ -114,10 +114,11 @@ function MonthRow({
             className="p-0"
           >
             <div
-              className="h-full bg-blue-50 flex items-center justify-center font-semibold text-gray-700"
+              className="h-full flex items-center justify-center font-semibold text-gray-700"
               style={{
                 fontSize: `${cellFontSize}px`,
                 minHeight: `${rowHeight}px`,
+                backgroundColor: 'transparent',
                 borderTop: '1.5px solid black',
                 borderBottom: '1px solid #d3d3d3',
                 borderRight: isLastMonth ? '1.5px solid black' : '1px solid #d3d3d3'

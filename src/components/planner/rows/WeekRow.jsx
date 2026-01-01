@@ -77,8 +77,8 @@ function WeekRow({
           style={{
             minHeight: `${rowHeight}px`,
             backgroundColor: 'black',
-            borderTop: '1.5px solid black',
-            borderBottom: '3px solid white',
+            borderTop: '1px solid black',
+            borderBottom: '1px solid black',
             borderRight: '1.5px solid black',
           }}
         />
@@ -111,10 +111,11 @@ function WeekRow({
             className="p-0"
           >
             <div
-              className="h-full bg-green-50 flex items-center justify-center font-semibold text-gray-700"
+              className="h-full flex items-center justify-center font-semibold text-gray-700"
               style={{
                 fontSize: `${cellFontSize}px`,
                 minHeight: `${rowHeight}px`,
+                backgroundColor: 'transparent',
                 borderTop: '1.5px solid black',
                 borderBottom: '1px solid #d3d3d3',
                 borderRight: '1.5px solid black'
