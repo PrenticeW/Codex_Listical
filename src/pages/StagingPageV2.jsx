@@ -838,8 +838,8 @@ export default function StagingPageV2() {
                             >
                               <button
                                 type="button"
-                                className="rounded-full p-1 text-white hover:text-white/80 focus:outline-none"
-                                style={{ backgroundColor: 'rgba(255,255,255,0.6)', border: 'none' }}
+                                className="rounded-full p-1 text-slate-700 hover:text-slate-900 focus:outline-none"
+                                style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: 'none' }}
                                 onClick={() => openPlanModal(item)}
                                 aria-label="Edit project"
                               >
