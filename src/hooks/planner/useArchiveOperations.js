@@ -19,7 +19,6 @@ import {
   insertRecurringSnapshots,
   resetRecurringTasks,
 } from '../../utils/planner/archiveHelpers';
-import { createDayColumnUpdates } from '../../utils/planner/dayColumnHelpers';
 
 /**
  * Hook for archive operations
@@ -99,7 +98,7 @@ export default function useArchiveOperations({
     const archiveCommand = {
       execute: () => {
         let newData = insertArchiveRow(data, archiveWeekRow);
-        newData = insertArchivedProjects(newData, archiveWeekRow.id, archivedProjects);
+        newData = insertArchivedProjects(newData, archivedProjects, archiveWeekRow.id);
         newData = moveTasksToArchive(newData, nonRecurringTasks, archiveWeekRow.id);
         newData = insertRecurringSnapshots(newData, recurringSnapshots, archiveWeekRow.id);
         newData = resetRecurringTasks(newData, recurringTasks);
