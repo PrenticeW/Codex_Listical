@@ -49,14 +49,47 @@ export default function useComputedDataV2({
         timeValue = calculateTimeValue(estimate);
       }
 
-      // Auto-update status based on task content
+      // Auto-update status based on task content and day columns
       let status = row.status;
-      const task = row.task || '';
+      const taskContent = row.task || '';
 
-      if (!task.trim() && status === 'Scheduled') {
-        status = 'Not Scheduled';
-      } else if (task.trim() && status === 'Not Scheduled') {
-        status = 'Scheduled';
+      // Check if any day column has a time value (including '0.00')
+      let hasScheduledTime = false;
+      for (let i = 0; i < totalDays; i++) {
+        const dayColumnId = `day-${i}` as `day-${number}`;
+        const dayValue = row[dayColumnId];
+
+        // Check if day has any time value
+        // Consider '=timeValue' as scheduled (it will be computed to actual value)
+        // Consider any non-empty value (including '0.00') as scheduled
+        if (dayValue && dayValue !== '') {
+          hasScheduledTime = true;
+          break;
+        }
+      }
+
+      // If task is empty or only whitespace, set status to '-'
+      // If task has content and day columns have time values, set status to 'Scheduled'
+      // If task has content but no time values, set status to 'Not Scheduled' (always)
+      if (taskContent.trim() === '') {
+        if (status !== '-') {
+          status = '-';
+        }
+      } else {
+        // Task has content
+        if (hasScheduledTime) {
+          // Auto-update to Scheduled if status is '-', 'Not Scheduled', or 'Abandoned'
+          // Don't override 'Done', 'Blocked', or 'On Hold'
+          if (status === '-' || status === 'Not Scheduled' || status === 'Abandoned') {
+            status = 'Scheduled';
+          }
+        } else {
+          // No scheduled time - set to 'Not Scheduled', unless status is 'Abandoned'
+          // Abandoned tasks can exist without scheduled time
+          if (status !== 'Abandoned') {
+            status = 'Not Scheduled';
+          }
+        }
       }
 
       return {
@@ -72,13 +105,15 @@ export default function useComputedDataV2({
     return assignParentGroupIds(dataWithTimeValues);
   }, [data, totalDays]);
 
-  // Sync computed status and estimate changes back to source data
+  // Sync computed status, estimate, and timeValue changes back to source data
   useEffect(() => {
     const hasChanges = data.some((row, index) => {
       const computed = computedData[index];
       return computed && (
         row.status !== computed.status ||
-        row.estimate !== computed.estimate
+        row.estimate !== computed.estimate ||
+        row.timeValue !== computed.timeValue ||
+        row._originalEstimate !== computed._originalEstimate
       );
     });
 
@@ -88,12 +123,22 @@ export default function useComputedDataV2({
           const computed = computedData[index];
           if (!computed) return row;
 
-          return {
+          const updatedRow: any = {
             ...row,
             status: computed.status,
             estimate: computed.estimate,
-            ...(computed._originalEstimate && { _originalEstimate: computed._originalEstimate }),
+            timeValue: computed.timeValue,
           };
+
+          // Handle _originalEstimate: add it if present, remove it if undefined
+          if (computed._originalEstimate !== undefined) {
+            updatedRow._originalEstimate = computed._originalEstimate;
+          } else {
+            // Explicitly delete _originalEstimate if it should be cleared
+            delete updatedRow._originalEstimate;
+          }
+
+          return updatedRow;
         })
       );
     }
