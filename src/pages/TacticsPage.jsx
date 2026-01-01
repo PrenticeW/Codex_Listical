@@ -1892,7 +1892,7 @@ export default function TacticsPage() {
     ]
   );
   const renderDragOutline = useCallback(() => {
-    if (!dragPreview || !tableRect) return null;
+    if (!dragPreview) return null;
     const outlineHeight = getBlockHeight(
       dragPreview.startRowId,
       dragPreview.endRowId
@@ -1907,26 +1907,26 @@ export default function TacticsPage() {
     if (!metrics) return null;
     const scrollY = typeof window === 'undefined' ? 0 : window.scrollY || 0;
     const scrollX = typeof window === 'undefined' ? 0 : window.scrollX || 0;
-    const containerTop = (tableRect.top ?? 0) + scrollY;
-    const containerLeft = (tableRect.left ?? 0) + scrollX;
-    const left = columnRect.left - containerLeft;
-    const top = metrics.top - containerTop;
+
+    // columnRect.left and metrics.top are in absolute page coordinates (getBoundingClientRect + scroll)
+    // We position the outline using fixed positioning to avoid any parent offset issues
+    const left = columnRect.left - scrollX;
+    const top = metrics.top - scrollY;
+
     return (
-      <div className="pointer-events-none absolute inset-0 z-20">
-        <div
-          className="absolute"
-          style={{
-            top,
-            left,
-            width: columnRect.width || 0,
-            height: outlineHeight,
-          }}
-        >
-          <div className="h-full w-full rounded border-2 border-dashed border-[#111827] bg-white/60" />
-        </div>
+      <div
+        className="pointer-events-none fixed z-20"
+        style={{
+          top,
+          left,
+          width: columnRect.width || 0,
+          height: outlineHeight,
+        }}
+      >
+        <div className="h-full w-full rounded border-2 border-dashed border-[#111827] bg-white/60" />
       </div>
     );
-  }, [columnRects, dragPreview, getBlockHeight, rowIndexMap, rowMetrics, tableRect]);
+  }, [columnRects, dragPreview, getBlockHeight, rowIndexMap, rowMetrics]);
   const renderCellProjectMenu = useCallback(() => {
     if (!cellMenu) return null;
     const { position } = cellMenu;
