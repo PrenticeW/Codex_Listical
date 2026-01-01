@@ -85,6 +85,7 @@ function PlannerTable({
                       style={{
                         width: `${cellWidth}px`,
                         minWidth: `${cellWidth}px`,
+                        maxWidth: `${cellWidth}px`,
                         flexShrink: 0,
                         flexGrow: 0,
                         boxSizing: 'border-box',
@@ -98,64 +99,90 @@ function PlannerTable({
                         borderBottom: '1px solid #e2e8f0',
                         paddingTop: '0.375rem',
                         paddingBottom: '0.375rem',
+                        paddingLeft: '0.25rem',
+                        paddingRight: '0.25rem',
                         textAlign: 'center',
                         fontWeight: 600,
                       }}
                       className=""
                     >
-                      {cell.content}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: '100%',
+                        position: 'relative',
+                      }}>
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {cell.content}
+                        </span>
 
-                      {/* Add resize handle for resizable columns */}
-                      {column && column.getCanResize && column.getCanResize() && (
-                        <div
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
+                        {/* Add resize handle for resizable columns */}
+                        {(() => {
+                          const canResize = column?.getCanResize?.();
+                          console.log(`Column ${cell.columnKey}: canResize=${canResize}, column exists=${!!column}`);
+                          return canResize;
+                        })() && (
+                          <div
+                            onMouseDown={(e) => {
+                              console.log('Resize handle clicked for column:', column.id);
+                              e.preventDefault();
+                              e.stopPropagation();
 
-                            const startX = e.clientX;
-                            const startWidth = column.getSize();
+                              const startX = e.clientX;
+                              const startWidth = column.getSize();
 
-                            const handleMouseMove = (moveEvent) => {
-                              const diff = moveEvent.clientX - startX;
-                              const minSize = column.columnDef.minSize || 30;
-                              const newWidth = Math.max(minSize, startWidth + diff);
+                              const handleMouseMove = (moveEvent) => {
+                                moveEvent.preventDefault();
+                                const diff = moveEvent.clientX - startX;
+                                const minSize = column.columnDef.minSize || 30;
+                                const newWidth = Math.max(minSize, startWidth + diff);
 
-                              table.setColumnSizing(prev => ({
-                                ...prev,
-                                [column.id]: newWidth
-                              }));
-                            };
+                                table.setColumnSizing(prev => ({
+                                  ...prev,
+                                  [column.id]: newWidth
+                                }));
+                              };
 
-                            const handleMouseUp = () => {
-                              document.removeEventListener('mousemove', handleMouseMove);
-                              document.removeEventListener('mouseup', handleMouseUp);
-                            };
+                              const handleMouseUp = () => {
+                                console.log('Resize completed');
+                                document.removeEventListener('mousemove', handleMouseMove);
+                                document.removeEventListener('mouseup', handleMouseUp);
+                                document.body.style.cursor = '';
+                                document.body.style.userSelect = '';
+                              };
 
-                            document.addEventListener('mousemove', handleMouseMove);
-                            document.addEventListener('mouseup', handleMouseUp);
-                          }}
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            right: 0,
-                            height: '100%',
-                            width: '4px',
-                            backgroundColor: 'transparent',
-                            cursor: 'col-resize',
-                            zIndex: 9999,
-                            pointerEvents: 'auto',
-                            userSelect: 'none',
-                            touchAction: 'none',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#93c5fd';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                          }}
-                          title="Drag to resize column"
-                        />
-                      )}
+                              document.addEventListener('mousemove', handleMouseMove);
+                              document.addEventListener('mouseup', handleMouseUp);
+                              document.body.style.cursor = 'col-resize';
+                              document.body.style.userSelect = 'none';
+                            }}
+                            onMouseEnter={(e) => {
+                              console.log('Mouse entered resize handle for column:', column.id);
+                              e.currentTarget.style.backgroundColor = '#3b82f6';
+                            }}
+                            onMouseLeave={(e) => {
+                              console.log('Mouse left resize handle');
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                            }}
+                            className="column-resizer"
+                            style={{
+                              position: 'absolute',
+                              right: '-2px',
+                              top: 0,
+                              bottom: 0,
+                              width: '10px',
+                              cursor: 'col-resize',
+                              userSelect: 'none',
+                              touchAction: 'none',
+                              backgroundColor: 'rgba(255, 0, 0, 0.3)',
+                              zIndex: 10000,
+                              pointerEvents: 'all',
+                            }}
+                            title="Drag to resize column"
+                          />
+                        )}
+                      </div>
                     </th>
                   );
                 })}

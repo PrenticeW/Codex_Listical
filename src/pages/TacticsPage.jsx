@@ -341,6 +341,24 @@ export default function TacticsPage() {
   const [selectedSummaryRowId, setSelectedSummaryRowId] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
   const [cellMenu, setCellMenu] = useState(null);
+
+  // Column widths for resizing (index 0 is the time column, rest are day/project columns)
+  const [columnWidths, setColumnWidths] = useState(() => {
+    const storageKey = `tactics-column-widths-${currentYear}`;
+    const saved = storage.getJSON(storageKey, null);
+    if (saved && Array.isArray(saved)) {
+      return saved;
+    }
+    // Default: 120px for time column, 140px for all other columns
+    return Array.from({ length: 30 }, (_, i) => i === 0 ? 120 : 140);
+  });
+
+  // Save column widths to storage when they change
+  useEffect(() => {
+    const storageKey = `tactics-column-widths-${currentYear}`;
+    storage.setJSON(storageKey, columnWidths);
+  }, [columnWidths, currentYear]);
+
   const [clipboardProject, setClipboardProject] = useState(null);
   const [editingChipId, setEditingChipId] = useState(null);
   const [editingChipLabel, setEditingChipLabel] = useState('');
@@ -1718,17 +1736,54 @@ export default function TacticsPage() {
     setSelectedCell(null);
     setCellMenu(null);
   }, [displayedWeekDays, incrementMinutes, stagingColumnConfigs, subprojectLayout, timelineRowIds]);
-  const gridTemplateColumns = useMemo(
-    () => `repeat(${1 + totalColumnCount}, minmax(0, 1fr))`,
-    [totalColumnCount]
-  );
+  const gridTemplateColumns = useMemo(() => {
+    // Build grid template with specific pixel widths from columnWidths state
+    const columns = [];
+    for (let i = 0; i <= totalColumnCount; i++) {
+      const width = columnWidths[i] || (i === 0 ? 120 : 140);
+      columns.push(`${width}px`);
+    }
+    return columns.join(' ');
+  }, [totalColumnCount, columnWidths]);
+
+  // Column resize handler
+  const handleColumnResize = useCallback((columnIndex, startX, startWidth) => {
+    const handleMouseMove = (e) => {
+      const diff = e.clientX - startX;
+      const newWidth = Math.max(60, startWidth + diff); // Min width 60px
+      setColumnWidths(prev => {
+        const updated = [...prev];
+        // Ensure array is long enough
+        while (updated.length <= columnIndex) {
+          updated.push(140);
+        }
+        updated[columnIndex] = newWidth;
+        return updated;
+      });
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
   const renderExtraColumnCells = useCallback(
     (rowKey, showHeaderLabel = false) =>
-      extendedStagingColumnConfigs.map((column) => {
+      extendedStagingColumnConfigs.map((column, extraIndex) => {
         const baseClass =
           'border border-[#e5e7eb] px-3 py-2 text-center overflow-visible text-[11px]';
+        // The grid has 9 columns before extra columns (0-8), so project columns start at index 9
+        const columnIndex = 9 + extraIndex;
+
         if (column.type === 'empty' || column.type === 'placeholder') {
-          return <td key={`${rowKey}-${column.id}`} className={baseClass} />;
+          return <td key={`${rowKey}-${column.id}`} className={baseClass} style={{ position: 'relative' }} />;
         }
         const metadata = projectMetadata.get(column.project.id);
         if (showHeaderLabel) {
@@ -1740,15 +1795,43 @@ export default function TacticsPage() {
             <td
               key={`${rowKey}-${column.id}`}
               className={`${baseClass} text-[10px] font-semibold uppercase`}
-              style={{ backgroundColor, color: textColor }}
+              style={{ backgroundColor, color: textColor, position: 'relative' }}
             >
               {label}
+              {/* Add resize handle */}
+              <div
+                onMouseDown={(e) => {
+                  console.log(`Project column resize started: columnIndex=${columnIndex}, extraIndex=${extraIndex}`);
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const width = columnWidths[columnIndex] || 140;
+                  handleColumnResize(columnIndex, e.clientX, width);
+                }}
+                style={{
+                  position: 'absolute',
+                  right: '-2px',
+                  top: 0,
+                  bottom: 0,
+                  width: '8px',
+                  cursor: 'col-resize',
+                  backgroundColor: 'rgba(255, 0, 0, 0.2)', // Visible red for debugging
+                  zIndex: 10,
+                }}
+                onMouseEnter={(e) => {
+                  console.log(`Hovering project column ${columnIndex}`);
+                  e.currentTarget.style.backgroundColor = '#3b82f6';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 0, 0, 0.2)';
+                }}
+                title="Drag to resize column"
+              />
             </td>
           );
         }
         return <td key={`${rowKey}-${column.id}`} className={baseClass} />;
       }),
-    [extendedStagingColumnConfigs, projectMetadata]
+    [extendedStagingColumnConfigs, projectMetadata, columnWidths, handleColumnResize]
   );
   const renderProjectChip = useCallback(
     (chipId, rowId) => {
@@ -2134,13 +2217,13 @@ export default function TacticsPage() {
             className="p-4"
             onDrop={handleTableDrop}
             onDragOver={handleTableDragOver}
-            style={{ display: 'block', paddingBottom: '440px' }}
+            style={{ display: 'block', paddingBottom: '440px', overflowX: 'auto' }}
           >
           {renderDragOutline()}
           <table
             ref={tableElementRef}
-            className="w-full border-collapse text-[11px] text-slate-800"
-            style={{ display: 'table' }}
+            className="border-collapse text-[11px] text-slate-800"
+            style={{ display: 'table', width: 'auto', minWidth: '100%' }}
           >
             <tbody>
               <tr className="grid text-sm" style={{ gridTemplateColumns }}>
@@ -2150,12 +2233,40 @@ export default function TacticsPage() {
                       <td
                         key={`blank-${index}`}
                         className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
-                      ></td>
+                        style={{ position: 'relative' }}
+                      >
+                        {/* Add resize handle */}
+                        <div
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const width = columnWidths[index] || (index === 0 ? 120 : 140);
+                            handleColumnResize(index, e.clientX, width);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            right: '-2px',
+                            top: 0,
+                            bottom: 0,
+                            width: '8px',
+                            cursor: 'col-resize',
+                            backgroundColor: 'transparent',
+                            zIndex: 10,
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#3b82f6';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }}
+                          title="Drag to resize column"
+                        />
+                      </td>
                     );
                   }
                   if (index === 1) {
                     return (
-                      <td key="selector" className="border border-[#e5e7eb] px-3 py-2">
+                      <td key="selector" className="border border-[#e5e7eb] px-3 py-2" style={{ position: 'relative' }}>
                         <select
                           className="w-full rounded border border-[#ced3d0] bg-white px-2 py-1 text-sm text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                           value={startDay}
@@ -2167,13 +2278,65 @@ export default function TacticsPage() {
                             </option>
                           ))}
                         </select>
+                        {/* Add resize handle */}
+                        <div
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const width = columnWidths[index] || 140;
+                            handleColumnResize(index, e.clientX, width);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            right: '-2px',
+                            top: 0,
+                            bottom: 0,
+                            width: '8px',
+                            cursor: 'col-resize',
+                            backgroundColor: 'transparent',
+                            zIndex: 10,
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#3b82f6';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }}
+                          title="Drag to resize column"
+                        />
                       </td>
                     );
                   }
                   const dayIndex = index - 2;
                       return (
-                        <td key={`day-${index}`} className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold">
+                        <td key={`day-${index}`} className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold" style={{ position: 'relative' }}>
                           {sequence[dayIndex] ?? ''}
+                          {/* Add resize handle */}
+                          <div
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const width = columnWidths[index] || 140;
+                              handleColumnResize(index, e.clientX, width);
+                            }}
+                            style={{
+                              position: 'absolute',
+                              right: '-2px',
+                              top: 0,
+                              bottom: 0,
+                              width: '8px',
+                              cursor: 'col-resize',
+                              backgroundColor: 'transparent',
+                              zIndex: 10,
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = '#3b82f6';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                            }}
+                            title="Drag to resize column"
+                          />
                         </td>
                       );
                     })}
