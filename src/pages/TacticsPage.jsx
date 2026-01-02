@@ -51,7 +51,7 @@ const updateChipSequenceFromList = (chips = []) => {
     }
   });
 };
-const logDragDebug = (...args) => console.log('[drag-debug]', ...args);
+const logDragDebug = () => {}; // Debug logging disabled
 
 const TACTICS_STORAGE_KEY = 'tactics-page-settings';
 const TACTICS_CHIPS_STORAGE_KEY_TEMPLATE = 'tactics-year-{yearNumber}-chips-state';

@@ -120,12 +120,10 @@ function PlannerTable({
                         {/* Add resize handle for resizable columns */}
                         {(() => {
                           const canResize = column?.getCanResize?.();
-                          console.log(`Column ${cell.columnKey}: canResize=${canResize}, column exists=${!!column}`);
                           return canResize;
                         })() && (
                           <div
                             onMouseDown={(e) => {
-                              console.log('Resize handle clicked for column:', column.id);
                               e.preventDefault();
                               e.stopPropagation();
 
@@ -145,7 +143,6 @@ function PlannerTable({
                               };
 
                               const handleMouseUp = () => {
-                                console.log('Resize completed');
                                 document.removeEventListener('mousemove', handleMouseMove);
                                 document.removeEventListener('mouseup', handleMouseUp);
                                 document.body.style.cursor = '';
@@ -158,11 +155,9 @@ function PlannerTable({
                               document.body.style.userSelect = 'none';
                             }}
                             onMouseEnter={(e) => {
-                              console.log('Mouse entered resize handle for column:', column.id);
                               e.currentTarget.style.backgroundColor = '#3b82f6';
                             }}
                             onMouseLeave={(e) => {
-                              console.log('Mouse left resize handle');
                               e.currentTarget.style.backgroundColor = 'transparent';
                             }}
                             className="column-resizer"

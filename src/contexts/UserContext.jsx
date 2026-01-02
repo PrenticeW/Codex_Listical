@@ -1,17 +1,19 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
+import { supabase } from '../lib/supabase';
 
 /**
  * UserContext
  *
- * Manages user-specific data and preferences.
+ * Manages user-specific data and preferences using Supabase.
  * This context sits on top of AuthContext and handles user profile data.
  *
  * Key responsibilities:
- * - Load and cache user profile data
+ * - Load and cache user profile data from Supabase
  * - Manage user preferences
  * - Provide user-scoped data access
  * - Handle user data updates
+ * - Create user profile on first login
  */
 
 const UserContext = createContext(null);
@@ -32,13 +34,7 @@ export function useUser() {
 /**
  * UserProvider Component
  *
- * Wraps authenticated parts of the app and provides user-specific data.
- *
- * TODO (Loveable Integration):
- * - Fetch user profile from Supabase database
- * - Implement user preferences sync
- * - Add real-time user data updates
- * - Handle user data migrations
+ * Wraps authenticated parts of the app and provides user-specific data from Supabase.
  */
 export function UserProvider({ children }) {
   const { user: authUser, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -67,33 +63,50 @@ export function UserProvider({ children }) {
         setIsLoading(true);
         setError(null);
 
-        // TODO: Replace with Supabase database query
-        // Example:
-        // const { data: profile, error: profileError } = await supabase
-        //   .from('profiles')
-        //   .select('*')
-        //   .eq('id', authUser.id)
-        //   .single()
+        // Fetch user profile from Supabase
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authUser.id)
+          .single();
 
-        // MOCK: Simulate loading user profile
-        const mockProfile = {
-          id: authUser.id,
-          email: authUser.email,
-          full_name: null,
-          avatar_url: null,
-          created_at: authUser.created_at,
-          updated_at: new Date().toISOString(),
-        };
+        if (profileError) {
+          // If profile doesn't exist, create it
+          if (profileError.code === 'PGRST116') {
+            const { data: newProfile, error: createError } = await supabase
+              .from('profiles')
+              .insert([
+                {
+                  id: authUser.id,
+                  email: authUser.email,
+                  full_name: authUser.user_metadata?.full_name || null,
+                  avatar_url: authUser.user_metadata?.avatar_url || null,
+                }
+              ])
+              .select()
+              .single();
 
-        // MOCK: Simulate loading user preferences
-        const mockPreferences = {
+            if (createError) {
+              throw createError;
+            }
+
+            setProfile(newProfile);
+          } else {
+            throw profileError;
+          }
+        } else {
+          setProfile(profileData);
+        }
+
+        // Load preferences (stored in profile or separate table)
+        // For now, using defaults - can be extended to a separate preferences table
+        const defaultPreferences = {
           theme: 'light',
           notifications_enabled: true,
           default_view: 'planner',
         };
 
-        setProfile(mockProfile);
-        setPreferences(mockPreferences);
+        setPreferences(defaultPreferences);
       } catch (err) {
         console.error('Failed to load user data:', err);
         setError(err);
@@ -108,23 +121,22 @@ export function UserProvider({ children }) {
   // Update user profile
   const updateProfile = async (updates) => {
     try {
-      // TODO: Replace with Supabase database update
-      // Example:
-      // const { data, error } = await supabase
-      //   .from('profiles')
-      //   .update(updates)
-      //   .eq('id', authUser.id)
-      //   .select()
-      //   .single()
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', authUser.id)
+        .select()
+        .single();
 
-      // MOCK: Simulate profile update
-      setProfile(prev => ({
-        ...prev,
-        ...updates,
-        updated_at: new Date().toISOString(),
-      }));
+      if (error) {
+        throw error;
+      }
 
-      return { data: profile, error: null };
+      setProfile(data);
+      return { data, error: null };
     } catch (err) {
       console.error('Failed to update profile:', err);
       return { data: null, error: err };

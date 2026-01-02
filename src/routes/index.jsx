@@ -3,6 +3,8 @@ import ProtectedRoute from '../components/ProtectedRoute';
 import PublicRoute from '../components/PublicRoute';
 import LoginPage from '../pages/LoginPage';
 import SignupPage from '../pages/SignupPage';
+import ForgotPasswordPage from '../pages/ForgotPasswordPage';
+import ResetPasswordPage from '../pages/ResetPasswordPage';
 import Layout from '../components/Layout';
 import ProjectTimePlannerV2 from '../pages/ProjectTimePlannerV2';
 import ProjectTimePlannerWireframe from '../pages/ProjectTimePlannerWireframe';
@@ -31,6 +33,18 @@ export const router = createBrowserRouter([
         <SignupPage />
       </PublicRoute>
     ),
+  },
+  {
+    path: '/forgot-password',
+    element: (
+      <PublicRoute>
+        <ForgotPasswordPage />
+      </PublicRoute>
+    ),
+  },
+  {
+    path: '/reset-password',
+    element: <ResetPasswordPage />,
   },
 
   // Protected routes (require authentication)

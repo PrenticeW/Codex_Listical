@@ -1,19 +1,20 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { setCurrentUserId } from '../lib/storageService';
 import useAsyncHandler from '../hooks/common/useAsyncHandler';
+import { supabase } from '../lib/supabase';
 
 /**
  * AuthContext
  *
- * Manages authentication state for the application.
- * This is a skeleton implementation - Loveable will integrate with Supabase Auth.
+ * Manages authentication state for the application using Supabase Auth.
  *
  * Key responsibilities:
  * - Track current authentication state (logged in/out)
  * - Provide user session information
- * - Handle login/logout flows
+ * - Handle login/logout/signup flows
  * - Persist auth state across page refreshes
  * - Set user ID in storage service for data scoping
+ * - Listen to auth state changes from Supabase
  */
 
 const AuthContext = createContext(null);
@@ -34,13 +35,7 @@ export function useAuth() {
 /**
  * AuthProvider Component
  *
- * Wraps the application and provides authentication context.
- *
- * TODO (Loveable Integration):
- * - Replace mock auth with Supabase Auth
- * - Add proper session management
- * - Implement token refresh logic
- * - Add social auth providers if needed
+ * Wraps the application and provides authentication context using Supabase Auth.
  */
 export function AuthProvider({ children }) {
   // Authentication state
@@ -49,24 +44,20 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Initialize auth state on mount
+  // Initialize auth state on mount and listen to auth changes
   useEffect(() => {
-    // TODO: Replace with Supabase session check
-    // Example: const { data: { session } } = await supabase.auth.getSession()
-
     const initializeAuth = async () => {
       try {
-        // MOCK: For now, simulate checking for existing session
-        // In production, this will check Supabase session
-        const mockSession = localStorage.getItem('mock-session');
+        // Get existing session from Supabase
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
 
-        if (mockSession) {
-          const mockUser = JSON.parse(mockSession);
-          setUser(mockUser);
-          setSession({ user: mockUser });
+        if (error) {
+          console.error('Error getting session:', error);
+        } else if (currentSession) {
+          setUser(currentSession.user);
+          setSession(currentSession);
           setIsAuthenticated(true);
-          // Set user ID in storage service for data scoping
-          setCurrentUserId(mockUser.id);
+          setCurrentUserId(currentSession.user.id);
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
@@ -76,71 +67,82 @@ export function AuthProvider({ children }) {
     };
 
     initializeAuth();
+
+    // Listen for auth state changes (login, logout, token refresh, etc.)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        console.log('Auth state changed:', event);
+
+        if (currentSession) {
+          setUser(currentSession.user);
+          setSession(currentSession);
+          setIsAuthenticated(true);
+          setCurrentUserId(currentSession.user.id);
+        } else {
+          setUser(null);
+          setSession(null);
+          setIsAuthenticated(false);
+          setCurrentUserId(null);
+        }
+
+        // Stop showing loading after initial session check
+        setIsLoading(false);
+      }
+    );
+
+    // Cleanup subscription on unmount
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Core login logic (extracted from try-catch-finally wrapper)
   const loginCore = useCallback(async (email, password) => {
-    // TODO: Replace with Supabase auth
-    // Example: const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-    // MOCK: Simulate successful login
-    const mockUser = {
-      id: 'mock-user-id-' + Date.now(),
-      email: email,
-      created_at: new Date().toISOString(),
-    };
+    if (error) {
+      console.error('Login error:', error);
+      return { user: null, error };
+    }
 
-    localStorage.setItem('mock-session', JSON.stringify(mockUser));
-
-    setUser(mockUser);
-    setSession({ user: mockUser });
-    setIsAuthenticated(true);
-
-    // Set user ID in storage service for data scoping
-    setCurrentUserId(mockUser.id);
-
-    return { user: mockUser, error: null };
+    // Auth state will be updated by onAuthStateChange listener
+    return { user: data.user, error: null };
   }, []);
 
   // Core signup logic (extracted from try-catch-finally wrapper)
   const signupCore = useCallback(async (email, password) => {
-    // TODO: Replace with Supabase auth
-    // Example: const { data, error } = await supabase.auth.signUp({ email, password })
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        // Redirect user to app after email confirmation
+        emailRedirectTo: `${window.location.origin}/`,
+      },
+    });
 
-    // MOCK: Simulate successful signup
-    const mockUser = {
-      id: 'mock-user-id-' + Date.now(),
-      email: email,
-      created_at: new Date().toISOString(),
-    };
+    if (error) {
+      console.error('Signup error:', error);
+      return { user: null, error };
+    }
 
-    localStorage.setItem('mock-session', JSON.stringify(mockUser));
-
-    setUser(mockUser);
-    setSession({ user: mockUser });
-    setIsAuthenticated(true);
-
-    // Set user ID in storage service for data scoping
-    setCurrentUserId(mockUser.id);
-
-    return { user: mockUser, error: null };
+    // Auth state will be updated by onAuthStateChange listener
+    // Note: User may need to confirm email before being fully authenticated
+    return { user: data.user, error: null };
   }, []);
 
   // Core logout logic (extracted from try-catch-finally wrapper)
   const logoutCore = useCallback(async () => {
-    // TODO: Replace with Supabase auth
-    // Example: const { error } = await supabase.auth.signOut()
+    const { error } = await supabase.auth.signOut();
 
-    // MOCK: Clear session
-    localStorage.removeItem('mock-session');
+    if (error) {
+      console.error('Logout error:', error);
+      return { error };
+    }
 
-    setUser(null);
-    setSession(null);
-    setIsAuthenticated(false);
-
-    // Clear user ID from storage service
-    setCurrentUserId(null);
-
+    // Auth state will be updated by onAuthStateChange listener
     return { error: null };
   }, []);
 
@@ -149,19 +151,43 @@ export function AuthProvider({ children }) {
   const signup = useAsyncHandler(signupCore, setIsLoading);
   const logout = useAsyncHandler(logoutCore, setIsLoading);
 
-  // Reset password function (mock - to be replaced by Loveable)
-  const resetPassword = async (email) => {
+  // Reset password function
+  const resetPassword = useCallback(async (email) => {
     try {
-      // TODO: Replace with Supabase auth
-      // Example: const { error } = await supabase.auth.resetPasswordForEmail(email)
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
 
-      console.log('Password reset requested for:', email);
+      if (error) {
+        console.error('Reset password error:', error);
+        return { error };
+      }
+
       return { error: null };
     } catch (error) {
       console.error('Reset password error:', error);
       return { error };
     }
-  };
+  }, []);
+
+  // Update password function (used on reset password page)
+  const updatePassword = useCallback(async (newPassword) => {
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) {
+        console.error('Update password error:', error);
+        return { error };
+      }
+
+      return { error: null };
+    } catch (error) {
+      console.error('Update password error:', error);
+      return { error };
+    }
+  }, []);
 
   const value = {
     // State
@@ -175,6 +201,7 @@ export function AuthProvider({ children }) {
     signup,
     logout,
     resetPassword,
+    updatePassword,
   };
 
   return (
