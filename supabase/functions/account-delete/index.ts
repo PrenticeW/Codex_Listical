@@ -28,12 +28,15 @@ Deno.serve(async (req: Request) => {
   try {
     // Get authorization header
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return new Response(
         JSON.stringify({ success: false, error: 'Missing authorization header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Extract the JWT token
+    const token = authHeader.replace('Bearer ', '');
 
     // Parse request body
     let body: DeleteAccountRequest;
@@ -54,23 +57,16 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Create Supabase clients
+    // Create Supabase admin client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    // User client to get current user
-    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    // Admin client for privileged operations
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Get the authenticated user
-    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
+    // Get the authenticated user using the JWT token
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
     if (userError || !user) {
       return new Response(
         JSON.stringify({ success: false, error: 'Unauthorized' }),
@@ -88,7 +84,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Check rate limit before recording attempt
+    // Check rate limit (max 3 attempts per hour)
     const { data: isAllowed, error: rateLimitCheckError } = await supabaseAdmin.rpc(
       'check_deletion_rate_limit',
       { target_user_id: userId }
@@ -112,16 +108,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Record this attempt
-    const { error: recordError } = await supabaseAdmin.rpc(
-      'record_deletion_attempt',
-      { target_user_id: userId }
-    );
-
-    if (recordError) {
-      console.error('Failed to record deletion attempt:', recordError);
-      // Continue anyway - rate limiting is a best effort
-    }
+    // Record this attempt for rate limiting
+    await supabaseAdmin.rpc('record_deletion_attempt', { target_user_id: userId });
 
     // Verify password by attempting to sign in
     const { error: signInError } = await supabaseAdmin.auth.signInWithPassword({
@@ -130,7 +118,6 @@ Deno.serve(async (req: Request) => {
     });
 
     if (signInError) {
-      // Password verification failed
       return new Response(
         JSON.stringify({ success: false, error: 'Invalid password' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -156,13 +143,6 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ success: false, error: 'Failed to create deletion request' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    }
-
-    // Sign out the user (invalidate all sessions)
-    const { error: signOutError } = await supabaseAdmin.auth.admin.signOut(userId, 'global');
-    if (signOutError) {
-      console.error('Failed to sign out user:', signOutError);
-      // Don't fail the request - deletion was already requested
     }
 
     const response: DeleteAccountResponse = {

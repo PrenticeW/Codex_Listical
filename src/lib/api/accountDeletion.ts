@@ -40,7 +40,6 @@ export async function requestAccountDeletion(
     });
 
     if (response.error) {
-      // Handle specific status codes
       const status = response.error.context?.status;
       if (status === 401) {
         return { success: false, error: 'Unauthorized' };

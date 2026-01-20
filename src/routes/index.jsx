@@ -10,7 +10,6 @@ import ProjectTimePlannerV2 from '../pages/ProjectTimePlannerV2';
 import ProjectTimePlannerWireframe from '../pages/ProjectTimePlannerWireframe';
 import StagingPageV2 from '../pages/StagingPageV2';
 import TacticsPage from '../pages/TacticsPage';
-import TestDeleteAccountPage from '../pages/TestDeleteAccountPage';
 
 /**
  * Application Routes Configuration
@@ -76,10 +75,6 @@ export const router = createBrowserRouter([
             <ProjectTimePlannerWireframe />
           </div>
         ),
-      },
-      {
-        path: 'test-delete-account',
-        element: <TestDeleteAccountPage />,
       },
     ],
   },
