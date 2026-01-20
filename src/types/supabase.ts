@@ -30,6 +30,9 @@ export interface Database {
           email: string
           full_name: string | null
           avatar_url: string | null
+          date_of_birth: string | null
+          deletion_requested_at: string | null
+          deleted_at: string | null
           created_at: string
           updated_at: string
         }
@@ -38,6 +41,9 @@ export interface Database {
           email: string
           full_name?: string | null
           avatar_url?: string | null
+          date_of_birth?: string | null
+          deletion_requested_at?: string | null
+          deleted_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -46,6 +52,9 @@ export interface Database {
           email?: string
           full_name?: string | null
           avatar_url?: string | null
+          date_of_birth?: string | null
+          deletion_requested_at?: string | null
+          deleted_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -58,15 +67,69 @@ export interface Database {
           }
         ]
       }
+      deletion_audit_log: {
+        Row: {
+          id: string
+          user_id_hash: string
+          requested_at: string
+          completed_at: string | null
+          status: Database['public']['Enums']['deletion_status']
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id_hash: string
+          requested_at?: string
+          completed_at?: string | null
+          status?: Database['public']['Enums']['deletion_status']
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id_hash?: string
+          requested_at?: string
+          completed_at?: string | null
+          status?: Database['public']['Enums']['deletion_status']
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      hash_user_id: {
+        Args: {
+          user_id: string
+        }
+        Returns: string
+      }
+      request_account_deletion: {
+        Args: {
+          target_user_id: string
+        }
+        Returns: string
+      }
+      complete_account_deletion: {
+        Args: {
+          target_user_id: string
+          audit_log_id: string
+        }
+        Returns: boolean
+      }
+      fail_account_deletion: {
+        Args: {
+          audit_log_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      deletion_status: 'pending' | 'completed' | 'failed'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -78,3 +141,8 @@ export interface Database {
 export type Profile = Database['public']['Tables']['profiles']['Row']
 export type ProfileInsert = Database['public']['Tables']['profiles']['Insert']
 export type ProfileUpdate = Database['public']['Tables']['profiles']['Update']
+
+export type DeletionAuditLog = Database['public']['Tables']['deletion_audit_log']['Row']
+export type DeletionAuditLogInsert = Database['public']['Tables']['deletion_audit_log']['Insert']
+export type DeletionAuditLogUpdate = Database['public']['Tables']['deletion_audit_log']['Update']
+export type DeletionStatus = Database['public']['Enums']['deletion_status']
