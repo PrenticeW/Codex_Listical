@@ -1,6 +1,79 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+
+// LocalStorage key for age verification block
+const AGE_BLOCK_KEY = 'listical_age_block';
+const AGE_BLOCK_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Helper to check if user is blocked from signup attempts
+function isAgeBlocked() {
+  const blockData = localStorage.getItem(AGE_BLOCK_KEY);
+  if (!blockData) return false;
+
+  const blockTime = parseInt(blockData, 10);
+  const now = Date.now();
+
+  if (now - blockTime < AGE_BLOCK_DURATION_MS) {
+    return true;
+  }
+
+  // Block expired, remove it
+  localStorage.removeItem(AGE_BLOCK_KEY);
+  return false;
+}
+
+// Helper to set the age block
+function setAgeBlock() {
+  localStorage.setItem(AGE_BLOCK_KEY, Date.now().toString());
+}
+
+// Calculate age from date of birth
+function calculateAge(year, month, day) {
+  const today = new Date();
+  const birthDate = new Date(year, month - 1, day);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+
+  return age;
+}
+
+// Generate year options (current year - 100 to current year - 5)
+function getYearOptions() {
+  const currentYear = new Date().getFullYear();
+  const years = [];
+  for (let year = currentYear - 5; year >= currentYear - 100; year--) {
+    years.push(year);
+  }
+  return years;
+}
+
+// Generate day options based on month and year
+function getDayOptions(month, year) {
+  if (!month || !year) return Array.from({ length: 31 }, (_, i) => i + 1);
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  return Array.from({ length: daysInMonth }, (_, i) => i + 1);
+}
+
+const MONTHS = [
+  { value: 1, label: 'January' },
+  { value: 2, label: 'February' },
+  { value: 3, label: 'March' },
+  { value: 4, label: 'April' },
+  { value: 5, label: 'May' },
+  { value: 6, label: 'June' },
+  { value: 7, label: 'July' },
+  { value: 8, label: 'August' },
+  { value: 9, label: 'September' },
+  { value: 10, label: 'October' },
+  { value: 11, label: 'November' },
+  { value: 12, label: 'December' },
+];
 
 /**
  * SignupPage Component
@@ -13,12 +86,51 @@ export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [birthMonth, setBirthMonth] = useState('');
+  const [birthDay, setBirthDay] = useState('');
+  const [birthYear, setBirthYear] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+
+  // Check for age block on mount
+  useEffect(() => {
+    if (isAgeBlocked()) {
+      setIsBlocked(true);
+      setError('Sorry, you must be 13 or older to use Listical. Please try again later.');
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Check if user is blocked from signup attempts
+    if (isBlocked || isAgeBlocked()) {
+      setIsBlocked(true);
+      setError('Sorry, you must be 13 or older to use Listical. Please try again later.');
+      return;
+    }
+
+    // Validate date of birth is provided
+    if (!birthMonth || !birthDay || !birthYear) {
+      setError('Please enter your date of birth');
+      return;
+    }
+
+    // Calculate age and validate
+    const age = calculateAge(
+      parseInt(birthYear, 10),
+      parseInt(birthMonth, 10),
+      parseInt(birthDay, 10)
+    );
+
+    if (age < 13) {
+      setAgeBlock();
+      setIsBlocked(true);
+      setError('Sorry, you must be 13 or older to use Listical');
+      return;
+    }
 
     // Validate passwords match
     if (password !== confirmPassword) {
@@ -34,8 +146,11 @@ export default function SignupPage() {
 
     setIsLoading(true);
 
+    // Format DOB as YYYY-MM-DD for database
+    const dateOfBirth = `${birthYear}-${String(birthMonth).padStart(2, '0')}-${String(birthDay).padStart(2, '0')}`;
+
     try {
-      const { error: signupError } = await signup(email, password);
+      const { error: signupError } = await signup(email, password, dateOfBirth);
 
       if (signupError) {
         setError(signupError.message || 'Failed to create account');
@@ -103,8 +218,9 @@ export default function SignupPage() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm"
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     placeholder="you@example.com"
+                    disabled={isBlocked}
                   />
                 </div>
               </div>
@@ -128,8 +244,9 @@ export default function SignupPage() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm"
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     placeholder="Minimum 6 characters"
+                    disabled={isBlocked}
                   />
                 </div>
               </div>
@@ -155,15 +272,73 @@ export default function SignupPage() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm"
                     placeholder="Confirm your password"
+                    disabled={isBlocked}
                   />
                 </div>
+              </div>
+
+              {/* Date of Birth Field */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Date of Birth
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {/* Month */}
+                  <select
+                    id="birth-month"
+                    value={birthMonth}
+                    onChange={(e) => setBirthMonth(e.target.value)}
+                    disabled={isBlocked}
+                    className="block w-full py-3 px-3 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Month</option>
+                    {MONTHS.map((month) => (
+                      <option key={month.value} value={month.value}>
+                        {month.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Day */}
+                  <select
+                    id="birth-day"
+                    value={birthDay}
+                    onChange={(e) => setBirthDay(e.target.value)}
+                    disabled={isBlocked}
+                    className="block w-full py-3 px-3 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Day</option>
+                    {getDayOptions(parseInt(birthMonth, 10), parseInt(birthYear, 10)).map((day) => (
+                      <option key={day} value={day}>
+                        {day}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Year */}
+                  <select
+                    id="birth-year"
+                    value={birthYear}
+                    onChange={(e) => setBirthYear(e.target.value)}
+                    disabled={isBlocked}
+                    className="block w-full py-3 px-3 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Year</option>
+                    {getYearOptions().map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">You must be 13 or older to use Listical</p>
               </div>
             </div>
 
             {/* Sign Up Button */}
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || isBlocked}
               className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-[#d5a6bd] hover:from-blue-700 hover:to-[#c494aa] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
               {isLoading ? (

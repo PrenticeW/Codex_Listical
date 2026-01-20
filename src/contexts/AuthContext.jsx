@@ -113,14 +113,25 @@ export function AuthProvider({ children }) {
   }, []);
 
   // Core signup logic (extracted from try-catch-finally wrapper)
-  const signupCore = useCallback(async (email, password) => {
+  // Accepts optional dateOfBirth for age verification (stored in user metadata)
+  const signupCore = useCallback(async (email, password, dateOfBirth = null) => {
+    const options = {
+      // Redirect user to app after email confirmation
+      emailRedirectTo: `${window.location.origin}/`,
+    };
+
+    // Include date_of_birth in user metadata if provided
+    // This will be picked up by the handle_new_user trigger and inserted into profiles
+    if (dateOfBirth) {
+      options.data = {
+        date_of_birth: dateOfBirth, // Format: YYYY-MM-DD
+      };
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        // Redirect user to app after email confirmation
-        emailRedirectTo: `${window.location.origin}/`,
-      },
+      options,
     });
 
     if (error) {
