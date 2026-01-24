@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
+import { LogOut, Settings } from 'lucide-react';
 import YearSelector from '../YearSelector';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -53,13 +53,22 @@ export default function NavigationBar({
       <div className="flex items-center gap-4">
         {yearSelector || <YearSelector />}
         {user && (
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 text-sm font-medium text-slate-600 bg-transparent rounded-lg hover:bg-slate-100 hover:text-slate-900 transition-all duration-200 flex items-center gap-2"
-            title="Sign out"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+          <>
+            <button
+              onClick={() => navigate('/settings')}
+              className="px-4 py-2 text-sm font-medium text-slate-600 bg-transparent rounded-lg hover:bg-slate-100 hover:text-slate-900 transition-all duration-200 flex items-center gap-2"
+              title="Account Settings"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 text-sm font-medium text-slate-600 bg-transparent rounded-lg hover:bg-slate-100 hover:text-slate-900 transition-all duration-200 flex items-center gap-2"
+              title="Sign out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </>
         )}
       </div>
     </div>

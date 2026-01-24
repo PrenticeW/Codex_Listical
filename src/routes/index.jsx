@@ -11,6 +11,7 @@ import ProjectTimePlannerV2 from '../pages/ProjectTimePlannerV2';
 import ProjectTimePlannerWireframe from '../pages/ProjectTimePlannerWireframe';
 import StagingPageV2 from '../pages/StagingPageV2';
 import TacticsPage from '../pages/TacticsPage';
+import AccountSettingsPage from '../pages/AccountSettingsPage';
 
 /**
  * Application Routes Configuration
@@ -80,6 +81,10 @@ export const router = createBrowserRouter([
             <ProjectTimePlannerWireframe />
           </div>
         ),
+      },
+      {
+        path: 'settings',
+        element: <AccountSettingsPage />,
       },
     ],
   },
