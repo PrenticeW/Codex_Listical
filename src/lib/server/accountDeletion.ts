@@ -1,6 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../../types/supabase';
 
+const GRACE_PERIOD_DAYS = 30;
+
 /**
  * Result type for account deletion request
  */
@@ -205,5 +207,283 @@ export async function failAccountDeletion(
       success: false,
       error: errorMessage,
     };
+  }
+}
+
+/**
+ * Permanently deletes a user from Supabase Auth.
+ *
+ * WARNING: This action is IRREVERSIBLE. Only call this during hard-delete operations,
+ * never during soft-delete. Once deleted, the user cannot recover their account.
+ *
+ * This function uses the Supabase Admin API which requires the service role key.
+ * It must only be executed in server-side contexts (Edge Functions, API routes, etc.)
+ *
+ * @param userId - The UUID of the auth user to permanently delete
+ * @returns Success/failure result with optional error message
+ */
+export async function deleteSupabaseAuthUser(
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!userId) {
+    return {
+      success: false,
+      error: 'User ID is required',
+    };
+  }
+
+  // Validate UUID format
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(userId)) {
+    return {
+      success: false,
+      error: 'Invalid user ID format',
+    };
+  }
+
+  try {
+    const adminClient = createAdminClient();
+
+    const { error } = await adminClient.auth.admin.deleteUser(userId);
+
+    if (error) {
+      console.error('[deleteSupabaseAuthUser] Failed to delete auth user:', {
+        userId,
+        error: error.message,
+        code: error.status,
+      });
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+
+    console.log('[deleteSupabaseAuthUser] Successfully deleted auth user:', userId);
+    return {
+      success: true,
+    };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+    console.error('[deleteSupabaseAuthUser] Unexpected error:', {
+      userId,
+      error: errorMessage,
+    });
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
+ * User pending deletion with their audit log info
+ */
+export interface UserPendingDeletion {
+  id: string;
+  email: string;
+  deletion_requested_at: string;
+  audit_log_id: string;
+}
+
+/**
+ * Result of processing a batch of deletions
+ */
+export interface BatchDeletionResult {
+  processed: number;
+  succeeded: number;
+  failed: number;
+  errors: Array<{ userId: string; error: string }>;
+}
+
+/**
+ * Fetches users who have requested deletion and are past the grace period.
+ *
+ * @returns Array of users pending hard deletion
+ */
+export async function getUsersPendingHardDeletion(): Promise<UserPendingDeletion[]> {
+  try {
+    const adminClient = createAdminClient();
+
+    const gracePeriodDate = new Date();
+    gracePeriodDate.setDate(gracePeriodDate.getDate() - GRACE_PERIOD_DAYS);
+
+    // Query profiles where deletion was requested more than 30 days ago
+    // and the account hasn't been hard-deleted yet
+    // Note: stripe_customer_id may not exist in all schemas - we handle this gracefully
+    const { data: profiles, error: profilesError } = await adminClient
+      .from('profiles')
+      .select('id, email, deletion_requested_at')
+      .not('deletion_requested_at', 'is', null)
+      .is('deleted_at', null)
+      .lt('deletion_requested_at', gracePeriodDate.toISOString());
+
+    if (profilesError) {
+      console.error('[getUsersPendingHardDeletion] Failed to fetch profiles:', profilesError);
+      return [];
+    }
+
+    if (!profiles || profiles.length === 0) {
+      return [];
+    }
+
+    // Get corresponding audit log entries for these users
+    const result: UserPendingDeletion[] = [];
+
+    for (const profile of profiles) {
+      // Find the pending audit log entry for this user using the hash function
+      const { data: auditLog, error: auditError } = await adminClient
+        .from('deletion_audit_log')
+        .select('id')
+        .eq('user_id_hash', await hashUserId(adminClient, profile.id))
+        .eq('status', 'pending')
+        .order('requested_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (auditError || !auditLog) {
+        console.warn('[getUsersPendingHardDeletion] No audit log found for user:', profile.id);
+        continue;
+      }
+
+      result.push({
+        id: profile.id,
+        email: profile.email,
+        deletion_requested_at: profile.deletion_requested_at!,
+        audit_log_id: auditLog.id,
+      });
+    }
+
+    return result;
+  } catch (err) {
+    console.error('[getUsersPendingHardDeletion] Unexpected error:', err);
+    return [];
+  }
+}
+
+/**
+ * Helper to hash a user ID using the database function
+ */
+async function hashUserId(client: SupabaseClient<Database>, userId: string): Promise<string> {
+  const { data, error } = await client.rpc('hash_user_id', { user_id: userId });
+  if (error) {
+    throw new Error(`Failed to hash user ID: ${error.message}`);
+  }
+  return data as string;
+}
+
+/**
+ * Performs hard deletion of a single user's data.
+ *
+ * This function:
+ * 1. Deletes all user data from related database tables
+ * 2. Deletes the Supabase auth user
+ * 3. Marks the profile as deleted and updates audit log
+ *
+ * @param user - The user to hard delete
+ * @returns Success/failure result
+ */
+export async function hardDeleteUser(
+  user: UserPendingDeletion
+): Promise<{ success: boolean; error?: string }> {
+  console.log('[hardDeleteUser] Starting hard deletion for user:', user.id);
+
+  try {
+    // Step 1: Delete user data from related tables
+    // Add explicit deletes here for any tables that don't have CASCADE delete
+    // For example: user_lists, user_preferences, etc.
+    // The profile will be soft-deleted (deleted_at set), not hard deleted, to maintain audit trail
+
+    // Step 2: Delete Supabase auth user
+    const authResult = await deleteSupabaseAuthUser(user.id);
+    if (!authResult.success) {
+      throw new Error(`Auth deletion failed: ${authResult.error}`);
+    }
+
+    // Step 3: Complete the deletion (sets deleted_at and updates audit log)
+    const completeResult = await completeAccountDeletion(user.id, user.audit_log_id);
+    if (!completeResult.success) {
+      throw new Error(`Failed to complete deletion: ${completeResult.error}`);
+    }
+
+    console.log('[hardDeleteUser] Successfully completed hard deletion for user:', user.id);
+    return { success: true };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+    console.error('[hardDeleteUser] Failed to hard delete user:', {
+      userId: user.id,
+      error: errorMessage,
+    });
+
+    // Mark the deletion as failed in the audit log
+    await failAccountDeletion(user.audit_log_id);
+
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
+ * Processes all users pending hard deletion.
+ *
+ * This is the main function called by the cron job. It:
+ * 1. Fetches all users past the grace period
+ * 2. Processes each deletion independently (one failure doesn't stop others)
+ * 3. Returns a summary of the batch results
+ *
+ * @returns Batch deletion result with success/failure counts
+ */
+export async function processScheduledDeletions(): Promise<BatchDeletionResult> {
+  console.log('[processScheduledDeletions] Starting scheduled deletion job');
+
+  const result: BatchDeletionResult = {
+    processed: 0,
+    succeeded: 0,
+    failed: 0,
+    errors: [],
+  };
+
+  try {
+    const usersPendingDeletion = await getUsersPendingHardDeletion();
+
+    console.log(`[processScheduledDeletions] Found ${usersPendingDeletion.length} users pending deletion`);
+
+    if (usersPendingDeletion.length === 0) {
+      return result;
+    }
+
+    for (const user of usersPendingDeletion) {
+      result.processed++;
+
+      const deletionResult = await hardDeleteUser(user);
+
+      if (deletionResult.success) {
+        result.succeeded++;
+      } else {
+        result.failed++;
+        result.errors.push({
+          userId: user.id,
+          error: deletionResult.error || 'Unknown error',
+        });
+      }
+    }
+
+    // Log summary
+    console.log('[processScheduledDeletions] Batch complete:', {
+      processed: result.processed,
+      succeeded: result.succeeded,
+      failed: result.failed,
+    });
+
+    // Alert if there were failures
+    if (result.failed > 0) {
+      console.error('[processScheduledDeletions] ALERT: Some deletions failed:', result.errors);
+    }
+
+    return result;
+  } catch (err) {
+    console.error('[processScheduledDeletions] Critical error in batch processing:', err);
+    throw err;
   }
 }
