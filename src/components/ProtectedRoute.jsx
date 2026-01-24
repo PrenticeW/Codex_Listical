@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { useEffect, useState, useRef } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -12,13 +12,20 @@ import { supabase } from '../lib/supabase';
  */
 export default function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoading, user, logout } = useAuth();
-  const [isDeletionPending, setIsDeletionPending] = useState(false);
   const [isCheckingDeletion, setIsCheckingDeletion] = useState(true);
+  const navigate = useNavigate();
+  const hasCheckedDeletion = useRef(false);
 
   // Check if user has requested account deletion
   useEffect(() => {
     const checkDeletionStatus = async () => {
       if (!isAuthenticated || !user) {
+        setIsCheckingDeletion(false);
+        return;
+      }
+
+      // Only check once per mount to avoid re-checking after logout
+      if (hasCheckedDeletion.current) {
         setIsCheckingDeletion(false);
         return;
       }
@@ -36,22 +43,25 @@ export default function ProtectedRoute({ children }) {
           return;
         }
 
+        hasCheckedDeletion.current = true;
+
         if (profile?.deletion_requested_at) {
           // User has requested deletion - sign them out and redirect
-          setIsDeletionPending(true);
           await logout();
+          // Navigate immediately after logout
+          navigate('/account-deleted', { replace: true });
+          return;
         }
       } catch (err) {
         console.error('Error checking deletion status:', err);
-      } finally {
-        setIsCheckingDeletion(false);
       }
+      setIsCheckingDeletion(false);
     };
 
     if (!isLoading) {
       checkDeletionStatus();
     }
-  }, [isAuthenticated, isLoading, user, logout]);
+  }, [isAuthenticated, isLoading, user, logout, navigate]);
 
   // Show loading state while checking authentication or deletion status
   if (isLoading || isCheckingDeletion) {
@@ -63,11 +73,6 @@ export default function ProtectedRoute({ children }) {
         </div>
       </div>
     );
-  }
-
-  // Redirect to account-deleted page if deletion is pending
-  if (isDeletionPending) {
-    return <Navigate to="/account-deleted" replace />;
   }
 
   // Redirect to login if not authenticated
