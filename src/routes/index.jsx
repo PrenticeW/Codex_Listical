@@ -5,6 +5,7 @@ import LoginPage from '../pages/LoginPage';
 import SignupPage from '../pages/SignupPage';
 import ForgotPasswordPage from '../pages/ForgotPasswordPage';
 import ResetPasswordPage from '../pages/ResetPasswordPage';
+import AccountDeletedPage from '../pages/AccountDeletedPage';
 import Layout from '../components/Layout';
 import ProjectTimePlannerV2 from '../pages/ProjectTimePlannerV2';
 import ProjectTimePlannerWireframe from '../pages/ProjectTimePlannerWireframe';
@@ -45,6 +46,10 @@ export const router = createBrowserRouter([
   {
     path: '/reset-password',
     element: <ResetPasswordPage />,
+  },
+  {
+    path: '/account-deleted',
+    element: <AccountDeletedPage />,
   },
 
   // Protected routes (require authentication)
