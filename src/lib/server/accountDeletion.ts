@@ -487,3 +487,175 @@ export async function processScheduledDeletions(): Promise<BatchDeletionResult> 
     throw err;
   }
 }
+
+/**
+ * Result type for admin-triggered deletion
+ */
+export interface AdminDeletionResult {
+  success: boolean;
+  userId?: string;
+  email?: string;
+  error?: string;
+  skippedGracePeriod: boolean;
+}
+
+/**
+ * Admin-only function to manually trigger hard deletion for a specific user.
+ *
+ * USE CASES:
+ * - User requests immediate deletion (support request)
+ * - Testing the deletion flow
+ * - Cleanup of stuck deletions
+ *
+ * IMPORTANT: This function is NOT exposed as a public API.
+ * Only call from server-side admin contexts (scripts, internal tools, etc.)
+ *
+ * @param identifier - User ID (UUID) or email address
+ * @param options.skipGracePeriod - If true, deletes immediately even if grace period hasn't passed.
+ *                                   Default: false (requires deletion_requested_at to be set)
+ * @param options.createAuditIfMissing - If true, creates an audit log entry if one doesn't exist.
+ *                                        Default: true
+ * @returns AdminDeletionResult with success status and user info
+ */
+export async function adminTriggerHardDeletion(
+  identifier: string,
+  options: {
+    skipGracePeriod?: boolean;
+    createAuditIfMissing?: boolean;
+  } = {}
+): Promise<AdminDeletionResult> {
+  const { skipGracePeriod = false, createAuditIfMissing = true } = options;
+
+  console.log('[adminTriggerHardDeletion] Starting admin-triggered deletion:', {
+    identifier: identifier.includes('@') ? identifier : '[UUID]',
+    skipGracePeriod,
+    createAuditIfMissing,
+  });
+
+  if (!identifier) {
+    return {
+      success: false,
+      error: 'User ID or email is required',
+      skippedGracePeriod: false,
+    };
+  }
+
+  try {
+    const adminClient = createAdminClient();
+
+    // Determine if identifier is UUID or email
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isUuid = uuidRegex.test(identifier);
+
+    // Look up the user profile
+    let query = adminClient
+      .from('profiles')
+      .select('id, email, deletion_requested_at')
+      .is('deleted_at', null);
+
+    if (isUuid) {
+      query = query.eq('id', identifier);
+    } else {
+      query = query.eq('email', identifier.toLowerCase());
+    }
+
+    const { data: profile, error: profileError } = await query.single();
+
+    if (profileError || !profile) {
+      return {
+        success: false,
+        error: `User not found: ${profileError?.message || 'No matching profile'}`,
+        skippedGracePeriod: false,
+      };
+    }
+
+    // Check if deletion was requested (unless skipping grace period)
+    if (!skipGracePeriod && !profile.deletion_requested_at) {
+      return {
+        success: false,
+        userId: profile.id,
+        email: profile.email,
+        error: 'User has not requested deletion. Use skipGracePeriod: true to force deletion.',
+        skippedGracePeriod: false,
+      };
+    }
+
+    // Find or create audit log entry
+    let auditLogId: string;
+
+    const userIdHash = await hashUserId(adminClient, profile.id);
+    const { data: existingAudit } = await adminClient
+      .from('deletion_audit_log')
+      .select('id')
+      .eq('user_id_hash', userIdHash)
+      .eq('status', 'pending')
+      .order('requested_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (existingAudit) {
+      auditLogId = existingAudit.id;
+    } else if (createAuditIfMissing) {
+      // Create a new deletion request (this also sets deletion_requested_at if not set)
+      const requestResult = await requestAccountDeletion(profile.id);
+      if (!requestResult.success || !requestResult.auditLogId) {
+        return {
+          success: false,
+          userId: profile.id,
+          email: profile.email,
+          error: `Failed to create audit log: ${requestResult.error}`,
+          skippedGracePeriod: skipGracePeriod,
+        };
+      }
+      auditLogId = requestResult.auditLogId;
+    } else {
+      return {
+        success: false,
+        userId: profile.id,
+        email: profile.email,
+        error: 'No pending audit log found and createAuditIfMissing is false',
+        skippedGracePeriod: false,
+      };
+    }
+
+    // Perform the hard deletion
+    const userPendingDeletion: UserPendingDeletion = {
+      id: profile.id,
+      email: profile.email,
+      deletion_requested_at: profile.deletion_requested_at || new Date().toISOString(),
+      audit_log_id: auditLogId,
+    };
+
+    const deletionResult = await hardDeleteUser(userPendingDeletion);
+
+    if (!deletionResult.success) {
+      return {
+        success: false,
+        userId: profile.id,
+        email: profile.email,
+        error: deletionResult.error,
+        skippedGracePeriod: skipGracePeriod,
+      };
+    }
+
+    console.log('[adminTriggerHardDeletion] Successfully deleted user:', {
+      userId: profile.id,
+      skipGracePeriod,
+    });
+
+    return {
+      success: true,
+      userId: profile.id,
+      email: profile.email,
+      skippedGracePeriod: skipGracePeriod,
+    };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+    console.error('[adminTriggerHardDeletion] Unexpected error:', err);
+    return {
+      success: false,
+      error: errorMessage,
+      skippedGracePeriod: skipGracePeriod,
+    };
+  }
+}
