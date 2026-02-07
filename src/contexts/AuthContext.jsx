@@ -157,10 +157,50 @@ export function AuthProvider({ children }) {
     return { error: null };
   }, []);
 
+  // Send OTP to email for passwordless login
+  const sendOtpCore = useCallback(async (email) => {
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: false, // Only allow existing users
+        emailRedirectTo: undefined, // Disable magic link, use OTP code instead
+      }
+    });
+
+    if (error) {
+      console.error('Send OTP error:', error);
+      return { error };
+    }
+
+    return { error: null };
+  }, []);
+
+  // Verify OTP code for passwordless login
+  const verifyOtpCore = useCallback(async (email, token) => {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'email'
+    });
+
+    if (error) {
+      console.error('Verify OTP error:', error);
+      return { user: null, error };
+    }
+
+    // Auth state will be updated by onAuthStateChange listener
+    return { user: data?.user, error: null };
+  }, []);
+
   // Wrap async functions with loading state management (eliminates repetitive try-catch-finally)
   const login = useAsyncHandler(loginCore, setIsLoading);
   const signup = useAsyncHandler(signupCore, setIsLoading);
   const logout = useAsyncHandler(logoutCore, setIsLoading);
+  // Note: sendOtp and verifyOtp are NOT wrapped with useAsyncHandler
+  // because setting isLoading causes PublicRoute to show loading screen
+  // and unmount LoginPage, resetting the OTP flow state
+  const sendOtp = sendOtpCore;
+  const verifyOtp = verifyOtpCore;
 
   // Reset password function
   const resetPassword = useCallback(async (email) => {
@@ -213,6 +253,8 @@ export function AuthProvider({ children }) {
     logout,
     resetPassword,
     updatePassword,
+    sendOtp,
+    verifyOtp,
   };
 
   return (
