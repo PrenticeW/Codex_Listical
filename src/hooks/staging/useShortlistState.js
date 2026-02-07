@@ -67,6 +67,16 @@ export default function useShortlistState({ currentYear }) {
     saveStagingState({ shortlist: enrichedShortlist, archived }, currentYear);
   }, [shortlist, archived, currentYear]);
 
+  // Generate a random color for new projects
+  const generateRandomColor = () => {
+    const colors = [
+      '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16',
+      '#22c55e', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6',
+      '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899',
+    ];
+    return colors[Math.floor(Math.random() * colors.length)];
+  };
+
   // Add new item to shortlist
   const handleAdd = useCallback(() => {
     const text = inputValue.trim();
@@ -83,7 +93,17 @@ export default function useShortlistState({ currentYear }) {
         {
           id,
           text,
-          color: null,
+          color: generateRandomColor(),
+          planTableVisible: true,
+          planTableCollapsed: true,
+          hasPlan: true,
+          planReasonRowCount: 1,
+          planOutcomeRowCount: 1,
+          planOutcomeQuestionRowCount: 1,
+          planNeedsQuestionRowCount: 1,
+          planNeedsPlanRowCount: 1,
+          planSubprojectRowCount: 1,
+          planXxxRowCount: 1,
         },
       ],
       archived: prev.archived,

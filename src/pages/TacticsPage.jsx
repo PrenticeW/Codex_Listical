@@ -398,11 +398,7 @@ export default function TacticsPage() {
   const highlightedProjects = useMemo(() => {
     if (!stagingProjects.length) return [];
     return stagingProjects
-      .filter((project) => {
-        const colorValue = typeof project?.color === 'string' ? project.color.trim() : '';
-        if (!colorValue) return false;
-        return colorValue.toLowerCase() !== '#f3f4f6';
-      })
+      .filter((project) => project.addedToPlan === true)
       .map((project) => {
         const nickname = (project.projectNickname || '').trim();
         const label = nickname || project.projectName || project.text || 'Project';

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { SquarePlus, Pencil } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
@@ -68,6 +68,17 @@ export default function StagingPageV2() {
 
   // Focus management
   usePlanTableFocus({ pendingFocusRequestRef, shortlist });
+
+  // Add to Plan handler
+  const handleTogglePlanStatus = useCallback((itemId, addToPlan) => {
+    setState((prev) => ({
+      ...prev,
+      shortlist: prev.shortlist.map((item) =>
+        item.id === itemId ? { ...item, addedToPlan: addToPlan } : item
+      ),
+    }));
+    closePlanModal();
+  }, [setState, closePlanModal]);
 
   // Render helper functions (kept inline as they're component-specific)
   const renderQuestionPromptRow = (item, rowValues, rowIdx) => (
@@ -902,13 +913,23 @@ export default function StagingPageV2() {
                                       Delete Project
                                     </button>
                                     <div className="flex gap-2">
-                                      <button
-                                        type="button"
-                                        className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
-                                        onClick={handlePlanNext}
-                                      >
-                                        Edit Project
-                                      </button>
+                                      {item.addedToPlan ? (
+                                        <button
+                                          type="button"
+                                          className="rounded border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700 shadow-sm hover:bg-orange-100"
+                                          onClick={() => handleTogglePlanStatus(item.id, false)}
+                                        >
+                                          Remove From Plan
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm hover:bg-blue-100"
+                                          onClick={() => handleTogglePlanStatus(item.id, true)}
+                                        >
+                                          Add To Plan
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
                                         className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
@@ -1118,66 +1139,6 @@ export default function StagingPageV2() {
           </div>
         </div>
       </div>
-      {planModal.open && (() => {
-        const modalContent = (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-4">
-            <div className="w-full max-w-md rounded-lg border border-[#ced3d0] bg-white p-5 shadow-xl">
-              <h3 className="text-lg font-bold text-slate-900 mb-4">Plan Project</h3>
-              <div className="space-y-4">
-                <div className="space-y-2" style={{ paddingTop: '15px' }}>
-                  <label className="text-sm font-semibold text-slate-700" htmlFor="plan-color-modal">
-                    Project colour
-                  </label>
-                  <input
-                    id="plan-color-modal"
-                    type="color"
-                    className="h-10 w-full cursor-pointer rounded border border-[#ced3d0] p-1"
-                    value={planModal.color || '#c9daf8'}
-                    onChange={(e) => updatePlanModal({ color: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1" style={{ paddingTop: '15px' }}>
-                  <label className="text-sm font-semibold text-slate-700" htmlFor="plan-name">
-                    Project Name
-                  </label>
-                  <input
-                    id="plan-name"
-                    type="text"
-                    value={planModal.projectName}
-                    onChange={(e) => updatePlanModal({ projectName: e.target.value })}
-                    className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                  />
-                </div>
-                <div className="space-y-1" style={{ paddingTop: '15px' }}>
-                  <label className="text-sm font-semibold text-slate-700" htmlFor="plan-nickname">
-                    Project Nickname
-                  </label>
-                  <input
-                    id="plan-nickname"
-                    type="text"
-                    value={planModal.projectNickname}
-                    onChange={(e) => {
-                      const nextValue = (e.target.value || '').toUpperCase();
-                      updatePlanModal({ projectNickname: nextValue });
-                    }}
-                    className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                  />
-                </div>
-              </div>
-              <div className="mt-5 flex justify-end" style={{ paddingTop: '15px' }}>
-                <button
-                  type="button"
-                  className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
-                  onClick={handlePlanNext}
-                >
-                  Edit Project
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-        return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
-      })()}
     </>
   );
 }
