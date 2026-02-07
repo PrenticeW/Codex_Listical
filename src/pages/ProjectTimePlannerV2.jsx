@@ -9,6 +9,7 @@ import { useLocation } from 'react-router-dom';
 import { Archive } from 'lucide-react';
 import { useYear } from '../contexts/YearContext';
 import usePlannerStorage from '../hooks/planner/usePlannerStorage';
+import usePageSize from '../hooks/usePageSize';
 import usePlannerColumns from '../hooks/planner/usePlannerColumns';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
@@ -102,8 +103,6 @@ export default function ProjectTimePlannerV2() {
   const {
     columnSizing,
     setColumnSizing,
-    sizeScale,
-    setSizeScale,
     startDate,
     setStartDate,
     showRecurring,
@@ -123,6 +122,9 @@ export default function ProjectTimePlannerV2() {
     visibleDayColumns,
     setVisibleDayColumns,
   } = usePlannerStorage({ yearNumber: currentYear });
+
+  // Global page size setting (shared across all pages)
+  const { sizeScale } = usePageSize();
 
   // Initialize data from storage or create new
   const [data, setData] = useState(() => {
@@ -804,16 +806,11 @@ export default function ProjectTimePlannerV2() {
     return headerRows;
   }, [dates]);
 
-  // Calculate sizes based on scale
-  const rowHeight = Math.round(21 * sizeScale);
-  const cellFontSize = Math.round(10 * sizeScale);
-  const headerFontSize = Math.round(9 * sizeScale);
-  const gripIconSize = Math.round(12 * sizeScale);
-
-  // Size adjustment functions
-  const increaseSize = () => setSizeScale(prev => Math.min(prev + 0.1, 3.0));
-  const decreaseSize = () => setSizeScale(prev => Math.max(prev - 0.1, 0.5));
-  const resetSize = () => setSizeScale(1.0);
+  // Calculate sizes based on scale (normalized to 14px base like other pages)
+  const rowHeight = Math.round(28 * sizeScale);
+  const cellFontSize = Math.round(14 * sizeScale);
+  const headerFontSize = Math.round(12 * sizeScale);
+  const gripIconSize = Math.round(16 * sizeScale);
 
   // All column IDs in order (used throughout the component)
   // Fixed columns (A-H) + day columns (starting from I)
@@ -1666,10 +1663,6 @@ export default function ProjectTimePlannerV2() {
             handleShowWeek={handleShowWeek}
             checkboxInputClass={checkboxInputClass}
             sortableStatuses={SORTABLE_STATUSES}
-            sizeScale={sizeScale}
-            decreaseSize={decreaseSize}
-            increaseSize={increaseSize}
-            resetSize={resetSize}
             undoStack={undoStack}
             redoStack={redoStack}
             undo={undo}

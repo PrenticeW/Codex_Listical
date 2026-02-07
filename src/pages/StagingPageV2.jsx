@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
+import usePageSize from '../hooks/usePageSize';
 import {
   useShortlistState,
   usePlanModal,
@@ -27,6 +28,12 @@ export default function StagingPageV2() {
   const location = useLocation();
   const currentPath = location.pathname;
   const { currentYear } = useYear();
+
+  // Global page size setting (shared across all pages)
+  // Note: StagingPage uses Tailwind hardcoded sizes; full dynamic sizing would require
+  // converting text-[14px] classes to inline styles throughout the component
+  const { sizeScale } = usePageSize();
+  const textSizeScale = sizeScale; // Alias for consistency
 
   // Shortlist state management
   const {
@@ -669,7 +676,7 @@ export default function StagingPageV2() {
                 }
               }}
               className="w-full rounded border border-[#ced3d0] px-3 py-2 text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-              style={{ fontSize: '18px' }}
+              style={{ fontSize: `${Math.round(18 * textSizeScale)}px` }}
               placeholder="What would you like to get done?"
             />
           </div>

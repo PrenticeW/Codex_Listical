@@ -32,10 +32,6 @@ export default function ProjectListicalMenu({
   handleShowWeek,
   checkboxInputClass,
   sortableStatuses,
-  sizeScale,
-  decreaseSize,
-  increaseSize,
-  resetSize,
   undoStack,
   redoStack,
   undo,
@@ -430,39 +426,6 @@ export default function ProjectListicalMenu({
               </button>
               {expandedSections.viewControls && (
                 <div className="px-4 py-3 flex flex-col bg-white/20" style={{ gap: '12px' }}>
-                  {/* Page Size Section */}
-                  <div className="flex flex-col border-b border-[#ced3d0]/30" style={{ paddingBottom: '12px', paddingTop: '12px', gap: '8px' }}>
-                    <span className="text-[13px] font-bold text-slate-700">Page Size</span>
-                    <div className="flex flex-col ml-4" style={{ gap: '8px' }}>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={decreaseSize}
-                          className="px-4 py-2 rounded text-sm font-semibold bg-white border border-[#ced3d0] text-[#065f46] hover:bg-[#e6f7ed] transition-colors"
-                          title="Decrease size"
-                        >
-                          Smaller
-                        </button>
-                        <div className="text-2xl font-bold text-[#065f46] min-w-[70px] text-center">
-                          {Math.round(sizeScale * 100)}%
-                        </div>
-                        <button
-                          onClick={increaseSize}
-                          className="px-4 py-2 rounded text-sm font-semibold bg-white border border-[#ced3d0] text-[#065f46] hover:bg-[#e6f7ed] transition-colors"
-                          title="Increase size"
-                        >
-                          Larger
-                        </button>
-                      </div>
-                      <button
-                        onClick={resetSize}
-                        className="px-3 py-1 rounded text-xs font-medium bg-white border border-[#ced3d0] text-slate-600 hover:bg-gray-100 transition-colors self-start"
-                        title="Reset to default size"
-                      >
-                        Reset to 100%
-                      </button>
-                    </div>
-                  </div>
-
                   {/* Start Date Section */}
                   <div className="flex flex-col" style={{ gap: '8px' }}>
                     <span className="text-[13px] font-bold text-slate-700">Start Date</span>
