@@ -220,8 +220,8 @@ export default function TacticsPage() {
     initialTacticsSettings.incrementMinutes
   );
 
-  // Global page size setting (shared across all pages)
-  const { sizeScale: textSizeScale } = usePageSize();
+  // Page-specific size setting
+  const { sizeScale: textSizeScale } = usePageSize('plan');
   const hourOptions = useMemo(() => {
     const step = Math.max(1, incrementMinutes);
     const totalSteps = Math.ceil(MINUTES_IN_DAY / step);
@@ -1800,10 +1800,9 @@ export default function TacticsPage() {
               style={{ backgroundColor, color: textColor, position: 'relative', fontSize: `${14 * textSizeScale}px` }}
             >
               {label}
-              {/* Add resize handle */}
+              {/* Resize handle */}
               <div
                 onMouseDown={(e) => {
-                  console.log(`Project column resize started: columnIndex=${columnIndex}, extraIndex=${extraIndex}`);
                   e.preventDefault();
                   e.stopPropagation();
                   const width = columnWidths[columnIndex] || 140;
@@ -1816,15 +1815,14 @@ export default function TacticsPage() {
                   bottom: 0,
                   width: '8px',
                   cursor: 'col-resize',
-                  backgroundColor: 'rgba(255, 0, 0, 0.2)', // Visible red for debugging
+                  backgroundColor: 'transparent',
                   zIndex: 10,
                 }}
                 onMouseEnter={(e) => {
-                  console.log(`Hovering project column ${columnIndex}`);
                   e.currentTarget.style.backgroundColor = '#3b82f6';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 0, 0, 0.2)';
+                  e.currentTarget.style.backgroundColor = 'transparent';
                 }}
                 title="Drag to resize column"
               />

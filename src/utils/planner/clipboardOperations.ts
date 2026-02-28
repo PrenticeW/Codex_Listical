@@ -64,12 +64,6 @@ export const handleCopyOperation = (params: {
     const row = data.find(r => r.id === rowId);
     if (row) {
       const cellValue = row[columnId] || '';
-      console.log('[COPY DEBUG] Copying cell', {
-        rowId,
-        columnId,
-        cellValue,
-        rowEstimate: row.estimate
-      });
       cellsByRow.get(rowId).set(columnId, cellValue);
     }
   });
@@ -277,12 +271,6 @@ const createCellFillCommand = (params: {
           const [rowId, columnId] = cellKey.split('|');
           if (row.id === rowId && columnId !== 'rowNum') {
             // Always paste the literal value, don't create formula links
-            console.log('[PASTE DEBUG] Setting value', {
-              rowId,
-              columnId,
-              pastedText,
-              currentValue: row[columnId]
-            });
             rowUpdates[columnId] = pastedText;
             hasUpdates = true;
           }

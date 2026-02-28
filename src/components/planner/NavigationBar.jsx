@@ -1,10 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { LogOut, Settings } from 'lucide-react';
 import YearSelector from '../YearSelector';
 import { useAuth } from '../../contexts/AuthContext';
 import usePageSize from '../../hooks/usePageSize';
+
+// Map routes to page identifiers and display names
+const PAGE_CONFIG = {
+  '/staging': { id: 'goal', name: 'Goal' },
+  '/tactics': { id: 'plan', name: 'Plan' },
+  '/': { id: 'system', name: 'System' },
+};
 
 export default function NavigationBar({
   listicalButton = null,
@@ -14,7 +21,13 @@ export default function NavigationBar({
   const location = useLocation();
   const currentPath = location.pathname;
   const { logout, user } = useAuth();
-  const { sizeScale, increaseSize, decreaseSize, resetSize } = usePageSize();
+
+  // Get current page config
+  const currentPageConfig = useMemo(() => {
+    return PAGE_CONFIG[currentPath] || { id: 'global', name: 'Page' };
+  }, [currentPath]);
+
+  const { sizeScale, setSizeScale, resetSize, minScale, maxScale } = usePageSize(currentPageConfig.id);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsButtonRef = useRef(null);
@@ -112,49 +125,43 @@ export default function NavigationBar({
             {settingsOpen && createPortal(
               <div
                 ref={settingsMenuRef}
-                className="fixed rounded-lg border border-[#94a3b8] p-4 shadow-2xl"
+                className="fixed rounded-lg border border-[#94a3b8] p-3 shadow-2xl"
                 style={{ ...menuStyle, backgroundColor: 'rgba(255, 255, 255, 0.97)', zIndex: 999999 }}
               >
-                <div className="flex flex-col" style={{ gap: '12px' }}>
-                  {/* Page Size Section */}
-                  <div className="flex flex-col" style={{ gap: '8px' }}>
-                    <span className="text-xs font-semibold text-slate-700">Page Size</span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={decreaseSize}
-                        className="px-3 py-1.5 rounded text-sm font-semibold bg-white border border-[#ced3d0] text-[#065f46] hover:bg-[#e6f7ed] transition-colors"
-                        title="Decrease size"
-                      >
-                        Smaller
-                      </button>
-                      <div className="text-xl font-bold text-[#065f46] min-w-[60px] text-center">
-                        {Math.round(sizeScale * 100)}%
-                      </div>
-                      <button
-                        onClick={increaseSize}
-                        className="px-3 py-1.5 rounded text-sm font-semibold bg-white border border-[#ced3d0] text-[#065f46] hover:bg-[#e6f7ed] transition-colors"
-                        title="Increase size"
-                      >
-                        Larger
-                      </button>
-                    </div>
+                <div className="flex flex-col" style={{ gap: '8px' }}>
+                  {/* Page Size Section - Compact slider */}
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-semibold text-slate-600 w-12">{currentPageConfig.name}</span>
+                    <input
+                      type="range"
+                      min={minScale * 100}
+                      max={maxScale * 100}
+                      step={10}
+                      value={Math.round(sizeScale * 100)}
+                      onChange={(e) => setSizeScale(parseInt(e.target.value, 10) / 100)}
+                      className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#065f46]"
+                      style={{ minWidth: '100px' }}
+                    />
+                    <span className="text-xs font-semibold text-[#065f46] w-10 text-right">
+                      {Math.round(sizeScale * 100)}%
+                    </span>
                     <button
                       onClick={resetSize}
-                      className="px-3 py-1 rounded text-xs font-medium bg-white border border-[#ced3d0] text-slate-600 hover:bg-gray-100 transition-colors self-start"
-                      title="Reset to default size"
+                      className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                      title="Reset to 100%"
                     >
-                      Reset to 100%
+                      ↺
                     </button>
                   </div>
 
                   {/* Account Settings Link */}
-                  <div className="pt-3 border-t border-[#e2e8f0]">
+                  <div className="pt-2 border-t border-[#e2e8f0]">
                     <button
                       onClick={() => {
                         setSettingsOpen(false);
                         navigate('/settings');
                       }}
-                      className="w-full px-3 py-2 rounded text-sm font-medium text-slate-600 bg-white border border-[#ced3d0] hover:bg-slate-100 transition-colors text-left"
+                      className="w-full px-3 py-1.5 rounded text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors text-left"
                     >
                       Account Settings
                     </button>

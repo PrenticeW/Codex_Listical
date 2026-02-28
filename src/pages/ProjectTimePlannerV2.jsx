@@ -123,8 +123,8 @@ export default function ProjectTimePlannerV2() {
     setVisibleDayColumns,
   } = usePlannerStorage({ yearNumber: currentYear });
 
-  // Global page size setting (shared across all pages)
-  const { sizeScale } = usePageSize();
+  // Page-specific size setting
+  const { sizeScale } = usePageSize('system');
 
   // Initialize data from storage or create new
   const [data, setData] = useState(() => {

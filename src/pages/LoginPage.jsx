@@ -50,7 +50,6 @@ export default function LoginPage() {
 
     try {
       const result = await sendOtp(email);
-      console.log('sendOtp result:', result);
 
       if (result?.error) {
         setError(result.error.message || 'Failed to send code');
@@ -59,7 +58,6 @@ export default function LoginPage() {
       }
 
       // Move to code entry step
-      console.log('Setting otpStep to code');
       setOtpStep('code');
       setIsLoading(false);
     } catch (err) {

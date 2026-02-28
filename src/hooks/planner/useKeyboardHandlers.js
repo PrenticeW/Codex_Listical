@@ -207,7 +207,6 @@ export const useKeyboardHandlers = ({
         // Arrow key navigation (TODO: implement navigation logic)
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
           e.preventDefault();
-          console.log('Arrow key pressed:', e.key, 'Current cell:', currentRowId, currentColumnId);
         }
 
         // Start typing to edit (if alphanumeric) - only if not already editing

@@ -60,43 +60,22 @@ export default function ProjectListicalMenu({
   };
 
   useEffect(() => {
-    console.log('=== MENU EFFECT RUNNING ===');
-    console.log('isOpen:', isOpen);
-    console.log('buttonRef.current:', buttonRef.current);
-
     if (!isOpen) {
-      console.log('Menu is closed, clearing style');
       setMenuStyle({});
       return undefined;
     }
 
-    console.log('Menu is open, calculating position...');
-
     // Calculate position when menu opens
     const updatePosition = () => {
-      console.log('updatePosition called, buttonRef.current:', buttonRef.current);
-
       if (buttonRef.current) {
         const rect = buttonRef.current.getBoundingClientRect();
-        console.log('Button position:', {
-          left: rect.left,
-          right: rect.right,
-          top: rect.top,
-          bottom: rect.bottom,
-          width: rect.width,
-        });
-
         const calculatedLeft = Math.max(16, rect.left);
-        console.log('Calculated menu left:', calculatedLeft);
-        console.log('Viewport width:', window.innerWidth);
 
         setMenuStyle({
           width: '600px',
           top: rect.bottom + 8,
           left: calculatedLeft,
         });
-      } else {
-        console.log('buttonRef.current is null!');
       }
     };
 

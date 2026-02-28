@@ -330,7 +330,6 @@ export default function useRowRenderers({
           style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(rowId, 'rowLabel')))}
           onMouseDown={handleRowMouseDown}
           onClick={(event) => {
-            console.log('[ROW NUMBER CLICK] Row number clicked, index:', tableRow.index);
             handleRowClick(event, tableRow.index);
           }}
           data-cell-purpose="row-number"
@@ -581,7 +580,6 @@ export default function useRowRenderers({
           style={getWidthStyle('rowLabel', applyRowLabelStyle(getCellHighlightStyle(rowId, 'rowLabel')))}
           onMouseDown={handleRowMouseDown}
           onClick={(event) => {
-            console.log('[ROW NUMBER CLICK] Row number clicked, index:', tableRow.index);
             handleRowClick(event, tableRow.index);
           }}
           data-cell-purpose="row-number"
