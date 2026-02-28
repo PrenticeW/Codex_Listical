@@ -3,8 +3,21 @@ import { loadStagingState, saveStagingState } from '../../lib/stagingStorage';
 import {
   buildProjectPlanSummary,
   clonePlanTableEntries,
+  PLAN_TABLE_COLS,
 } from '../../utils/staging/planTableHelpers';
 import { ensurePlanPairingMetadata } from '../../utils/staging/rowPairing';
+
+// Default number of rows for new simple tables
+const DEFAULT_SIMPLE_TABLE_ROWS = 10;
+
+/**
+ * Create a simple table with empty rows (no sections)
+ */
+const createSimpleTable = (rowCount = DEFAULT_SIMPLE_TABLE_ROWS) => {
+  return Array.from({ length: rowCount }, () =>
+    Array.from({ length: PLAN_TABLE_COLS }, () => '')
+  );
+};
 
 /**
  * Hook to manage shortlist and archived items state
@@ -95,15 +108,20 @@ export default function useShortlistState({ currentYear }) {
           text,
           color: generateRandomColor(),
           planTableVisible: true,
-          planTableCollapsed: true,
+          planTableCollapsed: false, // Start expanded for new simple tables
           hasPlan: true,
-          planReasonRowCount: 1,
-          planOutcomeRowCount: 1,
-          planOutcomeQuestionRowCount: 1,
-          planNeedsQuestionRowCount: 1,
-          planNeedsPlanRowCount: 1,
-          planSubprojectRowCount: 1,
-          planXxxRowCount: 1,
+          // Simple table: just rows with no special sections
+          planTableEntries: createSimpleTable(),
+          // Keep legacy section counts at 0 for simple tables
+          planReasonRowCount: 0,
+          planOutcomeRowCount: 0,
+          planOutcomeQuestionRowCount: 0,
+          planNeedsQuestionRowCount: 0,
+          planNeedsPlanRowCount: 0,
+          planSubprojectRowCount: 0,
+          planXxxRowCount: 0,
+          // Flag to indicate this is a simple table (no sections)
+          isSimpleTable: true,
         },
       ],
       archived: prev.archived,

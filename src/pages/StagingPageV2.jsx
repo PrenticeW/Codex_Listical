@@ -11,6 +11,10 @@ import {
   usePlanModalActions,
   usePlanTableState,
   usePlanTableFocus,
+  useCommandPattern,
+  usePlanTableSelection,
+  useStagingKeyboardHandlers,
+  usePlanTableDragAndDrop,
 } from '../hooks/staging';
 import {
   clonePlanTableEntries,
@@ -18,6 +22,10 @@ import {
   PLAN_ESTIMATE_OPTIONS,
 } from '../utils/staging/planTableHelpers';
 import { getRowPairId, buildPairedRowGroups } from '../utils/staging/rowPairing';
+import {
+  handleCopyOperation,
+  handlePasteOperation,
+} from '../utils/staging/clipboardOperations';
 
 /**
  * StagingPage (Goals/Staging) - Refactored with extracted hooks
@@ -32,6 +40,15 @@ export default function StagingPageV2() {
   // Global page size setting (shared across all pages)
   const { sizeScale } = usePageSize();
   const textSizeScale = sizeScale; // Alias for consistency
+
+  // Command pattern for undo/redo
+  const {
+    canUndo,
+    canRedo,
+    executeCommand,
+    undo,
+    redo,
+  } = useCommandPattern();
 
   // Shortlist state management
   const {
@@ -69,10 +86,91 @@ export default function StagingPageV2() {
     removePlanPromptRow,
     handlePlanTableCellChange,
     handlePlanEstimateChange,
-  } = usePlanTableState({ setState });
+  } = usePlanTableState({ setState, executeCommand });
 
   // Focus management
   usePlanTableFocus({ pendingFocusRequestRef, shortlist });
+
+  // Cell selection for tables
+  const {
+    selectedCells,
+    selectedRows,
+    isCellSelected,
+    handleCellMouseDown,
+    handleCellMouseEnter,
+    handleMouseUp,
+    clearSelection,
+    getSelectedCellsByItem,
+  } = usePlanTableSelection();
+
+  // Drag and drop for rows
+  const {
+    draggedRows,
+    dropTarget,
+    handleDragStart,
+    handleDragOver,
+    handleDrop,
+    handleDragEnd,
+    isRowDragged,
+    isDropTarget,
+  } = usePlanTableDragAndDrop({
+    setState,
+    selectedRows,
+    executeCommand,
+  });
+
+  // Global mouseup listener for drag selection
+  useEffect(() => {
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => window.removeEventListener('mouseup', handleMouseUp);
+  }, [handleMouseUp]);
+
+  // Copy handler
+  const handleCopy = useCallback(
+    (e) => {
+      const tsvData = handleCopyOperation({
+        selectedCells,
+        shortlist,
+      });
+
+      if (tsvData) {
+        e.preventDefault();
+        e.clipboardData.setData('text/plain', tsvData);
+      }
+    },
+    [selectedCells, shortlist]
+  );
+
+  // Paste handler
+  const handlePaste = useCallback(
+    (e) => {
+      const clipboardText = e.clipboardData.getData('text/plain');
+      const command = handlePasteOperation({
+        clipboardText,
+        selectedCells,
+        shortlist,
+        setState,
+      });
+
+      if (command) {
+        e.preventDefault();
+        executeCommand(command);
+      }
+    },
+    [selectedCells, shortlist, setState, executeCommand]
+  );
+
+  // Keyboard handlers for undo/redo, delete, etc.
+  useStagingKeyboardHandlers({
+    selectedCells,
+    undo,
+    redo,
+    executeCommand,
+    setState,
+    clearSelection,
+    handleCopy,
+    handlePaste,
+  });
 
   // Add to Plan handler
   const handleTogglePlanStatus = useCallback((itemId, addToPlan) => {
@@ -84,6 +182,84 @@ export default function StagingPageV2() {
     }));
     closePlanModal();
   }, [setState, closePlanModal]);
+
+  // Render a simple table row with drag and drop support
+  const renderSimpleTableRow = (item, rowValues, rowIdx) => {
+    const isDragged = isRowDragged(item.id, rowIdx);
+    const isTarget = isDropTarget(item.id, rowIdx);
+
+    return (
+      <tr
+        key={`${item.id}-simple-row-${rowIdx}`}
+        draggable
+        onDragStart={(e) => handleDragStart(e, item.id, rowIdx)}
+        onDragOver={(e) => handleDragOver(e, item.id, rowIdx)}
+        onDrop={(e) => handleDrop(e, item.id, rowIdx)}
+        onDragEnd={handleDragEnd}
+        style={{
+          opacity: isDragged ? 0.5 : 1,
+          cursor: 'grab',
+        }}
+      >
+        {/* Drag handle cell */}
+        <td
+          className="border border-[#e5e7eb] px-1 py-2 text-center"
+          style={{
+            width: '24px',
+            minWidth: '24px',
+            backgroundColor: isTarget ? '#dbeafe' : '#f9fafb',
+            borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+            cursor: 'grab',
+          }}
+        >
+          <span style={{ fontSize: '10px', color: '#9ca3af' }}>⋮⋮</span>
+        </td>
+        {/* Data cells */}
+        {rowValues.map((cellValue, cellIdx) => {
+          const isSelected = isCellSelected(item.id, rowIdx, cellIdx);
+          return (
+            <td
+              key={`${item.id}-simple-row-${rowIdx}-cell-${cellIdx}`}
+              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              style={{
+                backgroundColor: isSelected ? '#dbeafe' : '#ffffff',
+                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+              }}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
+              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
+            >
+              <input
+                type="text"
+                value={cellValue}
+                onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)}
+                className="w-full bg-transparent focus:outline-none border-none"
+                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+                data-plan-item={item.id}
+                data-plan-row={rowIdx}
+                data-plan-col={cellIdx}
+              />
+            </td>
+          );
+        })}
+      </tr>
+    );
+  };
+
+  // Render simple table for items with isSimpleTable flag
+  const renderSimpleTable = (item) => {
+    const entries = item.planTableEntries || [];
+    return (
+      <div className="rounded border border-dashed border-[#ced3d0] bg-white p-3">
+        <table className="w-full border-collapse text-left" style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
+          <tbody>
+            {entries.map((rowValues, rowIdx) =>
+              renderSimpleTableRow(item, rowValues, rowIdx)
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   // Render helper functions (kept inline as they're component-specific)
   const renderQuestionPromptRow = (item, rowValues, rowIdx) => (
@@ -973,6 +1149,9 @@ export default function StagingPageV2() {
                             )}
                           </div>
                           {item.planTableVisible && !item.planTableCollapsed ? (
+                            item.isSimpleTable ? (
+                              renderSimpleTable(item)
+                            ) : (
                             <div className="rounded border border-dashed border-[#ced3d0] bg-white p-3">
                               <table className="w-full border-collapse text-left" style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
                                 <tbody>
@@ -1163,6 +1342,7 @@ export default function StagingPageV2() {
                                 </tbody>
                               </table>
                             </div>
+                            )
                           ) : null}
                         </div>
                       </div>

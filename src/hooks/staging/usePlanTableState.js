@@ -14,9 +14,48 @@ import {
 
 /**
  * Hook to manage plan table state operations (add/remove rows, cell updates, etc.)
+ * @param {Object} options
+ * @param {Function} options.setState - State setter function
+ * @param {Function} options.executeCommand - Optional command executor for undo/redo support
  */
-export default function usePlanTableState({ setState }) {
+export default function usePlanTableState({ setState, executeCommand }) {
   const pendingFocusRequestRef = useRef(null);
+
+  /**
+   * Helper to execute a state mutation, optionally wrapped in a command for undo/redo
+   * @param {Function} getNewState - Function that takes prev state and returns new state
+   * @param {Function} getOldState - Function that takes prev state and returns the state to restore on undo
+   */
+  const executeStateMutation = useCallback(
+    (mutationFn) => {
+      if (executeCommand) {
+        // Capture current state for undo
+        let capturedPrevState = null;
+
+        const command = {
+          execute: () => {
+            setState((prev) => {
+              // Capture state on first execute for undo
+              if (capturedPrevState === null) {
+                capturedPrevState = JSON.parse(JSON.stringify(prev));
+              }
+              return mutationFn(prev);
+            });
+          },
+          undo: () => {
+            if (capturedPrevState !== null) {
+              setState(capturedPrevState);
+            }
+          },
+        };
+        executeCommand(command);
+      } else {
+        // No command pattern, just execute directly
+        setState(mutationFn);
+      }
+    },
+    [setState, executeCommand]
+  );
 
   /**
    * Add a plan prompt row (reason, outcome, question, etc.)
@@ -24,7 +63,7 @@ export default function usePlanTableState({ setState }) {
   const addPlanPromptRow = useCallback(
     (itemId, afterRowIdx, type = 'reason') => {
       let nextFocus = null;
-      setState((prev) => ({
+      executeStateMutation((prev) => ({
         ...prev,
         shortlist: prev.shortlist.map((item) => {
           if (item.id !== itemId) return item;
@@ -142,7 +181,7 @@ export default function usePlanTableState({ setState }) {
         pendingFocusRequestRef.current = nextFocus;
       }
     },
-    [setState]
+    [executeStateMutation]
   );
 
   /**
@@ -151,7 +190,7 @@ export default function usePlanTableState({ setState }) {
   const addQuestionPromptWithOutcomeRow = useCallback(
     (itemId) => {
       let nextFocus = null;
-      setState((prev) => ({
+      executeStateMutation((prev) => ({
         ...prev,
         shortlist: prev.shortlist.map((item) => {
           if (item.id !== itemId) return item;
@@ -207,7 +246,7 @@ export default function usePlanTableState({ setState }) {
         pendingFocusRequestRef.current = nextFocus;
       }
     },
-    [setState]
+    [executeStateMutation]
   );
 
   /**
@@ -216,7 +255,7 @@ export default function usePlanTableState({ setState }) {
   const addNeedsPromptWithPlanRow = useCallback(
     (itemId) => {
       let nextFocus = null;
-      setState((prev) => ({
+      executeStateMutation((prev) => ({
         ...prev,
         shortlist: prev.shortlist.map((item) => {
           if (item.id !== itemId) return item;
@@ -269,7 +308,7 @@ export default function usePlanTableState({ setState }) {
         pendingFocusRequestRef.current = nextFocus;
       }
     },
-    [setState]
+    [executeStateMutation]
   );
 
   /**
@@ -277,7 +316,7 @@ export default function usePlanTableState({ setState }) {
    */
   const removePlanPromptRow = useCallback(
     (itemId, rowIdx, type = 'reason') => {
-      setState((prev) => ({
+      executeStateMutation((prev) => ({
         ...prev,
         shortlist: prev.shortlist.map((item) => {
           if (item.id !== itemId) return item;
@@ -397,7 +436,7 @@ export default function usePlanTableState({ setState }) {
         }),
       }));
     },
-    [setState]
+    [executeStateMutation]
   );
 
   /**
@@ -408,7 +447,7 @@ export default function usePlanTableState({ setState }) {
       if (rowIdx < 0 || colIdx < 0 || colIdx >= PLAN_TABLE_COLS) {
         return;
       }
-      setState((prev) => ({
+      executeStateMutation((prev) => ({
         ...prev,
         shortlist: prev.shortlist.map((item) => {
           if (item.id !== itemId) return item;
@@ -418,7 +457,7 @@ export default function usePlanTableState({ setState }) {
         }),
       }));
     },
-    [setState]
+    [executeStateMutation]
   );
 
   /**
@@ -427,7 +466,7 @@ export default function usePlanTableState({ setState }) {
   const handlePlanEstimateChange = useCallback(
     (itemId, rowIdx, nextEstimate) => {
       if (rowIdx < 0) return;
-      setState((prev) => ({
+      executeStateMutation((prev) => ({
         ...prev,
         shortlist: prev.shortlist.map((item) => {
           if (item.id !== itemId) return item;
@@ -450,7 +489,7 @@ export default function usePlanTableState({ setState }) {
         }),
       }));
     },
-    [setState]
+    [executeStateMutation]
   );
 
   return {
