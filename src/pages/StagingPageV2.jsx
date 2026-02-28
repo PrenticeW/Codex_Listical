@@ -30,8 +30,6 @@ export default function StagingPageV2() {
   const { currentYear } = useYear();
 
   // Global page size setting (shared across all pages)
-  // Note: StagingPage uses Tailwind hardcoded sizes; full dynamic sizing would require
-  // converting text-[14px] classes to inline styles throughout the component
   const { sizeScale } = usePageSize();
   const textSizeScale = sizeScale; // Alias for consistency
 
@@ -98,7 +96,8 @@ export default function StagingPageV2() {
           type="text"
           value={rowValues[0] ?? ''}
           onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
-          className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+          className="w-full bg-transparent focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
           data-plan-item={item.id}
           data-plan-row={rowIdx}
           data-plan-col={0}
@@ -114,7 +113,8 @@ export default function StagingPageV2() {
           value={rowValues[1] ?? ''}
           onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
           placeholder="What do I want to be true in 12 weeks?"
-          className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
+          className="w-full bg-transparent font-semibold text-slate-800 focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
           data-plan-item={item.id}
           data-plan-row={rowIdx}
           data-plan-col={1}
@@ -138,7 +138,8 @@ export default function StagingPageV2() {
         <button
           type="button"
           aria-label="Delete question row"
-          className="text-[14px] font-semibold text-slate-800"
+          className="font-semibold text-slate-800"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
           onClick={() => removePlanPromptRow(item.id, rowIdx, 'question')}
         >
           X
@@ -176,7 +177,8 @@ export default function StagingPageV2() {
                   handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
                 }
                 placeholder="Measurable Outcome"
-                className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
+                className="w-full bg-transparent font-semibold text-slate-800 focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                 data-plan-item={item.id}
                 data-plan-row={rowIdx}
                 data-plan-col={2}
@@ -191,7 +193,8 @@ export default function StagingPageV2() {
               <button
                 type="button"
                 aria-label="Delete outcome row"
-                className="text-[14px] font-semibold text-slate-800"
+                className="font-semibold text-slate-800"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                 onClick={() => removePlanPromptRow(item.id, rowIdx, 'outcome')}
               >
                 X
@@ -203,7 +206,8 @@ export default function StagingPageV2() {
                 onChange={(e) =>
                   handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
                 }
-                className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                className="w-full bg-transparent focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                 data-plan-item={item.id}
                 data-plan-row={rowIdx}
                 data-plan-col={cellIdx}
@@ -239,7 +243,8 @@ export default function StagingPageV2() {
               <button
                 type="button"
                 aria-label="Delete prompt row"
-                className="text-[14px] font-semibold text-slate-800"
+                className="font-semibold text-slate-800"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                 onClick={() => removePlanPromptRow(item.id, rowIdx)}
               >
                 X
@@ -262,7 +267,8 @@ export default function StagingPageV2() {
                     : undefined
                 }
                 placeholder={isPromptCell ? 'Reason' : undefined}
-                className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                className="w-full bg-transparent focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                 data-plan-item={item.id}
                 data-plan-row={rowIdx}
                 data-plan-col={cellIdx}
@@ -284,7 +290,8 @@ export default function StagingPageV2() {
           type="text"
           value={rowValues[0] ?? ''}
           onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
-          className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+          className="w-full bg-transparent focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
           data-plan-item={item.id}
           data-plan-row={rowIdx}
           data-plan-col={0}
@@ -300,7 +307,8 @@ export default function StagingPageV2() {
           value={rowValues[1] ?? ''}
           onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
           placeholder="What needs to be true in order for the outcomes to happen?"
-          className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
+          className="w-full bg-transparent font-semibold text-slate-800 focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
           data-plan-item={item.id}
           data-plan-row={rowIdx}
           data-plan-col={1}
@@ -324,7 +332,8 @@ export default function StagingPageV2() {
         <button
           type="button"
           aria-label="Delete needs question row"
-          className="text-[14px] font-semibold text-slate-800"
+          className="font-semibold text-slate-800"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
           onClick={() => removePlanPromptRow(item.id, rowIdx, 'needsQuestion')}
         >
           X
@@ -378,7 +387,8 @@ export default function StagingPageV2() {
                     handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
                   }
                   placeholder="Plan"
-                  className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
+                  className="w-full bg-transparent font-semibold text-slate-800 focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   data-plan-item={item.id}
                   data-plan-row={rowIdx}
                   data-plan-col={2}
@@ -393,14 +403,16 @@ export default function StagingPageV2() {
                 <button
                   type="button"
                   aria-label="Delete plan row"
-                  className="text-[14px] font-semibold text-slate-800"
+                  className="font-semibold text-slate-800"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   onClick={() => removePlanPromptRow(item.id, rowIdx, 'needsPlan')}
                 >
                   X
                 </button>
               ) : isEstimateCell ? (
                 <select
-                  className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                  className="w-full bg-transparent focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   value={estimateValue}
                   onChange={(e) =>
                     handlePlanEstimateChange(item.id, rowIdx, e.target.value)
@@ -424,7 +436,8 @@ export default function StagingPageV2() {
                     handlePlanTableCellChange(item.id, rowIdx, 4, e.target.value);
                   }}
                   readOnly={!isCustomEstimate}
-                  className="w-full bg-transparent text-[14px] text-right focus:outline-none border-none"
+                  className="w-full bg-transparent text-right focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   placeholder="0.00"
                   data-plan-item={item.id}
                   data-plan-row={rowIdx}
@@ -437,7 +450,8 @@ export default function StagingPageV2() {
                   onChange={(e) =>
                     handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
                   }
-                  className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                  className="w-full bg-transparent focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   data-plan-item={item.id}
                   data-plan-row={rowIdx}
                   data-plan-col={cellIdx}
@@ -495,7 +509,8 @@ export default function StagingPageV2() {
                     handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
                   }
                   placeholder="Schedule Item"
-                  className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
+                  className="w-full bg-transparent font-semibold text-slate-800 focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   data-plan-item={item.id}
                   data-plan-row={rowIdx}
                   data-plan-col={2}
@@ -510,14 +525,16 @@ export default function StagingPageV2() {
                 <button
                   type="button"
                   aria-label="Delete schedule row"
-                  className="text-[14px] font-semibold text-slate-800"
+                  className="font-semibold text-slate-800"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   onClick={() => removePlanPromptRow(item.id, rowIdx, 'subproject')}
                 >
                   X
                 </button>
               ) : isEstimateCell ? (
                 <select
-                  className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                  className="w-full bg-transparent focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   value={estimateValue}
                   onChange={(e) =>
                     handlePlanEstimateChange(item.id, rowIdx, e.target.value)
@@ -541,7 +558,8 @@ export default function StagingPageV2() {
                     handlePlanTableCellChange(item.id, rowIdx, 4, e.target.value);
                   }}
                   readOnly={!isCustomEstimate}
-                  className="w-full bg-transparent text-[14px] text-right focus:outline-none border-none"
+                  className="w-full bg-transparent text-right focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   placeholder="0.00"
                   data-plan-item={item.id}
                   data-plan-row={rowIdx}
@@ -554,7 +572,8 @@ export default function StagingPageV2() {
                   onChange={(e) =>
                     handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
                   }
-                  className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                  className="w-full bg-transparent focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   data-plan-item={item.id}
                   data-plan-row={rowIdx}
                   data-plan-col={cellIdx}
@@ -609,7 +628,8 @@ export default function StagingPageV2() {
                     handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
                   }
                   placeholder="Subproject"
-                  className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
+                  className="w-full bg-transparent font-semibold text-slate-800 focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   data-plan-item={item.id}
                   data-plan-row={rowIdx}
                   data-plan-col={2}
@@ -624,7 +644,8 @@ export default function StagingPageV2() {
                 <button
                   type="button"
                   aria-label="Delete subproject row"
-                  className="text-[14px] font-semibold text-slate-800"
+                  className="font-semibold text-slate-800"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   onClick={() => removePlanPromptRow(item.id, rowIdx, 'xxx')}
                 >
                   X
@@ -636,7 +657,8 @@ export default function StagingPageV2() {
                   onChange={(e) =>
                     handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
                   }
-                  className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                  className="w-full bg-transparent focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   data-plan-item={item.id}
                   data-plan-row={rowIdx}
                   data-plan-col={cellIdx}
@@ -847,7 +869,7 @@ export default function StagingPageV2() {
                             </div>
                             <div></div>
                             <div style={{ width: '140px', minWidth: '140px' }}></div>
-                            <div className="text-right text-[14px] font-semibold pr-2">
+                            <div className="text-right font-semibold pr-2" style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
                               {projectPlanTimeTotal}
                             </div>
                             <div
@@ -952,13 +974,13 @@ export default function StagingPageV2() {
                           </div>
                           {item.planTableVisible && !item.planTableCollapsed ? (
                             <div className="rounded border border-dashed border-[#ced3d0] bg-white p-3">
-                              <table className="w-full border-collapse text-left text-[14px]">
+                              <table className="w-full border-collapse text-left" style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
                                 <tbody>
                                   <tr key={`${item.id}-plan-row-0`}>
                                     <td
                                       colSpan={PLAN_TABLE_COLS}
-                                      className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold text-[14px]"
-                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937' }}
+                                      className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold"
+                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937', fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                     >
                                       &nbsp;&nbsp;&nbsp;Reasons
                                     </td>
@@ -972,7 +994,8 @@ export default function StagingPageV2() {
                                         type="text"
                                         value={planEntries[1]?.[0] ?? ''}
                                         onChange={(e) => handlePlanTableCellChange(item.id, 1, 0, e.target.value)}
-                                        className="w-full bg-transparent text-[14px] focus:outline-none border-none"
+                                        className="w-full bg-transparent focus:outline-none border-none"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                         data-plan-item={item.id}
                                         data-plan-row={1}
                                         data-plan-col={0}
@@ -983,7 +1006,8 @@ export default function StagingPageV2() {
                                       colSpan={PLAN_TABLE_COLS - 1}
                                       style={{ backgroundColor: '#d9d9d9' }}
                                     >
-                                      <span className="text-[14px] font-semibold text-slate-800">
+                                      <span className="font-semibold text-slate-800"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
                                         Why do I want to start this?
                                       </span>
                                     </td>
@@ -994,8 +1018,8 @@ export default function StagingPageV2() {
                                   <tr key={`${item.id}-plan-row-${outcomeHeadingRow}`}>
                                     <td
                                       colSpan={PLAN_TABLE_COLS}
-                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px] text-left font-semibold text-[14px]"
-                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937', paddingLeft: '10px' }}
+                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px] text-left font-semibold"
+                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937', paddingLeft: '10px', fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                     >
                                       Outcomes
                                     </td>
@@ -1019,18 +1043,19 @@ export default function StagingPageV2() {
                                   <tr key={`${item.id}-plan-row-${needsHeadingRow}`}>
                                     <td
                                       colSpan={PLAN_TABLE_COLS - 2}
-                                      className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold text-[14px]"
-                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937' }}
+                                      className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold"
+                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937', fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                     >
                                       &nbsp;&nbsp;&nbsp;Needs
                                     </td>
                                     <td
-                                      className="border border-[#e5e7eb] px-3 py-2 text-right text-[14px] font-semibold"
+                                      className="border border-[#e5e7eb] px-3 py-2 text-right font-semibold"
                                       style={{
                                         backgroundColor: '#b7b7b7',
                                         width: '120px',
                                         minWidth: '120px',
                                         color: '#1f2937',
+                                        fontSize: `${Math.round(14 * textSizeScale)}px`,
                                         paddingRight: '10px',
                                       }}
                                     >
@@ -1064,8 +1089,8 @@ export default function StagingPageV2() {
                                   <tr key={`${item.id}-plan-row-schedule-header`}>
                                     <td
                                       colSpan={PLAN_TABLE_COLS}
-                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px] text-left font-semibold text-[14px]"
-                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937', paddingLeft: '10px' }}
+                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px] text-left font-semibold"
+                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937', paddingLeft: '10px', fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                     >
                                       Schedule
                                     </td>
@@ -1080,7 +1105,8 @@ export default function StagingPageV2() {
                                       colSpan={PLAN_TABLE_COLS - 2}
                                       style={{ backgroundColor: '#d9d9d9' }}
                                     >
-                                      <span className="text-[14px] font-semibold text-slate-800">
+                                      <span className="font-semibold text-slate-800"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
                                         Which activities need time alotted each week?
                                       </span>
                                     </td>
@@ -1100,8 +1126,8 @@ export default function StagingPageV2() {
                                   <tr key={`${item.id}-plan-row-subprojects-header`}>
                                     <td
                                       colSpan={PLAN_TABLE_COLS}
-                                      className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold text-[14px]"
-                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937' }}
+                                      className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold"
+                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937', fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                     >
                                       &nbsp;&nbsp;&nbsp;Subprojects
                                     </td>
@@ -1116,7 +1142,8 @@ export default function StagingPageV2() {
                                       colSpan={PLAN_TABLE_COLS - 2}
                                       style={{ backgroundColor: '#d9d9d9' }}
                                     >
-                                      <span className="text-[14px] font-semibold text-slate-800">
+                                      <span className="font-semibold text-slate-800"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
                                         What are the stages or weekly habits required to make these outcomes happen?
                                       </span>
                                     </td>
