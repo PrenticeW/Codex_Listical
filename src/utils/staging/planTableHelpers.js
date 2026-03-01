@@ -51,6 +51,24 @@ export const formatMinutesToHHmm = (minutes) => {
 };
 
 /**
+ * Convert minutes to estimate label (or 'Custom' if no match)
+ */
+export const minutesToEstimateLabel = (minutes) => {
+  if (minutes == null || minutes === 0) return '-';
+  if (minutes === 1) return '1 Minute';
+  if (minutes < 60 && minutes % 5 === 0 && minutes >= 5 && minutes <= 55) {
+    return `${minutes} Minutes`;
+  }
+  if (minutes >= 60 && minutes % 60 === 0) {
+    const hours = minutes / 60;
+    if (hours >= 1 && hours <= 8) {
+      return `${hours} Hour${hours > 1 ? 's' : ''}`;
+    }
+  }
+  return 'Custom';
+};
+
+/**
  * Parse time value string (H.MM format) to minutes
  */
 export const parseTimeValueToMinutes = (value) => {

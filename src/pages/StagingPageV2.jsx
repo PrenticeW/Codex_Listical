@@ -24,6 +24,8 @@ import {
   cloneStagingState,
   PLAN_TABLE_COLS,
   PLAN_ESTIMATE_OPTIONS,
+  parseTimeValueToMinutes,
+  minutesToEstimateLabel,
 } from '../utils/staging/planTableHelpers';
 import { getRowPairId, buildPairedRowGroups } from '../utils/staging/rowPairing';
 import {
@@ -695,7 +697,6 @@ export default function StagingPageV2() {
 
       if (hasTimeElements) {
         const estimateValue = rowValues[4] || '-';
-        const isCustomEstimate = estimateValue === 'Custom';
         const displayedTimeValue = rowValues[5] || '0.00';
 
         return (
@@ -841,10 +842,15 @@ export default function StagingPageV2() {
                 type="text"
                 value={displayedTimeValue}
                 onChange={(e) => {
-                  if (!isCustomEstimate) return;
-                  handlePlanTableCellChange(item.id, rowIdx, 5, e.target.value);
+                  const newTimeValue = e.target.value;
+                  // Update time value
+                  handlePlanTableCellChange(item.id, rowIdx, 5, newTimeValue);
+                  // Convert to minutes and find matching estimate label
+                  const minutes = parseTimeValueToMinutes(newTimeValue);
+                  const newEstimate = minutesToEstimateLabel(minutes);
+                  // Update estimate dropdown
+                  handlePlanTableCellChange(item.id, rowIdx, 4, newEstimate);
                 }}
-                readOnly={!isCustomEstimate}
                 onFocus={handleInputFocus}
                 className="w-full bg-transparent text-right focus:outline-none border-none"
                 style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
