@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { cloneRowWithMetadata, cloneStagingState } from '../../utils/staging/planTableHelpers';
 
 /**
  * Hook to manage drag-and-drop row reordering for plan tables
@@ -130,7 +131,7 @@ export default function usePlanTableDragAndDrop({
           setState((prev) => {
             // Capture state on first execute
             if (capturedState === null) {
-              capturedState = JSON.parse(JSON.stringify(prev));
+              capturedState = cloneStagingState(prev);
             }
 
             return {
@@ -138,7 +139,7 @@ export default function usePlanTableDragAndDrop({
               shortlist: prev.shortlist.map((item) => {
                 if (item.id !== sourceItemId) return item;
 
-                const entries = item.planTableEntries.map((row) => [...row]);
+                const entries = item.planTableEntries.map(cloneRowWithMetadata);
 
                 // Get indices of rows being dragged (sorted)
                 const draggedIndices = draggedRows

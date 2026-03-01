@@ -9,6 +9,8 @@
  * - Range Mode: Grid of values
  */
 
+import { cloneRowWithMetadata, cloneStagingState } from './planTableHelpers';
+
 /**
  * Parse a cell key into its components
  */
@@ -115,7 +117,7 @@ export const handlePasteOperation = ({
       setState((prev) => {
         // Capture state on first execute
         if (capturedState === null) {
-          capturedState = JSON.parse(JSON.stringify(prev));
+          capturedState = cloneStagingState(prev);
         }
 
         return {
@@ -123,7 +125,7 @@ export const handlePasteOperation = ({
           shortlist: prev.shortlist.map((item) => {
             if (item.id !== anchor.itemId) return item;
 
-            const nextEntries = item.planTableEntries.map((row) => [...row]);
+            const nextEntries = item.planTableEntries.map(cloneRowWithMetadata);
 
             // Paste values starting from anchor
             for (let r = 0; r < pasteRowCount; r++) {

@@ -7,16 +7,96 @@ import {
 } from '../../utils/staging/planTableHelpers';
 import { ensurePlanPairingMetadata } from '../../utils/staging/rowPairing';
 
-// Default number of rows for new simple tables
-const DEFAULT_SIMPLE_TABLE_ROWS = 10;
+// Row type constants
+const ROW_TYPE = {
+  HEADER: 'header',
+  PROMPT: 'prompt',
+  RESPONSE: 'response',
+  DATA: 'data',
+};
 
 /**
- * Create a simple table with empty rows (no sections)
+ * Create a row with optional type metadata
  */
-const createSimpleTable = (rowCount = DEFAULT_SIMPLE_TABLE_ROWS) => {
-  return Array.from({ length: rowCount }, () =>
-    Array.from({ length: PLAN_TABLE_COLS }, () => '')
+const createRow = (firstCellValue = '', rowType = ROW_TYPE.DATA) => {
+  const row = Array.from({ length: PLAN_TABLE_COLS }, (_, i) =>
+    i === 0 ? firstCellValue : ''
   );
+  // Store row type as non-enumerable property (won't be serialized to JSON by default)
+  Object.defineProperty(row, '__rowType', {
+    value: rowType,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
+  return row;
+};
+
+/**
+ * Create a prompt row with text in the second cell
+ */
+const createPromptRow = (promptText) => {
+  const row = Array.from({ length: PLAN_TABLE_COLS }, (_, i) =>
+    i === 1 ? promptText : ''
+  );
+  Object.defineProperty(row, '__rowType', {
+    value: ROW_TYPE.PROMPT,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
+  return row;
+};
+
+/**
+ * Create a response row (lighter grey, starts in third cell)
+ * @param {string} placeholder - Optional placeholder text for the third cell
+ */
+const createResponseRow = (placeholder = '') => {
+  const row = Array.from({ length: PLAN_TABLE_COLS }, (_, i) =>
+    i === 2 ? placeholder : ''
+  );
+  Object.defineProperty(row, '__rowType', {
+    value: ROW_TYPE.RESPONSE,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
+  return row;
+};
+
+/**
+ * Create a simple table with header rows, prompt rows, response rows, and empty data rows
+ */
+const createSimpleTable = () => {
+  const rows = [
+    // Reasons section
+    createRow('Reasons', ROW_TYPE.HEADER),
+    createPromptRow('Why do I want to start this?'),
+    createResponseRow('Reason'),
+    createRow('', ROW_TYPE.DATA),
+    // Outcomes section
+    createRow('Outcomes', ROW_TYPE.HEADER),
+    createPromptRow('What do I want to be true in 12 weeks?'),
+    createResponseRow('Measurable Outcome'),
+    createRow('', ROW_TYPE.DATA),
+    // Needs section
+    createRow('Needs', ROW_TYPE.HEADER),
+    createPromptRow('What needs to be true in order for the outcomes to happen?'),
+    createResponseRow('Need'),
+    createRow('', ROW_TYPE.DATA),
+    // Schedule section
+    createRow('Schedule', ROW_TYPE.HEADER),
+    createPromptRow('Which activities need time allotted each week?'),
+    createResponseRow('Schedule Item'),
+    createRow('', ROW_TYPE.DATA),
+    // Subprojects section
+    createRow('Subprojects', ROW_TYPE.HEADER),
+    createPromptRow('What are the stages or weekly habits required to make these outcomes happen?'),
+    createResponseRow('Subproject'),
+    createRow('', ROW_TYPE.DATA),
+  ];
+  return rows;
 };
 
 /**

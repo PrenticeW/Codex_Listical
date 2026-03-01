@@ -1,4 +1,8 @@
 import { useEffect, useCallback } from 'react';
+import {
+  cloneRowWithMetadata,
+  cloneStagingState,
+} from '../../utils/staging/planTableHelpers';
 
 /**
  * Custom hook for handling keyboard events in the staging/goals tables
@@ -8,6 +12,7 @@ import { useEffect, useCallback } from 'react';
  */
 export default function useStagingKeyboardHandlers({
   selectedCells,
+  selectedRows,
   undo,
   redo,
   executeCommand,
@@ -16,7 +21,7 @@ export default function useStagingKeyboardHandlers({
   handleCopy,
   handlePaste,
 }) {
-  // Delete/clear selected cells
+  // Delete/clear selected cells (only clears content, preserves row structure)
   const handleCellsDelete = useCallback(
     (e) => {
       if (!selectedCells || selectedCells.size === 0) return;
@@ -42,9 +47,9 @@ export default function useStagingKeyboardHandlers({
       const command = {
         execute: () => {
           setState((prev) => {
-            // Capture state on first execute
+            // Capture state on first execute - use cloneStagingState to preserve metadata
             if (capturedState === null) {
-              capturedState = JSON.parse(JSON.stringify(prev));
+              capturedState = cloneStagingState(prev);
             }
 
             return {
@@ -53,7 +58,8 @@ export default function useStagingKeyboardHandlers({
                 const cells = cellsByItem.get(item.id);
                 if (!cells) return item;
 
-                const nextEntries = item.planTableEntries.map((row) => [...row]);
+                // Use cloneRowWithMetadata to preserve __rowType and __pairId
+                const nextEntries = item.planTableEntries.map(cloneRowWithMetadata);
                 cells.forEach(({ rowIdx, colIdx }) => {
                   if (nextEntries[rowIdx] && nextEntries[rowIdx][colIdx] !== undefined) {
                     nextEntries[rowIdx][colIdx] = '';
@@ -75,6 +81,69 @@ export default function useStagingKeyboardHandlers({
       executeCommand(command);
     },
     [selectedCells, setState, executeCommand]
+  );
+
+  // Delete selected rows entirely
+  const handleRowsDelete = useCallback(
+    (e) => {
+      if (!selectedRows || selectedRows.size === 0) return;
+
+      e.preventDefault();
+
+      // Parse selected rows and group by item
+      const rowsByItem = new Map();
+      selectedRows.forEach((rowKey) => {
+        const [itemId, rowIdxStr] = rowKey.split('|');
+        const rowIdx = parseInt(rowIdxStr, 10);
+        if (!rowsByItem.has(itemId)) {
+          rowsByItem.set(itemId, new Set());
+        }
+        rowsByItem.get(itemId).add(rowIdx);
+      });
+
+      let capturedState = null;
+
+      const command = {
+        execute: () => {
+          setState((prev) => {
+            if (capturedState === null) {
+              capturedState = cloneStagingState(prev);
+            }
+
+            return {
+              ...prev,
+              shortlist: prev.shortlist.map((item) => {
+                const rowIdxSet = rowsByItem.get(item.id);
+                if (!rowIdxSet || rowIdxSet.size === 0) return item;
+
+                const entries = item.planTableEntries.map(cloneRowWithMetadata);
+                // Don't delete if it would leave no rows
+                if (entries.length <= rowIdxSet.size) return item;
+
+                // Delete rows in reverse order to preserve indices
+                const sortedIndices = Array.from(rowIdxSet).sort((a, b) => b - a);
+                sortedIndices.forEach((idx) => {
+                  if (idx >= 0 && idx < entries.length) {
+                    entries.splice(idx, 1);
+                  }
+                });
+
+                return { ...item, planTableEntries: entries };
+              }),
+            };
+          });
+        },
+        undo: () => {
+          if (capturedState !== null) {
+            setState(capturedState);
+          }
+        },
+      };
+
+      executeCommand(command);
+      clearSelection();
+    },
+    [selectedRows, setState, executeCommand, clearSelection]
   );
 
   // Main keyboard event handler
@@ -107,9 +176,13 @@ export default function useStagingKeyboardHandlers({
       // Don't handle other shortcuts while editing
       if (isEditing) return;
 
-      // Delete/Backspace to clear selected cells
+      // Delete/Backspace - delete rows if rows are selected, otherwise clear cells
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        handleCellsDelete(e);
+        if (selectedRows && selectedRows.size > 0) {
+          handleRowsDelete(e);
+        } else {
+          handleCellsDelete(e);
+        }
         return;
       }
 
@@ -158,9 +231,11 @@ export default function useStagingKeyboardHandlers({
     };
   }, [
     selectedCells,
+    selectedRows,
     undo,
     redo,
     handleCellsDelete,
+    handleRowsDelete,
     clearSelection,
     handleCopy,
     handlePaste,

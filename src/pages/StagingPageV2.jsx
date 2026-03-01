@@ -15,9 +15,13 @@ import {
   usePlanTableSelection,
   useStagingKeyboardHandlers,
   usePlanTableDragAndDrop,
+  useContextMenu,
 } from '../hooks/staging';
+import ContextMenu from '../components/staging/ContextMenu';
 import {
   clonePlanTableEntries,
+  cloneRowWithMetadata,
+  cloneStagingState,
   PLAN_TABLE_COLS,
   PLAN_ESTIMATE_OPTIONS,
 } from '../utils/staging/planTableHelpers';
@@ -96,9 +100,11 @@ export default function StagingPageV2() {
     selectedCells,
     selectedRows,
     isCellSelected,
+    isRowSelected,
     handleCellMouseDown,
     handleCellMouseEnter,
     handleMouseUp,
+    selectRow,
     clearSelection,
     getSelectedCellsByItem,
   } = usePlanTableSelection();
@@ -163,6 +169,7 @@ export default function StagingPageV2() {
   // Keyboard handlers for undo/redo, delete, etc.
   useStagingKeyboardHandlers({
     selectedCells,
+    selectedRows,
     undo,
     redo,
     executeCommand,
@@ -171,6 +178,320 @@ export default function StagingPageV2() {
     handleCopy,
     handlePaste,
   });
+
+  // Context menu
+  const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
+
+  // Context menu action handlers
+  const handleInsertRowAbove = useCallback(() => {
+    if (contextMenu.itemId == null || contextMenu.rowIdx == null) return;
+    const { itemId, rowIdx } = contextMenu;
+
+    let capturedState = null;
+    const command = {
+      execute: () => {
+        setState((prev) => {
+          if (capturedState === null) {
+            capturedState = cloneStagingState(prev);
+          }
+          return {
+            ...prev,
+            shortlist: prev.shortlist.map((item) => {
+              if (item.id !== itemId) return item;
+              const entries = item.planTableEntries.map(cloneRowWithMetadata);
+              const newRow = Array.from({ length: PLAN_TABLE_COLS }, () => '');
+              entries.splice(rowIdx, 0, newRow);
+              return { ...item, planTableEntries: entries };
+            }),
+          };
+        });
+      },
+      undo: () => {
+        if (capturedState) setState(capturedState);
+      },
+    };
+    executeCommand(command);
+  }, [contextMenu.itemId, contextMenu.rowIdx, setState, executeCommand]);
+
+  const handleInsertRowBelow = useCallback(() => {
+    if (contextMenu.itemId == null || contextMenu.rowIdx == null) return;
+    const { itemId, rowIdx } = contextMenu;
+
+    let capturedState = null;
+    const command = {
+      execute: () => {
+        setState((prev) => {
+          if (capturedState === null) {
+            capturedState = cloneStagingState(prev);
+          }
+          return {
+            ...prev,
+            shortlist: prev.shortlist.map((item) => {
+              if (item.id !== itemId) return item;
+              const entries = item.planTableEntries.map(cloneRowWithMetadata);
+              const newRow = Array.from({ length: PLAN_TABLE_COLS }, () => '');
+              entries.splice(rowIdx + 1, 0, newRow);
+              return { ...item, planTableEntries: entries };
+            }),
+          };
+        });
+      },
+      undo: () => {
+        if (capturedState) setState(capturedState);
+      },
+    };
+    executeCommand(command);
+  }, [contextMenu.itemId, contextMenu.rowIdx, setState, executeCommand]);
+
+  const handleDeleteRows = useCallback(() => {
+    // Build set of rows to delete - either from selection or from context menu
+    const rowsToDelete = new Map(); // itemId -> Set of rowIdx
+
+    if (selectedRows.size > 0) {
+      // Delete all selected rows
+      selectedRows.forEach((rowKey) => {
+        const [itemId, rowIdxStr] = rowKey.split('|');
+        const rowIdx = parseInt(rowIdxStr, 10);
+        if (!rowsToDelete.has(itemId)) {
+          rowsToDelete.set(itemId, new Set());
+        }
+        rowsToDelete.get(itemId).add(rowIdx);
+      });
+    } else if (contextMenu.itemId != null && contextMenu.rowIdx != null) {
+      // Fall back to context menu row
+      rowsToDelete.set(contextMenu.itemId, new Set([contextMenu.rowIdx]));
+    } else {
+      return;
+    }
+
+    let capturedState = null;
+    const command = {
+      execute: () => {
+        setState((prev) => {
+          if (capturedState === null) {
+            capturedState = cloneStagingState(prev);
+          }
+          return {
+            ...prev,
+            shortlist: prev.shortlist.map((item) => {
+              const rowIdxSet = rowsToDelete.get(item.id);
+              if (!rowIdxSet || rowIdxSet.size === 0) return item;
+
+              const entries = item.planTableEntries.map(cloneRowWithMetadata);
+              // Don't delete if it would leave no rows
+              if (entries.length <= rowIdxSet.size) return item;
+
+              // Delete rows in reverse order to preserve indices
+              const sortedIndices = Array.from(rowIdxSet).sort((a, b) => b - a);
+              sortedIndices.forEach((idx) => {
+                if (idx >= 0 && idx < entries.length) {
+                  entries.splice(idx, 1);
+                }
+              });
+
+              return { ...item, planTableEntries: entries };
+            }),
+          };
+        });
+      },
+      undo: () => {
+        if (capturedState) setState(capturedState);
+      },
+    };
+    executeCommand(command);
+    clearSelection();
+  }, [selectedRows, contextMenu.itemId, contextMenu.rowIdx, setState, executeCommand, clearSelection]);
+
+  const handleDuplicateRow = useCallback(() => {
+    // Build set of rows to duplicate - either from selection or from context menu
+    const rowsToDuplicate = new Map(); // itemId -> Set of rowIdx
+
+    if (selectedRows.size > 0) {
+      // Duplicate all selected rows
+      selectedRows.forEach((rowKey) => {
+        const [itemId, rowIdxStr] = rowKey.split('|');
+        const rowIdx = parseInt(rowIdxStr, 10);
+        if (!rowsToDuplicate.has(itemId)) {
+          rowsToDuplicate.set(itemId, new Set());
+        }
+        rowsToDuplicate.get(itemId).add(rowIdx);
+      });
+    } else if (contextMenu.itemId != null && contextMenu.rowIdx != null) {
+      // Fall back to context menu row
+      rowsToDuplicate.set(contextMenu.itemId, new Set([contextMenu.rowIdx]));
+    } else {
+      return;
+    }
+
+    let capturedState = null;
+    const command = {
+      execute: () => {
+        setState((prev) => {
+          if (capturedState === null) {
+            capturedState = cloneStagingState(prev);
+          }
+          return {
+            ...prev,
+            shortlist: prev.shortlist.map((item) => {
+              const rowIdxSet = rowsToDuplicate.get(item.id);
+              if (!rowIdxSet || rowIdxSet.size === 0) return item;
+
+              const entries = item.planTableEntries.map(cloneRowWithMetadata);
+
+              // Sort indices in ascending order and duplicate after each
+              // Insert in reverse order to preserve indices
+              const sortedIndices = Array.from(rowIdxSet).sort((a, b) => b - a);
+              sortedIndices.forEach((idx) => {
+                if (idx >= 0 && idx < entries.length) {
+                  const duplicatedRow = cloneRowWithMetadata(entries[idx]);
+                  entries.splice(idx + 1, 0, duplicatedRow);
+                }
+              });
+
+              return { ...item, planTableEntries: entries };
+            }),
+          };
+        });
+      },
+      undo: () => {
+        if (capturedState) setState(capturedState);
+      },
+    };
+    executeCommand(command);
+    clearSelection();
+  }, [selectedRows, contextMenu.itemId, contextMenu.rowIdx, setState, executeCommand, clearSelection]);
+
+  const handleClearCells = useCallback(() => {
+    if (!selectedCells || selectedCells.size === 0) return;
+
+    let capturedState = null;
+    const command = {
+      execute: () => {
+        setState((prev) => {
+          if (capturedState === null) {
+            capturedState = cloneStagingState(prev);
+          }
+
+          const cellsByItem = new Map();
+          selectedCells.forEach((cellKey) => {
+            const [itemId, rowIdx, colIdx] = cellKey.split('|');
+            if (!cellsByItem.has(itemId)) {
+              cellsByItem.set(itemId, []);
+            }
+            cellsByItem.get(itemId).push({
+              rowIdx: parseInt(rowIdx, 10),
+              colIdx: parseInt(colIdx, 10),
+            });
+          });
+
+          return {
+            ...prev,
+            shortlist: prev.shortlist.map((item) => {
+              const cells = cellsByItem.get(item.id);
+              if (!cells) return item;
+              const entries = item.planTableEntries.map(cloneRowWithMetadata);
+              cells.forEach(({ rowIdx, colIdx }) => {
+                if (entries[rowIdx] && entries[rowIdx][colIdx] !== undefined) {
+                  entries[rowIdx][colIdx] = '';
+                }
+              });
+              return { ...item, planTableEntries: entries };
+            }),
+          };
+        });
+      },
+      undo: () => {
+        if (capturedState) setState(capturedState);
+      },
+    };
+    executeCommand(command);
+  }, [selectedCells, setState, executeCommand]);
+
+  // Handle Enter key to add a new row of the same type below
+  const handleEnterKeyAddRow = useCallback((e, itemId, rowIdx, rowType) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+
+    // Default text mappings based on section header
+    const responseDefaultsBySection = {
+      'Reasons': 'Reason',
+      'Outcomes': 'Measurable Outcome',
+      'Needs': 'Need',
+      'Schedule': 'Schedule Item',
+      'Subprojects': 'Subproject',
+    };
+
+    const promptDefaultsBySection = {
+      'Reasons': 'Why do I want to start this?',
+      'Outcomes': 'What do I want to be true in 12 weeks?',
+      'Needs': 'What needs to be true in order for the outcomes to happen?',
+      'Schedule': 'Which activities need time allotted each week?',
+      'Subprojects': 'What are the stages or weekly habits required to make these outcomes happen?',
+    };
+
+    let capturedState = null;
+    const command = {
+      execute: () => {
+        setState((prev) => {
+          if (capturedState === null) {
+            capturedState = cloneStagingState(prev);
+          }
+          return {
+            ...prev,
+            shortlist: prev.shortlist.map((item) => {
+              if (item.id !== itemId) return item;
+              const entries = item.planTableEntries.map(cloneRowWithMetadata);
+
+              // Find the nearest header row above to determine the section
+              let sectionName = '';
+              for (let i = rowIdx; i >= 0; i--) {
+                if (entries[i]?.__rowType === 'header') {
+                  sectionName = entries[i][0] || '';
+                  break;
+                }
+              }
+
+              // Get default text based on row type and section
+              const getDefaultText = () => {
+                if (rowType === 'response') {
+                  return responseDefaultsBySection[sectionName] || '';
+                }
+                if (rowType === 'prompt') {
+                  return promptDefaultsBySection[sectionName] || '';
+                }
+                return '';
+              };
+
+              // Create new row with same type and appropriate default text
+              const defaultText = getDefaultText();
+              const newRow = Array.from({ length: PLAN_TABLE_COLS }, (_, i) => {
+                if (rowType === 'response' && i === 2) return defaultText;
+                if (rowType === 'prompt' && i === 1) return defaultText;
+                return '';
+              });
+
+              // Set the row type as non-enumerable property
+              if (rowType) {
+                Object.defineProperty(newRow, '__rowType', {
+                  value: rowType,
+                  writable: true,
+                  configurable: true,
+                  enumerable: false,
+                });
+              }
+
+              entries.splice(rowIdx + 1, 0, newRow);
+              return { ...item, planTableEntries: entries };
+            }),
+          };
+        });
+      },
+      undo: () => {
+        if (capturedState) setState(capturedState);
+      },
+    };
+    executeCommand(command);
+  }, [setState, executeCommand]);
 
   // Add to Plan handler
   const handleTogglePlanStatus = useCallback((itemId, addToPlan) => {
@@ -183,10 +504,286 @@ export default function StagingPageV2() {
     closePlanModal();
   }, [setState, closePlanModal]);
 
+  // Handle click on drag handle to select row
+  const handleHandleClick = useCallback(
+    (e, itemId, rowIdx) => {
+      e.stopPropagation();
+      const addToSelection = e.metaKey || e.ctrlKey || e.shiftKey;
+      selectRow(itemId, rowIdx, PLAN_TABLE_COLS, addToSelection);
+    },
+    [selectRow]
+  );
+
+  // Clear row selection when focusing into a cell input
+  const handleInputFocus = useCallback(() => {
+    if (selectedRows.size > 0) {
+      clearSelection();
+    }
+  }, [selectedRows, clearSelection]);
+
   // Render a simple table row with drag and drop support
   const renderSimpleTableRow = (item, rowValues, rowIdx) => {
     const isDragged = isRowDragged(item.id, rowIdx);
     const isTarget = isDropTarget(item.id, rowIdx);
+    const isSelected = isRowSelected(item.id, rowIdx);
+    const isHeaderRow = rowValues.__rowType === 'header';
+    const isPromptRow = rowValues.__rowType === 'prompt';
+    const isResponseRow = rowValues.__rowType === 'response';
+
+    // For header rows, render a single spanning cell with grey background
+    if (isHeaderRow) {
+      return (
+        <tr
+          key={`${item.id}-simple-row-${rowIdx}`}
+          draggable
+          onDragStart={(e) => handleDragStart(e, item.id, rowIdx)}
+          onDragOver={(e) => handleDragOver(e, item.id, rowIdx)}
+          onDrop={(e) => handleDrop(e, item.id, rowIdx)}
+          onDragEnd={handleDragEnd}
+          onContextMenu={(e) =>
+            handleContextMenu(e, {
+              itemId: item.id,
+              rowIdx,
+              selectedCells,
+              selectedRows,
+            })
+          }
+          style={{
+            opacity: isDragged ? 0.5 : 1,
+            cursor: 'grab',
+          }}
+        >
+          {/* Drag handle cell */}
+          <td
+            className="border border-[#e5e7eb] px-1 py-2 text-center"
+            style={{
+              width: '24px',
+              minWidth: '24px',
+              backgroundColor: isSelected ? '#3b82f6' : '#b7b7b7',
+              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+              cursor: 'grab',
+            }}
+            onClick={(e) => handleHandleClick(e, item.id, rowIdx)}
+          >
+            <span style={{ fontSize: '10px', color: isSelected ? '#ffffff' : '#6b7280' }}>⋮⋮</span>
+          </td>
+          {/* Header cell - spans all columns */}
+          <td
+            colSpan={PLAN_TABLE_COLS}
+            className="border border-[#e5e7eb] py-2 min-h-[44px]"
+            style={{
+              backgroundColor: '#b7b7b7',
+              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+              paddingLeft: '12px',
+            }}
+          >
+            <input
+              type="text"
+              value={rowValues[0] || ''}
+              onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
+              onFocus={handleInputFocus}
+              className="w-full bg-transparent focus:outline-none border-none font-semibold text-gray-800"
+              style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+              data-plan-item={item.id}
+              data-plan-row={rowIdx}
+              data-plan-col={0}
+            />
+          </td>
+        </tr>
+      );
+    }
+
+    // For prompt rows, render with lighter grey background and text in second cell
+    if (isPromptRow) {
+      return (
+        <tr
+          key={`${item.id}-simple-row-${rowIdx}`}
+          draggable
+          onDragStart={(e) => handleDragStart(e, item.id, rowIdx)}
+          onDragOver={(e) => handleDragOver(e, item.id, rowIdx)}
+          onDrop={(e) => handleDrop(e, item.id, rowIdx)}
+          onDragEnd={handleDragEnd}
+          onContextMenu={(e) =>
+            handleContextMenu(e, {
+              itemId: item.id,
+              rowIdx,
+              selectedCells,
+              selectedRows,
+            })
+          }
+          style={{
+            opacity: isDragged ? 0.5 : 1,
+            cursor: 'grab',
+          }}
+        >
+          {/* Drag handle cell */}
+          <td
+            className="border border-[#e5e7eb] px-1 py-2 text-center"
+            style={{
+              width: '24px',
+              minWidth: '24px',
+              backgroundColor: isSelected ? '#3b82f6' : '#d9d9d9',
+              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+              cursor: 'grab',
+            }}
+            onClick={(e) => handleHandleClick(e, item.id, rowIdx)}
+          >
+            <span style={{ fontSize: '10px', color: isSelected ? '#ffffff' : '#9ca3af' }}>⋮⋮</span>
+          </td>
+          {/* First cell - empty */}
+          <td
+            className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+            style={{
+              width: '120px',
+              minWidth: '120px',
+              backgroundColor: '#d9d9d9',
+              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+            }}
+          >
+            <input
+              type="text"
+              value={rowValues[0] || ''}
+              onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
+              onFocus={handleInputFocus}
+              className="w-full bg-transparent focus:outline-none border-none"
+              style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+              data-plan-item={item.id}
+              data-plan-row={rowIdx}
+              data-plan-col={0}
+            />
+          </td>
+          {/* Prompt cell - spans remaining columns */}
+          <td
+            colSpan={PLAN_TABLE_COLS - 1}
+            className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+            style={{
+              backgroundColor: '#d9d9d9',
+              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+            }}
+          >
+            <input
+              type="text"
+              value={rowValues[1] || ''}
+              onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
+              onKeyDown={(e) => handleEnterKeyAddRow(e, item.id, rowIdx, 'prompt')}
+              onFocus={handleInputFocus}
+              className="w-full bg-transparent focus:outline-none border-none font-semibold text-slate-800"
+              style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+              data-plan-item={item.id}
+              data-plan-row={rowIdx}
+              data-plan-col={1}
+            />
+          </td>
+        </tr>
+      );
+    }
+
+    // For response rows, render with lighter grey background and editable cell starting in third column
+    if (isResponseRow) {
+      return (
+        <tr
+          key={`${item.id}-simple-row-${rowIdx}`}
+          draggable
+          onDragStart={(e) => handleDragStart(e, item.id, rowIdx)}
+          onDragOver={(e) => handleDragOver(e, item.id, rowIdx)}
+          onDrop={(e) => handleDrop(e, item.id, rowIdx)}
+          onDragEnd={handleDragEnd}
+          onContextMenu={(e) =>
+            handleContextMenu(e, {
+              itemId: item.id,
+              rowIdx,
+              selectedCells,
+              selectedRows,
+            })
+          }
+          style={{
+            opacity: isDragged ? 0.5 : 1,
+            cursor: 'grab',
+          }}
+        >
+          {/* Drag handle cell */}
+          <td
+            className="border border-[#e5e7eb] px-1 py-2 text-center"
+            style={{
+              width: '24px',
+              minWidth: '24px',
+              backgroundColor: isSelected ? '#3b82f6' : '#f3f3f3',
+              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+              cursor: 'grab',
+            }}
+            onClick={(e) => handleHandleClick(e, item.id, rowIdx)}
+          >
+            <span style={{ fontSize: '10px', color: isSelected ? '#ffffff' : '#9ca3af' }}>⋮⋮</span>
+          </td>
+          {/* First cell - empty */}
+          <td
+            className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+            style={{
+              width: '120px',
+              minWidth: '120px',
+              backgroundColor: '#f3f3f3',
+              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+            }}
+          >
+            <input
+              type="text"
+              value={rowValues[0] || ''}
+              onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
+              onFocus={handleInputFocus}
+              className="w-full bg-transparent focus:outline-none border-none"
+              style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+              data-plan-item={item.id}
+              data-plan-row={rowIdx}
+              data-plan-col={0}
+            />
+          </td>
+          {/* Second cell - empty */}
+          <td
+            className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+            style={{
+              width: '120px',
+              minWidth: '120px',
+              backgroundColor: '#f3f3f3',
+              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+            }}
+          >
+            <input
+              type="text"
+              value={rowValues[1] || ''}
+              onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
+              onFocus={handleInputFocus}
+              className="w-full bg-transparent focus:outline-none border-none"
+              style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+              data-plan-item={item.id}
+              data-plan-row={rowIdx}
+              data-plan-col={1}
+            />
+          </td>
+          {/* Response cell - spans remaining columns */}
+          <td
+            colSpan={PLAN_TABLE_COLS - 2}
+            className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+            style={{
+              backgroundColor: '#f3f3f3',
+              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+            }}
+          >
+            <input
+              type="text"
+              value={rowValues[2] || ''}
+              onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)}
+              onKeyDown={(e) => handleEnterKeyAddRow(e, item.id, rowIdx, 'response')}
+              onFocus={handleInputFocus}
+              className="w-full bg-transparent focus:outline-none border-none"
+              style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+              data-plan-item={item.id}
+              data-plan-row={rowIdx}
+              data-plan-col={2}
+            />
+          </td>
+        </tr>
+      );
+    }
 
     return (
       <tr
@@ -196,6 +793,14 @@ export default function StagingPageV2() {
         onDragOver={(e) => handleDragOver(e, item.id, rowIdx)}
         onDrop={(e) => handleDrop(e, item.id, rowIdx)}
         onDragEnd={handleDragEnd}
+        onContextMenu={(e) =>
+          handleContextMenu(e, {
+            itemId: item.id,
+            rowIdx,
+            selectedCells,
+            selectedRows,
+          })
+        }
         style={{
           opacity: isDragged ? 0.5 : 1,
           cursor: 'grab',
@@ -207,12 +812,13 @@ export default function StagingPageV2() {
           style={{
             width: '24px',
             minWidth: '24px',
-            backgroundColor: isTarget ? '#dbeafe' : '#f9fafb',
+            backgroundColor: isSelected ? '#3b82f6' : isTarget ? '#dbeafe' : '#f9fafb',
             borderTop: isTarget ? '2px solid #3b82f6' : undefined,
             cursor: 'grab',
           }}
+          onClick={(e) => handleHandleClick(e, item.id, rowIdx)}
         >
-          <span style={{ fontSize: '10px', color: '#9ca3af' }}>⋮⋮</span>
+          <span style={{ fontSize: '10px', color: isSelected ? '#ffffff' : '#9ca3af' }}>⋮⋮</span>
         </td>
         {/* Data cells */}
         {rowValues.map((cellValue, cellIdx) => {
@@ -232,6 +838,8 @@ export default function StagingPageV2() {
                 type="text"
                 value={cellValue}
                 onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)}
+                onKeyDown={(e) => handleEnterKeyAddRow(e, item.id, rowIdx, rowValues.__rowType || 'data')}
+                onFocus={handleInputFocus}
                 className="w-full bg-transparent focus:outline-none border-none"
                 style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                 data-plan-item={item.id}
@@ -1353,6 +1961,15 @@ export default function StagingPageV2() {
           </div>
         </div>
       </div>
+      <ContextMenu
+        contextMenu={contextMenu}
+        onClose={closeContextMenu}
+        onDeleteRows={handleDeleteRows}
+        onInsertRowAbove={handleInsertRowAbove}
+        onInsertRowBelow={handleInsertRowBelow}
+        onDuplicateRow={handleDuplicateRow}
+        onClearCells={handleClearCells}
+      />
     </>
   );
 }

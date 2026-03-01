@@ -67,6 +67,50 @@ export const parseTimeValueToMinutes = (value) => {
 };
 
 /**
+ * Clone a single row while preserving non-enumerable metadata
+ */
+export const cloneRowWithMetadata = (row) => {
+  if (!Array.isArray(row)) return row;
+  const newRow = [...row];
+  if (row['__rowType']) {
+    Object.defineProperty(newRow, '__rowType', {
+      value: row['__rowType'],
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  if (row['__pairId']) {
+    Object.defineProperty(newRow, '__pairId', {
+      value: row['__pairId'],
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  return newRow;
+};
+
+/**
+ * Deep clone staging state while preserving row metadata (__rowType, __pairId)
+ * Use this instead of JSON.parse(JSON.stringify()) for undo/redo state capture
+ */
+export const cloneStagingState = (state) => {
+  if (!state) return state;
+  return {
+    ...state,
+    shortlist: state.shortlist?.map((item) => ({
+      ...item,
+      planTableEntries: item.planTableEntries?.map(cloneRowWithMetadata) || [],
+    })) || [],
+    archived: state.archived?.map((item) => ({
+      ...item,
+      planTableEntries: item.planTableEntries?.map(cloneRowWithMetadata) || [],
+    })) || [],
+  };
+};
+
+/**
  * Clone plan table entries with row count normalization
  */
 export const clonePlanTableEntries = (entries, ensureRows = PLAN_TABLE_ROWS) => {
@@ -86,6 +130,16 @@ export const clonePlanTableEntries = (entries, ensureRows = PLAN_TABLE_ROWS) => 
     if (sourceRow && sourceRow['__pairId']) {
       Object.defineProperty(nextRow, '__pairId', {
         value: sourceRow['__pairId'],
+        writable: true,
+        configurable: true,
+        enumerable: false,
+      });
+    }
+
+    // Preserve row type metadata
+    if (sourceRow && sourceRow['__rowType']) {
+      Object.defineProperty(nextRow, '__rowType', {
+        value: sourceRow['__rowType'],
         writable: true,
         configurable: true,
         enumerable: false,

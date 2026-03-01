@@ -10,3 +10,4 @@ export { default as useCommandPattern } from './useCommandPattern';
 export { default as usePlanTableSelection } from './usePlanTableSelection';
 export { default as useStagingKeyboardHandlers } from './useStagingKeyboardHandlers';
 export { default as usePlanTableDragAndDrop } from './usePlanTableDragAndDrop';
+export { default as useContextMenu } from './useContextMenu';
