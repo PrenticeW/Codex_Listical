@@ -680,6 +680,185 @@ export default function StagingPageV2() {
 
     // For response rows, render with lighter grey background and editable cell starting in third column
     if (isResponseRow) {
+      // Find the nearest header row above to determine the section
+      const entries = item.planTableEntries || [];
+      let sectionName = '';
+      for (let i = rowIdx; i >= 0; i--) {
+        if (entries[i]?.__rowType === 'header') {
+          sectionName = entries[i][0] || '';
+          break;
+        }
+      }
+
+      // Check if this section should have time elements (Actions or Subprojects)
+      const hasTimeElements = sectionName === 'Actions' || sectionName === 'Subprojects' || sectionName === 'Schedule';
+
+      if (hasTimeElements) {
+        const estimateValue = rowValues[4] || '-';
+        const isCustomEstimate = estimateValue === 'Custom';
+        const displayedTimeValue = rowValues[5] || '0.00';
+
+        return (
+          <tr
+            key={`${item.id}-simple-row-${rowIdx}`}
+            draggable
+            onDragStart={(e) => handleDragStart(e, item.id, rowIdx)}
+            onDragOver={(e) => handleDragOver(e, item.id, rowIdx)}
+            onDrop={(e) => handleDrop(e, item.id, rowIdx)}
+            onDragEnd={handleDragEnd}
+            onContextMenu={(e) =>
+              handleContextMenu(e, {
+                itemId: item.id,
+                rowIdx,
+                selectedCells,
+                selectedRows,
+              })
+            }
+            style={{
+              opacity: isDragged ? 0.5 : 1,
+              cursor: 'grab',
+            }}
+          >
+            {/* Drag handle cell */}
+            <td
+              className="border border-[#e5e7eb] px-1 py-2 text-center"
+              style={{
+                width: '24px',
+                minWidth: '24px',
+                backgroundColor: isSelected ? '#3b82f6' : '#f3f3f3',
+                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+                cursor: 'grab',
+              }}
+              onClick={(e) => handleHandleClick(e, item.id, rowIdx)}
+            >
+              <span style={{ fontSize: '10px', color: isSelected ? '#ffffff' : '#9ca3af' }}>⋮⋮</span>
+            </td>
+            {/* First cell - empty */}
+            <td
+              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              style={{
+                width: '120px',
+                minWidth: '120px',
+                backgroundColor: '#f3f3f3',
+                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+              }}
+            >
+              <input
+                type="text"
+                value={rowValues[0] || ''}
+                onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
+                onFocus={handleInputFocus}
+                className="w-full bg-transparent focus:outline-none border-none"
+                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+                data-plan-item={item.id}
+                data-plan-row={rowIdx}
+                data-plan-col={0}
+              />
+            </td>
+            {/* Second cell - empty */}
+            <td
+              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              style={{
+                width: '120px',
+                minWidth: '120px',
+                backgroundColor: '#f3f3f3',
+                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+              }}
+            >
+              <input
+                type="text"
+                value={rowValues[1] || ''}
+                onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
+                onFocus={handleInputFocus}
+                className="w-full bg-transparent focus:outline-none border-none"
+                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+                data-plan-item={item.id}
+                data-plan-row={rowIdx}
+                data-plan-col={1}
+              />
+            </td>
+            {/* Response cell - third column, spans 2 columns */}
+            <td
+              colSpan={2}
+              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              style={{
+                backgroundColor: '#f3f3f3',
+                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+              }}
+            >
+              <input
+                type="text"
+                value={rowValues[2] || ''}
+                onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)}
+                onKeyDown={(e) => handleEnterKeyAddRow(e, item.id, rowIdx, 'response')}
+                onFocus={handleInputFocus}
+                className="w-full bg-transparent focus:outline-none border-none"
+                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+                data-plan-item={item.id}
+                data-plan-row={rowIdx}
+                data-plan-col={2}
+              />
+            </td>
+            {/* Estimate dropdown cell - column 5 */}
+            <td
+              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              style={{
+                width: '140px',
+                minWidth: '140px',
+                backgroundColor: '#f3f3f3',
+                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+              }}
+            >
+              <select
+                className="w-full bg-transparent focus:outline-none border-none"
+                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+                value={estimateValue}
+                onChange={(e) => handlePlanEstimateChange(item.id, rowIdx, e.target.value)}
+                data-plan-item={item.id}
+                data-plan-row={rowIdx}
+                data-plan-col={4}
+              >
+                {PLAN_ESTIMATE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </td>
+            {/* Time value cell - column 6 */}
+            <td
+              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              style={{
+                width: '120px',
+                minWidth: '120px',
+                textAlign: 'right',
+                paddingRight: '10px',
+                backgroundColor: '#f3f3f3',
+                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+              }}
+            >
+              <input
+                type="text"
+                value={displayedTimeValue}
+                onChange={(e) => {
+                  if (!isCustomEstimate) return;
+                  handlePlanTableCellChange(item.id, rowIdx, 5, e.target.value);
+                }}
+                readOnly={!isCustomEstimate}
+                onFocus={handleInputFocus}
+                className="w-full bg-transparent text-right focus:outline-none border-none"
+                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+                placeholder="0.00"
+                data-plan-item={item.id}
+                data-plan-row={rowIdx}
+                data-plan-col={5}
+              />
+            </td>
+          </tr>
+        );
+      }
+
+      // Default response row without time elements
       return (
         <tr
           key={`${item.id}-simple-row-${rowIdx}`}

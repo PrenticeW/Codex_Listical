@@ -476,7 +476,7 @@ export default function usePlanTableState({ setState, executeCommand }) {
           if (!nextEntries[rowIdx]) {
             nextEntries[rowIdx] = row;
           }
-          row[3] = nextEstimate;
+          row[4] = nextEstimate;
           const minutes = parseEstimateLabelToMinutes(nextEstimate);
           let nextTimeValue = '0.00';
           if (minutes != null) {
@@ -484,7 +484,7 @@ export default function usePlanTableState({ setState, executeCommand }) {
           } else if (nextEstimate === 'Custom') {
             nextTimeValue = '0.00';
           }
-          row[4] = nextTimeValue;
+          row[5] = nextTimeValue;
           return { ...item, planTableEntries: nextEntries };
         }),
       }));
