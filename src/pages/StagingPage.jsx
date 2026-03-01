@@ -1177,7 +1177,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                         type="text"
                         value={rowValues[1] ?? ''}
                         onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
-                        placeholder="What needs to be true in order for the outcomes to happen?"
+                        placeholder="What needs to happen and in what order?"
                         className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
                         data-plan-item={item.id}
                         data-plan-row={rowIdx}

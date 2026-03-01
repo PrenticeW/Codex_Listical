@@ -80,10 +80,10 @@ const createSimpleTable = () => {
     createPromptRow('What do I want to be true in 12 weeks?'),
     createResponseRow('Measurable Outcome'),
     createRow('', ROW_TYPE.DATA),
-    // Needs section
-    createRow('Needs', ROW_TYPE.HEADER),
-    createPromptRow('What needs to be true in order for the outcomes to happen?'),
-    createResponseRow('Need'),
+    // Actions section
+    createRow('Actions', ROW_TYPE.HEADER),
+    createPromptRow('What needs to happen and in what order?'),
+    createResponseRow('Action'),
     createRow('', ROW_TYPE.DATA),
     // Schedule section
     createRow('Schedule', ROW_TYPE.HEADER),

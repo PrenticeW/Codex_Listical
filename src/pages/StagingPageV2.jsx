@@ -416,7 +416,7 @@ export default function StagingPageV2() {
     const responseDefaultsBySection = {
       'Reasons': 'Reason',
       'Outcomes': 'Measurable Outcome',
-      'Needs': 'Need',
+      'Needs': 'Action',
       'Schedule': 'Schedule Item',
       'Subprojects': 'Subproject',
     };
@@ -424,7 +424,7 @@ export default function StagingPageV2() {
     const promptDefaultsBySection = {
       'Reasons': 'Why do I want to start this?',
       'Outcomes': 'What do I want to be true in 12 weeks?',
-      'Needs': 'What needs to be true in order for the outcomes to happen?',
+      'Needs': 'What needs to happen and in what order?',
       'Schedule': 'Which activities need time allotted each week?',
       'Subprojects': 'What are the stages or weekly habits required to make these outcomes happen?',
     };
@@ -1090,7 +1090,7 @@ export default function StagingPageV2() {
           type="text"
           value={rowValues[1] ?? ''}
           onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
-          placeholder="What needs to be true in order for the outcomes to happen?"
+          placeholder="What needs to happen and in what order?"
           className="w-full bg-transparent font-semibold text-slate-800 focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
           data-plan-item={item.id}
@@ -1833,7 +1833,7 @@ export default function StagingPageV2() {
                                       className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold"
                                       style={{ backgroundColor: '#b7b7b7', color: '#1f2937', fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                     >
-                                      &nbsp;&nbsp;&nbsp;Needs
+                                      &nbsp;&nbsp;&nbsp;Actions
                                     </td>
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 text-right font-semibold"
