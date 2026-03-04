@@ -33,6 +33,15 @@ import {
   handlePasteOperation,
 } from '../utils/staging/clipboardOperations';
 
+// Centralized question prompts for each section
+const SECTION_PROMPTS = {
+  Reasons: 'Why do I want to start this?',
+  Outcomes: 'What do I want to be true in 12 weeks?',
+  Needs: 'For each outcome, what needs to happen and in what order?',
+  Schedule: 'Which activities need time allotted each week?',
+  Subprojects: 'What are the areas or stages your tasks will fall under?',
+};
+
 /**
  * StagingPage (Goals/Staging) - Refactored with extracted hooks
  *
@@ -418,17 +427,18 @@ export default function StagingPageV2() {
     const responseDefaultsBySection = {
       'Reasons': 'Reason',
       'Outcomes': 'Measurable Outcome',
-      'Needs': 'Action',
+      'Actions': 'Action',
       'Schedule': 'Schedule Item',
       'Subprojects': 'Subproject',
     };
 
+    // Map section header names to prompts (simple table uses 'Actions', SECTION_PROMPTS uses 'Needs')
     const promptDefaultsBySection = {
-      'Reasons': 'Why do I want to start this?',
-      'Outcomes': 'What do I want to be true in 12 weeks?',
-      'Needs': 'What needs to happen and in what order?',
-      'Schedule': 'Which activities need time allotted each week?',
-      'Subprojects': 'What are the stages or weekly habits required to make these outcomes happen?',
+      'Reasons': SECTION_PROMPTS.Reasons,
+      'Outcomes': SECTION_PROMPTS.Outcomes,
+      'Actions': SECTION_PROMPTS.Needs,
+      'Schedule': SECTION_PROMPTS.Schedule,
+      'Subprojects': SECTION_PROMPTS.Subprojects,
     };
 
     let capturedState = null;
@@ -692,8 +702,8 @@ export default function StagingPageV2() {
         }
       }
 
-      // Check if this section should have time elements (Actions or Subprojects)
-      const hasTimeElements = sectionName === 'Actions' || sectionName === 'Subprojects' || sectionName === 'Schedule';
+      // Check if this section should have time elements (Actions or Schedule only, not Subprojects)
+      const hasTimeElements = sectionName === 'Actions' || sectionName === 'Schedule';
 
       if (hasTimeElements) {
         const estimateValue = rowValues[4] || '-';
@@ -1081,7 +1091,7 @@ export default function StagingPageV2() {
           type="text"
           value={rowValues[1] ?? ''}
           onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
-          placeholder="What do I want to be true in 12 weeks?"
+          placeholder={SECTION_PROMPTS.Outcomes}
           className="w-full bg-transparent font-semibold text-slate-800 focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
           data-plan-item={item.id}
@@ -1275,7 +1285,7 @@ export default function StagingPageV2() {
           type="text"
           value={rowValues[1] ?? ''}
           onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
-          placeholder="What needs to happen and in what order?"
+          placeholder={SECTION_PROMPTS.Needs}
           className="w-full bg-transparent font-semibold text-slate-800 focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
           data-plan-item={item.id}
@@ -1776,15 +1786,39 @@ export default function StagingPageV2() {
                     return `${hrs}.${mins.toString().padStart(2, '0')}`;
                   };
 
-                  const needsPlanTotalMinutes = needsPlanEntries.reduce((sum, entry) => {
-                    const value = entry.rowValues?.[4] ?? '';
-                    return sum + parseTimeValueToMinutes(value);
-                  }, 0);
+                  // Calculate totals - different logic for simple vs regular tables
+                  let needsPlanTotalMinutes = 0;
+                  let scheduleTotalMinutes = 0;
 
-                  const scheduleTotalMinutes = scheduleEntries.reduce((sum, entry) => {
-                    const value = entry.rowValues?.[4] ?? '';
-                    return sum + parseTimeValueToMinutes(value);
-                  }, 0);
+                  if (item.isSimpleTable) {
+                    // For simple tables, find response rows by iterating through entries
+                    let currentSection = '';
+                    for (let i = 0; i < planEntries.length; i++) {
+                      const row = planEntries[i];
+                      if (row?.__rowType === 'header') {
+                        currentSection = row[0] || '';
+                      } else if (row?.__rowType === 'response') {
+                        // In simple table, time value is at index 5
+                        const value = row[5] ?? '';
+                        const minutes = parseTimeValueToMinutes(value);
+                        if (currentSection === 'Actions') {
+                          needsPlanTotalMinutes += minutes;
+                        } else if (currentSection === 'Schedule') {
+                          scheduleTotalMinutes += minutes;
+                        }
+                      }
+                    }
+                  } else {
+                    // For regular tables, use the indexed entries with time at index 4
+                    needsPlanTotalMinutes = needsPlanEntries.reduce((sum, entry) => {
+                      const value = entry.rowValues?.[4] ?? '';
+                      return sum + parseTimeValueToMinutes(value);
+                    }, 0);
+                    scheduleTotalMinutes = scheduleEntries.reduce((sum, entry) => {
+                      const value = entry.rowValues?.[4] ?? '';
+                      return sum + parseTimeValueToMinutes(value);
+                    }, 0);
+                  }
 
                   const needsPlanTimeTotal = formatMinutesToHHmm(needsPlanTotalMinutes);
                   const projectPlanTimeTotal = formatMinutesToHHmm(
@@ -1980,7 +2014,7 @@ export default function StagingPageV2() {
                                     >
                                       <span className="font-semibold text-slate-800"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
-                                        Why do I want to start this?
+                                        {SECTION_PROMPTS.Reasons}
                                       </span>
                                     </td>
                                   </tr>
@@ -2079,7 +2113,7 @@ export default function StagingPageV2() {
                                     >
                                       <span className="font-semibold text-slate-800"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
-                                        Which activities need time alotted each week?
+                                        {SECTION_PROMPTS.Schedule}
                                       </span>
                                     </td>
                                     <td
@@ -2116,7 +2150,7 @@ export default function StagingPageV2() {
                                     >
                                       <span className="font-semibold text-slate-800"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
-                                        What are the stages or weekly habits required to make these outcomes happen?
+                                        {SECTION_PROMPTS.Subprojects}
                                       </span>
                                     </td>
                                     <td

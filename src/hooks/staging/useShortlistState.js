@@ -82,7 +82,7 @@ const createSimpleTable = () => {
     createRow('', ROW_TYPE.DATA),
     // Actions section
     createRow('Actions', ROW_TYPE.HEADER),
-    createPromptRow('What needs to happen and in what order?'),
+    createPromptRow('For each outcome, what needs to happen and in what order?'),
     createResponseRow('Action'),
     createRow('', ROW_TYPE.DATA),
     // Schedule section
@@ -92,7 +92,7 @@ const createSimpleTable = () => {
     createRow('', ROW_TYPE.DATA),
     // Subprojects section
     createRow('Subprojects', ROW_TYPE.HEADER),
-    createPromptRow('What are the stages or weekly habits required to make these outcomes happen?'),
+    createPromptRow('What are the areas or stages your tasks will fall under?'),
     createResponseRow('Subproject'),
     createRow('', ROW_TYPE.DATA),
   ];
