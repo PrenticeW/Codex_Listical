@@ -32,15 +32,7 @@ import {
   handleCopyOperation,
   handlePasteOperation,
 } from '../utils/staging/clipboardOperations';
-
-// Centralized question prompts for each section
-const SECTION_PROMPTS = {
-  Reasons: 'Why do I want to start this?',
-  Outcomes: 'What do I want to be true in 12 weeks?',
-  Needs: 'For each outcome, what needs to happen and in what order?',
-  Schedule: 'Which activities need time allotted each week?',
-  Subprojects: 'What are the areas or stages your tasks will fall under?',
-};
+import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
 
 /**
  * StagingPage (Goals/Staging) - Refactored with extracted hooks
@@ -424,22 +416,23 @@ export default function StagingPageV2() {
     if (e.key !== 'Enter') return;
     e.preventDefault();
 
-    // Default text mappings based on section header
+    // Default text mappings based on section header (from centralized config)
+    // Keys are the full header text since that's what's stored in the row
     const responseDefaultsBySection = {
-      'Reasons': 'Reason',
-      'Outcomes': 'Measurable Outcome',
-      'Actions': 'Action',
-      'Schedule': 'Schedule Item',
-      'Subprojects': 'Subproject',
+      [SECTION_CONFIG.Reasons.header]: SECTION_CONFIG.Reasons.placeholder,
+      [SECTION_CONFIG.Outcomes.header]: SECTION_CONFIG.Outcomes.placeholder,
+      [SECTION_CONFIG.Actions.header]: SECTION_CONFIG.Actions.placeholder,
+      [SECTION_CONFIG.Schedule.header]: SECTION_CONFIG.Schedule.placeholder,
+      [SECTION_CONFIG.Subprojects.header]: SECTION_CONFIG.Subprojects.placeholder,
     };
 
-    // Map section header names to prompts (simple table uses 'Actions', SECTION_PROMPTS uses 'Needs')
+    // Map section header names to prompts (from centralized config)
     const promptDefaultsBySection = {
-      'Reasons': SECTION_PROMPTS.Reasons,
-      'Outcomes': SECTION_PROMPTS.Outcomes,
-      'Actions': SECTION_PROMPTS.Needs,
-      'Schedule': SECTION_PROMPTS.Schedule,
-      'Subprojects': SECTION_PROMPTS.Subprojects,
+      [SECTION_CONFIG.Reasons.header]: SECTION_CONFIG.Reasons.prompt,
+      [SECTION_CONFIG.Outcomes.header]: SECTION_CONFIG.Outcomes.prompt,
+      [SECTION_CONFIG.Actions.header]: SECTION_CONFIG.Actions.prompt,
+      [SECTION_CONFIG.Schedule.header]: SECTION_CONFIG.Schedule.prompt,
+      [SECTION_CONFIG.Subprojects.header]: SECTION_CONFIG.Subprojects.prompt,
     };
 
     let capturedState = null;
@@ -624,6 +617,163 @@ export default function StagingPageV2() {
 
     // For prompt rows, render with lighter grey background and text in second cell
     if (isPromptRow) {
+      // Find the nearest header row above to determine the section
+      const entries = item.planTableEntries || [];
+      let sectionName = '';
+      for (let i = rowIdx; i >= 0; i--) {
+        if (entries[i]?.__rowType === 'header') {
+          sectionName = entries[i][0] || '';
+          break;
+        }
+      }
+
+      // Check if this is a Schedule prompt row (needs time elements)
+      const isSchedulePrompt = sectionName === SECTION_CONFIG.Schedule.header;
+
+      if (isSchedulePrompt) {
+        const estimateValue = rowValues[4] || '-';
+        const isCustomEstimate = estimateValue === 'Custom';
+        const displayedTimeValue = rowValues[5] || '0.00';
+
+        return (
+          <tr
+            key={`${item.id}-simple-row-${rowIdx}`}
+            draggable
+            onDragStart={(e) => handleDragStart(e, item.id, rowIdx)}
+            onDragOver={(e) => handleDragOver(e, item.id, rowIdx)}
+            onDrop={(e) => handleDrop(e, item.id, rowIdx)}
+            onDragEnd={handleDragEnd}
+            onContextMenu={(e) =>
+              handleContextMenu(e, {
+                itemId: item.id,
+                rowIdx,
+                selectedCells,
+                selectedRows,
+              })
+            }
+            style={{
+              opacity: isDragged ? 0.5 : 1,
+              cursor: 'grab',
+            }}
+          >
+            {/* Drag handle cell */}
+            <td
+              className="border border-[#e5e7eb] px-1 py-2 text-center"
+              style={{
+                width: '24px',
+                minWidth: '24px',
+                backgroundColor: isSelected ? '#3b82f6' : '#d9d9d9',
+                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+                cursor: 'grab',
+              }}
+              onClick={(e) => handleHandleClick(e, item.id, rowIdx)}
+            >
+              <span style={{ fontSize: '10px', color: isSelected ? '#ffffff' : '#9ca3af' }}>⋮⋮</span>
+            </td>
+            {/* First cell */}
+            <td
+              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              style={{
+                width: '120px',
+                minWidth: '120px',
+                backgroundColor: '#d9d9d9',
+                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+              }}
+            >
+              <input
+                type="text"
+                value={rowValues[0] || ''}
+                onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
+                onFocus={handleInputFocus}
+                className="w-full bg-transparent focus:outline-none border-none"
+                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+                data-plan-item={item.id}
+                data-plan-row={rowIdx}
+                data-plan-col={0}
+              />
+            </td>
+            {/* Prompt cell - spans 3 columns */}
+            <td
+              colSpan={3}
+              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              style={{
+                backgroundColor: '#d9d9d9',
+                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+              }}
+            >
+              <input
+                type="text"
+                value={rowValues[2] || ''}
+                onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)}
+                onKeyDown={(e) => handleEnterKeyAddRow(e, item.id, rowIdx, 'prompt')}
+                onFocus={handleInputFocus}
+                className="w-full bg-transparent focus:outline-none border-none text-slate-800"
+                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+                data-plan-item={item.id}
+                data-plan-row={rowIdx}
+                data-plan-col={2}
+              />
+            </td>
+            {/* Estimate dropdown */}
+            <td
+              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              style={{
+                width: '140px',
+                minWidth: '140px',
+                backgroundColor: '#d9d9d9',
+                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+              }}
+            >
+              <select
+                className="w-full bg-transparent focus:outline-none border-none"
+                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+                value={estimateValue}
+                onChange={(e) => handlePlanEstimateChange(item.id, rowIdx, e.target.value)}
+                data-plan-item={item.id}
+                data-plan-row={rowIdx}
+                data-plan-col={4}
+              >
+                {PLAN_ESTIMATE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </td>
+            {/* Time value */}
+            <td
+              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              style={{
+                width: '120px',
+                minWidth: '120px',
+                backgroundColor: '#d9d9d9',
+                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
+                textAlign: 'right',
+                paddingRight: '10px',
+              }}
+            >
+              <input
+                type="text"
+                value={displayedTimeValue}
+                onChange={(e) => {
+                  if (!isCustomEstimate) return;
+                  handlePlanTableCellChange(item.id, rowIdx, 5, e.target.value);
+                }}
+                readOnly={!isCustomEstimate}
+                onFocus={handleInputFocus}
+                className="w-full bg-transparent text-right focus:outline-none border-none"
+                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+                placeholder="0.00"
+                data-plan-item={item.id}
+                data-plan-row={rowIdx}
+                data-plan-col={5}
+              />
+            </td>
+          </tr>
+        );
+      }
+
+      // Regular prompt row (not Schedule)
       return (
         <tr
           key={`${item.id}-simple-row-${rowIdx}`}
@@ -696,7 +846,7 @@ export default function StagingPageV2() {
               onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
               onKeyDown={(e) => handleEnterKeyAddRow(e, item.id, rowIdx, 'prompt')}
               onFocus={handleInputFocus}
-              className="w-full bg-transparent focus:outline-none border-none font-semibold text-slate-800"
+              className="w-full bg-transparent focus:outline-none border-none text-slate-800"
               style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
               data-plan-item={item.id}
               data-plan-row={rowIdx}
@@ -720,7 +870,7 @@ export default function StagingPageV2() {
       }
 
       // Check if this section should have time elements (Actions or Schedule only, not Subprojects)
-      const hasTimeElements = sectionName === 'Actions' || sectionName === 'Schedule';
+      const hasTimeElements = sectionName === SECTION_CONFIG.Actions.header || sectionName === SECTION_CONFIG.Schedule.header;
 
       if (hasTimeElements) {
         const estimateValue = rowValues[4] || '-';
@@ -1108,8 +1258,8 @@ export default function StagingPageV2() {
           type="text"
           value={rowValues[1] ?? ''}
           onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
-          placeholder={SECTION_PROMPTS.Outcomes}
-          className="w-full bg-transparent font-semibold text-slate-800 focus:outline-none border-none"
+          placeholder={SECTION_CONFIG.Outcomes.prompt}
+          className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
           data-plan-item={item.id}
           data-plan-row={rowIdx}
@@ -1172,8 +1322,8 @@ export default function StagingPageV2() {
                 onChange={(e) =>
                   handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
                 }
-                placeholder="Measurable Outcome"
-                className="w-full bg-transparent font-semibold text-slate-800 focus:outline-none border-none"
+                placeholder={SECTION_CONFIG.Outcomes.placeholder}
+                className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                 data-plan-item={item.id}
                 data-plan-row={rowIdx}
@@ -1262,7 +1412,7 @@ export default function StagingPageV2() {
                       }
                     : undefined
                 }
-                placeholder={isPromptCell ? 'Reason' : undefined}
+                placeholder={isPromptCell ? SECTION_CONFIG.Reasons.placeholder : undefined}
                 className="w-full bg-transparent focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                 data-plan-item={item.id}
@@ -1302,8 +1452,8 @@ export default function StagingPageV2() {
           type="text"
           value={rowValues[1] ?? ''}
           onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
-          placeholder={SECTION_PROMPTS.Needs}
-          className="w-full bg-transparent font-semibold text-slate-800 focus:outline-none border-none"
+          placeholder={SECTION_CONFIG.Actions.prompt}
+          className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
           data-plan-item={item.id}
           data-plan-row={rowIdx}
@@ -1383,7 +1533,7 @@ export default function StagingPageV2() {
                     handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
                   }
                   placeholder="Plan"
-                  className="w-full bg-transparent font-semibold text-slate-800 focus:outline-none border-none"
+                  className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   data-plan-item={item.id}
                   data-plan-row={rowIdx}
@@ -1504,8 +1654,8 @@ export default function StagingPageV2() {
                   onChange={(e) =>
                     handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
                   }
-                  placeholder="Schedule Item"
-                  className="w-full bg-transparent font-semibold text-slate-800 focus:outline-none border-none"
+                  placeholder={SECTION_CONFIG.Schedule.placeholder}
+                  className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   data-plan-item={item.id}
                   data-plan-row={rowIdx}
@@ -1623,8 +1773,8 @@ export default function StagingPageV2() {
                   onChange={(e) =>
                     handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
                   }
-                  placeholder="Subproject"
-                  className="w-full bg-transparent font-semibold text-slate-800 focus:outline-none border-none"
+                  placeholder={SECTION_CONFIG.Subprojects.placeholder}
+                  className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   data-plan-item={item.id}
                   data-plan-row={rowIdx}
@@ -1773,6 +1923,8 @@ export default function StagingPageV2() {
                     return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
                   });
 
+                  const schedulePromptEntry = buildRowEntry(schedulePromptRow);
+
                   const scheduleEntries = Array.from({ length: Math.max(scheduleRowCount, 0) }, (_, idx) => {
                     const rowIdx = scheduleStart + idx;
                     return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
@@ -1808,7 +1960,7 @@ export default function StagingPageV2() {
                   let scheduleTotalMinutes = 0;
 
                   if (item.isSimpleTable) {
-                    // For simple tables, find response rows by iterating through entries
+                    // For simple tables, find response/prompt rows by iterating through entries
                     let currentSection = '';
                     for (let i = 0; i < planEntries.length; i++) {
                       const row = planEntries[i];
@@ -1818,11 +1970,16 @@ export default function StagingPageV2() {
                         // In simple table, time value is at index 5
                         const value = row[5] ?? '';
                         const minutes = parseTimeValueToMinutes(value);
-                        if (currentSection === 'Actions') {
+                        if (currentSection === SECTION_CONFIG.Actions.header) {
                           needsPlanTotalMinutes += minutes;
-                        } else if (currentSection === 'Schedule') {
+                        } else if (currentSection === SECTION_CONFIG.Schedule.header) {
                           scheduleTotalMinutes += minutes;
                         }
+                      } else if (row?.__rowType === 'prompt' && currentSection === SECTION_CONFIG.Schedule.header) {
+                        // Schedule prompt row has time elements at index 5
+                        const value = row[5] ?? '';
+                        const minutes = parseTimeValueToMinutes(value);
+                        scheduleTotalMinutes += minutes;
                       }
                     }
                   } else {
@@ -1831,16 +1988,21 @@ export default function StagingPageV2() {
                       const value = entry.rowValues?.[4] ?? '';
                       return sum + parseTimeValueToMinutes(value);
                     }, 0);
-                    scheduleTotalMinutes = scheduleEntries.reduce((sum, entry) => {
+                    // Include prompt row time value + all schedule data rows
+                    const schedulePromptTimeValue = schedulePromptEntry.rowValues?.[4] ?? '';
+                    scheduleTotalMinutes = parseTimeValueToMinutes(schedulePromptTimeValue) + scheduleEntries.reduce((sum, entry) => {
                       const value = entry.rowValues?.[4] ?? '';
                       return sum + parseTimeValueToMinutes(value);
                     }, 0);
                   }
 
                   const needsPlanTimeTotal = formatMinutesToHHmm(needsPlanTotalMinutes);
-                  const projectPlanTimeTotal = formatMinutesToHHmm(
-                    needsPlanTotalMinutes + scheduleTotalMinutes
-                  );
+
+                  // Schedule prompt row values for editable time elements
+                  const schedulePromptEstimate = schedulePromptEntry.rowValues?.[3] || '-';
+                  const schedulePromptIsCustom = schedulePromptEstimate === 'Custom';
+                  const schedulePromptTimeValue = schedulePromptEntry.rowValues?.[4] || '0.00';
+                  const projectPlanTimeTotal = formatMinutesToHHmm(scheduleTotalMinutes);
 
                   const {
                     pairs: needsQuestionPlanGroups,
@@ -2005,7 +2167,7 @@ export default function StagingPageV2() {
                                       className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold"
                                       style={{ backgroundColor: '#b7b7b7', color: '#1f2937', fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                     >
-                                      &nbsp;&nbsp;&nbsp;Reasons
+                                      &nbsp;&nbsp;&nbsp;{SECTION_CONFIG.Reasons.header}
                                     </td>
                                   </tr>
                                   <tr key={`${item.id}-plan-row-1`}>
@@ -2029,9 +2191,9 @@ export default function StagingPageV2() {
                                       colSpan={PLAN_TABLE_COLS - 1}
                                       style={{ backgroundColor: '#d9d9d9' }}
                                     >
-                                      <span className="font-semibold text-slate-800"
+                                      <span className="text-slate-800"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
-                                        {SECTION_PROMPTS.Reasons}
+                                        {SECTION_CONFIG.Reasons.prompt}
                                       </span>
                                     </td>
                                   </tr>
@@ -2044,7 +2206,7 @@ export default function StagingPageV2() {
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px] text-left font-semibold"
                                       style={{ backgroundColor: '#b7b7b7', color: '#1f2937', paddingLeft: '10px', fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                     >
-                                      Outcomes
+                                      {SECTION_CONFIG.Outcomes.header}
                                     </td>
                                   </tr>
                                   {questionOutcomeGroups.map(({ primary, secondaryList }) => (
@@ -2069,7 +2231,7 @@ export default function StagingPageV2() {
                                       className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold"
                                       style={{ backgroundColor: '#b7b7b7', color: '#1f2937', fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                     >
-                                      &nbsp;&nbsp;&nbsp;Actions
+                                      &nbsp;&nbsp;&nbsp;{SECTION_CONFIG.Actions.header}
                                     </td>
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 text-right font-semibold"
@@ -2115,7 +2277,7 @@ export default function StagingPageV2() {
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px] text-left font-semibold"
                                       style={{ backgroundColor: '#b7b7b7', color: '#1f2937', paddingLeft: '10px', fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                     >
-                                      Schedule
+                                      {SECTION_CONFIG.Schedule.header}
                                     </td>
                                   </tr>
                                   <tr key={`${item.id}-schedule-row-prompt`}>
@@ -2125,13 +2287,64 @@ export default function StagingPageV2() {
                                     ></td>
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-                                      colSpan={PLAN_TABLE_COLS - 2}
                                       style={{ backgroundColor: '#d9d9d9' }}
                                     >
-                                      <span className="font-semibold text-slate-800"
+                                      <span className="text-slate-800"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
-                                        {SECTION_PROMPTS.Schedule}
+                                        {SECTION_CONFIG.Schedule.prompt}
                                       </span>
+                                    </td>
+                                    <td
+                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                      style={{
+                                        width: '140px',
+                                        minWidth: '140px',
+                                        backgroundColor: '#d9d9d9',
+                                      }}
+                                    >
+                                      <select
+                                        className="w-full bg-transparent focus:outline-none border-none"
+                                        style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+                                        value={schedulePromptEstimate}
+                                        onChange={(e) =>
+                                          handlePlanEstimateChange(item.id, schedulePromptRow, e.target.value)
+                                        }
+                                        data-plan-item={item.id}
+                                        data-plan-row={schedulePromptRow}
+                                        data-plan-col={3}
+                                      >
+                                        {PLAN_ESTIMATE_OPTIONS.map((option) => (
+                                          <option key={option} value={option}>
+                                            {option}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                    <td
+                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                      style={{
+                                        width: '120px',
+                                        minWidth: '120px',
+                                        backgroundColor: '#d9d9d9',
+                                        textAlign: 'right',
+                                        paddingRight: '10px',
+                                      }}
+                                    >
+                                      <input
+                                        type="text"
+                                        value={schedulePromptTimeValue}
+                                        onChange={(e) => {
+                                          if (!schedulePromptIsCustom) return;
+                                          handlePlanTableCellChange(item.id, schedulePromptRow, 4, e.target.value);
+                                        }}
+                                        readOnly={!schedulePromptIsCustom}
+                                        className="w-full bg-transparent text-right focus:outline-none border-none"
+                                        style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+                                        placeholder="0.00"
+                                        data-plan-item={item.id}
+                                        data-plan-row={schedulePromptRow}
+                                        data-plan-col={4}
+                                      />
                                     </td>
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
@@ -2152,7 +2365,7 @@ export default function StagingPageV2() {
                                       className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold"
                                       style={{ backgroundColor: '#b7b7b7', color: '#1f2937', fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                     >
-                                      &nbsp;&nbsp;&nbsp;Subprojects
+                                      &nbsp;&nbsp;&nbsp;{SECTION_CONFIG.Subprojects.header}
                                     </td>
                                   </tr>
                                   <tr key={`${item.id}-subprojects-row-prompt`}>
@@ -2165,9 +2378,9 @@ export default function StagingPageV2() {
                                       colSpan={PLAN_TABLE_COLS - 2}
                                       style={{ backgroundColor: '#d9d9d9' }}
                                     >
-                                      <span className="font-semibold text-slate-800"
+                                      <span className="text-slate-800"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
-                                        {SECTION_PROMPTS.Subprojects}
+                                        {SECTION_CONFIG.Subprojects.prompt}
                                       </span>
                                     </td>
                                     <td

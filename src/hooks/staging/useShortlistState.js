@@ -7,6 +7,7 @@ import {
   PLAN_TABLE_COLS,
 } from '../../utils/staging/planTableHelpers';
 import { ensurePlanPairingMetadata } from '../../utils/staging/rowPairing';
+import { SECTION_CONFIG } from '../../utils/staging/sectionConfig';
 
 // Row type constants
 const ROW_TYPE = {
@@ -50,6 +51,22 @@ const createPromptRow = (promptText) => {
 };
 
 /**
+ * Create a Schedule prompt row with text in the third cell (to match column layout with time elements)
+ */
+const createSchedulePromptRow = (promptText) => {
+  const row = Array.from({ length: PLAN_TABLE_COLS }, (_, i) =>
+    i === 2 ? promptText : ''
+  );
+  Object.defineProperty(row, '__rowType', {
+    value: ROW_TYPE.PROMPT,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
+  return row;
+};
+
+/**
  * Create a response row (lighter grey, starts in third cell)
  * @param {string} placeholder - Optional placeholder text for the third cell
  */
@@ -72,29 +89,26 @@ const createResponseRow = (placeholder = '') => {
 const createSimpleTable = () => {
   const rows = [
     // Reasons section
-    createRow('Reasons', ROW_TYPE.HEADER),
-    createPromptRow('Why do I want to start this?'),
-    createResponseRow('Reason'),
+    createRow(SECTION_CONFIG.Reasons.header, ROW_TYPE.HEADER),
+    createPromptRow(SECTION_CONFIG.Reasons.prompt),
     createRow('', ROW_TYPE.DATA),
     // Outcomes section
-    createRow('Outcomes', ROW_TYPE.HEADER),
-    createPromptRow('What do I want to be true in 12 weeks?'),
-    createResponseRow('Measurable Outcome'),
+    createRow(SECTION_CONFIG.Outcomes.header, ROW_TYPE.HEADER),
+    createPromptRow(SECTION_CONFIG.Outcomes.prompt),
+    createResponseRow(SECTION_CONFIG.Outcomes.placeholder),
     createRow('', ROW_TYPE.DATA),
     // Actions section
-    createRow('Actions', ROW_TYPE.HEADER),
-    createPromptRow('For each outcome, what needs to happen and in what order?'),
-    createResponseRow('Action'),
-    createRow('', ROW_TYPE.DATA),
-    // Schedule section
-    createRow('Schedule', ROW_TYPE.HEADER),
-    createPromptRow('Which activities need time allotted each week?'),
-    createResponseRow('Schedule Item'),
+    createRow(SECTION_CONFIG.Actions.header, ROW_TYPE.HEADER),
+    createPromptRow(SECTION_CONFIG.Actions.prompt),
+    createResponseRow(SECTION_CONFIG.Actions.placeholder),
     createRow('', ROW_TYPE.DATA),
     // Subprojects section
-    createRow('Subprojects', ROW_TYPE.HEADER),
-    createPromptRow('What are the areas or stages your tasks will fall under?'),
-    createResponseRow('Subproject'),
+    createRow(SECTION_CONFIG.Subprojects.header, ROW_TYPE.HEADER),
+    createPromptRow(SECTION_CONFIG.Subprojects.prompt),
+    createRow('', ROW_TYPE.DATA),
+    // Schedule section
+    createRow(SECTION_CONFIG.Schedule.header, ROW_TYPE.HEADER),
+    createSchedulePromptRow(SECTION_CONFIG.Schedule.prompt),
     createRow('', ROW_TYPE.DATA),
   ];
   return rows;
