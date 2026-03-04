@@ -75,7 +75,7 @@ export default function StagingPageV2() {
     handleAdd,
     handleRemove,
     togglePlanTable,
-  } = useShortlistState({ currentYear });
+  } = useShortlistState({ currentYear, executeCommand });
 
   // Plan modal state
   const {
@@ -90,6 +90,7 @@ export default function StagingPageV2() {
     planModal,
     setState,
     closePlanModal,
+    executeCommand,
   });
 
   // Plan table operations
@@ -507,14 +508,30 @@ export default function StagingPageV2() {
 
   // Add to Plan handler
   const handleTogglePlanStatus = useCallback((itemId, addToPlan) => {
-    setState((prev) => ({
-      ...prev,
-      shortlist: prev.shortlist.map((item) =>
-        item.id === itemId ? { ...item, addedToPlan: addToPlan } : item
-      ),
-    }));
+    let capturedState = null;
+
+    const command = {
+      execute: () => {
+        setState((prev) => {
+          if (capturedState === null) {
+            capturedState = cloneStagingState(prev);
+          }
+          return {
+            ...prev,
+            shortlist: prev.shortlist.map((item) =>
+              item.id === itemId ? { ...item, addedToPlan: addToPlan } : item
+            ),
+          };
+        });
+      },
+      undo: () => {
+        if (capturedState) setState(capturedState);
+      },
+    };
+
+    executeCommand(command);
     closePlanModal();
-  }, [setState, closePlanModal]);
+  }, [setState, closePlanModal, executeCommand]);
 
   // Handle click on drag handle to select row
   const handleHandleClick = useCallback(
@@ -1965,7 +1982,7 @@ export default function StagingPageV2() {
                                       <button
                                         type="button"
                                         className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
-                                        onClick={closePlanModal}
+                                        onClick={handlePlanNext}
                                       >
                                         Close
                                       </button>

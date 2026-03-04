@@ -3,6 +3,7 @@ import { loadStagingState, saveStagingState } from '../../lib/stagingStorage';
 import {
   buildProjectPlanSummary,
   clonePlanTableEntries,
+  cloneStagingState,
   PLAN_TABLE_COLS,
 } from '../../utils/staging/planTableHelpers';
 import { ensurePlanPairingMetadata } from '../../utils/staging/rowPairing';
@@ -102,8 +103,12 @@ const createSimpleTable = () => {
 /**
  * Hook to manage shortlist and archived items state
  * Handles loading, saving, and updating shortlist items
+ *
+ * @param {Object} options
+ * @param {number} options.currentYear - Current year for storage
+ * @param {Function} options.executeCommand - Optional command executor for undo/redo support
  */
-export default function useShortlistState({ currentYear }) {
+export default function useShortlistState({ currentYear, executeCommand }) {
   const [inputValue, setInputValue] = useState('');
   const [{ shortlist, archived }, setState] = useState(() => loadStagingState(currentYear));
 
@@ -180,53 +185,124 @@ export default function useShortlistState({ currentYear }) {
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-    setState((prev) => ({
-      shortlist: [
-        ...prev.shortlist,
-        {
-          id,
-          text,
-          color: generateRandomColor(),
-          planTableVisible: true,
-          planTableCollapsed: false, // Start expanded for new simple tables
-          hasPlan: true,
-          // Simple table: just rows with no special sections
-          planTableEntries: createSimpleTable(),
-          // Keep legacy section counts at 0 for simple tables
-          planReasonRowCount: 0,
-          planOutcomeRowCount: 0,
-          planOutcomeQuestionRowCount: 0,
-          planNeedsQuestionRowCount: 0,
-          planNeedsPlanRowCount: 0,
-          planSubprojectRowCount: 0,
-          planXxxRowCount: 0,
-          // Flag to indicate this is a simple table (no sections)
-          isSimpleTable: true,
+    const newItem = {
+      id,
+      text,
+      color: generateRandomColor(),
+      planTableVisible: true,
+      planTableCollapsed: false, // Start expanded for new simple tables
+      hasPlan: true,
+      // Simple table: just rows with no special sections
+      planTableEntries: createSimpleTable(),
+      // Keep legacy section counts at 0 for simple tables
+      planReasonRowCount: 0,
+      planOutcomeRowCount: 0,
+      planOutcomeQuestionRowCount: 0,
+      planNeedsQuestionRowCount: 0,
+      planNeedsPlanRowCount: 0,
+      planSubprojectRowCount: 0,
+      planXxxRowCount: 0,
+      // Flag to indicate this is a simple table (no sections)
+      isSimpleTable: true,
+    };
+
+    if (executeCommand) {
+      let capturedState = null;
+
+      const command = {
+        execute: () => {
+          setState((prev) => {
+            if (capturedState === null) {
+              capturedState = cloneStagingState(prev);
+            }
+            return {
+              shortlist: [...prev.shortlist, newItem],
+              archived: prev.archived,
+            };
+          });
         },
-      ],
-      archived: prev.archived,
-    }));
+        undo: () => {
+          if (capturedState) setState(capturedState);
+        },
+      };
+
+      executeCommand(command);
+    } else {
+      setState((prev) => ({
+        shortlist: [...prev.shortlist, newItem],
+        archived: prev.archived,
+      }));
+    }
     setInputValue('');
-  }, [inputValue]);
+  }, [inputValue, executeCommand]);
 
   // Remove item from shortlist
   const handleRemove = useCallback((id) => {
-    setState((prev) => ({
-      shortlist: prev.shortlist.filter((item) => item.id !== id),
-      archived: prev.archived,
-    }));
-  }, []);
+    if (executeCommand) {
+      let capturedState = null;
+
+      const command = {
+        execute: () => {
+          setState((prev) => {
+            if (capturedState === null) {
+              capturedState = cloneStagingState(prev);
+            }
+            return {
+              shortlist: prev.shortlist.filter((item) => item.id !== id),
+              archived: prev.archived,
+            };
+          });
+        },
+        undo: () => {
+          if (capturedState) setState(capturedState);
+        },
+      };
+
+      executeCommand(command);
+    } else {
+      setState((prev) => ({
+        shortlist: prev.shortlist.filter((item) => item.id !== id),
+        archived: prev.archived,
+      }));
+    }
+  }, [executeCommand]);
 
   // Toggle plan table collapse state
   const togglePlanTable = useCallback((id) => {
-    setState((prev) => ({
-      ...prev,
-      shortlist: prev.shortlist.map((item) => {
-        if (item.id !== id || !item.planTableVisible) return item;
-        return { ...item, planTableCollapsed: !item.planTableCollapsed };
-      }),
-    }));
-  }, []);
+    if (executeCommand) {
+      let capturedState = null;
+
+      const command = {
+        execute: () => {
+          setState((prev) => {
+            if (capturedState === null) {
+              capturedState = cloneStagingState(prev);
+            }
+            return {
+              ...prev,
+              shortlist: prev.shortlist.map((item) => {
+                if (item.id !== id || !item.planTableVisible) return item;
+                return { ...item, planTableCollapsed: !item.planTableCollapsed };
+              }),
+            };
+          });
+        },
+        undo: () => {
+          if (capturedState) setState(capturedState);
+        },
+      };
+
+      executeCommand(command);
+    } else {
+      setState((prev) => ({
+        ...prev,
+        shortlist: prev.shortlist.map((item) => {
+          if (item.id !== id || !item.planTableVisible) return item;
+          return { ...item, planTableCollapsed: !item.planTableCollapsed };
+        }),
+      }));
+    }
+  }, [executeCommand]);
 
   return {
     inputValue,
