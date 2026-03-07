@@ -19,8 +19,11 @@ const ROW_TYPE = {
 
 /**
  * Create a row with optional type metadata
+ * @param {string} firstCellValue - Value for the first cell
+ * @param {string} rowType - Row type (header, prompt, response, data)
+ * @param {string} sectionType - Section type for header rows (Reasons, Outcomes, Actions, Schedule, Subprojects)
  */
-const createRow = (firstCellValue = '', rowType = ROW_TYPE.DATA) => {
+const createRow = (firstCellValue = '', rowType = ROW_TYPE.DATA, sectionType = null) => {
   const row = Array.from({ length: PLAN_TABLE_COLS }, (_, i) =>
     i === 0 ? firstCellValue : ''
   );
@@ -31,6 +34,15 @@ const createRow = (firstCellValue = '', rowType = ROW_TYPE.DATA) => {
     configurable: true,
     enumerable: false,
   });
+  // Store section type for header rows (used to identify section even if header text changes)
+  if (sectionType) {
+    Object.defineProperty(row, '__sectionType', {
+      value: sectionType,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
+  }
   return row;
 };
 
@@ -89,25 +101,25 @@ const createResponseRow = (placeholder = '') => {
 const createSimpleTable = () => {
   const rows = [
     // Reasons section
-    createRow(SECTION_CONFIG.Reasons.header, ROW_TYPE.HEADER),
+    createRow(SECTION_CONFIG.Reasons.header, ROW_TYPE.HEADER, 'Reasons'),
     createPromptRow(SECTION_CONFIG.Reasons.prompt),
     createRow('', ROW_TYPE.DATA),
     // Outcomes section
-    createRow(SECTION_CONFIG.Outcomes.header, ROW_TYPE.HEADER),
+    createRow(SECTION_CONFIG.Outcomes.header, ROW_TYPE.HEADER, 'Outcomes'),
     createPromptRow(SECTION_CONFIG.Outcomes.prompt),
     createResponseRow(SECTION_CONFIG.Outcomes.placeholder),
     createRow('', ROW_TYPE.DATA),
     // Actions section
-    createRow(SECTION_CONFIG.Actions.header, ROW_TYPE.HEADER),
+    createRow(SECTION_CONFIG.Actions.header, ROW_TYPE.HEADER, 'Actions'),
     createPromptRow(SECTION_CONFIG.Actions.prompt),
     createResponseRow(SECTION_CONFIG.Actions.placeholder),
     createRow('', ROW_TYPE.DATA),
     // Subprojects section
-    createRow(SECTION_CONFIG.Subprojects.header, ROW_TYPE.HEADER),
+    createRow(SECTION_CONFIG.Subprojects.header, ROW_TYPE.HEADER, 'Subprojects'),
     createPromptRow(SECTION_CONFIG.Subprojects.prompt),
     createRow('', ROW_TYPE.DATA),
     // Schedule section
-    createRow(SECTION_CONFIG.Schedule.header, ROW_TYPE.HEADER),
+    createRow(SECTION_CONFIG.Schedule.header, ROW_TYPE.HEADER, 'Schedule'),
     createSchedulePromptRow(SECTION_CONFIG.Schedule.prompt),
     createRow('', ROW_TYPE.DATA),
   ];

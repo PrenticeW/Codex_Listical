@@ -411,28 +411,101 @@ export default function StagingPageV2() {
     executeCommand(command);
   }, [selectedCells, setState, executeCommand]);
 
+  // Handle inserting a specific row type from context menu
+  const handleInsertRowType = useCallback((rowType) => {
+    if (contextMenu.itemId == null || contextMenu.rowIdx == null) return;
+    const { itemId, rowIdx, sectionType } = contextMenu;
+
+    // Determine text column and placeholder based on row type and section
+    // Match the template structure from useShortlistState.js:
+    // - 'prompt' rows: text in column 1 (index 1), use prompt text from SECTION_CONFIG
+    //   Exception: Schedule section uses column 2 (index 2) via createSchedulePromptRow
+    // - 'response' rows: text in column 2 (index 2), use placeholder text from SECTION_CONFIG
+    // - 'data' rows: no placeholder text, all cells empty
+    let textColumn = 2;
+    let placeholderText = '';
+
+    if (rowType === 'response') {
+      textColumn = 2;
+      placeholderText = SECTION_CONFIG[sectionType]?.placeholder || '';
+    } else if (rowType === 'prompt') {
+      // Regular prompt rows use column 1, but Schedule uses column 2
+      textColumn = sectionType === 'Schedule' ? 2 : 1;
+      placeholderText = SECTION_CONFIG[sectionType]?.prompt || '';
+    } else if (rowType === 'data') {
+      // Data rows have no placeholder - start empty
+      textColumn = 0;
+      placeholderText = '';
+    }
+
+    let capturedState = null;
+    const command = {
+      execute: () => {
+        setState((prev) => {
+          if (capturedState === null) {
+            capturedState = cloneStagingState(prev);
+          }
+          return {
+            ...prev,
+            shortlist: prev.shortlist.map((item) => {
+              if (item.id !== itemId) return item;
+              const entries = item.planTableEntries.map(cloneRowWithMetadata);
+
+              // Create new row - for data rows, all cells empty; otherwise put placeholder in textColumn
+              const newRow = Array.from({ length: PLAN_TABLE_COLS }, (_, i) => {
+                if (rowType !== 'data' && i === textColumn) return placeholderText;
+                return '';
+              });
+
+              // Set the row type as non-enumerable property
+              Object.defineProperty(newRow, '__rowType', {
+                value: rowType,
+                writable: true,
+                configurable: true,
+                enumerable: false,
+              });
+
+              entries.splice(rowIdx + 1, 0, newRow);
+              return { ...item, planTableEntries: entries };
+            }),
+          };
+        });
+      },
+      undo: () => {
+        if (capturedState) setState(capturedState);
+      },
+    };
+    executeCommand(command);
+
+    // Set focus to the new row
+    pendingFocusRequestRef.current = {
+      itemId,
+      row: rowIdx + 1,
+      col: textColumn,
+    };
+  }, [contextMenu.itemId, contextMenu.rowIdx, contextMenu.sectionType, setState, executeCommand, pendingFocusRequestRef]);
+
   // Handle Enter key to add a new row of the same type below
   const handleEnterKeyAddRow = useCallback((e, itemId, rowIdx, rowType) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
 
-    // Default text mappings based on section header (from centralized config)
-    // Keys are the full header text since that's what's stored in the row
+    // Default text mappings based on section type (using __sectionType metadata)
     const responseDefaultsBySection = {
-      [SECTION_CONFIG.Reasons.header]: SECTION_CONFIG.Reasons.placeholder,
-      [SECTION_CONFIG.Outcomes.header]: SECTION_CONFIG.Outcomes.placeholder,
-      [SECTION_CONFIG.Actions.header]: SECTION_CONFIG.Actions.placeholder,
-      [SECTION_CONFIG.Schedule.header]: SECTION_CONFIG.Schedule.placeholder,
-      [SECTION_CONFIG.Subprojects.header]: SECTION_CONFIG.Subprojects.placeholder,
+      Reasons: SECTION_CONFIG.Reasons.placeholder,
+      Outcomes: SECTION_CONFIG.Outcomes.placeholder,
+      Actions: SECTION_CONFIG.Actions.placeholder,
+      Schedule: SECTION_CONFIG.Schedule.placeholder,
+      Subprojects: SECTION_CONFIG.Subprojects.placeholder,
     };
 
-    // Map section header names to prompts (from centralized config)
+    // Map section types to prompts (from centralized config)
     const promptDefaultsBySection = {
-      [SECTION_CONFIG.Reasons.header]: SECTION_CONFIG.Reasons.prompt,
-      [SECTION_CONFIG.Outcomes.header]: SECTION_CONFIG.Outcomes.prompt,
-      [SECTION_CONFIG.Actions.header]: SECTION_CONFIG.Actions.prompt,
-      [SECTION_CONFIG.Schedule.header]: SECTION_CONFIG.Schedule.prompt,
-      [SECTION_CONFIG.Subprojects.header]: SECTION_CONFIG.Subprojects.prompt,
+      Reasons: SECTION_CONFIG.Reasons.prompt,
+      Outcomes: SECTION_CONFIG.Outcomes.prompt,
+      Actions: SECTION_CONFIG.Actions.prompt,
+      Schedule: SECTION_CONFIG.Schedule.prompt,
+      Subprojects: SECTION_CONFIG.Subprojects.prompt,
     };
 
     let capturedState = null;
@@ -449,10 +522,10 @@ export default function StagingPageV2() {
               const entries = item.planTableEntries.map(cloneRowWithMetadata);
 
               // Find the nearest header row above to determine the section
-              let sectionName = '';
+              let sectionType = '';
               for (let i = rowIdx; i >= 0; i--) {
                 if (entries[i]?.__rowType === 'header') {
-                  sectionName = entries[i][0] || '';
+                  sectionType = entries[i].__sectionType || '';
                   break;
                 }
               }
@@ -460,10 +533,10 @@ export default function StagingPageV2() {
               // Get default text based on row type and section
               const getDefaultText = () => {
                 if (rowType === 'response') {
-                  return responseDefaultsBySection[sectionName] || '';
+                  return responseDefaultsBySection[sectionType] || '';
                 }
                 if (rowType === 'prompt') {
-                  return promptDefaultsBySection[sectionName] || '';
+                  return promptDefaultsBySection[sectionType] || '';
                 }
                 return '';
               };
@@ -497,7 +570,16 @@ export default function StagingPageV2() {
       },
     };
     executeCommand(command);
-  }, [setState, executeCommand]);
+
+    // Set focus to the new row after it's created
+    // Column 1 for prompt rows, column 2 for response rows
+    const focusCol = rowType === 'prompt' ? 1 : 2;
+    pendingFocusRequestRef.current = {
+      itemId,
+      row: rowIdx + 1,
+      col: focusCol,
+    };
+  }, [setState, executeCommand, pendingFocusRequestRef]);
 
   // Add to Plan handler
   const handleTogglePlanStatus = useCallback((itemId, addToPlan) => {
@@ -543,6 +625,22 @@ export default function StagingPageV2() {
     }
   }, [selectedRows, clearSelection]);
 
+  // Helper to get section type for any row by finding the nearest header above
+  const getSectionTypeForRow = useCallback((item, rowIdx) => {
+    const entries = item.planTableEntries || [];
+    // If this is a header row, return its section type directly
+    if (entries[rowIdx]?.__rowType === 'header') {
+      return entries[rowIdx].__sectionType || '';
+    }
+    // Otherwise, find the nearest header above
+    for (let i = rowIdx; i >= 0; i--) {
+      if (entries[i]?.__rowType === 'header') {
+        return entries[i].__sectionType || '';
+      }
+    }
+    return '';
+  }, []);
+
   // Render a simple table row with drag and drop support
   const renderSimpleTableRow = (item, rowValues, rowIdx) => {
     const isDragged = isRowDragged(item.id, rowIdx);
@@ -566,6 +664,7 @@ export default function StagingPageV2() {
             handleContextMenu(e, {
               itemId: item.id,
               rowIdx,
+              sectionType: getSectionTypeForRow(item, rowIdx),
               selectedCells,
               selectedRows,
             })
@@ -619,16 +718,16 @@ export default function StagingPageV2() {
     if (isPromptRow) {
       // Find the nearest header row above to determine the section
       const entries = item.planTableEntries || [];
-      let sectionName = '';
+      let sectionType = '';
       for (let i = rowIdx; i >= 0; i--) {
         if (entries[i]?.__rowType === 'header') {
-          sectionName = entries[i][0] || '';
+          sectionType = entries[i].__sectionType || '';
           break;
         }
       }
 
       // Check if this is a Schedule prompt row (needs time elements)
-      const isSchedulePrompt = sectionName === SECTION_CONFIG.Schedule.header;
+      const isSchedulePrompt = sectionType === 'Schedule';
 
       if (isSchedulePrompt) {
         const estimateValue = rowValues[4] || '-';
@@ -647,6 +746,7 @@ export default function StagingPageV2() {
               handleContextMenu(e, {
                 itemId: item.id,
                 rowIdx,
+                sectionType,
                 selectedCells,
                 selectedRows,
               })
@@ -786,6 +886,7 @@ export default function StagingPageV2() {
             handleContextMenu(e, {
               itemId: item.id,
               rowIdx,
+              sectionType,
               selectedCells,
               selectedRows,
             })
@@ -861,16 +962,16 @@ export default function StagingPageV2() {
     if (isResponseRow) {
       // Find the nearest header row above to determine the section
       const entries = item.planTableEntries || [];
-      let sectionName = '';
+      let sectionType = '';
       for (let i = rowIdx; i >= 0; i--) {
         if (entries[i]?.__rowType === 'header') {
-          sectionName = entries[i][0] || '';
+          sectionType = entries[i].__sectionType || '';
           break;
         }
       }
 
       // Check if this section should have time elements (Actions or Schedule only, not Subprojects)
-      const hasTimeElements = sectionName === SECTION_CONFIG.Actions.header || sectionName === SECTION_CONFIG.Schedule.header;
+      const hasTimeElements = sectionType === 'Actions' || sectionType === 'Schedule';
 
       if (hasTimeElements) {
         const estimateValue = rowValues[4] || '-';
@@ -888,6 +989,7 @@ export default function StagingPageV2() {
               handleContextMenu(e, {
                 itemId: item.id,
                 rowIdx,
+                sectionType,
                 selectedCells,
                 selectedRows,
               })
@@ -1054,6 +1156,7 @@ export default function StagingPageV2() {
             handleContextMenu(e, {
               itemId: item.id,
               rowIdx,
+              sectionType,
               selectedCells,
               selectedRows,
             })
@@ -1159,6 +1262,7 @@ export default function StagingPageV2() {
           handleContextMenu(e, {
             itemId: item.id,
             rowIdx,
+            sectionType: getSectionTypeForRow(item, rowIdx),
             selectedCells,
             selectedRows,
           })
@@ -2418,6 +2522,7 @@ export default function StagingPageV2() {
         onInsertRowBelow={handleInsertRowBelow}
         onDuplicateRow={handleDuplicateRow}
         onClearCells={handleClearCells}
+        onInsertRowType={handleInsertRowType}
       />
     </>
   );

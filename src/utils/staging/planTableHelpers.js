@@ -106,6 +106,14 @@ export const cloneRowWithMetadata = (row) => {
       enumerable: false,
     });
   }
+  if (row['__sectionType']) {
+    Object.defineProperty(newRow, '__sectionType', {
+      value: row['__sectionType'],
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
+  }
   return newRow;
 };
 
@@ -158,6 +166,16 @@ export const clonePlanTableEntries = (entries, ensureRows = PLAN_TABLE_ROWS) => 
     if (sourceRow && sourceRow['__rowType']) {
       Object.defineProperty(nextRow, '__rowType', {
         value: sourceRow['__rowType'],
+        writable: true,
+        configurable: true,
+        enumerable: false,
+      });
+    }
+
+    // Preserve section type metadata
+    if (sourceRow && sourceRow['__sectionType']) {
+      Object.defineProperty(nextRow, '__sectionType', {
+        value: sourceRow['__sectionType'],
         writable: true,
         configurable: true,
         enumerable: false,

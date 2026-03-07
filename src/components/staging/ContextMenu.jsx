@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, Plus, CornerDownRight, Copy } from 'lucide-react';
+import { Trash2, Plus, CornerDownRight, Copy, Target, CheckSquare, ListTodo, Calendar, FolderKanban } from 'lucide-react';
 
 /**
  * Context menu for staging table cells and rows
@@ -13,6 +13,7 @@ export default function ContextMenu({
   onInsertRowBelow,
   onDuplicateRow,
   onClearCells,
+  onInsertRowType,
 }) {
   if (!contextMenu.isOpen) return null;
 
@@ -21,11 +22,51 @@ export default function ContextMenu({
     y,
     itemId,
     rowIdx,
+    sectionType,
     hasSelectedCells,
     hasSelectedRows,
     selectedCellsCount,
     selectedRowsCount,
   } = contextMenu;
+
+  // Define section-specific row type options based on the actual template structure
+  // Template uses:
+  // - 'prompt' rows: darker grey background, text in column 1 (index 1)
+  // - 'response' rows: lighter grey background, text in column 2 (index 2)
+  // - 'data' rows: white background, all cells editable
+  //
+  // Outcomes section template: prompt ("Outcome") -> response ("Measurable Outcome")
+  // Actions section template: prompt ("Measurable Outcome") -> response ("Action")
+  const getSectionInsertOptions = () => {
+    switch (sectionType) {
+      case 'Reasons':
+        return [
+          { label: 'Add Reason', type: 'prompt', icon: Target },
+        ];
+      case 'Outcomes':
+        return [
+          { label: 'Add Outcome', type: 'prompt', icon: Target },
+          { label: 'Add Measurable Outcome', type: 'response', icon: CheckSquare },
+        ];
+      case 'Actions':
+        return [
+          { label: 'Add Measurable Outcome', type: 'prompt', icon: CheckSquare },
+          { label: 'Add Action', type: 'response', icon: ListTodo },
+        ];
+      case 'Subprojects':
+        return [
+          { label: 'Add Subproject', type: 'prompt', icon: FolderKanban },
+        ];
+      case 'Schedule':
+        return [
+          { label: 'Add Schedule Item', type: 'prompt', icon: Calendar },
+        ];
+      default:
+        return [];
+    }
+  };
+
+  const sectionOptions = getSectionInsertOptions();
 
   // Position the menu, ensuring it doesn't go off-screen
   const menuStyle = {
@@ -63,6 +104,26 @@ export default function ContextMenu({
       {/* Row actions - always show when right-clicking on a row */}
       {hasRowContext && (
         <>
+          {/* Section-specific insert options */}
+          {!isMultiRow && sectionOptions.length > 0 && (
+            <>
+              {sectionOptions.map((option, index) => {
+                const IconComponent = option.icon;
+                return (
+                  <button
+                    key={`${option.type}-${index}`}
+                    onClick={() => handleAction(() => onInsertRowType(option.type))}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
+                  >
+                    <IconComponent className="w-4 h-4" />
+                    {option.label}
+                  </button>
+                );
+              })}
+              <div className="border-t border-gray-100 my-1" />
+            </>
+          )}
+          {/* Generic row operations */}
           {!isMultiRow && (
             <>
               <button

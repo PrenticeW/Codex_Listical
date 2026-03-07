@@ -12,6 +12,7 @@ export default function useContextMenu() {
     itemId: null,
     rowIdx: null,
     colIdx: null,
+    sectionType: null,
     hasSelectedCells: false,
     hasSelectedRows: false,
     selectedCellsCount: 0,
@@ -27,6 +28,7 @@ export default function useContextMenu() {
       itemId = null,
       rowIdx = null,
       colIdx = null,
+      sectionType = null,
       selectedCells = new Set(),
       selectedRows = new Set(),
     } = options;
@@ -38,6 +40,7 @@ export default function useContextMenu() {
       itemId,
       rowIdx,
       colIdx,
+      sectionType,
       hasSelectedCells: selectedCells.size > 0,
       hasSelectedRows: selectedRows.size > 0,
       selectedCellsCount: selectedCells.size,
