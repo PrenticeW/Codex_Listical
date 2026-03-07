@@ -1336,72 +1336,81 @@ export default function StagingPageV2() {
   };
 
   // Render helper functions (kept inline as they're component-specific)
-  const renderQuestionPromptRow = (item, rowValues, rowIdx) => (
-    <tr key={`${item.id}-plan-question-row-${rowIdx}`}>
-      <td
-        className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-        style={{ width: '120px', minWidth: '120px', backgroundColor: '#d9d9d9' }}
-      >
-        <input
-          type="text"
-          value={rowValues[0] ?? ''}
-          onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
-          className="w-full bg-transparent focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-          data-plan-item={item.id}
-          data-plan-row={rowIdx}
-          data-plan-col={0}
-        />
-      </td>
-      <td
-        className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-        colSpan={PLAN_TABLE_COLS - 2}
-        style={{ backgroundColor: '#d9d9d9' }}
-      >
-        <input
-          type="text"
-          value={rowValues[1] ?? ''}
-          onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
-          placeholder={SECTION_CONFIG.Outcomes.prompt}
-          className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-          data-plan-item={item.id}
-          data-plan-row={rowIdx}
-          data-plan-col={1}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-              addQuestionPromptWithOutcomeRow(item.id);
-            }
-          }}
-        />
-      </td>
-      <td
-        className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-        style={{
-          width: '32px',
-          minWidth: '32px',
-          textAlign: 'center',
-          backgroundColor: '#d9d9d9',
-        }}
-      >
-        <button
-          type="button"
-          aria-label="Delete question row"
-          className="font-semibold text-slate-800"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-          onClick={() => removePlanPromptRow(item.id, rowIdx, 'question')}
+  const renderQuestionPromptRow = (item, rowValues, rowIdx) => {
+    const isCell0Selected = isCellSelected(item.id, rowIdx, 0);
+    const isCell1Selected = isCellSelected(item.id, rowIdx, 1);
+    return (
+      <tr key={`${item.id}-plan-question-row-${rowIdx}`}>
+        <td
+          className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+          style={{ width: '120px', minWidth: '120px', backgroundColor: isCell0Selected ? '#dbeafe' : '#d9d9d9' }}
+          onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
+          onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 0, PLAN_TABLE_COLS)}
         >
-          X
-        </button>
-      </td>
-    </tr>
-  );
+          <input
+            type="text"
+            value={rowValues[0] ?? ''}
+            onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
+            className="w-full bg-transparent focus:outline-none border-none"
+            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+            data-plan-item={item.id}
+            data-plan-row={rowIdx}
+            data-plan-col={0}
+          />
+        </td>
+        <td
+          className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+          colSpan={PLAN_TABLE_COLS - 2}
+          style={{ backgroundColor: isCell1Selected ? '#dbeafe' : '#d9d9d9' }}
+          onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
+          onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 1, PLAN_TABLE_COLS)}
+        >
+          <input
+            type="text"
+            value={rowValues[1] ?? ''}
+            onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
+            placeholder={SECTION_CONFIG.Outcomes.prompt}
+            className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
+            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+            data-plan-item={item.id}
+            data-plan-row={rowIdx}
+            data-plan-col={1}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                addQuestionPromptWithOutcomeRow(item.id);
+              }
+            }}
+          />
+        </td>
+        <td
+          className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+          style={{
+            width: '32px',
+            minWidth: '32px',
+            textAlign: 'center',
+            backgroundColor: '#d9d9d9',
+          }}
+        >
+          <button
+            type="button"
+            aria-label="Delete question row"
+            className="font-semibold text-slate-800"
+            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+            onClick={() => removePlanPromptRow(item.id, rowIdx, 'question')}
+          >
+            X
+          </button>
+        </td>
+      </tr>
+    );
+  };
 
   const renderOutcomePromptRow = (item, rowValues, rowIdx) => (
     <tr key={`${item.id}-plan-row-${rowIdx}`}>
       {rowValues.map((cellValue, cellIdx) => {
-        const style = { backgroundColor: '#f3f3f3' };
+        const isSelected = isCellSelected(item.id, rowIdx, cellIdx);
+        const style = { backgroundColor: isSelected ? '#dbeafe' : '#f3f3f3' };
         if (cellIdx === 0 || cellIdx === 1) {
           style.width = '120px';
           style.minWidth = '120px';
@@ -1418,6 +1427,8 @@ export default function StagingPageV2() {
             key={`${item.id}-outcome-row-${rowIdx}-${cellIdx}`}
             className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
             style={style}
+            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
+            onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
           >
             {isPromptCell ? (
               <input
@@ -1472,10 +1483,11 @@ export default function StagingPageV2() {
   const renderReasonPromptRow = (item, rowValues, rowIdx) => (
     <tr key={`${item.id}-plan-row-${rowIdx}`}>
       {rowValues.map((cellValue, cellIdx) => {
+        const isSelected = isCellSelected(item.id, rowIdx, cellIdx);
         const baseStyle =
           cellIdx === 0 || cellIdx === 1
-            ? { width: '120px', minWidth: '120px', backgroundColor: '#f3f3f3' }
-            : { backgroundColor: '#f3f3f3' };
+            ? { width: '120px', minWidth: '120px', backgroundColor: isSelected ? '#dbeafe' : '#f3f3f3' }
+            : { backgroundColor: isSelected ? '#dbeafe' : '#f3f3f3' };
         const isPromptCell = cellIdx === 2;
         const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
         if (isDeleteCell) {
@@ -1488,6 +1500,8 @@ export default function StagingPageV2() {
             key={`${item.id}-plan-row-${rowIdx}-cell-${cellIdx}`}
             className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
             style={baseStyle}
+            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
+            onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
           >
             {isDeleteCell ? (
               <button
@@ -1530,67 +1544,75 @@ export default function StagingPageV2() {
     </tr>
   );
 
-  const renderNeedsQuestionRow = (item, rowValues, rowIdx) => (
-    <tr key={`${item.id}-needs-question-row-${rowIdx}`}>
-      <td
-        className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-        style={{ width: '120px', minWidth: '120px', backgroundColor: '#d9d9d9' }}
-      >
-        <input
-          type="text"
-          value={rowValues[0] ?? ''}
-          onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
-          className="w-full bg-transparent focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-          data-plan-item={item.id}
-          data-plan-row={rowIdx}
-          data-plan-col={0}
-        />
-      </td>
-      <td
-        className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-        colSpan={PLAN_TABLE_COLS - 2}
-        style={{ backgroundColor: '#d9d9d9' }}
-      >
-        <input
-          type="text"
-          value={rowValues[1] ?? ''}
-          onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
-          placeholder={SECTION_CONFIG.Actions.prompt}
-          className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-          data-plan-item={item.id}
-          data-plan-row={rowIdx}
-          data-plan-col={1}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-              addNeedsPromptWithPlanRow(item.id);
-            }
-          }}
-        />
-      </td>
-      <td
-        className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-        style={{
-          width: '32px',
-          minWidth: '32px',
-          textAlign: 'center',
-          backgroundColor: '#d9d9d9',
-        }}
-      >
-        <button
-          type="button"
-          aria-label="Delete needs question row"
-          className="font-semibold text-slate-800"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-          onClick={() => removePlanPromptRow(item.id, rowIdx, 'needsQuestion')}
+  const renderNeedsQuestionRow = (item, rowValues, rowIdx) => {
+    const isCell0Selected = isCellSelected(item.id, rowIdx, 0);
+    const isCell1Selected = isCellSelected(item.id, rowIdx, 1);
+    return (
+      <tr key={`${item.id}-needs-question-row-${rowIdx}`}>
+        <td
+          className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+          style={{ width: '120px', minWidth: '120px', backgroundColor: isCell0Selected ? '#dbeafe' : '#d9d9d9' }}
+          onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
+          onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 0, PLAN_TABLE_COLS)}
         >
-          X
-        </button>
-      </td>
-    </tr>
-  );
+          <input
+            type="text"
+            value={rowValues[0] ?? ''}
+            onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
+            className="w-full bg-transparent focus:outline-none border-none"
+            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+            data-plan-item={item.id}
+            data-plan-row={rowIdx}
+            data-plan-col={0}
+          />
+        </td>
+        <td
+          className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+          colSpan={PLAN_TABLE_COLS - 2}
+          style={{ backgroundColor: isCell1Selected ? '#dbeafe' : '#d9d9d9' }}
+          onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
+          onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 1, PLAN_TABLE_COLS)}
+        >
+          <input
+            type="text"
+            value={rowValues[1] ?? ''}
+            onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
+            placeholder={SECTION_CONFIG.Actions.prompt}
+            className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
+            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+            data-plan-item={item.id}
+            data-plan-row={rowIdx}
+            data-plan-col={1}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                addNeedsPromptWithPlanRow(item.id);
+              }
+            }}
+          />
+        </td>
+        <td
+          className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+          style={{
+            width: '32px',
+            minWidth: '32px',
+            textAlign: 'center',
+            backgroundColor: '#d9d9d9',
+          }}
+        >
+          <button
+            type="button"
+            aria-label="Delete needs question row"
+            className="font-semibold text-slate-800"
+            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+            onClick={() => removePlanPromptRow(item.id, rowIdx, 'needsQuestion')}
+          >
+            X
+          </button>
+        </td>
+      </tr>
+    );
+  };
 
   const renderNeedsPlanRow = (item, rowValues, rowIdx) => {
     const estimateValue = rowValues[3] || '-';
@@ -1599,11 +1621,12 @@ export default function StagingPageV2() {
     return (
       <tr key={`${item.id}-needs-plan-row-${rowIdx}`}>
         {rowValues.map((cellValue, cellIdx) => {
+          const isSelected = isCellSelected(item.id, rowIdx, cellIdx);
           const isPromptCell = cellIdx === 2;
           const isEstimateCell = cellIdx === 3;
           const isTimeValueCell = cellIdx === 4;
           const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
-          const style = { backgroundColor: '#f3f3f3' };
+          const style = { backgroundColor: isSelected ? '#dbeafe' : '#f3f3f3' };
           if (cellIdx === 0 || cellIdx === 1) {
             style.width = '120px';
             style.minWidth = '120px';
@@ -1628,6 +1651,8 @@ export default function StagingPageV2() {
               key={`${item.id}-needs-plan-row-${rowIdx}-${cellIdx}`}
               className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
               style={style}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
+              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
             >
               {isPromptCell ? (
                 <input
@@ -1721,11 +1746,12 @@ export default function StagingPageV2() {
     return (
       <tr key={`${item.id}-schedule-row-${rowIdx}`}>
         {rowValues.map((cellValue, cellIdx) => {
+          const isSelected = isCellSelected(item.id, rowIdx, cellIdx);
           const isPromptCell = cellIdx === 2;
           const isEstimateCell = cellIdx === 3;
           const isTimeValueCell = cellIdx === 4;
           const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
-          const style = { backgroundColor: '#f3f3f3' };
+          const style = { backgroundColor: isSelected ? '#dbeafe' : '#f3f3f3' };
           if (cellIdx === 0 || cellIdx === 1) {
             style.width = '120px';
             style.minWidth = '120px';
@@ -1750,6 +1776,8 @@ export default function StagingPageV2() {
               key={`${item.id}-schedule-row-${rowIdx}-${cellIdx}`}
               className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
               style={style}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
+              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
             >
               {isPromptCell ? (
                 <input
@@ -1847,9 +1875,10 @@ export default function StagingPageV2() {
             return null;
           }
 
+          const isSelected = isCellSelected(item.id, rowIdx, cellIdx);
           const isPromptCell = cellIdx === 2;
           const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
-          const style = { backgroundColor: '#f3f3f3' };
+          const style = { backgroundColor: isSelected ? '#dbeafe' : '#f3f3f3' };
           if (cellIdx === 0 || cellIdx === 1) {
             style.width = '120px';
             style.minWidth = '120px';
@@ -1869,6 +1898,8 @@ export default function StagingPageV2() {
               className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
               style={style}
               colSpan={colSpan}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
+              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
             >
               {isPromptCell ? (
                 <input
@@ -2277,7 +2308,9 @@ export default function StagingPageV2() {
                                   <tr key={`${item.id}-plan-row-1`}>
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-                                      style={{ width: '120px', minWidth: '120px', backgroundColor: '#d9d9d9' }}
+                                      style={{ width: '120px', minWidth: '120px', backgroundColor: isCellSelected(item.id, 1, 0) ? '#dbeafe' : '#d9d9d9' }}
+                                      onMouseDown={(e) => handleCellMouseDown(e, item.id, 1, 0, PLAN_TABLE_COLS)}
+                                      onMouseEnter={() => handleCellMouseEnter(item.id, 1, 0, PLAN_TABLE_COLS)}
                                     >
                                       <input
                                         type="text"
@@ -2293,7 +2326,9 @@ export default function StagingPageV2() {
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
                                       colSpan={PLAN_TABLE_COLS - 1}
-                                      style={{ backgroundColor: '#d9d9d9' }}
+                                      style={{ backgroundColor: isCellSelected(item.id, 1, 1) ? '#dbeafe' : '#d9d9d9' }}
+                                      onMouseDown={(e) => handleCellMouseDown(e, item.id, 1, 1, PLAN_TABLE_COLS)}
+                                      onMouseEnter={() => handleCellMouseEnter(item.id, 1, 1, PLAN_TABLE_COLS)}
                                     >
                                       <span className="text-slate-800"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
@@ -2387,11 +2422,15 @@ export default function StagingPageV2() {
                                   <tr key={`${item.id}-schedule-row-prompt`}>
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-                                      style={{ width: '120px', minWidth: '120px', backgroundColor: '#d9d9d9' }}
+                                      style={{ width: '120px', minWidth: '120px', backgroundColor: isCellSelected(item.id, schedulePromptRow, 0) ? '#dbeafe' : '#d9d9d9' }}
+                                      onMouseDown={(e) => handleCellMouseDown(e, item.id, schedulePromptRow, 0, PLAN_TABLE_COLS)}
+                                      onMouseEnter={() => handleCellMouseEnter(item.id, schedulePromptRow, 0, PLAN_TABLE_COLS)}
                                     ></td>
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-                                      style={{ backgroundColor: '#d9d9d9' }}
+                                      style={{ backgroundColor: isCellSelected(item.id, schedulePromptRow, 1) ? '#dbeafe' : '#d9d9d9' }}
+                                      onMouseDown={(e) => handleCellMouseDown(e, item.id, schedulePromptRow, 1, PLAN_TABLE_COLS)}
+                                      onMouseEnter={() => handleCellMouseEnter(item.id, schedulePromptRow, 1, PLAN_TABLE_COLS)}
                                     >
                                       <span className="text-slate-800"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
@@ -2403,8 +2442,10 @@ export default function StagingPageV2() {
                                       style={{
                                         width: '140px',
                                         minWidth: '140px',
-                                        backgroundColor: '#d9d9d9',
+                                        backgroundColor: isCellSelected(item.id, schedulePromptRow, 3) ? '#dbeafe' : '#d9d9d9',
                                       }}
+                                      onMouseDown={(e) => handleCellMouseDown(e, item.id, schedulePromptRow, 3, PLAN_TABLE_COLS)}
+                                      onMouseEnter={() => handleCellMouseEnter(item.id, schedulePromptRow, 3, PLAN_TABLE_COLS)}
                                     >
                                       <select
                                         className="w-full bg-transparent focus:outline-none border-none"
@@ -2429,10 +2470,12 @@ export default function StagingPageV2() {
                                       style={{
                                         width: '120px',
                                         minWidth: '120px',
-                                        backgroundColor: '#d9d9d9',
+                                        backgroundColor: isCellSelected(item.id, schedulePromptRow, 4) ? '#dbeafe' : '#d9d9d9',
                                         textAlign: 'right',
                                         paddingRight: '10px',
                                       }}
+                                      onMouseDown={(e) => handleCellMouseDown(e, item.id, schedulePromptRow, 4, PLAN_TABLE_COLS)}
+                                      onMouseEnter={() => handleCellMouseEnter(item.id, schedulePromptRow, 4, PLAN_TABLE_COLS)}
                                     >
                                       <input
                                         type="text"
@@ -2475,12 +2518,16 @@ export default function StagingPageV2() {
                                   <tr key={`${item.id}-subprojects-row-prompt`}>
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
-                                      style={{ width: '120px', minWidth: '120px', backgroundColor: '#d9d9d9' }}
+                                      style={{ width: '120px', minWidth: '120px', backgroundColor: isCellSelected(item.id, subprojectsPromptRow, 0) ? '#dbeafe' : '#d9d9d9' }}
+                                      onMouseDown={(e) => handleCellMouseDown(e, item.id, subprojectsPromptRow, 0, PLAN_TABLE_COLS)}
+                                      onMouseEnter={() => handleCellMouseEnter(item.id, subprojectsPromptRow, 0, PLAN_TABLE_COLS)}
                                     ></td>
                                     <td
                                       className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
                                       colSpan={PLAN_TABLE_COLS - 2}
-                                      style={{ backgroundColor: '#d9d9d9' }}
+                                      style={{ backgroundColor: isCellSelected(item.id, subprojectsPromptRow, 1) ? '#dbeafe' : '#d9d9d9' }}
+                                      onMouseDown={(e) => handleCellMouseDown(e, item.id, subprojectsPromptRow, 1, PLAN_TABLE_COLS)}
+                                      onMouseEnter={() => handleCellMouseEnter(item.id, subprojectsPromptRow, 1, PLAN_TABLE_COLS)}
                                     >
                                       <span className="text-slate-800"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
