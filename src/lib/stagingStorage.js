@@ -35,6 +35,9 @@ const serializeRow = (row) => {
   if (row.__sectionType) {
     serialized._sectionType = row.__sectionType;
   }
+  if (row.__isTotalRow) {
+    serialized._isTotalRow = row.__isTotalRow;
+  }
   return serialized;
 };
 
@@ -44,7 +47,7 @@ const serializeRow = (row) => {
  * Also handles legacy format (plain arrays without metadata).
  */
 const deserializeRow = (row) => {
-  // Handle new format: { cells: [...], _rowType?, _pairId?, _sectionType? }
+  // Handle new format: { cells: [...], _rowType?, _pairId?, _sectionType?, _isTotalRow? }
   if (row && typeof row === 'object' && Array.isArray(row.cells)) {
     const deserialized = [...row.cells];
     if (row._rowType) {
@@ -66,6 +69,14 @@ const deserializeRow = (row) => {
     if (row._sectionType) {
       Object.defineProperty(deserialized, '__sectionType', {
         value: row._sectionType,
+        writable: true,
+        configurable: true,
+        enumerable: false,
+      });
+    }
+    if (row._isTotalRow) {
+      Object.defineProperty(deserialized, '__isTotalRow', {
+        value: row._isTotalRow,
         writable: true,
         configurable: true,
         enumerable: false,

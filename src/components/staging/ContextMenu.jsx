@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, Plus, CornerDownRight, Copy, Target, CheckSquare, ListTodo, Calendar, FolderKanban } from 'lucide-react';
+import { Trash2, Plus, CornerDownRight, Copy, Target, CheckSquare, ListTodo, Calendar, FolderKanban, Calculator } from 'lucide-react';
 
 /**
  * Context menu for staging table cells and rows
@@ -14,6 +14,7 @@ export default function ContextMenu({
   onDuplicateRow,
   onClearCells,
   onInsertRowType,
+  onToggleOutcomeTotals,
 }) {
   if (!contextMenu.isOpen) return null;
 
@@ -23,6 +24,8 @@ export default function ContextMenu({
     itemId,
     rowIdx,
     sectionType,
+    rowType,
+    showOutcomeTotals,
     hasSelectedCells,
     hasSelectedRows,
     selectedCellsCount,
@@ -120,6 +123,19 @@ export default function ContextMenu({
                   </button>
                 );
               })}
+              <div className="border-t border-gray-100 my-1" />
+            </>
+          )}
+          {/* Toggle totals for the entire Actions section */}
+          {!isMultiRow && sectionType === 'Actions' && (
+            <>
+              <button
+                onClick={() => handleAction(onToggleOutcomeTotals)}
+                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
+              >
+                <Calculator className="w-4 h-4" />
+                {showOutcomeTotals ? 'Hide Totals' : 'Show Totals'}
+              </button>
               <div className="border-t border-gray-100 my-1" />
             </>
           )}

@@ -7,7 +7,7 @@ import {
   TimeValueCell,
   EmptyCell,
 } from './TableCells';
-import { PLAN_TABLE_COLS } from '../../utils/staging/planTableHelpers';
+import { PLAN_TABLE_COLS, formatMinutesToHHmm } from '../../utils/staging/planTableHelpers';
 import { SECTION_CONFIG } from '../../utils/staging/sectionConfig';
 
 /**
@@ -47,6 +47,9 @@ export default function TableRow({
   // Selection context for context menu
   selectedCells,
   selectedRows,
+  // Outcome totaling
+  outcomeTotals,
+  outcomeSectionTotal,
 }) {
   const hasTimeElements = sectionType === 'Actions' || sectionType === 'Schedule';
   const isSchedulePrompt = rowType === 'prompt' && sectionType === 'Schedule';
@@ -63,6 +66,8 @@ export default function TableRow({
         itemId: item.id,
         rowIdx,
         sectionType,
+        rowType,
+        showOutcomeTotals: item.showOutcomeTotals || false,
         selectedCells,
         selectedRows,
       }),
@@ -85,6 +90,10 @@ export default function TableRow({
 
   // HEADER ROW
   if (rowType === 'header') {
+    const isActionsHeader = sectionType === 'Actions';
+    const showOutcomeTotals = item.showOutcomeTotals || false;
+    const showSectionTotal = isActionsHeader && showOutcomeTotals;
+
     return (
       <tr key={`${item.id}-row-${rowIdx}`} {...rowProps}>
         <DragHandleCell
@@ -94,7 +103,7 @@ export default function TableRow({
           onClick={(e) => onHandleClick(e, item.id, rowIdx)}
         />
         <td
-          colSpan={PLAN_TABLE_COLS}
+          colSpan={showSectionTotal ? PLAN_TABLE_COLS - 1 : PLAN_TABLE_COLS}
           className="border border-[#e5e7eb] py-0.5"
           style={{
             backgroundColor: isCellSelected(item.id, rowIdx, 0) ? '#dbeafe' : '#b7b7b7',
@@ -115,6 +124,19 @@ export default function TableRow({
             {...dataAttrs(0)}
           />
         </td>
+        {showSectionTotal && (
+          <td
+            className="border border-[#e5e7eb] py-0.5 text-right pr-2 font-semibold text-gray-800"
+            style={{
+              backgroundColor: '#b7b7b7',
+              width: '70px',
+              minWidth: '70px',
+              fontSize: `${Math.round(14 * textSizeScale)}px`,
+            }}
+          >
+            {formatMinutesToHHmm(outcomeSectionTotal)}
+          </td>
+        )}
       </tr>
     );
   }
@@ -189,8 +211,14 @@ export default function TableRow({
     );
   }
 
-  // PROMPT ROW - Regular (no time elements)
+  // PROMPT ROW - Regular (no time elements, but may show totals for Actions section)
   if (rowType === 'prompt') {
+    const showOutcomeTotals = item.showOutcomeTotals || false;
+    const isActionsPrompt = sectionType === 'Actions';
+    // outcomeTotals is now keyed by row index
+    const outcomeTotal = isActionsPrompt && outcomeTotals ? outcomeTotals.get(rowIdx) || 0 : 0;
+    const showTotal = isActionsPrompt && showOutcomeTotals;
+
     return (
       <tr key={`${item.id}-row-${rowIdx}`} {...rowProps}>
         <DragHandleCell
@@ -224,9 +252,22 @@ export default function TableRow({
           isDropTarget={isDropTarget}
           rowType="prompt"
           textSizeScale={textSizeScale}
-          colSpan={PLAN_TABLE_COLS - 1}
+          colSpan={showTotal ? PLAN_TABLE_COLS - 2 : PLAN_TABLE_COLS - 1}
           dataAttributes={dataAttrs(1)}
         />
+        {showTotal && (
+          <td
+            className="border border-[#e5e7eb] py-0.5 text-right pr-2 font-semibold"
+            style={{
+              backgroundColor: '#d4d4d4',
+              width: '70px',
+              minWidth: '70px',
+              fontSize: `${Math.round(14 * textSizeScale)}px`,
+            }}
+          >
+            {formatMinutesToHHmm(outcomeTotal)}
+          </td>
+        )}
       </tr>
     );
   }

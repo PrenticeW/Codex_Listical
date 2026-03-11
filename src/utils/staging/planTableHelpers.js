@@ -114,6 +114,14 @@ export const cloneRowWithMetadata = (row) => {
       enumerable: false,
     });
   }
+  if (row['__isTotalRow']) {
+    Object.defineProperty(newRow, '__isTotalRow', {
+      value: row['__isTotalRow'],
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
+  }
   return newRow;
 };
 
@@ -182,6 +190,16 @@ export const clonePlanTableEntries = (entries, ensureRows = PLAN_TABLE_ROWS) => 
       });
     }
 
+    // Preserve total row metadata
+    if (sourceRow && sourceRow['__isTotalRow']) {
+      Object.defineProperty(nextRow, '__isTotalRow', {
+        value: sourceRow['__isTotalRow'],
+        writable: true,
+        configurable: true,
+        enumerable: false,
+      });
+    }
+
     normalized.push(nextRow);
   }
   return normalized;
@@ -190,6 +208,53 @@ export const clonePlanTableEntries = (entries, ensureRows = PLAN_TABLE_ROWS) => 
 /**
  * Build project plan summary from item data
  */
+/**
+ * Calculate totals for measurable outcome rows by summing action time values
+ * that follow each prompt row in the Actions section.
+ * Returns a Map of rowIndex -> totalMinutes for each prompt row in Actions section
+ */
+export const calculateOutcomeTotals = (entries) => {
+  const totals = new Map();
+  let currentSection = '';
+  let currentPromptIdx = null;
+
+  for (let i = 0; i < entries.length; i++) {
+    const row = entries[i];
+    if (row?.__rowType === 'header') {
+      currentSection = row.__sectionType || '';
+      currentPromptIdx = null; // Reset when entering new section
+    } else if (currentSection === 'Actions') {
+      if (row?.__rowType === 'prompt') {
+        // Found a new measurable outcome row - track its index
+        currentPromptIdx = i;
+        totals.set(currentPromptIdx, 0);
+      } else if (row?.__rowType === 'response' && currentPromptIdx !== null) {
+        // Sum time values from response rows (actions) into the current prompt's total
+        const value = row[5] ?? '';
+        const minutes = parseTimeValueToMinutes(value);
+        totals.set(currentPromptIdx, (totals.get(currentPromptIdx) || 0) + minutes);
+      }
+    }
+  }
+
+  return totals;
+};
+
+/**
+ * Calculate the section total for all measurable outcome rows (prompt rows in Actions section)
+ * Returns total minutes (sum of all outcome totals)
+ */
+export const calculateOutcomeSectionTotal = (entries, outcomeTotals) => {
+  let sectionTotal = 0;
+
+  // outcomeTotals is now keyed by row index, so just sum all values
+  outcomeTotals.forEach((minutes) => {
+    sectionTotal += minutes;
+  });
+
+  return sectionTotal;
+};
+
 export const buildProjectPlanSummary = (item) => {
   if (!item) return { subprojects: [], totalHours: '0.00' };
 

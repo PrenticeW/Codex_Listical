@@ -436,6 +436,39 @@ export default function useRowCommands({
     [setState, executeCommand, pendingFocusRequestRef, setSelectedCells]
   );
 
+  /**
+   * Toggle showOutcomeTotals on the item level
+   * When enabled, all measurable outcome rows in Actions section show totals
+   */
+  const toggleItemOutcomeTotals = useCallback(
+    (itemId) => {
+      if (itemId == null) return;
+
+      let capturedState = null;
+      const command = {
+        execute: () => {
+          setState((prev) => {
+            if (capturedState === null) {
+              capturedState = cloneStagingState(prev);
+            }
+            return {
+              ...prev,
+              shortlist: prev.shortlist.map((item) => {
+                if (item.id !== itemId) return item;
+                return { ...item, showOutcomeTotals: !item.showOutcomeTotals };
+              }),
+            };
+          });
+        },
+        undo: () => {
+          if (capturedState) setState(capturedState);
+        },
+      };
+      executeCommand(command);
+    },
+    [setState, executeCommand]
+  );
+
   return {
     insertRowAbove,
     insertRowBelow,
@@ -444,5 +477,6 @@ export default function useRowCommands({
     clearCells,
     insertRowType,
     addRowOnEnter,
+    toggleItemOutcomeTotals,
   };
 }

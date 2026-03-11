@@ -25,12 +25,13 @@ import {
   PLAN_TABLE_COLS,
   parseTimeValueToMinutes,
   formatMinutesToHHmm,
+  calculateOutcomeTotals,
+  calculateOutcomeSectionTotal,
 } from '../utils/staging/planTableHelpers';
 import {
   handleCopyOperation,
   handlePasteOperation,
 } from '../utils/staging/clipboardOperations';
-import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
 
 /**
  * Helper to get section type for any row by finding the nearest header above
@@ -50,35 +51,29 @@ const getSectionTypeForRow = (entries, rowIdx) => {
 
 /**
  * Calculate time totals for an item's plan table
+ * Project total only includes Schedule section (not Actions)
  */
 const calculateTimeTotals = (planEntries) => {
-  let actionsTotalMinutes = 0;
   let scheduleTotalMinutes = 0;
   let currentSection = '';
 
   for (let i = 0; i < planEntries.length; i++) {
     const row = planEntries[i];
     if (row?.__rowType === 'header') {
-      currentSection = row[0] || '';
-    } else if (row?.__rowType === 'response') {
-      const value = row[5] ?? '';
-      const minutes = parseTimeValueToMinutes(value);
-      if (currentSection === SECTION_CONFIG.Actions.header) {
-        actionsTotalMinutes += minutes;
-      } else if (currentSection === SECTION_CONFIG.Schedule.header) {
+      // Use __sectionType metadata for reliable section detection
+      currentSection = row.__sectionType || '';
+    } else if (currentSection === 'Schedule') {
+      if (row?.__rowType === 'response' || row?.__rowType === 'prompt') {
+        const value = row[5] ?? '';
+        const minutes = parseTimeValueToMinutes(value);
         scheduleTotalMinutes += minutes;
       }
-    } else if (row?.__rowType === 'prompt' && currentSection === SECTION_CONFIG.Schedule.header) {
-      const value = row[5] ?? '';
-      const minutes = parseTimeValueToMinutes(value);
-      scheduleTotalMinutes += minutes;
     }
   }
 
   return {
-    actionsTotal: formatMinutesToHHmm(actionsTotalMinutes),
     scheduleTotal: formatMinutesToHHmm(scheduleTotalMinutes),
-    projectTotal: formatMinutesToHHmm(actionsTotalMinutes + scheduleTotalMinutes),
+    projectTotal: formatMinutesToHHmm(scheduleTotalMinutes),
   };
 };
 
@@ -175,6 +170,7 @@ export default function StagingPageV2() {
     clearCells,
     insertRowType,
     addRowOnEnter,
+    toggleItemOutcomeTotals,
   } = useRowCommands({
     setState,
     executeCommand,
@@ -269,6 +265,12 @@ export default function StagingPageV2() {
     [contextMenu.itemId, contextMenu.rowIdx, contextMenu.sectionType, insertRowType]
   );
 
+  const handleToggleOutcomeTotals = useCallback(() => {
+    if (contextMenu.itemId != null) {
+      toggleItemOutcomeTotals(contextMenu.itemId);
+    }
+  }, [contextMenu.itemId, toggleItemOutcomeTotals]);
+
   // Add to Plan handler
   const handleTogglePlanStatus = useCallback(
     (itemId, addToPlan) => {
@@ -318,6 +320,10 @@ export default function StagingPageV2() {
   const renderTable = (item) => {
     const entries = item.planTableEntries || [];
 
+    // Calculate outcome totals for this item
+    const outcomeTotals = calculateOutcomeTotals(entries);
+    const outcomeSectionTotal = calculateOutcomeSectionTotal(entries, outcomeTotals);
+
     return (
       <div className="rounded border border-dashed border-[#ced3d0] bg-white p-3">
         <table
@@ -356,6 +362,8 @@ export default function StagingPageV2() {
                   textSizeScale={textSizeScale}
                   selectedCells={selectedCells}
                   selectedRows={selectedRows}
+                  outcomeTotals={outcomeTotals}
+                  outcomeSectionTotal={outcomeSectionTotal}
                 />
               );
             })}
@@ -590,6 +598,7 @@ export default function StagingPageV2() {
         onDuplicateRow={handleDuplicateRow}
         onClearCells={handleClearCells}
         onInsertRowType={handleInsertRowType}
+        onToggleOutcomeTotals={handleToggleOutcomeTotals}
       />
     </>
   );
