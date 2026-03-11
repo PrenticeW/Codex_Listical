@@ -11,3 +11,4 @@ export { default as usePlanTableSelection } from './usePlanTableSelection';
 export { default as useStagingKeyboardHandlers } from './useStagingKeyboardHandlers';
 export { default as usePlanTableDragAndDrop } from './usePlanTableDragAndDrop';
 export { default as useContextMenu } from './useContextMenu';
+export { default as useRowCommands } from './useRowCommands';

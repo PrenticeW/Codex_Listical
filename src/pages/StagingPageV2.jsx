@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
 import { SquarePlus, Pencil } from 'lucide-react';
-import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
@@ -16,18 +15,17 @@ import {
   useStagingKeyboardHandlers,
   usePlanTableDragAndDrop,
   useContextMenu,
+  useRowCommands,
 } from '../hooks/staging';
 import ContextMenu from '../components/staging/ContextMenu';
+import TableRow from '../components/staging/TableRow';
 import {
   clonePlanTableEntries,
-  cloneRowWithMetadata,
   cloneStagingState,
   PLAN_TABLE_COLS,
-  PLAN_ESTIMATE_OPTIONS,
   parseTimeValueToMinutes,
-  minutesToEstimateLabel,
+  formatMinutesToHHmm,
 } from '../utils/staging/planTableHelpers';
-import { getRowPairId, buildPairedRowGroups } from '../utils/staging/rowPairing';
 import {
   handleCopyOperation,
   handlePasteOperation,
@@ -35,27 +33,70 @@ import {
 import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
 
 /**
- * StagingPage (Goals/Staging) - Refactored with extracted hooks
+ * Helper to get section type for any row by finding the nearest header above
+ */
+const getSectionTypeForRow = (entries, rowIdx) => {
+  if (!entries || rowIdx < 0) return '';
+  if (entries[rowIdx]?.__rowType === 'header') {
+    return entries[rowIdx].__sectionType || '';
+  }
+  for (let i = rowIdx; i >= 0; i--) {
+    if (entries[i]?.__rowType === 'header') {
+      return entries[i].__sectionType || '';
+    }
+  }
+  return '';
+};
+
+/**
+ * Calculate time totals for an item's plan table
+ */
+const calculateTimeTotals = (planEntries) => {
+  let actionsTotalMinutes = 0;
+  let scheduleTotalMinutes = 0;
+  let currentSection = '';
+
+  for (let i = 0; i < planEntries.length; i++) {
+    const row = planEntries[i];
+    if (row?.__rowType === 'header') {
+      currentSection = row[0] || '';
+    } else if (row?.__rowType === 'response') {
+      const value = row[5] ?? '';
+      const minutes = parseTimeValueToMinutes(value);
+      if (currentSection === SECTION_CONFIG.Actions.header) {
+        actionsTotalMinutes += minutes;
+      } else if (currentSection === SECTION_CONFIG.Schedule.header) {
+        scheduleTotalMinutes += minutes;
+      }
+    } else if (row?.__rowType === 'prompt' && currentSection === SECTION_CONFIG.Schedule.header) {
+      const value = row[5] ?? '';
+      const minutes = parseTimeValueToMinutes(value);
+      scheduleTotalMinutes += minutes;
+    }
+  }
+
+  return {
+    actionsTotal: formatMinutesToHHmm(actionsTotalMinutes),
+    scheduleTotal: formatMinutesToHHmm(scheduleTotalMinutes),
+    projectTotal: formatMinutesToHHmm(actionsTotalMinutes + scheduleTotalMinutes),
+  };
+};
+
+/**
+ * StagingPage (Goals/Staging) - Refactored version
  *
- * Manages project shortlist and planning tables
+ * Manages project shortlist and planning tables with unified row rendering
  */
 export default function StagingPageV2() {
   const location = useLocation();
   const currentPath = location.pathname;
   const { currentYear } = useYear();
 
-  // Page-specific size setting for Goals page
   const { sizeScale } = usePageSize('goal');
-  const textSizeScale = sizeScale; // Alias for consistency
+  const textSizeScale = sizeScale;
 
   // Command pattern for undo/redo
-  const {
-    canUndo,
-    canRedo,
-    executeCommand,
-    undo,
-    redo,
-  } = useCommandPattern();
+  const { canUndo, canRedo, executeCommand, undo, redo } = useCommandPattern();
 
   // Shortlist state management
   const {
@@ -70,12 +111,7 @@ export default function StagingPageV2() {
   } = useShortlistState({ currentYear, executeCommand });
 
   // Plan modal state
-  const {
-    planModal,
-    openPlanModal,
-    closePlanModal,
-    updatePlanModal,
-  } = usePlanModal();
+  const { planModal, openPlanModal, closePlanModal, updatePlanModal } = usePlanModal();
 
   // Plan modal actions
   const { handlePlanNext } = usePlanModalActions({
@@ -129,6 +165,22 @@ export default function StagingPageV2() {
     executeCommand,
   });
 
+  // Row commands (insert, delete, duplicate, etc.)
+  const {
+    insertRowAbove,
+    insertRowBelow,
+    deleteRows,
+    duplicateRows,
+    clearCells,
+    insertRowType,
+    addRowOnEnter,
+  } = useRowCommands({
+    setState,
+    executeCommand,
+    clearSelection,
+    pendingFocusRequestRef,
+  });
+
   // Global mouseup listener for drag selection
   useEffect(() => {
     window.addEventListener('mouseup', handleMouseUp);
@@ -138,11 +190,7 @@ export default function StagingPageV2() {
   // Copy handler
   const handleCopy = useCallback(
     (e) => {
-      const tsvData = handleCopyOperation({
-        selectedCells,
-        shortlist,
-      });
-
+      const tsvData = handleCopyOperation({ selectedCells, shortlist });
       if (tsvData) {
         e.preventDefault();
         e.clipboardData.setData('text/plain', tsvData);
@@ -161,7 +209,6 @@ export default function StagingPageV2() {
         shortlist,
         setState,
       });
-
       if (command) {
         e.preventDefault();
         executeCommand(command);
@@ -186,427 +233,67 @@ export default function StagingPageV2() {
   // Context menu
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
 
-  // Context menu action handlers
+  // Context menu action handlers - wrapped to use the hook
   const handleInsertRowAbove = useCallback(() => {
-    if (contextMenu.itemId == null || contextMenu.rowIdx == null) return;
-    const { itemId, rowIdx } = contextMenu;
-
-    let capturedState = null;
-    const command = {
-      execute: () => {
-        setState((prev) => {
-          if (capturedState === null) {
-            capturedState = cloneStagingState(prev);
-          }
-          return {
-            ...prev,
-            shortlist: prev.shortlist.map((item) => {
-              if (item.id !== itemId) return item;
-              const entries = item.planTableEntries.map(cloneRowWithMetadata);
-              const newRow = Array.from({ length: PLAN_TABLE_COLS }, () => '');
-              entries.splice(rowIdx, 0, newRow);
-              return { ...item, planTableEntries: entries };
-            }),
-          };
-        });
-      },
-      undo: () => {
-        if (capturedState) setState(capturedState);
-      },
-    };
-    executeCommand(command);
-  }, [contextMenu.itemId, contextMenu.rowIdx, setState, executeCommand]);
+    if (contextMenu.itemId != null && contextMenu.rowIdx != null) {
+      insertRowAbove(contextMenu.itemId, contextMenu.rowIdx);
+    }
+  }, [contextMenu.itemId, contextMenu.rowIdx, insertRowAbove]);
 
   const handleInsertRowBelow = useCallback(() => {
-    if (contextMenu.itemId == null || contextMenu.rowIdx == null) return;
-    const { itemId, rowIdx } = contextMenu;
-
-    let capturedState = null;
-    const command = {
-      execute: () => {
-        setState((prev) => {
-          if (capturedState === null) {
-            capturedState = cloneStagingState(prev);
-          }
-          return {
-            ...prev,
-            shortlist: prev.shortlist.map((item) => {
-              if (item.id !== itemId) return item;
-              const entries = item.planTableEntries.map(cloneRowWithMetadata);
-              const newRow = Array.from({ length: PLAN_TABLE_COLS }, () => '');
-              entries.splice(rowIdx + 1, 0, newRow);
-              return { ...item, planTableEntries: entries };
-            }),
-          };
-        });
-      },
-      undo: () => {
-        if (capturedState) setState(capturedState);
-      },
-    };
-    executeCommand(command);
-  }, [contextMenu.itemId, contextMenu.rowIdx, setState, executeCommand]);
+    if (contextMenu.itemId != null && contextMenu.rowIdx != null) {
+      insertRowBelow(contextMenu.itemId, contextMenu.rowIdx);
+    }
+  }, [contextMenu.itemId, contextMenu.rowIdx, insertRowBelow]);
 
   const handleDeleteRows = useCallback(() => {
-    // Build set of rows to delete - either from selection or from context menu
-    const rowsToDelete = new Map(); // itemId -> Set of rowIdx
-
-    if (selectedRows.size > 0) {
-      // Delete all selected rows
-      selectedRows.forEach((rowKey) => {
-        const [itemId, rowIdxStr] = rowKey.split('|');
-        const rowIdx = parseInt(rowIdxStr, 10);
-        if (!rowsToDelete.has(itemId)) {
-          rowsToDelete.set(itemId, new Set());
-        }
-        rowsToDelete.get(itemId).add(rowIdx);
-      });
-    } else if (contextMenu.itemId != null && contextMenu.rowIdx != null) {
-      // Fall back to context menu row
-      rowsToDelete.set(contextMenu.itemId, new Set([contextMenu.rowIdx]));
-    } else {
-      return;
-    }
-
-    let capturedState = null;
-    const command = {
-      execute: () => {
-        setState((prev) => {
-          if (capturedState === null) {
-            capturedState = cloneStagingState(prev);
-          }
-          return {
-            ...prev,
-            shortlist: prev.shortlist.map((item) => {
-              const rowIdxSet = rowsToDelete.get(item.id);
-              if (!rowIdxSet || rowIdxSet.size === 0) return item;
-
-              const entries = item.planTableEntries.map(cloneRowWithMetadata);
-              // Don't delete if it would leave no rows
-              if (entries.length <= rowIdxSet.size) return item;
-
-              // Delete rows in reverse order to preserve indices
-              const sortedIndices = Array.from(rowIdxSet).sort((a, b) => b - a);
-              sortedIndices.forEach((idx) => {
-                if (idx >= 0 && idx < entries.length) {
-                  entries.splice(idx, 1);
-                }
-              });
-
-              return { ...item, planTableEntries: entries };
-            }),
-          };
-        });
-      },
-      undo: () => {
-        if (capturedState) setState(capturedState);
-      },
-    };
-    executeCommand(command);
-    clearSelection();
-  }, [selectedRows, contextMenu.itemId, contextMenu.rowIdx, setState, executeCommand, clearSelection]);
+    deleteRows(selectedRows, contextMenu.itemId, contextMenu.rowIdx);
+  }, [selectedRows, contextMenu.itemId, contextMenu.rowIdx, deleteRows]);
 
   const handleDuplicateRow = useCallback(() => {
-    // Build set of rows to duplicate - either from selection or from context menu
-    const rowsToDuplicate = new Map(); // itemId -> Set of rowIdx
-
-    if (selectedRows.size > 0) {
-      // Duplicate all selected rows
-      selectedRows.forEach((rowKey) => {
-        const [itemId, rowIdxStr] = rowKey.split('|');
-        const rowIdx = parseInt(rowIdxStr, 10);
-        if (!rowsToDuplicate.has(itemId)) {
-          rowsToDuplicate.set(itemId, new Set());
-        }
-        rowsToDuplicate.get(itemId).add(rowIdx);
-      });
-    } else if (contextMenu.itemId != null && contextMenu.rowIdx != null) {
-      // Fall back to context menu row
-      rowsToDuplicate.set(contextMenu.itemId, new Set([contextMenu.rowIdx]));
-    } else {
-      return;
-    }
-
-    let capturedState = null;
-    const command = {
-      execute: () => {
-        setState((prev) => {
-          if (capturedState === null) {
-            capturedState = cloneStagingState(prev);
-          }
-          return {
-            ...prev,
-            shortlist: prev.shortlist.map((item) => {
-              const rowIdxSet = rowsToDuplicate.get(item.id);
-              if (!rowIdxSet || rowIdxSet.size === 0) return item;
-
-              const entries = item.planTableEntries.map(cloneRowWithMetadata);
-
-              // Sort indices in ascending order and duplicate after each
-              // Insert in reverse order to preserve indices
-              const sortedIndices = Array.from(rowIdxSet).sort((a, b) => b - a);
-              sortedIndices.forEach((idx) => {
-                if (idx >= 0 && idx < entries.length) {
-                  const duplicatedRow = cloneRowWithMetadata(entries[idx]);
-                  entries.splice(idx + 1, 0, duplicatedRow);
-                }
-              });
-
-              return { ...item, planTableEntries: entries };
-            }),
-          };
-        });
-      },
-      undo: () => {
-        if (capturedState) setState(capturedState);
-      },
-    };
-    executeCommand(command);
-    clearSelection();
-  }, [selectedRows, contextMenu.itemId, contextMenu.rowIdx, setState, executeCommand, clearSelection]);
+    duplicateRows(selectedRows, contextMenu.itemId, contextMenu.rowIdx);
+  }, [selectedRows, contextMenu.itemId, contextMenu.rowIdx, duplicateRows]);
 
   const handleClearCells = useCallback(() => {
-    if (!selectedCells || selectedCells.size === 0) return;
+    clearCells(selectedCells);
+  }, [selectedCells, clearCells]);
 
-    let capturedState = null;
-    const command = {
-      execute: () => {
-        setState((prev) => {
-          if (capturedState === null) {
-            capturedState = cloneStagingState(prev);
-          }
-
-          const cellsByItem = new Map();
-          selectedCells.forEach((cellKey) => {
-            const [itemId, rowIdx, colIdx] = cellKey.split('|');
-            if (!cellsByItem.has(itemId)) {
-              cellsByItem.set(itemId, []);
-            }
-            cellsByItem.get(itemId).push({
-              rowIdx: parseInt(rowIdx, 10),
-              colIdx: parseInt(colIdx, 10),
-            });
-          });
-
-          return {
-            ...prev,
-            shortlist: prev.shortlist.map((item) => {
-              const cells = cellsByItem.get(item.id);
-              if (!cells) return item;
-              const entries = item.planTableEntries.map(cloneRowWithMetadata);
-              cells.forEach(({ rowIdx, colIdx }) => {
-                if (entries[rowIdx] && entries[rowIdx][colIdx] !== undefined) {
-                  entries[rowIdx][colIdx] = '';
-                }
-              });
-              return { ...item, planTableEntries: entries };
-            }),
-          };
-        });
-      },
-      undo: () => {
-        if (capturedState) setState(capturedState);
-      },
-    };
-    executeCommand(command);
-  }, [selectedCells, setState, executeCommand]);
-
-  // Handle inserting a specific row type from context menu
-  const handleInsertRowType = useCallback((rowType) => {
-    if (contextMenu.itemId == null || contextMenu.rowIdx == null) return;
-    const { itemId, rowIdx, sectionType } = contextMenu;
-
-    // Determine text column and placeholder based on row type and section
-    // Match the template structure from useShortlistState.js:
-    // - 'prompt' rows: text in column 1 (index 1), use prompt text from SECTION_CONFIG
-    //   Exception: Schedule section uses column 2 (index 2) via createSchedulePromptRow
-    // - 'response' rows: text in column 2 (index 2), use placeholder text from SECTION_CONFIG
-    // - 'data' rows: no placeholder text, all cells empty
-    let textColumn = 2;
-    let placeholderText = '';
-
-    if (rowType === 'response') {
-      textColumn = 2;
-      placeholderText = SECTION_CONFIG[sectionType]?.placeholder || '';
-    } else if (rowType === 'prompt') {
-      // Regular prompt rows use column 1, but Schedule uses column 2
-      textColumn = sectionType === 'Schedule' ? 2 : 1;
-      placeholderText = SECTION_CONFIG[sectionType]?.prompt || '';
-    } else if (rowType === 'data') {
-      // Data rows have no placeholder - start empty
-      textColumn = 0;
-      placeholderText = '';
-    }
-
-    let capturedState = null;
-    const command = {
-      execute: () => {
-        setState((prev) => {
-          if (capturedState === null) {
-            capturedState = cloneStagingState(prev);
-          }
-          return {
-            ...prev,
-            shortlist: prev.shortlist.map((item) => {
-              if (item.id !== itemId) return item;
-              const entries = item.planTableEntries.map(cloneRowWithMetadata);
-
-              // Create new row - for data rows, all cells empty; otherwise put placeholder in textColumn
-              const newRow = Array.from({ length: PLAN_TABLE_COLS }, (_, i) => {
-                if (rowType !== 'data' && i === textColumn) return placeholderText;
-                return '';
-              });
-
-              // Set the row type as non-enumerable property
-              Object.defineProperty(newRow, '__rowType', {
-                value: rowType,
-                writable: true,
-                configurable: true,
-                enumerable: false,
-              });
-
-              entries.splice(rowIdx + 1, 0, newRow);
-              return { ...item, planTableEntries: entries };
-            }),
-          };
-        });
-      },
-      undo: () => {
-        if (capturedState) setState(capturedState);
-      },
-    };
-    executeCommand(command);
-
-    // Set focus to the new row
-    pendingFocusRequestRef.current = {
-      itemId,
-      row: rowIdx + 1,
-      col: textColumn,
-    };
-  }, [contextMenu.itemId, contextMenu.rowIdx, contextMenu.sectionType, setState, executeCommand, pendingFocusRequestRef]);
-
-  // Handle Enter key to add a new row of the same type below
-  const handleEnterKeyAddRow = useCallback((e, itemId, rowIdx, rowType) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-
-    // Default text mappings based on section type (using __sectionType metadata)
-    const responseDefaultsBySection = {
-      Reasons: SECTION_CONFIG.Reasons.placeholder,
-      Outcomes: SECTION_CONFIG.Outcomes.placeholder,
-      Actions: SECTION_CONFIG.Actions.placeholder,
-      Schedule: SECTION_CONFIG.Schedule.placeholder,
-      Subprojects: SECTION_CONFIG.Subprojects.placeholder,
-    };
-
-    // Map section types to prompts (from centralized config)
-    const promptDefaultsBySection = {
-      Reasons: SECTION_CONFIG.Reasons.prompt,
-      Outcomes: SECTION_CONFIG.Outcomes.prompt,
-      Actions: SECTION_CONFIG.Actions.prompt,
-      Schedule: SECTION_CONFIG.Schedule.prompt,
-      Subprojects: SECTION_CONFIG.Subprojects.prompt,
-    };
-
-    let capturedState = null;
-    const command = {
-      execute: () => {
-        setState((prev) => {
-          if (capturedState === null) {
-            capturedState = cloneStagingState(prev);
-          }
-          return {
-            ...prev,
-            shortlist: prev.shortlist.map((item) => {
-              if (item.id !== itemId) return item;
-              const entries = item.planTableEntries.map(cloneRowWithMetadata);
-
-              // Find the nearest header row above to determine the section
-              let sectionType = '';
-              for (let i = rowIdx; i >= 0; i--) {
-                if (entries[i]?.__rowType === 'header') {
-                  sectionType = entries[i].__sectionType || '';
-                  break;
-                }
-              }
-
-              // Get default text based on row type and section
-              const getDefaultText = () => {
-                if (rowType === 'response') {
-                  return responseDefaultsBySection[sectionType] || '';
-                }
-                if (rowType === 'prompt') {
-                  return promptDefaultsBySection[sectionType] || '';
-                }
-                return '';
-              };
-
-              // Create new row with same type and appropriate default text
-              const defaultText = getDefaultText();
-              const newRow = Array.from({ length: PLAN_TABLE_COLS }, (_, i) => {
-                if (rowType === 'response' && i === 2) return defaultText;
-                if (rowType === 'prompt' && i === 1) return defaultText;
-                return '';
-              });
-
-              // Set the row type as non-enumerable property
-              if (rowType) {
-                Object.defineProperty(newRow, '__rowType', {
-                  value: rowType,
-                  writable: true,
-                  configurable: true,
-                  enumerable: false,
-                });
-              }
-
-              entries.splice(rowIdx + 1, 0, newRow);
-              return { ...item, planTableEntries: entries };
-            }),
-          };
-        });
-      },
-      undo: () => {
-        if (capturedState) setState(capturedState);
-      },
-    };
-    executeCommand(command);
-
-    // Set focus to the new row after it's created
-    // Column 1 for prompt rows, column 2 for response rows
-    const focusCol = rowType === 'prompt' ? 1 : 2;
-    pendingFocusRequestRef.current = {
-      itemId,
-      row: rowIdx + 1,
-      col: focusCol,
-    };
-  }, [setState, executeCommand, pendingFocusRequestRef]);
+  const handleInsertRowType = useCallback(
+    (rowType) => {
+      if (contextMenu.itemId != null && contextMenu.rowIdx != null) {
+        insertRowType(contextMenu.itemId, contextMenu.rowIdx, contextMenu.sectionType, rowType);
+      }
+    },
+    [contextMenu.itemId, contextMenu.rowIdx, contextMenu.sectionType, insertRowType]
+  );
 
   // Add to Plan handler
-  const handleTogglePlanStatus = useCallback((itemId, addToPlan) => {
-    let capturedState = null;
-
-    const command = {
-      execute: () => {
-        setState((prev) => {
-          if (capturedState === null) {
-            capturedState = cloneStagingState(prev);
-          }
-          return {
-            ...prev,
-            shortlist: prev.shortlist.map((item) =>
-              item.id === itemId ? { ...item, addedToPlan: addToPlan } : item
-            ),
-          };
-        });
-      },
-      undo: () => {
-        if (capturedState) setState(capturedState);
-      },
-    };
-
-    executeCommand(command);
-    closePlanModal();
-  }, [setState, closePlanModal, executeCommand]);
+  const handleTogglePlanStatus = useCallback(
+    (itemId, addToPlan) => {
+      let capturedState = null;
+      const command = {
+        execute: () => {
+          setState((prev) => {
+            if (capturedState === null) {
+              capturedState = cloneStagingState(prev);
+            }
+            return {
+              ...prev,
+              shortlist: prev.shortlist.map((item) =>
+                item.id === itemId ? { ...item, addedToPlan: addToPlan } : item
+              ),
+            };
+          });
+        },
+        undo: () => {
+          if (capturedState) setState(capturedState);
+        },
+      };
+      executeCommand(command);
+      closePlanModal();
+    },
+    [setState, closePlanModal, executeCommand]
+  );
 
   // Handle click on drag handle to select row
   const handleHandleClick = useCallback(
@@ -625,1393 +312,54 @@ export default function StagingPageV2() {
     }
   }, [selectedRows, clearSelection]);
 
-  // Helper to get section type for any row by finding the nearest header above
-  const getSectionTypeForRow = useCallback((item, rowIdx) => {
+  // Render the simple table (unified row rendering)
+  const renderTable = (item) => {
     const entries = item.planTableEntries || [];
-    // If this is a header row, return its section type directly
-    if (entries[rowIdx]?.__rowType === 'header') {
-      return entries[rowIdx].__sectionType || '';
-    }
-    // Otherwise, find the nearest header above
-    for (let i = rowIdx; i >= 0; i--) {
-      if (entries[i]?.__rowType === 'header') {
-        return entries[i].__sectionType || '';
-      }
-    }
-    return '';
-  }, []);
 
-  // Render a simple table row with drag and drop support
-  const renderSimpleTableRow = (item, rowValues, rowIdx) => {
-    const isDragged = isRowDragged(item.id, rowIdx);
-    const isTarget = isDropTarget(item.id, rowIdx);
-    const isSelected = isRowSelected(item.id, rowIdx);
-    const isHeaderRow = rowValues.__rowType === 'header';
-    const isPromptRow = rowValues.__rowType === 'prompt';
-    const isResponseRow = rowValues.__rowType === 'response';
-
-    // For header rows, render a single spanning cell with grey background
-    if (isHeaderRow) {
-      return (
-        <tr
-          key={`${item.id}-simple-row-${rowIdx}`}
-          draggable
-          onDragStart={(e) => handleDragStart(e, item.id, rowIdx)}
-          onDragOver={(e) => handleDragOver(e, item.id, rowIdx)}
-          onDrop={(e) => handleDrop(e, item.id, rowIdx)}
-          onDragEnd={handleDragEnd}
-          onContextMenu={(e) =>
-            handleContextMenu(e, {
-              itemId: item.id,
-              rowIdx,
-              sectionType: getSectionTypeForRow(item, rowIdx),
-              selectedCells,
-              selectedRows,
-            })
-          }
-          style={{
-            opacity: isDragged ? 0.5 : 1,
-            cursor: 'grab',
-          }}
-        >
-          {/* Drag handle cell */}
-          <td
-            className="border border-[#e5e7eb] px-1 py-0.5 text-center"
-            style={{
-              width: '24px',
-              minWidth: '24px',
-              backgroundColor: isSelected ? '#3b82f6' : '#b7b7b7',
-              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-              cursor: 'grab',
-            }}
-            onClick={(e) => handleHandleClick(e, item.id, rowIdx)}
-          >
-            <span style={{ fontSize: '10px', color: isSelected ? '#ffffff' : '#6b7280' }}>⋮⋮</span>
-          </td>
-          {/* Header cell - spans all columns */}
-          <td
-            colSpan={PLAN_TABLE_COLS}
-            className="border border-[#e5e7eb] py-0.5"
-            style={{
-              backgroundColor: isCellSelected(item.id, rowIdx, 0) ? '#dbeafe' : '#b7b7b7',
-              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-              paddingLeft: '12px',
-            }}
-            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-            onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-          >
-            <input
-              type="text"
-              value={rowValues[0] || ''}
-              onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-              onFocus={handleInputFocus}
-              className="w-full bg-transparent focus:outline-none border-none font-semibold text-gray-800"
-              style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-              data-plan-item={item.id}
-              data-plan-row={rowIdx}
-              data-plan-col={0}
-            />
-          </td>
-        </tr>
-      );
-    }
-
-    // For prompt rows, render with lighter grey background and text in second cell
-    if (isPromptRow) {
-      // Find the nearest header row above to determine the section
-      const entries = item.planTableEntries || [];
-      let sectionType = '';
-      for (let i = rowIdx; i >= 0; i--) {
-        if (entries[i]?.__rowType === 'header') {
-          sectionType = entries[i].__sectionType || '';
-          break;
-        }
-      }
-
-      // Check if this is a Schedule prompt row (needs time elements)
-      const isSchedulePrompt = sectionType === 'Schedule';
-
-      if (isSchedulePrompt) {
-        const estimateValue = rowValues[4] || '-';
-        const isCustomEstimate = estimateValue === 'Custom';
-        const displayedTimeValue = rowValues[5] || '0.00';
-
-        return (
-          <tr
-            key={`${item.id}-simple-row-${rowIdx}`}
-            draggable
-            onDragStart={(e) => handleDragStart(e, item.id, rowIdx)}
-            onDragOver={(e) => handleDragOver(e, item.id, rowIdx)}
-            onDrop={(e) => handleDrop(e, item.id, rowIdx)}
-            onDragEnd={handleDragEnd}
-            onContextMenu={(e) =>
-              handleContextMenu(e, {
-                itemId: item.id,
-                rowIdx,
-                sectionType,
-                selectedCells,
-                selectedRows,
-              })
-            }
-            style={{
-              opacity: isDragged ? 0.5 : 1,
-              cursor: 'grab',
-            }}
-          >
-            {/* Drag handle cell */}
-            <td
-              className="border border-[#e5e7eb] px-1 py-0.5 text-center"
-              style={{
-                width: '24px',
-                minWidth: '24px',
-                backgroundColor: isSelected ? '#3b82f6' : '#d9d9d9',
-                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-                cursor: 'grab',
-              }}
-              onClick={(e) => handleHandleClick(e, item.id, rowIdx)}
-            >
-              <span style={{ fontSize: '10px', color: isSelected ? '#ffffff' : '#9ca3af' }}>⋮⋮</span>
-            </td>
-            {/* First cell */}
-            <td
-              className="border border-[#e5e7eb] px-3 py-0.5"
-              style={{
-                width: '120px',
-                minWidth: '120px',
-                backgroundColor: isCellSelected(item.id, rowIdx, 0) ? '#dbeafe' : '#d9d9d9',
-                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-              }}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-            >
-              <input
-                type="text"
-                value={rowValues[0] || ''}
-                onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
-                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-                onFocus={handleInputFocus}
-                className="w-full bg-transparent focus:outline-none border-none"
-                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                data-plan-item={item.id}
-                data-plan-row={rowIdx}
-                data-plan-col={0}
-              />
-            </td>
-            {/* Prompt cell - spans 3 columns */}
-            <td
-              colSpan={3}
-              className="border border-[#e5e7eb] px-3 py-0.5"
-              style={{
-                backgroundColor: isCellSelected(item.id, rowIdx, 2) ? '#dbeafe' : '#d9d9d9',
-                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-              }}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 2, PLAN_TABLE_COLS)}
-              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 2, PLAN_TABLE_COLS)}
-            >
-              <input
-                type="text"
-                value={rowValues[2] || ''}
-                onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)}
-                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 2, PLAN_TABLE_COLS)}
-                onKeyDown={(e) => handleEnterKeyAddRow(e, item.id, rowIdx, 'prompt')}
-                onFocus={handleInputFocus}
-                className="w-full bg-transparent focus:outline-none border-none text-slate-800"
-                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                data-plan-item={item.id}
-                data-plan-row={rowIdx}
-                data-plan-col={2}
-              />
-            </td>
-            {/* Estimate dropdown */}
-            <td
-              className="border border-[#e5e7eb] px-3 py-0.5"
-              style={{
-                width: '140px',
-                minWidth: '140px',
-                backgroundColor: isCellSelected(item.id, rowIdx, 4) ? '#dbeafe' : '#d9d9d9',
-                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-              }}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 4, PLAN_TABLE_COLS)}
-              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 4, PLAN_TABLE_COLS)}
-            >
-              <select
-                className="w-full bg-transparent focus:outline-none border-none"
-                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                value={estimateValue}
-                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 4, PLAN_TABLE_COLS)}
-                onChange={(e) => handlePlanEstimateChange(item.id, rowIdx, e.target.value)}
-                data-plan-item={item.id}
-                data-plan-row={rowIdx}
-                data-plan-col={4}
-              >
-                {PLAN_ESTIMATE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </td>
-            {/* Time value */}
-            <td
-              className="border border-[#e5e7eb] px-3 py-0.5"
-              style={{
-                width: '120px',
-                minWidth: '120px',
-                backgroundColor: isCellSelected(item.id, rowIdx, 5) ? '#dbeafe' : '#d9d9d9',
-                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-                textAlign: 'right',
-                paddingRight: '10px',
-              }}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 5, PLAN_TABLE_COLS)}
-              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 5, PLAN_TABLE_COLS)}
-            >
-              <input
-                type="text"
-                value={displayedTimeValue}
-                onChange={(e) => {
-                  if (!isCustomEstimate) return;
-                  handlePlanTableCellChange(item.id, rowIdx, 5, e.target.value);
-                }}
-                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 5, PLAN_TABLE_COLS)}
-                readOnly={!isCustomEstimate}
-                onFocus={handleInputFocus}
-                className="w-full bg-transparent text-right focus:outline-none border-none"
-                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                placeholder="0.00"
-                data-plan-item={item.id}
-                data-plan-row={rowIdx}
-                data-plan-col={5}
-              />
-            </td>
-          </tr>
-        );
-      }
-
-      // Regular prompt row (not Schedule)
-      return (
-        <tr
-          key={`${item.id}-simple-row-${rowIdx}`}
-          draggable
-          onDragStart={(e) => handleDragStart(e, item.id, rowIdx)}
-          onDragOver={(e) => handleDragOver(e, item.id, rowIdx)}
-          onDrop={(e) => handleDrop(e, item.id, rowIdx)}
-          onDragEnd={handleDragEnd}
-          onContextMenu={(e) =>
-            handleContextMenu(e, {
-              itemId: item.id,
-              rowIdx,
-              sectionType,
-              selectedCells,
-              selectedRows,
-            })
-          }
-          style={{
-            opacity: isDragged ? 0.5 : 1,
-            cursor: 'grab',
-          }}
-        >
-          {/* Drag handle cell */}
-          <td
-            className="border border-[#e5e7eb] px-1 py-0.5 text-center"
-            style={{
-              width: '24px',
-              minWidth: '24px',
-              backgroundColor: isSelected ? '#3b82f6' : '#d9d9d9',
-              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-              cursor: 'grab',
-            }}
-            onClick={(e) => handleHandleClick(e, item.id, rowIdx)}
-          >
-            <span style={{ fontSize: '10px', color: isSelected ? '#ffffff' : '#9ca3af' }}>⋮⋮</span>
-          </td>
-          {/* First cell - empty */}
-          <td
-            className="border border-[#e5e7eb] px-3 py-0.5"
-            style={{
-              width: '120px',
-              minWidth: '120px',
-              backgroundColor: isCellSelected(item.id, rowIdx, 0) ? '#dbeafe' : '#d9d9d9',
-              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-            }}
-            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-            onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-          >
-            <input
-              type="text"
-              value={rowValues[0] || ''}
-              onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-              onFocus={handleInputFocus}
-              className="w-full bg-transparent focus:outline-none border-none"
-              style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-              data-plan-item={item.id}
-              data-plan-row={rowIdx}
-              data-plan-col={0}
-            />
-          </td>
-          {/* Prompt cell - spans remaining columns */}
-          <td
-            colSpan={PLAN_TABLE_COLS - 1}
-            className="border border-[#e5e7eb] px-3 py-0.5"
-            style={{
-              backgroundColor: isCellSelected(item.id, rowIdx, 1) ? '#dbeafe' : '#d9d9d9',
-              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-            }}
-            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
-            onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 1, PLAN_TABLE_COLS)}
-          >
-            <input
-              type="text"
-              value={rowValues[1] || ''}
-              onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
-              onKeyDown={(e) => handleEnterKeyAddRow(e, item.id, rowIdx, 'prompt')}
-              onFocus={handleInputFocus}
-              className="w-full bg-transparent focus:outline-none border-none text-slate-800"
-              style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-              data-plan-item={item.id}
-              data-plan-row={rowIdx}
-              data-plan-col={1}
-            />
-          </td>
-        </tr>
-      );
-    }
-
-    // For response rows, render with lighter grey background and editable cell starting in third column
-    if (isResponseRow) {
-      // Find the nearest header row above to determine the section
-      const entries = item.planTableEntries || [];
-      let sectionType = '';
-      for (let i = rowIdx; i >= 0; i--) {
-        if (entries[i]?.__rowType === 'header') {
-          sectionType = entries[i].__sectionType || '';
-          break;
-        }
-      }
-
-      // Check if this section should have time elements (Actions or Schedule only, not Subprojects)
-      const hasTimeElements = sectionType === 'Actions' || sectionType === 'Schedule';
-
-      if (hasTimeElements) {
-        const estimateValue = rowValues[4] || '-';
-        const displayedTimeValue = rowValues[5] || '0.00';
-
-        return (
-          <tr
-            key={`${item.id}-simple-row-${rowIdx}`}
-            draggable
-            onDragStart={(e) => handleDragStart(e, item.id, rowIdx)}
-            onDragOver={(e) => handleDragOver(e, item.id, rowIdx)}
-            onDrop={(e) => handleDrop(e, item.id, rowIdx)}
-            onDragEnd={handleDragEnd}
-            onContextMenu={(e) =>
-              handleContextMenu(e, {
-                itemId: item.id,
-                rowIdx,
-                sectionType,
-                selectedCells,
-                selectedRows,
-              })
-            }
-            style={{
-              opacity: isDragged ? 0.5 : 1,
-              cursor: 'grab',
-            }}
-          >
-            {/* Drag handle cell */}
-            <td
-              className="border border-[#e5e7eb] px-1 py-0.5 text-center"
-              style={{
-                width: '24px',
-                minWidth: '24px',
-                backgroundColor: isSelected ? '#3b82f6' : '#f3f3f3',
-                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-                cursor: 'grab',
-              }}
-              onClick={(e) => handleHandleClick(e, item.id, rowIdx)}
-            >
-              <span style={{ fontSize: '10px', color: isSelected ? '#ffffff' : '#9ca3af' }}>⋮⋮</span>
-            </td>
-            {/* First cell - empty */}
-            <td
-              className="border border-[#e5e7eb] px-3 py-0.5"
-              style={{
-                width: '120px',
-                minWidth: '120px',
-                backgroundColor: isCellSelected(item.id, rowIdx, 0) ? '#dbeafe' : '#f3f3f3',
-                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-              }}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-            >
-              <input
-                type="text"
-                value={rowValues[0] || ''}
-                onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
-                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-                onFocus={handleInputFocus}
-                className="w-full bg-transparent focus:outline-none border-none"
-                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                data-plan-item={item.id}
-                data-plan-row={rowIdx}
-                data-plan-col={0}
-              />
-            </td>
-            {/* Second cell - empty */}
-            <td
-              className="border border-[#e5e7eb] px-3 py-0.5"
-              style={{
-                width: '120px',
-                minWidth: '120px',
-                backgroundColor: isCellSelected(item.id, rowIdx, 1) ? '#dbeafe' : '#f3f3f3',
-                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-              }}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
-              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 1, PLAN_TABLE_COLS)}
-            >
-              <input
-                type="text"
-                value={rowValues[1] || ''}
-                onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
-                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
-                onFocus={handleInputFocus}
-                className="w-full bg-transparent focus:outline-none border-none"
-                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                data-plan-item={item.id}
-                data-plan-row={rowIdx}
-                data-plan-col={1}
-              />
-            </td>
-            {/* Response cell - third column, spans 2 columns */}
-            <td
-              colSpan={2}
-              className="border border-[#e5e7eb] px-3 py-0.5"
-              style={{
-                backgroundColor: isCellSelected(item.id, rowIdx, 2) ? '#dbeafe' : '#f3f3f3',
-                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-              }}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 2, PLAN_TABLE_COLS)}
-              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 2, PLAN_TABLE_COLS)}
-            >
-              <input
-                type="text"
-                value={rowValues[2] || ''}
-                onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)}
-                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 2, PLAN_TABLE_COLS)}
-                onKeyDown={(e) => handleEnterKeyAddRow(e, item.id, rowIdx, 'response')}
-                onFocus={handleInputFocus}
-                className="w-full bg-transparent focus:outline-none border-none"
-                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                data-plan-item={item.id}
-                data-plan-row={rowIdx}
-                data-plan-col={2}
-              />
-            </td>
-            {/* Estimate dropdown cell - column 5 */}
-            <td
-              className="border border-[#e5e7eb] px-3 py-0.5"
-              style={{
-                width: '140px',
-                minWidth: '140px',
-                backgroundColor: isCellSelected(item.id, rowIdx, 4) ? '#dbeafe' : '#f3f3f3',
-                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-              }}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 4, PLAN_TABLE_COLS)}
-              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 4, PLAN_TABLE_COLS)}
-            >
-              <select
-                className="w-full bg-transparent focus:outline-none border-none"
-                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                value={estimateValue}
-                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 4, PLAN_TABLE_COLS)}
-                onChange={(e) => handlePlanEstimateChange(item.id, rowIdx, e.target.value)}
-                data-plan-item={item.id}
-                data-plan-row={rowIdx}
-                data-plan-col={4}
-              >
-                {PLAN_ESTIMATE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </td>
-            {/* Time value cell - column 6 */}
-            <td
-              className="border border-[#e5e7eb] px-3 py-0.5"
-              style={{
-                width: '120px',
-                minWidth: '120px',
-                textAlign: 'right',
-                paddingRight: '10px',
-                backgroundColor: isCellSelected(item.id, rowIdx, 5) ? '#dbeafe' : '#f3f3f3',
-                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-              }}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 5, PLAN_TABLE_COLS)}
-              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 5, PLAN_TABLE_COLS)}
-            >
-              <input
-                type="text"
-                value={displayedTimeValue}
-                onChange={(e) => {
-                  const newTimeValue = e.target.value;
-                  // Update time value
-                  handlePlanTableCellChange(item.id, rowIdx, 5, newTimeValue);
-                  // Convert to minutes and find matching estimate label
-                  const minutes = parseTimeValueToMinutes(newTimeValue);
-                  const newEstimate = minutesToEstimateLabel(minutes);
-                  // Update estimate dropdown
-                  handlePlanTableCellChange(item.id, rowIdx, 4, newEstimate);
-                }}
-                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 5, PLAN_TABLE_COLS)}
-                onFocus={handleInputFocus}
-                className="w-full bg-transparent text-right focus:outline-none border-none"
-                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                placeholder="0.00"
-                data-plan-item={item.id}
-                data-plan-row={rowIdx}
-                data-plan-col={5}
-              />
-            </td>
-          </tr>
-        );
-      }
-
-      // Default response row without time elements
-      return (
-        <tr
-          key={`${item.id}-simple-row-${rowIdx}`}
-          draggable
-          onDragStart={(e) => handleDragStart(e, item.id, rowIdx)}
-          onDragOver={(e) => handleDragOver(e, item.id, rowIdx)}
-          onDrop={(e) => handleDrop(e, item.id, rowIdx)}
-          onDragEnd={handleDragEnd}
-          onContextMenu={(e) =>
-            handleContextMenu(e, {
-              itemId: item.id,
-              rowIdx,
-              sectionType,
-              selectedCells,
-              selectedRows,
-            })
-          }
-          style={{
-            opacity: isDragged ? 0.5 : 1,
-            cursor: 'grab',
-          }}
-        >
-          {/* Drag handle cell */}
-          <td
-            className="border border-[#e5e7eb] px-1 py-0.5 text-center"
-            style={{
-              width: '24px',
-              minWidth: '24px',
-              backgroundColor: isSelected ? '#3b82f6' : '#f3f3f3',
-              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-              cursor: 'grab',
-            }}
-            onClick={(e) => handleHandleClick(e, item.id, rowIdx)}
-          >
-            <span style={{ fontSize: '10px', color: isSelected ? '#ffffff' : '#9ca3af' }}>⋮⋮</span>
-          </td>
-          {/* First cell - empty */}
-          <td
-            className="border border-[#e5e7eb] px-3 py-0.5"
-            style={{
-              width: '120px',
-              minWidth: '120px',
-              backgroundColor: isCellSelected(item.id, rowIdx, 0) ? '#dbeafe' : '#f3f3f3',
-              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-            }}
-            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-            onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-          >
-            <input
-              type="text"
-              value={rowValues[0] || ''}
-              onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-              onFocus={handleInputFocus}
-              className="w-full bg-transparent focus:outline-none border-none"
-              style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-              data-plan-item={item.id}
-              data-plan-row={rowIdx}
-              data-plan-col={0}
-            />
-          </td>
-          {/* Second cell - empty */}
-          <td
-            className="border border-[#e5e7eb] px-3 py-0.5"
-            style={{
-              width: '120px',
-              minWidth: '120px',
-              backgroundColor: isCellSelected(item.id, rowIdx, 1) ? '#dbeafe' : '#f3f3f3',
-              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-            }}
-            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
-            onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 1, PLAN_TABLE_COLS)}
-          >
-            <input
-              type="text"
-              value={rowValues[1] || ''}
-              onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
-              onFocus={handleInputFocus}
-              className="w-full bg-transparent focus:outline-none border-none"
-              style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-              data-plan-item={item.id}
-              data-plan-row={rowIdx}
-              data-plan-col={1}
-            />
-          </td>
-          {/* Response cell - spans remaining columns */}
-          <td
-            colSpan={PLAN_TABLE_COLS - 2}
-            className="border border-[#e5e7eb] px-3 py-0.5"
-            style={{
-              backgroundColor: isCellSelected(item.id, rowIdx, 2) ? '#dbeafe' : '#f3f3f3',
-              borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-            }}
-            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 2, PLAN_TABLE_COLS)}
-            onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 2, PLAN_TABLE_COLS)}
-          >
-            <input
-              type="text"
-              value={rowValues[2] || ''}
-              onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 2, PLAN_TABLE_COLS)}
-              onKeyDown={(e) => handleEnterKeyAddRow(e, item.id, rowIdx, 'response')}
-              onFocus={handleInputFocus}
-              className="w-full bg-transparent focus:outline-none border-none"
-              style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-              data-plan-item={item.id}
-              data-plan-row={rowIdx}
-              data-plan-col={2}
-            />
-          </td>
-        </tr>
-      );
-    }
-
-    return (
-      <tr
-        key={`${item.id}-simple-row-${rowIdx}`}
-        draggable
-        onDragStart={(e) => handleDragStart(e, item.id, rowIdx)}
-        onDragOver={(e) => handleDragOver(e, item.id, rowIdx)}
-        onDrop={(e) => handleDrop(e, item.id, rowIdx)}
-        onDragEnd={handleDragEnd}
-        onContextMenu={(e) =>
-          handleContextMenu(e, {
-            itemId: item.id,
-            rowIdx,
-            sectionType: getSectionTypeForRow(item, rowIdx),
-            selectedCells,
-            selectedRows,
-          })
-        }
-        style={{
-          opacity: isDragged ? 0.5 : 1,
-          cursor: 'grab',
-        }}
-      >
-        {/* Drag handle cell */}
-        <td
-          className="border border-[#e5e7eb] px-1 py-0.5 text-center"
-          style={{
-            width: '24px',
-            minWidth: '24px',
-            backgroundColor: isSelected ? '#3b82f6' : isTarget ? '#dbeafe' : '#f9fafb',
-            borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-            cursor: 'grab',
-          }}
-          onClick={(e) => handleHandleClick(e, item.id, rowIdx)}
-        >
-          <span style={{ fontSize: '10px', color: isSelected ? '#ffffff' : '#9ca3af' }}>⋮⋮</span>
-        </td>
-        {/* Data cells */}
-        {rowValues.map((cellValue, cellIdx) => {
-          const isSelected = isCellSelected(item.id, rowIdx, cellIdx);
-          return (
-            <td
-              key={`${item.id}-simple-row-${rowIdx}-cell-${cellIdx}`}
-              className="border border-[#e5e7eb] px-3 py-0.5"
-              style={{
-                backgroundColor: isSelected ? '#dbeafe' : '#ffffff',
-                borderTop: isTarget ? '2px solid #3b82f6' : undefined,
-              }}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-            >
-              <input
-                type="text"
-                value={cellValue}
-                onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)}
-                onKeyDown={(e) => handleEnterKeyAddRow(e, item.id, rowIdx, rowValues.__rowType || 'data')}
-                onFocus={handleInputFocus}
-                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-                className="w-full bg-transparent focus:outline-none border-none"
-                style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                data-plan-item={item.id}
-                data-plan-row={rowIdx}
-                data-plan-col={cellIdx}
-              />
-            </td>
-          );
-        })}
-      </tr>
-    );
-  };
-
-  // Render simple table for items with isSimpleTable flag
-  const renderSimpleTable = (item) => {
-    const entries = item.planTableEntries || [];
     return (
       <div className="rounded border border-dashed border-[#ced3d0] bg-white p-3">
-        <table className="w-full border-collapse text-left" style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
+        <table
+          className="w-full border-collapse text-left"
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+        >
           <tbody>
-            {entries.map((rowValues, rowIdx) =>
-              renderSimpleTableRow(item, rowValues, rowIdx)
-            )}
+            {entries.map((rowValues, rowIdx) => {
+              const rowType = rowValues.__rowType || 'data';
+              const sectionType = getSectionTypeForRow(entries, rowIdx);
+
+              return (
+                <TableRow
+                  key={`${item.id}-row-${rowIdx}`}
+                  item={item}
+                  rowValues={rowValues}
+                  rowIdx={rowIdx}
+                  rowType={rowType}
+                  sectionType={sectionType}
+                  isCellSelected={isCellSelected}
+                  isRowSelected={isRowSelected(item.id, rowIdx)}
+                  isDropTarget={isDropTarget(item.id, rowIdx)}
+                  isDragged={isRowDragged(item.id, rowIdx)}
+                  onCellChange={handlePlanTableCellChange}
+                  onEstimateChange={handlePlanEstimateChange}
+                  onCellMouseDown={handleCellMouseDown}
+                  onCellMouseEnter={handleCellMouseEnter}
+                  onHandleClick={handleHandleClick}
+                  onInputFocus={handleInputFocus}
+                  onEnterKeyAddRow={addRowOnEnter}
+                  onContextMenu={handleContextMenu}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  textSizeScale={textSizeScale}
+                  selectedCells={selectedCells}
+                  selectedRows={selectedRows}
+                />
+              );
+            })}
           </tbody>
         </table>
       </div>
-    );
-  };
-
-  // Render helper functions (kept inline as they're component-specific)
-  const renderQuestionPromptRow = (item, rowValues, rowIdx) => {
-    const isCell0Selected = isCellSelected(item.id, rowIdx, 0);
-    const isCell1Selected = isCellSelected(item.id, rowIdx, 1);
-    return (
-      <tr key={`${item.id}-plan-question-row-${rowIdx}`}>
-        <td
-          className="border border-[#e5e7eb] px-3 py-0.5"
-          style={{ width: '120px', minWidth: '120px', backgroundColor: isCell0Selected ? '#dbeafe' : '#d9d9d9' }}
-          onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-          onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-        >
-          <input
-            type="text"
-            value={rowValues[0] ?? ''}
-            onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
-            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-            className="w-full bg-transparent focus:outline-none border-none"
-            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-            data-plan-item={item.id}
-            data-plan-row={rowIdx}
-            data-plan-col={0}
-          />
-        </td>
-        <td
-          className="border border-[#e5e7eb] px-3 py-0.5"
-          colSpan={PLAN_TABLE_COLS - 2}
-          style={{ backgroundColor: isCell1Selected ? '#dbeafe' : '#d9d9d9' }}
-          onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
-          onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 1, PLAN_TABLE_COLS)}
-        >
-          <input
-            type="text"
-            value={rowValues[1] ?? ''}
-            onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
-            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
-            placeholder={SECTION_CONFIG.Outcomes.prompt}
-            className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
-            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-            data-plan-item={item.id}
-            data-plan-row={rowIdx}
-            data-plan-col={1}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                addQuestionPromptWithOutcomeRow(item.id);
-              }
-            }}
-          />
-        </td>
-        <td
-          className="border border-[#e5e7eb] px-3 py-0.5"
-          style={{
-            width: '32px',
-            minWidth: '32px',
-            textAlign: 'center',
-            backgroundColor: '#d9d9d9',
-          }}
-        >
-          <button
-            type="button"
-            aria-label="Delete question row"
-            className="font-semibold text-slate-800"
-            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-            onClick={() => removePlanPromptRow(item.id, rowIdx, 'question')}
-          >
-            X
-          </button>
-        </td>
-      </tr>
-    );
-  };
-
-  const renderOutcomePromptRow = (item, rowValues, rowIdx) => (
-    <tr key={`${item.id}-plan-row-${rowIdx}`}>
-      {rowValues.map((cellValue, cellIdx) => {
-        const isSelected = isCellSelected(item.id, rowIdx, cellIdx);
-        const style = { backgroundColor: isSelected ? '#dbeafe' : '#f3f3f3' };
-        if (cellIdx === 0 || cellIdx === 1) {
-          style.width = '120px';
-          style.minWidth = '120px';
-        }
-        if (cellIdx === PLAN_TABLE_COLS - 1) {
-          style.width = '32px';
-          style.minWidth = '32px';
-          style.textAlign = 'center';
-        }
-        const isPromptCell = cellIdx === 2;
-        const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
-        return (
-          <td
-            key={`${item.id}-outcome-row-${rowIdx}-${cellIdx}`}
-            className="border border-[#e5e7eb] px-3 py-0.5"
-            style={style}
-            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-            onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-          >
-            {isPromptCell ? (
-              <input
-                type="text"
-                value={cellValue}
-                onChange={(e) =>
-                  handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
-                }
-                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-                placeholder={SECTION_CONFIG.Outcomes.placeholder}
-                className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                data-plan-item={item.id}
-                data-plan-row={rowIdx}
-                data-plan-col={2}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    addPlanPromptRow(item.id, rowIdx, 'outcome');
-                  }
-                }}
-              />
-            ) : isDeleteCell ? (
-              <button
-                type="button"
-                aria-label="Delete outcome row"
-                className="font-semibold text-slate-800"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                onClick={() => removePlanPromptRow(item.id, rowIdx, 'outcome')}
-              >
-                X
-              </button>
-            ) : (
-              <input
-                type="text"
-                value={cellValue}
-                onChange={(e) =>
-                  handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
-                }
-                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-                className="w-full bg-transparent focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                data-plan-item={item.id}
-                data-plan-row={rowIdx}
-                data-plan-col={cellIdx}
-              />
-            )}
-          </td>
-        );
-      })}
-    </tr>
-  );
-
-  const renderReasonPromptRow = (item, rowValues, rowIdx) => (
-    <tr key={`${item.id}-plan-row-${rowIdx}`}>
-      {rowValues.map((cellValue, cellIdx) => {
-        const isSelected = isCellSelected(item.id, rowIdx, cellIdx);
-        const baseStyle =
-          cellIdx === 0 || cellIdx === 1
-            ? { width: '120px', minWidth: '120px', backgroundColor: isSelected ? '#dbeafe' : '#f3f3f3' }
-            : { backgroundColor: isSelected ? '#dbeafe' : '#f3f3f3' };
-        const isPromptCell = cellIdx === 2;
-        const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
-        if (isDeleteCell) {
-          baseStyle.width = '32px';
-          baseStyle.minWidth = '32px';
-          baseStyle.textAlign = 'center';
-        }
-        return (
-          <td
-            key={`${item.id}-plan-row-${rowIdx}-cell-${cellIdx}`}
-            className="border border-[#e5e7eb] px-3 py-0.5"
-            style={baseStyle}
-            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-            onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-          >
-            {isDeleteCell ? (
-              <button
-                type="button"
-                aria-label="Delete prompt row"
-                className="font-semibold text-slate-800"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                onClick={() => removePlanPromptRow(item.id, rowIdx)}
-              >
-                X
-              </button>
-            ) : (
-              <input
-                type="text"
-                value={cellValue}
-                onChange={(e) =>
-                  handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
-                }
-                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-                onKeyDown={
-                  isPromptCell
-                    ? (event) => {
-                        if (event.key === 'Enter' && !event.shiftKey) {
-                          event.preventDefault();
-                          addPlanPromptRow(item.id, rowIdx);
-                        }
-                      }
-                    : undefined
-                }
-                placeholder={isPromptCell ? SECTION_CONFIG.Reasons.placeholder : undefined}
-                className="w-full bg-transparent focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                data-plan-item={item.id}
-                data-plan-row={rowIdx}
-                data-plan-col={cellIdx}
-              />
-            )}
-          </td>
-        );
-      })}
-    </tr>
-  );
-
-  const renderNeedsQuestionRow = (item, rowValues, rowIdx) => {
-    const isCell0Selected = isCellSelected(item.id, rowIdx, 0);
-    const isCell1Selected = isCellSelected(item.id, rowIdx, 1);
-    return (
-      <tr key={`${item.id}-needs-question-row-${rowIdx}`}>
-        <td
-          className="border border-[#e5e7eb] px-3 py-0.5"
-          style={{ width: '120px', minWidth: '120px', backgroundColor: isCell0Selected ? '#dbeafe' : '#d9d9d9' }}
-          onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-          onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-        >
-          <input
-            type="text"
-            value={rowValues[0] ?? ''}
-            onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
-            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
-            className="w-full bg-transparent focus:outline-none border-none"
-            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-            data-plan-item={item.id}
-            data-plan-row={rowIdx}
-            data-plan-col={0}
-          />
-        </td>
-        <td
-          className="border border-[#e5e7eb] px-3 py-0.5"
-          colSpan={PLAN_TABLE_COLS - 2}
-          style={{ backgroundColor: isCell1Selected ? '#dbeafe' : '#d9d9d9' }}
-          onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
-          onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 1, PLAN_TABLE_COLS)}
-        >
-          <input
-            type="text"
-            value={rowValues[1] ?? ''}
-            onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
-            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
-            placeholder={SECTION_CONFIG.Actions.prompt}
-            className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
-            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-            data-plan-item={item.id}
-            data-plan-row={rowIdx}
-            data-plan-col={1}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                addNeedsPromptWithPlanRow(item.id);
-              }
-            }}
-          />
-        </td>
-        <td
-          className="border border-[#e5e7eb] px-3 py-0.5"
-          style={{
-            width: '32px',
-            minWidth: '32px',
-            textAlign: 'center',
-            backgroundColor: '#d9d9d9',
-          }}
-        >
-          <button
-            type="button"
-            aria-label="Delete needs question row"
-            className="font-semibold text-slate-800"
-            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-            onClick={() => removePlanPromptRow(item.id, rowIdx, 'needsQuestion')}
-          >
-            X
-          </button>
-        </td>
-      </tr>
-    );
-  };
-
-  const renderNeedsPlanRow = (item, rowValues, rowIdx) => {
-    const estimateValue = rowValues[3] || '-';
-    const isCustomEstimate = estimateValue === 'Custom';
-    const displayedTimeValue = rowValues[4] || '0.00';
-    return (
-      <tr key={`${item.id}-needs-plan-row-${rowIdx}`}>
-        {rowValues.map((cellValue, cellIdx) => {
-          const isSelected = isCellSelected(item.id, rowIdx, cellIdx);
-          const isPromptCell = cellIdx === 2;
-          const isEstimateCell = cellIdx === 3;
-          const isTimeValueCell = cellIdx === 4;
-          const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
-          const style = { backgroundColor: isSelected ? '#dbeafe' : '#f3f3f3' };
-          if (cellIdx === 0 || cellIdx === 1) {
-            style.width = '120px';
-            style.minWidth = '120px';
-          }
-          if (isEstimateCell) {
-            style.width = '140px';
-            style.minWidth = '140px';
-          }
-          if (isTimeValueCell) {
-            style.width = '120px';
-            style.minWidth = '120px';
-            style.textAlign = 'right';
-            style.paddingRight = '10px';
-          }
-          if (isDeleteCell) {
-            style.width = '32px';
-            style.minWidth = '32px';
-            style.textAlign = 'center';
-          }
-          return (
-            <td
-              key={`${item.id}-needs-plan-row-${rowIdx}-${cellIdx}`}
-              className="border border-[#e5e7eb] px-3 py-0.5"
-              style={style}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-            >
-              {isPromptCell ? (
-                <input
-                  type="text"
-                  value={cellValue}
-                  onChange={(e) =>
-                    handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
-                  }
-                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-                  placeholder="Plan"
-                  className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                  data-plan-item={item.id}
-                  data-plan-row={rowIdx}
-                  data-plan-col={2}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault();
-                      addPlanPromptRow(item.id, rowIdx, 'needsPlan');
-                    }
-                  }}
-                />
-              ) : isDeleteCell ? (
-                <button
-                  type="button"
-                  aria-label="Delete plan row"
-                  className="font-semibold text-slate-800"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                  onClick={() => removePlanPromptRow(item.id, rowIdx, 'needsPlan')}
-                >
-                  X
-                </button>
-              ) : isEstimateCell ? (
-                <select
-                  className="w-full bg-transparent focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                  value={estimateValue}
-                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-                  onChange={(e) =>
-                    handlePlanEstimateChange(item.id, rowIdx, e.target.value)
-                  }
-                  data-plan-item={item.id}
-                  data-plan-row={rowIdx}
-                  data-plan-col={3}
-                >
-                  {PLAN_ESTIMATE_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              ) : isTimeValueCell ? (
-                <input
-                  type="text"
-                  value={displayedTimeValue}
-                  onChange={(e) => {
-                    if (!isCustomEstimate) return;
-                    handlePlanTableCellChange(item.id, rowIdx, 4, e.target.value);
-                  }}
-                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-                  readOnly={!isCustomEstimate}
-                  className="w-full bg-transparent text-right focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                  placeholder="0.00"
-                  data-plan-item={item.id}
-                  data-plan-row={rowIdx}
-                  data-plan-col={4}
-                />
-              ) : (
-                <input
-                  type="text"
-                  value={cellValue}
-                  onChange={(e) =>
-                    handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
-                  }
-                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-                  className="w-full bg-transparent focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                  data-plan-item={item.id}
-                  data-plan-row={rowIdx}
-                  data-plan-col={cellIdx}
-                />
-              )}
-            </td>
-          );
-        })}
-      </tr>
-    );
-  };
-
-  const renderScheduleRow = (item, rowValues, rowIdx) => {
-    const estimateValue = rowValues[3] || '-';
-    const isCustomEstimate = estimateValue === 'Custom';
-    const displayedTimeValue = rowValues[4] || '0.00';
-    return (
-      <tr key={`${item.id}-schedule-row-${rowIdx}`}>
-        {rowValues.map((cellValue, cellIdx) => {
-          const isSelected = isCellSelected(item.id, rowIdx, cellIdx);
-          const isPromptCell = cellIdx === 2;
-          const isEstimateCell = cellIdx === 3;
-          const isTimeValueCell = cellIdx === 4;
-          const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
-          const style = { backgroundColor: isSelected ? '#dbeafe' : '#f3f3f3' };
-          if (cellIdx === 0 || cellIdx === 1) {
-            style.width = '120px';
-            style.minWidth = '120px';
-          }
-          if (isEstimateCell) {
-            style.width = '140px';
-            style.minWidth = '140px';
-          }
-          if (isTimeValueCell) {
-            style.width = '120px';
-            style.minWidth = '120px';
-            style.textAlign = 'right';
-            style.paddingRight = '10px';
-          }
-          if (isDeleteCell) {
-            style.width = '32px';
-            style.minWidth = '32px';
-            style.textAlign = 'center';
-          }
-          return (
-            <td
-              key={`${item.id}-schedule-row-${rowIdx}-${cellIdx}`}
-              className="border border-[#e5e7eb] px-3 py-0.5"
-              style={style}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-            >
-              {isPromptCell ? (
-                <input
-                  type="text"
-                  value={cellValue}
-                  onChange={(e) =>
-                    handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
-                  }
-                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-                  placeholder={SECTION_CONFIG.Schedule.placeholder}
-                  className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                  data-plan-item={item.id}
-                  data-plan-row={rowIdx}
-                  data-plan-col={2}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault();
-                      addPlanPromptRow(item.id, rowIdx, 'subproject');
-                    }
-                  }}
-                />
-              ) : isDeleteCell ? (
-                <button
-                  type="button"
-                  aria-label="Delete schedule row"
-                  className="font-semibold text-slate-800"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                  onClick={() => removePlanPromptRow(item.id, rowIdx, 'subproject')}
-                >
-                  X
-                </button>
-              ) : isEstimateCell ? (
-                <select
-                  className="w-full bg-transparent focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                  value={estimateValue}
-                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-                  onChange={(e) =>
-                    handlePlanEstimateChange(item.id, rowIdx, e.target.value)
-                  }
-                  data-plan-item={item.id}
-                  data-plan-row={rowIdx}
-                  data-plan-col={3}
-                >
-                  {PLAN_ESTIMATE_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              ) : isTimeValueCell ? (
-                <input
-                  type="text"
-                  value={displayedTimeValue}
-                  onChange={(e) => {
-                    if (!isCustomEstimate) return;
-                    handlePlanTableCellChange(item.id, rowIdx, 4, e.target.value);
-                  }}
-                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-                  readOnly={!isCustomEstimate}
-                  className="w-full bg-transparent text-right focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                  placeholder="0.00"
-                  data-plan-item={item.id}
-                  data-plan-row={rowIdx}
-                  data-plan-col={4}
-                />
-              ) : (
-                <input
-                  type="text"
-                  value={cellValue}
-                  onChange={(e) =>
-                    handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
-                  }
-                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-                  className="w-full bg-transparent focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                  data-plan-item={item.id}
-                  data-plan-row={rowIdx}
-                  data-plan-col={cellIdx}
-                />
-              )}
-            </td>
-          );
-        })}
-      </tr>
-    );
-  };
-
-  const renderSubprojectRow = (item, rowValues, rowIdx) => {
-    return (
-      <tr key={`${item.id}-subproject-row-${rowIdx}`}>
-        {rowValues.map((cellValue, cellIdx) => {
-          // Skip estimate (column 3) and time value (column 4) cells for Subprojects
-          const isEstimateCell = cellIdx === 3;
-          const isTimeValueCell = cellIdx === 4;
-          if (isEstimateCell || isTimeValueCell) {
-            return null;
-          }
-
-          const isSelected = isCellSelected(item.id, rowIdx, cellIdx);
-          const isPromptCell = cellIdx === 2;
-          const isDeleteCell = cellIdx === PLAN_TABLE_COLS - 1;
-          const style = { backgroundColor: isSelected ? '#dbeafe' : '#f3f3f3' };
-          if (cellIdx === 0 || cellIdx === 1) {
-            style.width = '120px';
-            style.minWidth = '120px';
-          }
-          if (isDeleteCell) {
-            style.width = '32px';
-            style.minWidth = '32px';
-            style.textAlign = 'center';
-          }
-
-          // For the prompt cell, we need to span across the estimate and time value columns
-          const colSpan = isPromptCell ? 3 : 1;
-
-          return (
-            <td
-              key={`${item.id}-subproject-row-${rowIdx}-${cellIdx}`}
-              className="border border-[#e5e7eb] px-3 py-0.5"
-              style={style}
-              colSpan={colSpan}
-              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-            >
-              {isPromptCell ? (
-                <input
-                  type="text"
-                  value={cellValue}
-                  onChange={(e) =>
-                    handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
-                  }
-                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-                  placeholder={SECTION_CONFIG.Subprojects.placeholder}
-                  className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                  data-plan-item={item.id}
-                  data-plan-row={rowIdx}
-                  data-plan-col={2}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault();
-                      addPlanPromptRow(item.id, rowIdx, 'xxx');
-                    }
-                  }}
-                />
-              ) : isDeleteCell ? (
-                <button
-                  type="button"
-                  aria-label="Delete subproject row"
-                  className="font-semibold text-slate-800"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                  onClick={() => removePlanPromptRow(item.id, rowIdx, 'xxx')}
-                >
-                  X
-                </button>
-              ) : (
-                <input
-                  type="text"
-                  value={cellValue}
-                  onChange={(e) =>
-                    handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
-                  }
-                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
-                  className="w-full bg-transparent focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                  data-plan-item={item.id}
-                  data-plan-row={rowIdx}
-                  data-plan-col={cellIdx}
-                />
-              )}
-            </td>
-          );
-        })}
-      </tr>
     );
   };
 
@@ -2029,7 +377,10 @@ export default function StagingPageV2() {
           }
         />
         <div className="space-y-6" style={{ marginTop: '75px' }}>
-          <div className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm" style={{ marginBottom: '30px' }}>
+          <div
+            className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm"
+            style={{ marginBottom: '30px' }}
+          >
             <input
               id="staging-input"
               type="text"
@@ -2050,579 +401,180 @@ export default function StagingPageV2() {
           <div className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm">
             <div className="grid gap-[5px]">
               {shortlist.map((item) => {
-                  const planEntries = clonePlanTableEntries(item.planTableEntries);
-                  const reasonRowCount = item.planReasonRowCount ?? 1;
-                  const outcomeRowCount = item.planOutcomeRowCount ?? 1;
-                  const questionRowCount = item.planOutcomeQuestionRowCount ?? 1;
-                  const needsQuestionRowCount = item.planNeedsQuestionRowCount ?? 1;
-                  const needsPlanRowCount = item.planNeedsPlanRowCount ?? 1;
-                  const scheduleRowCount = item.planSubprojectRowCount ?? 1;
-                  const subprojectRowCount = item.planXxxRowCount ?? 1;
+                const planEntries = clonePlanTableEntries(item.planTableEntries);
+                const { projectTotal } = calculateTimeTotals(planEntries);
 
-                  // Calculate row positions
-                  const reasonRowLimit = 2 + reasonRowCount;
-                  const outcomeHeadingRow = reasonRowLimit;
-                  const outcomePromptStart = outcomeHeadingRow + 1;
-                  const outcomePromptEnd = outcomePromptStart + Math.max(outcomeRowCount - 1, 0);
-                  const questionPromptStart = outcomePromptEnd + 1;
-                  const questionPromptEnd = questionPromptStart + Math.max(questionRowCount - 1, 0);
-                  const needsHeadingRow = questionPromptEnd + 1;
-                  const needsQuestionStart = needsHeadingRow + 1;
-                  const needsQuestionEnd = needsQuestionStart + Math.max(needsQuestionRowCount - 1, 0);
-                  const needsPlanStart = needsQuestionEnd + 1;
-                  const scheduleHeadingRow = needsPlanStart + Math.max(needsPlanRowCount, 0);
-                  const schedulePromptRow = scheduleHeadingRow + 1;
-                  const scheduleStart = schedulePromptRow + 1;
-                  const subprojectsHeadingRow = scheduleStart + Math.max(scheduleRowCount, 0);
-                  const subprojectsPromptRow = subprojectsHeadingRow + 1;
-                  const subprojectStart = subprojectsPromptRow + 1;
+                const isEditing = planModal.open && planModal.itemId === item.id;
+                const activeColor = isEditing ? planModal.color ?? item.color : item.color;
+                const headerBackground = activeColor || '#f3f4f6';
+                const headerTextColor = activeColor ? '#ffffff' : '#0f172a';
 
-                  const buildRowEntry = (rowIdx) => {
-                    const rowValues =
-                      planEntries[rowIdx] ?? Array.from({ length: PLAN_TABLE_COLS }, () => '');
-                    return {
-                      rowIdx,
-                      rowValues,
-                      pairId: getRowPairId(planEntries[rowIdx]),
-                    };
-                  };
-
-                  // Build row entries
-                  const reasonPromptEntries = Array.from({ length: reasonRowCount }, (_, idx) =>
-                    buildRowEntry(2 + idx)
-                  );
-
-                  const outcomeEntries = Array.from({ length: Math.max(outcomeRowCount, 0) }, (_, idx) => {
-                    const rowIdx = outcomePromptStart + idx;
-                    return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
-                  });
-
-                  const questionEntries = Array.from({ length: Math.max(questionRowCount, 0) }, (_, idx) => {
-                    const rowIdx = questionPromptStart + idx;
-                    return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
-                  });
-
-                  const {
-                    pairs: questionOutcomeGroups,
-                    leftoverPrimary: leftoverQuestionEntries,
-                    leftoverSecondary: leftoverOutcomeEntries,
-                  } = buildPairedRowGroups(questionEntries, outcomeEntries);
-
-                  const needsQuestionEntries = Array.from(
-                    { length: Math.max(needsQuestionRowCount, 0) },
-                    (_, idx) => {
-                      const rowIdx = needsQuestionStart + idx;
-                      return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
-                    }
-                  );
-
-                  const needsPlanEntries = Array.from({ length: Math.max(needsPlanRowCount, 0) }, (_, idx) => {
-                    const rowIdx = needsPlanStart + idx;
-                    return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
-                  });
-
-                  const schedulePromptEntry = buildRowEntry(schedulePromptRow);
-
-                  const scheduleEntries = Array.from({ length: Math.max(scheduleRowCount, 0) }, (_, idx) => {
-                    const rowIdx = scheduleStart + idx;
-                    return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
-                  });
-
-                  const subprojectEntries = Array.from({ length: Math.max(subprojectRowCount, 0) }, (_, idx) => {
-                    const rowIdx = subprojectStart + idx;
-                    return { ...buildRowEntry(rowIdx), promptIndex: idx + 1 };
-                  });
-
-                  // Calculate totals (NOTE: moved this calculation inside the map to have access to entries)
-                  const parseTimeValueToMinutes = (value) => {
-                    if (value == null) return 0;
-                    const stringValue = typeof value === 'string' ? value : String(value);
-                    const trimmed = stringValue.trim();
-                    if (!trimmed) return 0;
-                    const [hrsPart, minsPart = '0'] = trimmed.split('.');
-                    const hours = parseInt(hrsPart, 10);
-                    const minutes = parseInt(minsPart.padEnd(2, '0').slice(0, 2), 10);
-                    if (Number.isNaN(hours)) return 0;
-                    const safeMinutes = Number.isNaN(minutes) ? 0 : Math.min(Math.max(minutes, 0), 59);
-                    return hours * 60 + safeMinutes;
-                  };
-
-                  const formatMinutesToHHmm = (minutes) => {
-                    const hrs = Math.floor(minutes / 60);
-                    const mins = minutes % 60;
-                    return `${hrs}.${mins.toString().padStart(2, '0')}`;
-                  };
-
-                  // Calculate totals - different logic for simple vs regular tables
-                  let needsPlanTotalMinutes = 0;
-                  let scheduleTotalMinutes = 0;
-
-                  if (item.isSimpleTable) {
-                    // For simple tables, find response/prompt rows by iterating through entries
-                    let currentSection = '';
-                    for (let i = 0; i < planEntries.length; i++) {
-                      const row = planEntries[i];
-                      if (row?.__rowType === 'header') {
-                        currentSection = row[0] || '';
-                      } else if (row?.__rowType === 'response') {
-                        // In simple table, time value is at index 5
-                        const value = row[5] ?? '';
-                        const minutes = parseTimeValueToMinutes(value);
-                        if (currentSection === SECTION_CONFIG.Actions.header) {
-                          needsPlanTotalMinutes += minutes;
-                        } else if (currentSection === SECTION_CONFIG.Schedule.header) {
-                          scheduleTotalMinutes += minutes;
-                        }
-                      } else if (row?.__rowType === 'prompt' && currentSection === SECTION_CONFIG.Schedule.header) {
-                        // Schedule prompt row has time elements at index 5
-                        const value = row[5] ?? '';
-                        const minutes = parseTimeValueToMinutes(value);
-                        scheduleTotalMinutes += minutes;
-                      }
-                    }
-                  } else {
-                    // For regular tables, use the indexed entries with time at index 4
-                    needsPlanTotalMinutes = needsPlanEntries.reduce((sum, entry) => {
-                      const value = entry.rowValues?.[4] ?? '';
-                      return sum + parseTimeValueToMinutes(value);
-                    }, 0);
-                    // Include prompt row time value + all schedule data rows
-                    const schedulePromptTimeValue = schedulePromptEntry.rowValues?.[4] ?? '';
-                    scheduleTotalMinutes = parseTimeValueToMinutes(schedulePromptTimeValue) + scheduleEntries.reduce((sum, entry) => {
-                      const value = entry.rowValues?.[4] ?? '';
-                      return sum + parseTimeValueToMinutes(value);
-                    }, 0);
-                  }
-
-                  const needsPlanTimeTotal = formatMinutesToHHmm(needsPlanTotalMinutes);
-
-                  // Schedule prompt row values for editable time elements
-                  const schedulePromptEstimate = schedulePromptEntry.rowValues?.[3] || '-';
-                  const schedulePromptIsCustom = schedulePromptEstimate === 'Custom';
-                  const schedulePromptTimeValue = schedulePromptEntry.rowValues?.[4] || '0.00';
-                  const projectPlanTimeTotal = formatMinutesToHHmm(scheduleTotalMinutes);
-
-                  const {
-                    pairs: needsQuestionPlanGroups,
-                    leftoverPrimary: leftoverNeedsQuestionEntries,
-                    leftoverSecondary: leftoverNeedsPlanEntries,
-                  } = buildPairedRowGroups(needsQuestionEntries, needsPlanEntries);
-
-                  const isEditing = planModal.open && planModal.itemId === item.id;
-                  const activeColor = isEditing ? planModal.color ?? item.color : item.color;
-                  const headerBackground = activeColor || '#f3f4f6';
-                  const headerTextColor = activeColor ? '#ffffff' : '#0f172a';
-
-                  return (
-                    <div key={item.id}>
-                      <div className="flex items-start gap-2">
-                        <div className="mt-1 flex h-7 w-7 items-center justify-center">
-                          {item.planTableVisible ? (
+                return (
+                  <div key={item.id}>
+                    <div className="flex items-start gap-2">
+                      <div className="mt-1 flex h-7 w-7 items-center justify-center">
+                        {item.planTableVisible ? (
+                          <button
+                            type="button"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-transparent text-slate-700 hover:text-slate-900"
+                            onClick={() => togglePlanTable(item.id)}
+                            aria-label={
+                              item.planTableCollapsed ? 'Expand plan table' : 'Collapse plan table'
+                            }
+                          >
+                            <SquarePlus
+                              size={18}
+                              className={`transition-transform ${
+                                item.planTableCollapsed ? '' : 'rotate-45'
+                              }`}
+                            />
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className="flex-1 space-y-2">
+                        <div
+                          className="relative grid rounded border border-[#ced3d0] pr-3 py-2 shadow-inner"
+                          style={{
+                            backgroundColor: headerBackground,
+                            color: headerTextColor,
+                            paddingLeft: '12px',
+                            fontWeight: 600,
+                            gridTemplateColumns: '1fr auto 140px 120px 32px',
+                            alignItems: 'center',
+                            gap: '12px',
+                          }}
+                        >
+                          <div className="flex items-center gap-2 font-semibold">
+                            {item.projectName || item.text}
+                          </div>
+                          <div></div>
+                          <div style={{ width: '140px', minWidth: '140px' }}></div>
+                          <div
+                            className="text-right font-semibold pr-2"
+                            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+                          >
+                            {projectTotal}
+                          </div>
+                          <div
+                            style={{ width: '32px', minWidth: '32px' }}
+                            className="flex items-center justify-end"
+                          >
                             <button
                               type="button"
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-transparent text-slate-700 hover:text-slate-900"
-                              onClick={() => togglePlanTable(item.id)}
-                              aria-label={item.planTableCollapsed ? 'Expand plan table' : 'Collapse plan table'}
+                              className="rounded-full p-1 text-slate-700 hover:text-slate-900 focus:outline-none"
+                              style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: 'none' }}
+                              onClick={() => openPlanModal(item)}
+                              aria-label="Edit project"
                             >
-                              <SquarePlus
-                                size={18}
-                                className={`transition-transform ${item.planTableCollapsed ? '' : 'rotate-45'}`}
-                              />
+                              <Pencil size={14} />
                             </button>
-                          ) : null}
-                        </div>
-                        <div className="flex-1 space-y-2">
-                          <div
-                            className="relative grid rounded border border-[#ced3d0] pr-3 py-2 shadow-inner"
-                            style={{
-                              backgroundColor: headerBackground,
-                              color: headerTextColor,
-                              paddingLeft: '12px',
-                              fontWeight: 600,
-                              gridTemplateColumns: '1fr auto 140px 120px 32px',
-                              alignItems: 'center',
-                              gap: '12px',
-                            }}
-                          >
-                            <div className="flex items-center gap-2 font-semibold">
-                              {item.projectName || item.text}
-                            </div>
-                            <div></div>
-                            <div style={{ width: '140px', minWidth: '140px' }}></div>
-                            <div className="text-right font-semibold pr-2" style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
-                              {projectPlanTimeTotal}
-                            </div>
+                          </div>
+                          {planModal.open && planModal.itemId === item.id && (
                             <div
-                              style={{ width: '32px', minWidth: '32px' }}
-                              className="flex items-center justify-end"
+                              className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-[#ced3d0] bg-white p-4 shadow-xl z-[9999]"
+                              style={{ backgroundColor: '#ffffff', color: '#0f172a' }}
                             >
-                              <button
-                                type="button"
-                                className="rounded-full p-1 text-slate-700 hover:text-slate-900 focus:outline-none"
-                                style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: 'none' }}
-                                onClick={() => openPlanModal(item)}
-                                aria-label="Edit project"
-                              >
-                                <Pencil size={14} />
-                              </button>
-                            </div>
-                            {planModal.open && planModal.itemId === item.id && (
-                              <div
-                                className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-[#ced3d0] bg-white p-4 shadow-xl z-[9999]"
-                                style={{ backgroundColor: '#ffffff', color: '#0f172a' }}
-                              >
-                                <div className="space-y-3">
-                                  <div className="space-y-2" style={{ paddingTop: '15px' }}>
-                                    <label className="text-sm font-semibold text-slate-700" htmlFor="plan-color-inline">
-                                      Project colour
-                                    </label>
-                                    <input
-                                      id="plan-color-inline"
-                                      type="color"
-                                      className="h-10 w-full cursor-pointer rounded border border-[#ced3d0] p-1"
-                                      value={planModal.color || '#c9daf8'}
-                                      onChange={(e) => updatePlanModal({ color: e.target.value })}
-                                    />
-                                  </div>
-                                  <div className="space-y-1" style={{ paddingTop: '15px' }}>
-                                    <label className="text-sm font-semibold text-slate-700" htmlFor="plan-name-inline">
-                                      Project Name
-                                    </label>
-                                    <input
-                                      id="plan-name-inline"
-                                      type="text"
-                                      value={planModal.projectName}
-                                      onChange={(e) =>
-                                        updatePlanModal({ projectName: e.target.value })
-                                      }
-                                      className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                                    />
-                                  </div>
-                                  <div className="space-y-1" style={{ paddingTop: '15px' }}>
-                                    <label className="text-sm font-semibold text-slate-700" htmlFor="plan-nickname-inline">
-                                      Project Nickname
-                                    </label>
-                                    <input
-                                      id="plan-nickname-inline"
-                                      type="text"
-                                      value={planModal.projectNickname}
-                                      onChange={(e) => {
-                                        const nextValue = (e.target.value || '').toUpperCase();
-                                        updatePlanModal({ projectNickname: nextValue });
-                                      }}
-                                      className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                                    />
-                                  </div>
-                                  <div className="flex flex-wrap items-center justify-between gap-2" style={{ paddingTop: '15px' }}>
-                                    <button
-                                      type="button"
-                                      className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-100"
-                                      onClick={() => handleRemove(item.id)}
-                                    >
-                                      Delete Project
-                                    </button>
-                                    <div className="flex gap-2">
-                                      {item.addedToPlan ? (
-                                        <button
-                                          type="button"
-                                          className="rounded border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700 shadow-sm hover:bg-orange-100"
-                                          onClick={() => handleTogglePlanStatus(item.id, false)}
-                                        >
-                                          Remove From Plan
-                                        </button>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm hover:bg-blue-100"
-                                          onClick={() => handleTogglePlanStatus(item.id, true)}
-                                        >
-                                          Add To Plan
-                                        </button>
-                                      )}
+                              <div className="space-y-3">
+                                <div className="space-y-2" style={{ paddingTop: '15px' }}>
+                                  <label
+                                    className="text-sm font-semibold text-slate-700"
+                                    htmlFor="plan-color-inline"
+                                  >
+                                    Project colour
+                                  </label>
+                                  <input
+                                    id="plan-color-inline"
+                                    type="color"
+                                    className="h-10 w-full cursor-pointer rounded border border-[#ced3d0] p-1"
+                                    value={planModal.color || '#c9daf8'}
+                                    onChange={(e) => updatePlanModal({ color: e.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-1" style={{ paddingTop: '15px' }}>
+                                  <label
+                                    className="text-sm font-semibold text-slate-700"
+                                    htmlFor="plan-name-inline"
+                                  >
+                                    Project Name
+                                  </label>
+                                  <input
+                                    id="plan-name-inline"
+                                    type="text"
+                                    value={planModal.projectName}
+                                    onChange={(e) =>
+                                      updatePlanModal({ projectName: e.target.value })
+                                    }
+                                    className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                                  />
+                                </div>
+                                <div className="space-y-1" style={{ paddingTop: '15px' }}>
+                                  <label
+                                    className="text-sm font-semibold text-slate-700"
+                                    htmlFor="plan-nickname-inline"
+                                  >
+                                    Project Nickname
+                                  </label>
+                                  <input
+                                    id="plan-nickname-inline"
+                                    type="text"
+                                    value={planModal.projectNickname}
+                                    onChange={(e) => {
+                                      const nextValue = (e.target.value || '').toUpperCase();
+                                      updatePlanModal({ projectNickname: nextValue });
+                                    }}
+                                    className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                                  />
+                                </div>
+                                <div
+                                  className="flex flex-wrap items-center justify-between gap-2"
+                                  style={{ paddingTop: '15px' }}
+                                >
+                                  <button
+                                    type="button"
+                                    className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-100"
+                                    onClick={() => handleRemove(item.id)}
+                                  >
+                                    Delete Project
+                                  </button>
+                                  <div className="flex gap-2">
+                                    {item.addedToPlan ? (
                                       <button
                                         type="button"
-                                        className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
-                                        onClick={handlePlanNext}
+                                        className="rounded border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700 shadow-sm hover:bg-orange-100"
+                                        onClick={() => handleTogglePlanStatus(item.id, false)}
                                       >
-                                        Close
+                                        Remove From Plan
                                       </button>
-                                    </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm hover:bg-blue-100"
+                                        onClick={() => handleTogglePlanStatus(item.id, true)}
+                                      >
+                                        Add To Plan
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+                                      onClick={handlePlanNext}
+                                    >
+                                      Close
+                                    </button>
                                   </div>
                                 </div>
                               </div>
-                            )}
-                          </div>
-                          {item.planTableVisible && !item.planTableCollapsed ? (
-                            item.isSimpleTable ? (
-                              renderSimpleTable(item)
-                            ) : (
-                            <div className="rounded border border-dashed border-[#ced3d0] bg-white p-3">
-                              <table className="w-full border-collapse text-left" style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
-                                <tbody>
-                                  <tr key={`${item.id}-plan-row-0`}>
-                                    <td
-                                      colSpan={PLAN_TABLE_COLS}
-                                      className="border border-[#e5e7eb] pl-6 pr-3 py-0.5 text-left font-semibold"
-                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937', fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                                    >
-                                      &nbsp;&nbsp;&nbsp;{SECTION_CONFIG.Reasons.header}
-                                    </td>
-                                  </tr>
-                                  <tr key={`${item.id}-plan-row-1`}>
-                                    <td
-                                      className="border border-[#e5e7eb] px-3 py-0.5"
-                                      style={{ width: '120px', minWidth: '120px', backgroundColor: isCellSelected(item.id, 1, 0) ? '#dbeafe' : '#d9d9d9' }}
-                                      onMouseDown={(e) => handleCellMouseDown(e, item.id, 1, 0, PLAN_TABLE_COLS)}
-                                      onMouseEnter={() => handleCellMouseEnter(item.id, 1, 0, PLAN_TABLE_COLS)}
-                                    >
-                                      <input
-                                        type="text"
-                                        value={planEntries[1]?.[0] ?? ''}
-                                        onChange={(e) => handlePlanTableCellChange(item.id, 1, 0, e.target.value)}
-                                        onMouseDown={(e) => handleCellMouseDown(e, item.id, 1, 0, PLAN_TABLE_COLS)}
-                                        className="w-full bg-transparent focus:outline-none border-none"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                                        data-plan-item={item.id}
-                                        data-plan-row={1}
-                                        data-plan-col={0}
-                                      />
-                                    </td>
-                                    <td
-                                      className="border border-[#e5e7eb] px-3 py-0.5"
-                                      colSpan={PLAN_TABLE_COLS - 1}
-                                      style={{ backgroundColor: isCellSelected(item.id, 1, 1) ? '#dbeafe' : '#d9d9d9' }}
-                                      onMouseDown={(e) => handleCellMouseDown(e, item.id, 1, 1, PLAN_TABLE_COLS)}
-                                      onMouseEnter={() => handleCellMouseEnter(item.id, 1, 1, PLAN_TABLE_COLS)}
-                                    >
-                                      <span className="text-slate-800"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
-                                        {SECTION_CONFIG.Reasons.prompt}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                  {reasonPromptEntries.map(({ rowIdx, rowValues }) =>
-                                    renderReasonPromptRow(item, rowValues, rowIdx)
-                                  )}
-                                  <tr key={`${item.id}-plan-row-${outcomeHeadingRow}`}>
-                                    <td
-                                      colSpan={PLAN_TABLE_COLS}
-                                      className="border border-[#e5e7eb] px-3 py-0.5 text-left font-semibold"
-                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937', paddingLeft: '10px', fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                                    >
-                                      {SECTION_CONFIG.Outcomes.header}
-                                    </td>
-                                  </tr>
-                                  {questionOutcomeGroups.map(({ primary, secondaryList }) => (
-                                    <React.Fragment
-                                      key={`${item.id}-plan-pair-${primary.pairId || primary.rowIdx}`}
-                                    >
-                                      {renderQuestionPromptRow(item, primary.rowValues, primary.rowIdx)}
-                                      {secondaryList.map((outcome) =>
-                                        renderOutcomePromptRow(item, outcome.rowValues, outcome.rowIdx)
-                                      )}
-                                    </React.Fragment>
-                                  ))}
-                                  {leftoverOutcomeEntries.map(({ rowIdx, rowValues }) =>
-                                    renderOutcomePromptRow(item, rowValues, rowIdx)
-                                  )}
-                                  {leftoverQuestionEntries.map(({ rowIdx, rowValues }) =>
-                                    renderQuestionPromptRow(item, rowValues, rowIdx)
-                                  )}
-                                  <tr key={`${item.id}-plan-row-${needsHeadingRow}`}>
-                                    <td
-                                      colSpan={PLAN_TABLE_COLS - 2}
-                                      className="border border-[#e5e7eb] pl-6 pr-3 py-0.5 text-left font-semibold"
-                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937', fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                                    >
-                                      &nbsp;&nbsp;&nbsp;{SECTION_CONFIG.Actions.header}
-                                    </td>
-                                    <td
-                                      className="border border-[#e5e7eb] px-3 py-0.5 text-right font-semibold"
-                                      style={{
-                                        backgroundColor: '#b7b7b7',
-                                        width: '120px',
-                                        minWidth: '120px',
-                                        color: '#1f2937',
-                                        fontSize: `${Math.round(14 * textSizeScale)}px`,
-                                        paddingRight: '10px',
-                                      }}
-                                    >
-                                      {needsPlanTimeTotal}
-                                    </td>
-                                    <td
-                                      className="border border-[#e5e7eb]"
-                                      style={{
-                                        backgroundColor: '#b7b7b7',
-                                        width: '32px',
-                                        minWidth: '32px',
-                                      }}
-                                    ></td>
-                                  </tr>
-                                  {needsQuestionPlanGroups.map(({ primary, secondaryList }) => (
-                                    <React.Fragment
-                                      key={`${item.id}-needs-pair-${primary.pairId || primary.rowIdx}`}
-                                    >
-                                      {renderNeedsQuestionRow(item, primary.rowValues, primary.rowIdx)}
-                                      {secondaryList.map((plan) =>
-                                        renderNeedsPlanRow(item, plan.rowValues, plan.rowIdx)
-                                      )}
-                                    </React.Fragment>
-                                  ))}
-                                  {leftoverNeedsQuestionEntries.map(({ rowIdx, rowValues }) =>
-                                    renderNeedsQuestionRow(item, rowValues, rowIdx)
-                                  )}
-                                  {leftoverNeedsPlanEntries.map(({ rowIdx, rowValues }) =>
-                                    renderNeedsPlanRow(item, rowValues, rowIdx)
-                                  )}
-                                  <tr key={`${item.id}-plan-row-schedule-header`}>
-                                    <td
-                                      colSpan={PLAN_TABLE_COLS}
-                                      className="border border-[#e5e7eb] px-3 py-0.5 text-left font-semibold"
-                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937', paddingLeft: '10px', fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                                    >
-                                      {SECTION_CONFIG.Schedule.header}
-                                    </td>
-                                  </tr>
-                                  <tr key={`${item.id}-schedule-row-prompt`}>
-                                    <td
-                                      className="border border-[#e5e7eb] px-3 py-0.5"
-                                      style={{ width: '120px', minWidth: '120px', backgroundColor: isCellSelected(item.id, schedulePromptRow, 0) ? '#dbeafe' : '#d9d9d9' }}
-                                      onMouseDown={(e) => handleCellMouseDown(e, item.id, schedulePromptRow, 0, PLAN_TABLE_COLS)}
-                                      onMouseEnter={() => handleCellMouseEnter(item.id, schedulePromptRow, 0, PLAN_TABLE_COLS)}
-                                    ></td>
-                                    <td
-                                      className="border border-[#e5e7eb] px-3 py-0.5"
-                                      style={{ backgroundColor: isCellSelected(item.id, schedulePromptRow, 1) ? '#dbeafe' : '#d9d9d9' }}
-                                      onMouseDown={(e) => handleCellMouseDown(e, item.id, schedulePromptRow, 1, PLAN_TABLE_COLS)}
-                                      onMouseEnter={() => handleCellMouseEnter(item.id, schedulePromptRow, 1, PLAN_TABLE_COLS)}
-                                    >
-                                      <span className="text-slate-800"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
-                                        {SECTION_CONFIG.Schedule.prompt}
-                                      </span>
-                                    </td>
-                                    <td
-                                      className="border border-[#e5e7eb] px-3 py-0.5"
-                                      style={{
-                                        width: '140px',
-                                        minWidth: '140px',
-                                        backgroundColor: isCellSelected(item.id, schedulePromptRow, 3) ? '#dbeafe' : '#d9d9d9',
-                                      }}
-                                      onMouseDown={(e) => handleCellMouseDown(e, item.id, schedulePromptRow, 3, PLAN_TABLE_COLS)}
-                                      onMouseEnter={() => handleCellMouseEnter(item.id, schedulePromptRow, 3, PLAN_TABLE_COLS)}
-                                    >
-                                      <select
-                                        className="w-full bg-transparent focus:outline-none border-none"
-                                        style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                                        value={schedulePromptEstimate}
-                                        onMouseDown={(e) => handleCellMouseDown(e, item.id, schedulePromptRow, 3, PLAN_TABLE_COLS)}
-                                        onChange={(e) =>
-                                          handlePlanEstimateChange(item.id, schedulePromptRow, e.target.value)
-                                        }
-                                        data-plan-item={item.id}
-                                        data-plan-row={schedulePromptRow}
-                                        data-plan-col={3}
-                                      >
-                                        {PLAN_ESTIMATE_OPTIONS.map((option) => (
-                                          <option key={option} value={option}>
-                                            {option}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </td>
-                                    <td
-                                      className="border border-[#e5e7eb] px-3 py-0.5"
-                                      style={{
-                                        width: '120px',
-                                        minWidth: '120px',
-                                        backgroundColor: isCellSelected(item.id, schedulePromptRow, 4) ? '#dbeafe' : '#d9d9d9',
-                                        textAlign: 'right',
-                                        paddingRight: '10px',
-                                      }}
-                                      onMouseDown={(e) => handleCellMouseDown(e, item.id, schedulePromptRow, 4, PLAN_TABLE_COLS)}
-                                      onMouseEnter={() => handleCellMouseEnter(item.id, schedulePromptRow, 4, PLAN_TABLE_COLS)}
-                                    >
-                                      <input
-                                        type="text"
-                                        value={schedulePromptTimeValue}
-                                        onChange={(e) => {
-                                          if (!schedulePromptIsCustom) return;
-                                          handlePlanTableCellChange(item.id, schedulePromptRow, 4, e.target.value);
-                                        }}
-                                        onMouseDown={(e) => handleCellMouseDown(e, item.id, schedulePromptRow, 4, PLAN_TABLE_COLS)}
-                                        readOnly={!schedulePromptIsCustom}
-                                        className="w-full bg-transparent text-right focus:outline-none border-none"
-                                        style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                                        placeholder="0.00"
-                                        data-plan-item={item.id}
-                                        data-plan-row={schedulePromptRow}
-                                        data-plan-col={4}
-                                      />
-                                    </td>
-                                    <td
-                                      className="border border-[#e5e7eb] px-3 py-0.5"
-                                      style={{
-                                        width: '32px',
-                                        minWidth: '32px',
-                                        textAlign: 'center',
-                                        backgroundColor: '#d9d9d9',
-                                      }}
-                                    ></td>
-                                  </tr>
-                                  {scheduleEntries.map(({ rowIdx, rowValues }) =>
-                                    renderScheduleRow(item, rowValues, rowIdx)
-                                  )}
-                                  <tr key={`${item.id}-plan-row-subprojects-header`}>
-                                    <td
-                                      colSpan={PLAN_TABLE_COLS}
-                                      className="border border-[#e5e7eb] pl-6 pr-3 py-0.5 text-left font-semibold"
-                                      style={{ backgroundColor: '#b7b7b7', color: '#1f2937', fontSize: `${Math.round(14 * textSizeScale)}px` }}
-                                    >
-                                      &nbsp;&nbsp;&nbsp;{SECTION_CONFIG.Subprojects.header}
-                                    </td>
-                                  </tr>
-                                  <tr key={`${item.id}-subprojects-row-prompt`}>
-                                    <td
-                                      className="border border-[#e5e7eb] px-3 py-0.5"
-                                      style={{ width: '120px', minWidth: '120px', backgroundColor: isCellSelected(item.id, subprojectsPromptRow, 0) ? '#dbeafe' : '#d9d9d9' }}
-                                      onMouseDown={(e) => handleCellMouseDown(e, item.id, subprojectsPromptRow, 0, PLAN_TABLE_COLS)}
-                                      onMouseEnter={() => handleCellMouseEnter(item.id, subprojectsPromptRow, 0, PLAN_TABLE_COLS)}
-                                    ></td>
-                                    <td
-                                      className="border border-[#e5e7eb] px-3 py-0.5"
-                                      colSpan={PLAN_TABLE_COLS - 2}
-                                      style={{ backgroundColor: isCellSelected(item.id, subprojectsPromptRow, 1) ? '#dbeafe' : '#d9d9d9' }}
-                                      onMouseDown={(e) => handleCellMouseDown(e, item.id, subprojectsPromptRow, 1, PLAN_TABLE_COLS)}
-                                      onMouseEnter={() => handleCellMouseEnter(item.id, subprojectsPromptRow, 1, PLAN_TABLE_COLS)}
-                                    >
-                                      <span className="text-slate-800"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}>
-                                        {SECTION_CONFIG.Subprojects.prompt}
-                                      </span>
-                                    </td>
-                                    <td
-                                      className="border border-[#e5e7eb] px-3 py-0.5"
-                                      style={{
-                                        width: '32px',
-                                        minWidth: '32px',
-                                        textAlign: 'center',
-                                        backgroundColor: '#d9d9d9',
-                                      }}
-                                    ></td>
-                                  </tr>
-                                  {subprojectEntries.map(({ rowIdx, rowValues }) =>
-                                    renderSubprojectRow(item, rowValues, rowIdx)
-                                  )}
-                                </tbody>
-                              </table>
                             </div>
-                            )
-                          ) : null}
+                          )}
                         </div>
+                        {item.planTableVisible && !item.planTableCollapsed
+                          ? renderTable(item)
+                          : null}
                       </div>
                     </div>
-                  );
-                })}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
