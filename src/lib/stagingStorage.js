@@ -32,6 +32,9 @@ const serializeRow = (row) => {
   if (row.__pairId) {
     serialized._pairId = row.__pairId;
   }
+  if (row.__sectionType) {
+    serialized._sectionType = row.__sectionType;
+  }
   return serialized;
 };
 
@@ -41,7 +44,7 @@ const serializeRow = (row) => {
  * Also handles legacy format (plain arrays without metadata).
  */
 const deserializeRow = (row) => {
-  // Handle new format: { cells: [...], _rowType?, _pairId? }
+  // Handle new format: { cells: [...], _rowType?, _pairId?, _sectionType? }
   if (row && typeof row === 'object' && Array.isArray(row.cells)) {
     const deserialized = [...row.cells];
     if (row._rowType) {
@@ -55,6 +58,14 @@ const deserializeRow = (row) => {
     if (row._pairId) {
       Object.defineProperty(deserialized, '__pairId', {
         value: row._pairId,
+        writable: true,
+        configurable: true,
+        enumerable: false,
+      });
+    }
+    if (row._sectionType) {
+      Object.defineProperty(deserialized, '__sectionType', {
+        value: row._sectionType,
         writable: true,
         configurable: true,
         enumerable: false,

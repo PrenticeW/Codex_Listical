@@ -139,6 +139,7 @@ export default function StagingPageV2() {
   const {
     selectedCells,
     selectedRows,
+    setSelectedCells,
     isCellSelected,
     isRowSelected,
     handleCellMouseDown,
@@ -179,6 +180,7 @@ export default function StagingPageV2() {
     executeCommand,
     clearSelection,
     pendingFocusRequestRef,
+    setSelectedCells,
   });
 
   // Global mouseup listener for drag selection

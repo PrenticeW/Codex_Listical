@@ -15,6 +15,7 @@ export default function useRowCommands({
   executeCommand,
   clearSelection,
   pendingFocusRequestRef,
+  setSelectedCells,
 }) {
   /**
    * Insert a blank row above the specified position
@@ -425,8 +426,14 @@ export default function useRowCommands({
           col: focusCol,
         };
       }
+
+      // Update cell selection to the new cell
+      if (setSelectedCells) {
+        const newCellKey = `${itemId}|${rowIdx + 1}|${focusCol}`;
+        setSelectedCells(new Set([newCellKey]));
+      }
     },
-    [setState, executeCommand, pendingFocusRequestRef]
+    [setState, executeCommand, pendingFocusRequestRef, setSelectedCells]
   );
 
   return {
