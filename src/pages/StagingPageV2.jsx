@@ -44,8 +44,8 @@ export default function StagingPageV2() {
   const currentPath = location.pathname;
   const { currentYear } = useYear();
 
-  // Global page size setting (shared across all pages)
-  const { sizeScale } = usePageSize();
+  // Page-specific size setting for Goals page
+  const { sizeScale } = usePageSize('goal');
   const textSizeScale = sizeScale; // Alias for consistency
 
   // Command pattern for undo/redo
@@ -138,13 +138,10 @@ export default function StagingPageV2() {
   // Copy handler
   const handleCopy = useCallback(
     (e) => {
-      console.log('[handleCopy] selectedCells:', Array.from(selectedCells));
-      console.log('[handleCopy] shortlist:', shortlist);
       const tsvData = handleCopyOperation({
         selectedCells,
         shortlist,
       });
-      console.log('[handleCopy] tsvData:', tsvData);
 
       if (tsvData) {
         e.preventDefault();
@@ -158,8 +155,6 @@ export default function StagingPageV2() {
   const handlePaste = useCallback(
     (e) => {
       const clipboardText = e.clipboardData.getData('text/plain');
-      console.log('[handlePaste] clipboardText:', clipboardText);
-      console.log('[handlePaste] selectedCells:', Array.from(selectedCells));
       const command = handlePasteOperation({
         clipboardText,
         selectedCells,
@@ -681,7 +676,7 @@ export default function StagingPageV2() {
         >
           {/* Drag handle cell */}
           <td
-            className="border border-[#e5e7eb] px-1 py-2 text-center"
+            className="border border-[#e5e7eb] px-1 py-0.5 text-center"
             style={{
               width: '24px',
               minWidth: '24px',
@@ -696,7 +691,7 @@ export default function StagingPageV2() {
           {/* Header cell - spans all columns */}
           <td
             colSpan={PLAN_TABLE_COLS}
-            className="border border-[#e5e7eb] py-2 min-h-[44px]"
+            className="border border-[#e5e7eb] py-0.5"
             style={{
               backgroundColor: isCellSelected(item.id, rowIdx, 0) ? '#dbeafe' : '#b7b7b7',
               borderTop: isTarget ? '2px solid #3b82f6' : undefined,
@@ -766,7 +761,7 @@ export default function StagingPageV2() {
           >
             {/* Drag handle cell */}
             <td
-              className="border border-[#e5e7eb] px-1 py-2 text-center"
+              className="border border-[#e5e7eb] px-1 py-0.5 text-center"
               style={{
                 width: '24px',
                 minWidth: '24px',
@@ -780,7 +775,7 @@ export default function StagingPageV2() {
             </td>
             {/* First cell */}
             <td
-              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              className="border border-[#e5e7eb] px-3 py-0.5"
               style={{
                 width: '120px',
                 minWidth: '120px',
@@ -806,7 +801,7 @@ export default function StagingPageV2() {
             {/* Prompt cell - spans 3 columns */}
             <td
               colSpan={3}
-              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              className="border border-[#e5e7eb] px-3 py-0.5"
               style={{
                 backgroundColor: isCellSelected(item.id, rowIdx, 2) ? '#dbeafe' : '#d9d9d9',
                 borderTop: isTarget ? '2px solid #3b82f6' : undefined,
@@ -830,7 +825,7 @@ export default function StagingPageV2() {
             </td>
             {/* Estimate dropdown */}
             <td
-              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              className="border border-[#e5e7eb] px-3 py-0.5"
               style={{
                 width: '140px',
                 minWidth: '140px',
@@ -859,7 +854,7 @@ export default function StagingPageV2() {
             </td>
             {/* Time value */}
             <td
-              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              className="border border-[#e5e7eb] px-3 py-0.5"
               style={{
                 width: '120px',
                 minWidth: '120px',
@@ -918,7 +913,7 @@ export default function StagingPageV2() {
         >
           {/* Drag handle cell */}
           <td
-            className="border border-[#e5e7eb] px-1 py-2 text-center"
+            className="border border-[#e5e7eb] px-1 py-0.5 text-center"
             style={{
               width: '24px',
               minWidth: '24px',
@@ -932,7 +927,7 @@ export default function StagingPageV2() {
           </td>
           {/* First cell - empty */}
           <td
-            className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+            className="border border-[#e5e7eb] px-3 py-0.5"
             style={{
               width: '120px',
               minWidth: '120px',
@@ -958,7 +953,7 @@ export default function StagingPageV2() {
           {/* Prompt cell - spans remaining columns */}
           <td
             colSpan={PLAN_TABLE_COLS - 1}
-            className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+            className="border border-[#e5e7eb] px-3 py-0.5"
             style={{
               backgroundColor: isCellSelected(item.id, rowIdx, 1) ? '#dbeafe' : '#d9d9d9',
               borderTop: isTarget ? '2px solid #3b82f6' : undefined,
@@ -1027,7 +1022,7 @@ export default function StagingPageV2() {
           >
             {/* Drag handle cell */}
             <td
-              className="border border-[#e5e7eb] px-1 py-2 text-center"
+              className="border border-[#e5e7eb] px-1 py-0.5 text-center"
               style={{
                 width: '24px',
                 minWidth: '24px',
@@ -1041,7 +1036,7 @@ export default function StagingPageV2() {
             </td>
             {/* First cell - empty */}
             <td
-              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              className="border border-[#e5e7eb] px-3 py-0.5"
               style={{
                 width: '120px',
                 minWidth: '120px',
@@ -1066,7 +1061,7 @@ export default function StagingPageV2() {
             </td>
             {/* Second cell - empty */}
             <td
-              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              className="border border-[#e5e7eb] px-3 py-0.5"
               style={{
                 width: '120px',
                 minWidth: '120px',
@@ -1092,7 +1087,7 @@ export default function StagingPageV2() {
             {/* Response cell - third column, spans 2 columns */}
             <td
               colSpan={2}
-              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              className="border border-[#e5e7eb] px-3 py-0.5"
               style={{
                 backgroundColor: isCellSelected(item.id, rowIdx, 2) ? '#dbeafe' : '#f3f3f3',
                 borderTop: isTarget ? '2px solid #3b82f6' : undefined,
@@ -1116,7 +1111,7 @@ export default function StagingPageV2() {
             </td>
             {/* Estimate dropdown cell - column 5 */}
             <td
-              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              className="border border-[#e5e7eb] px-3 py-0.5"
               style={{
                 width: '140px',
                 minWidth: '140px',
@@ -1145,7 +1140,7 @@ export default function StagingPageV2() {
             </td>
             {/* Time value cell - column 6 */}
             <td
-              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              className="border border-[#e5e7eb] px-3 py-0.5"
               style={{
                 width: '120px',
                 minWidth: '120px',
@@ -1209,7 +1204,7 @@ export default function StagingPageV2() {
         >
           {/* Drag handle cell */}
           <td
-            className="border border-[#e5e7eb] px-1 py-2 text-center"
+            className="border border-[#e5e7eb] px-1 py-0.5 text-center"
             style={{
               width: '24px',
               minWidth: '24px',
@@ -1223,7 +1218,7 @@ export default function StagingPageV2() {
           </td>
           {/* First cell - empty */}
           <td
-            className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+            className="border border-[#e5e7eb] px-3 py-0.5"
             style={{
               width: '120px',
               minWidth: '120px',
@@ -1248,7 +1243,7 @@ export default function StagingPageV2() {
           </td>
           {/* Second cell - empty */}
           <td
-            className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+            className="border border-[#e5e7eb] px-3 py-0.5"
             style={{
               width: '120px',
               minWidth: '120px',
@@ -1274,7 +1269,7 @@ export default function StagingPageV2() {
           {/* Response cell - spans remaining columns */}
           <td
             colSpan={PLAN_TABLE_COLS - 2}
-            className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+            className="border border-[#e5e7eb] px-3 py-0.5"
             style={{
               backgroundColor: isCellSelected(item.id, rowIdx, 2) ? '#dbeafe' : '#f3f3f3',
               borderTop: isTarget ? '2px solid #3b82f6' : undefined,
@@ -1324,7 +1319,7 @@ export default function StagingPageV2() {
       >
         {/* Drag handle cell */}
         <td
-          className="border border-[#e5e7eb] px-1 py-2 text-center"
+          className="border border-[#e5e7eb] px-1 py-0.5 text-center"
           style={{
             width: '24px',
             minWidth: '24px',
@@ -1342,7 +1337,7 @@ export default function StagingPageV2() {
           return (
             <td
               key={`${item.id}-simple-row-${rowIdx}-cell-${cellIdx}`}
-              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              className="border border-[#e5e7eb] px-3 py-0.5"
               style={{
                 backgroundColor: isSelected ? '#dbeafe' : '#ffffff',
                 borderTop: isTarget ? '2px solid #3b82f6' : undefined,
@@ -1393,7 +1388,7 @@ export default function StagingPageV2() {
     return (
       <tr key={`${item.id}-plan-question-row-${rowIdx}`}>
         <td
-          className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+          className="border border-[#e5e7eb] px-3 py-0.5"
           style={{ width: '120px', minWidth: '120px', backgroundColor: isCell0Selected ? '#dbeafe' : '#d9d9d9' }}
           onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
           onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 0, PLAN_TABLE_COLS)}
@@ -1411,7 +1406,7 @@ export default function StagingPageV2() {
           />
         </td>
         <td
-          className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+          className="border border-[#e5e7eb] px-3 py-0.5"
           colSpan={PLAN_TABLE_COLS - 2}
           style={{ backgroundColor: isCell1Selected ? '#dbeafe' : '#d9d9d9' }}
           onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
@@ -1437,7 +1432,7 @@ export default function StagingPageV2() {
           />
         </td>
         <td
-          className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+          className="border border-[#e5e7eb] px-3 py-0.5"
           style={{
             width: '32px',
             minWidth: '32px',
@@ -1478,7 +1473,7 @@ export default function StagingPageV2() {
         return (
           <td
             key={`${item.id}-outcome-row-${rowIdx}-${cellIdx}`}
-            className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+            className="border border-[#e5e7eb] px-3 py-0.5"
             style={style}
             onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
             onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
@@ -1553,7 +1548,7 @@ export default function StagingPageV2() {
         return (
           <td
             key={`${item.id}-plan-row-${rowIdx}-cell-${cellIdx}`}
-            className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+            className="border border-[#e5e7eb] px-3 py-0.5"
             style={baseStyle}
             onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
             onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
@@ -1606,7 +1601,7 @@ export default function StagingPageV2() {
     return (
       <tr key={`${item.id}-needs-question-row-${rowIdx}`}>
         <td
-          className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+          className="border border-[#e5e7eb] px-3 py-0.5"
           style={{ width: '120px', minWidth: '120px', backgroundColor: isCell0Selected ? '#dbeafe' : '#d9d9d9' }}
           onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
           onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 0, PLAN_TABLE_COLS)}
@@ -1624,7 +1619,7 @@ export default function StagingPageV2() {
           />
         </td>
         <td
-          className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+          className="border border-[#e5e7eb] px-3 py-0.5"
           colSpan={PLAN_TABLE_COLS - 2}
           style={{ backgroundColor: isCell1Selected ? '#dbeafe' : '#d9d9d9' }}
           onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
@@ -1650,7 +1645,7 @@ export default function StagingPageV2() {
           />
         </td>
         <td
-          className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+          className="border border-[#e5e7eb] px-3 py-0.5"
           style={{
             width: '32px',
             minWidth: '32px',
@@ -1707,7 +1702,7 @@ export default function StagingPageV2() {
           return (
             <td
               key={`${item.id}-needs-plan-row-${rowIdx}-${cellIdx}`}
-              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              className="border border-[#e5e7eb] px-3 py-0.5"
               style={style}
               onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
               onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
@@ -1836,7 +1831,7 @@ export default function StagingPageV2() {
           return (
             <td
               key={`${item.id}-schedule-row-${rowIdx}-${cellIdx}`}
-              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              className="border border-[#e5e7eb] px-3 py-0.5"
               style={style}
               onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
               onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
@@ -1961,7 +1956,7 @@ export default function StagingPageV2() {
           return (
             <td
               key={`${item.id}-subproject-row-${rowIdx}-${cellIdx}`}
-              className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+              className="border border-[#e5e7eb] px-3 py-0.5"
               style={style}
               colSpan={colSpan}
               onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
@@ -2367,7 +2362,7 @@ export default function StagingPageV2() {
                                   <tr key={`${item.id}-plan-row-0`}>
                                     <td
                                       colSpan={PLAN_TABLE_COLS}
-                                      className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold"
+                                      className="border border-[#e5e7eb] pl-6 pr-3 py-0.5 text-left font-semibold"
                                       style={{ backgroundColor: '#b7b7b7', color: '#1f2937', fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                     >
                                       &nbsp;&nbsp;&nbsp;{SECTION_CONFIG.Reasons.header}
@@ -2375,7 +2370,7 @@ export default function StagingPageV2() {
                                   </tr>
                                   <tr key={`${item.id}-plan-row-1`}>
                                     <td
-                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                      className="border border-[#e5e7eb] px-3 py-0.5"
                                       style={{ width: '120px', minWidth: '120px', backgroundColor: isCellSelected(item.id, 1, 0) ? '#dbeafe' : '#d9d9d9' }}
                                       onMouseDown={(e) => handleCellMouseDown(e, item.id, 1, 0, PLAN_TABLE_COLS)}
                                       onMouseEnter={() => handleCellMouseEnter(item.id, 1, 0, PLAN_TABLE_COLS)}
@@ -2393,7 +2388,7 @@ export default function StagingPageV2() {
                                       />
                                     </td>
                                     <td
-                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                      className="border border-[#e5e7eb] px-3 py-0.5"
                                       colSpan={PLAN_TABLE_COLS - 1}
                                       style={{ backgroundColor: isCellSelected(item.id, 1, 1) ? '#dbeafe' : '#d9d9d9' }}
                                       onMouseDown={(e) => handleCellMouseDown(e, item.id, 1, 1, PLAN_TABLE_COLS)}
@@ -2411,7 +2406,7 @@ export default function StagingPageV2() {
                                   <tr key={`${item.id}-plan-row-${outcomeHeadingRow}`}>
                                     <td
                                       colSpan={PLAN_TABLE_COLS}
-                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px] text-left font-semibold"
+                                      className="border border-[#e5e7eb] px-3 py-0.5 text-left font-semibold"
                                       style={{ backgroundColor: '#b7b7b7', color: '#1f2937', paddingLeft: '10px', fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                     >
                                       {SECTION_CONFIG.Outcomes.header}
@@ -2436,13 +2431,13 @@ export default function StagingPageV2() {
                                   <tr key={`${item.id}-plan-row-${needsHeadingRow}`}>
                                     <td
                                       colSpan={PLAN_TABLE_COLS - 2}
-                                      className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold"
+                                      className="border border-[#e5e7eb] pl-6 pr-3 py-0.5 text-left font-semibold"
                                       style={{ backgroundColor: '#b7b7b7', color: '#1f2937', fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                     >
                                       &nbsp;&nbsp;&nbsp;{SECTION_CONFIG.Actions.header}
                                     </td>
                                     <td
-                                      className="border border-[#e5e7eb] px-3 py-2 text-right font-semibold"
+                                      className="border border-[#e5e7eb] px-3 py-0.5 text-right font-semibold"
                                       style={{
                                         backgroundColor: '#b7b7b7',
                                         width: '120px',
@@ -2482,7 +2477,7 @@ export default function StagingPageV2() {
                                   <tr key={`${item.id}-plan-row-schedule-header`}>
                                     <td
                                       colSpan={PLAN_TABLE_COLS}
-                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px] text-left font-semibold"
+                                      className="border border-[#e5e7eb] px-3 py-0.5 text-left font-semibold"
                                       style={{ backgroundColor: '#b7b7b7', color: '#1f2937', paddingLeft: '10px', fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                     >
                                       {SECTION_CONFIG.Schedule.header}
@@ -2490,13 +2485,13 @@ export default function StagingPageV2() {
                                   </tr>
                                   <tr key={`${item.id}-schedule-row-prompt`}>
                                     <td
-                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                      className="border border-[#e5e7eb] px-3 py-0.5"
                                       style={{ width: '120px', minWidth: '120px', backgroundColor: isCellSelected(item.id, schedulePromptRow, 0) ? '#dbeafe' : '#d9d9d9' }}
                                       onMouseDown={(e) => handleCellMouseDown(e, item.id, schedulePromptRow, 0, PLAN_TABLE_COLS)}
                                       onMouseEnter={() => handleCellMouseEnter(item.id, schedulePromptRow, 0, PLAN_TABLE_COLS)}
                                     ></td>
                                     <td
-                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                      className="border border-[#e5e7eb] px-3 py-0.5"
                                       style={{ backgroundColor: isCellSelected(item.id, schedulePromptRow, 1) ? '#dbeafe' : '#d9d9d9' }}
                                       onMouseDown={(e) => handleCellMouseDown(e, item.id, schedulePromptRow, 1, PLAN_TABLE_COLS)}
                                       onMouseEnter={() => handleCellMouseEnter(item.id, schedulePromptRow, 1, PLAN_TABLE_COLS)}
@@ -2507,7 +2502,7 @@ export default function StagingPageV2() {
                                       </span>
                                     </td>
                                     <td
-                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                      className="border border-[#e5e7eb] px-3 py-0.5"
                                       style={{
                                         width: '140px',
                                         minWidth: '140px',
@@ -2536,7 +2531,7 @@ export default function StagingPageV2() {
                                       </select>
                                     </td>
                                     <td
-                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                      className="border border-[#e5e7eb] px-3 py-0.5"
                                       style={{
                                         width: '120px',
                                         minWidth: '120px',
@@ -2565,7 +2560,7 @@ export default function StagingPageV2() {
                                       />
                                     </td>
                                     <td
-                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                      className="border border-[#e5e7eb] px-3 py-0.5"
                                       style={{
                                         width: '32px',
                                         minWidth: '32px',
@@ -2580,7 +2575,7 @@ export default function StagingPageV2() {
                                   <tr key={`${item.id}-plan-row-subprojects-header`}>
                                     <td
                                       colSpan={PLAN_TABLE_COLS}
-                                      className="border border-[#e5e7eb] pl-6 pr-3 py-2 text-left font-semibold"
+                                      className="border border-[#e5e7eb] pl-6 pr-3 py-0.5 text-left font-semibold"
                                       style={{ backgroundColor: '#b7b7b7', color: '#1f2937', fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                     >
                                       &nbsp;&nbsp;&nbsp;{SECTION_CONFIG.Subprojects.header}
@@ -2588,13 +2583,13 @@ export default function StagingPageV2() {
                                   </tr>
                                   <tr key={`${item.id}-subprojects-row-prompt`}>
                                     <td
-                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                      className="border border-[#e5e7eb] px-3 py-0.5"
                                       style={{ width: '120px', minWidth: '120px', backgroundColor: isCellSelected(item.id, subprojectsPromptRow, 0) ? '#dbeafe' : '#d9d9d9' }}
                                       onMouseDown={(e) => handleCellMouseDown(e, item.id, subprojectsPromptRow, 0, PLAN_TABLE_COLS)}
                                       onMouseEnter={() => handleCellMouseEnter(item.id, subprojectsPromptRow, 0, PLAN_TABLE_COLS)}
                                     ></td>
                                     <td
-                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                      className="border border-[#e5e7eb] px-3 py-0.5"
                                       colSpan={PLAN_TABLE_COLS - 2}
                                       style={{ backgroundColor: isCellSelected(item.id, subprojectsPromptRow, 1) ? '#dbeafe' : '#d9d9d9' }}
                                       onMouseDown={(e) => handleCellMouseDown(e, item.id, subprojectsPromptRow, 1, PLAN_TABLE_COLS)}
@@ -2606,7 +2601,7 @@ export default function StagingPageV2() {
                                       </span>
                                     </td>
                                     <td
-                                      className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
+                                      className="border border-[#e5e7eb] px-3 py-0.5"
                                       style={{
                                         width: '32px',
                                         minWidth: '32px',
