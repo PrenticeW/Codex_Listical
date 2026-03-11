@@ -195,27 +195,21 @@ export default function useStagingKeyboardHandlers({
     };
 
     // Copy event handler
+    // For Goals page, always use our copy handler when cells are selected
+    // This ensures the full cell value(s) are copied, not just selected text in an input
     const handleCopyEvent = (e) => {
-      const target = e.target;
-      const isEditing =
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable;
-
-      if (!isEditing && handleCopy) {
+      // If any cells are selected, use our copy handler
+      if (selectedCells && selectedCells.size > 0 && handleCopy) {
         handleCopy(e);
       }
     };
 
     // Paste event handler
+    // For Goals page, always use our paste handler when cells are selected
+    // This ensures consistent behavior with our copy handler
     const handlePasteEvent = (e) => {
-      const target = e.target;
-      const isEditing =
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable;
-
-      if (!isEditing && handlePaste) {
+      // If any cells are selected, use our paste handler
+      if (selectedCells && selectedCells.size > 0 && handlePaste) {
         handlePaste(e);
       }
     };

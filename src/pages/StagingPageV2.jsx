@@ -138,10 +138,13 @@ export default function StagingPageV2() {
   // Copy handler
   const handleCopy = useCallback(
     (e) => {
+      console.log('[handleCopy] selectedCells:', Array.from(selectedCells));
+      console.log('[handleCopy] shortlist:', shortlist);
       const tsvData = handleCopyOperation({
         selectedCells,
         shortlist,
       });
+      console.log('[handleCopy] tsvData:', tsvData);
 
       if (tsvData) {
         e.preventDefault();
@@ -155,6 +158,8 @@ export default function StagingPageV2() {
   const handlePaste = useCallback(
     (e) => {
       const clipboardText = e.clipboardData.getData('text/plain');
+      console.log('[handlePaste] clipboardText:', clipboardText);
+      console.log('[handlePaste] selectedCells:', Array.from(selectedCells));
       const command = handlePasteOperation({
         clipboardText,
         selectedCells,
@@ -693,15 +698,18 @@ export default function StagingPageV2() {
             colSpan={PLAN_TABLE_COLS}
             className="border border-[#e5e7eb] py-2 min-h-[44px]"
             style={{
-              backgroundColor: '#b7b7b7',
+              backgroundColor: isCellSelected(item.id, rowIdx, 0) ? '#dbeafe' : '#b7b7b7',
               borderTop: isTarget ? '2px solid #3b82f6' : undefined,
               paddingLeft: '12px',
             }}
+            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
+            onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 0, PLAN_TABLE_COLS)}
           >
             <input
               type="text"
               value={rowValues[0] || ''}
               onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
               onFocus={handleInputFocus}
               className="w-full bg-transparent focus:outline-none border-none font-semibold text-gray-800"
               style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
@@ -776,14 +784,17 @@ export default function StagingPageV2() {
               style={{
                 width: '120px',
                 minWidth: '120px',
-                backgroundColor: '#d9d9d9',
+                backgroundColor: isCellSelected(item.id, rowIdx, 0) ? '#dbeafe' : '#d9d9d9',
                 borderTop: isTarget ? '2px solid #3b82f6' : undefined,
               }}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
+              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 0, PLAN_TABLE_COLS)}
             >
               <input
                 type="text"
                 value={rowValues[0] || ''}
                 onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
+                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
                 onFocus={handleInputFocus}
                 className="w-full bg-transparent focus:outline-none border-none"
                 style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
@@ -797,14 +808,17 @@ export default function StagingPageV2() {
               colSpan={3}
               className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
               style={{
-                backgroundColor: '#d9d9d9',
+                backgroundColor: isCellSelected(item.id, rowIdx, 2) ? '#dbeafe' : '#d9d9d9',
                 borderTop: isTarget ? '2px solid #3b82f6' : undefined,
               }}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 2, PLAN_TABLE_COLS)}
+              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 2, PLAN_TABLE_COLS)}
             >
               <input
                 type="text"
                 value={rowValues[2] || ''}
                 onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)}
+                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 2, PLAN_TABLE_COLS)}
                 onKeyDown={(e) => handleEnterKeyAddRow(e, item.id, rowIdx, 'prompt')}
                 onFocus={handleInputFocus}
                 className="w-full bg-transparent focus:outline-none border-none text-slate-800"
@@ -820,14 +834,17 @@ export default function StagingPageV2() {
               style={{
                 width: '140px',
                 minWidth: '140px',
-                backgroundColor: '#d9d9d9',
+                backgroundColor: isCellSelected(item.id, rowIdx, 4) ? '#dbeafe' : '#d9d9d9',
                 borderTop: isTarget ? '2px solid #3b82f6' : undefined,
               }}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 4, PLAN_TABLE_COLS)}
+              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 4, PLAN_TABLE_COLS)}
             >
               <select
                 className="w-full bg-transparent focus:outline-none border-none"
                 style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                 value={estimateValue}
+                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 4, PLAN_TABLE_COLS)}
                 onChange={(e) => handlePlanEstimateChange(item.id, rowIdx, e.target.value)}
                 data-plan-item={item.id}
                 data-plan-row={rowIdx}
@@ -846,11 +863,13 @@ export default function StagingPageV2() {
               style={{
                 width: '120px',
                 minWidth: '120px',
-                backgroundColor: '#d9d9d9',
+                backgroundColor: isCellSelected(item.id, rowIdx, 5) ? '#dbeafe' : '#d9d9d9',
                 borderTop: isTarget ? '2px solid #3b82f6' : undefined,
                 textAlign: 'right',
                 paddingRight: '10px',
               }}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 5, PLAN_TABLE_COLS)}
+              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 5, PLAN_TABLE_COLS)}
             >
               <input
                 type="text"
@@ -859,6 +878,7 @@ export default function StagingPageV2() {
                   if (!isCustomEstimate) return;
                   handlePlanTableCellChange(item.id, rowIdx, 5, e.target.value);
                 }}
+                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 5, PLAN_TABLE_COLS)}
                 readOnly={!isCustomEstimate}
                 onFocus={handleInputFocus}
                 className="w-full bg-transparent text-right focus:outline-none border-none"
@@ -916,14 +936,17 @@ export default function StagingPageV2() {
             style={{
               width: '120px',
               minWidth: '120px',
-              backgroundColor: '#d9d9d9',
+              backgroundColor: isCellSelected(item.id, rowIdx, 0) ? '#dbeafe' : '#d9d9d9',
               borderTop: isTarget ? '2px solid #3b82f6' : undefined,
             }}
+            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
+            onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 0, PLAN_TABLE_COLS)}
           >
             <input
               type="text"
               value={rowValues[0] || ''}
               onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
               onFocus={handleInputFocus}
               className="w-full bg-transparent focus:outline-none border-none"
               style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
@@ -937,14 +960,17 @@ export default function StagingPageV2() {
             colSpan={PLAN_TABLE_COLS - 1}
             className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
             style={{
-              backgroundColor: '#d9d9d9',
+              backgroundColor: isCellSelected(item.id, rowIdx, 1) ? '#dbeafe' : '#d9d9d9',
               borderTop: isTarget ? '2px solid #3b82f6' : undefined,
             }}
+            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
+            onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 1, PLAN_TABLE_COLS)}
           >
             <input
               type="text"
               value={rowValues[1] || ''}
               onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
               onKeyDown={(e) => handleEnterKeyAddRow(e, item.id, rowIdx, 'prompt')}
               onFocus={handleInputFocus}
               className="w-full bg-transparent focus:outline-none border-none text-slate-800"
@@ -1019,14 +1045,17 @@ export default function StagingPageV2() {
               style={{
                 width: '120px',
                 minWidth: '120px',
-                backgroundColor: '#f3f3f3',
+                backgroundColor: isCellSelected(item.id, rowIdx, 0) ? '#dbeafe' : '#f3f3f3',
                 borderTop: isTarget ? '2px solid #3b82f6' : undefined,
               }}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
+              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 0, PLAN_TABLE_COLS)}
             >
               <input
                 type="text"
                 value={rowValues[0] || ''}
                 onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
+                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
                 onFocus={handleInputFocus}
                 className="w-full bg-transparent focus:outline-none border-none"
                 style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
@@ -1041,14 +1070,17 @@ export default function StagingPageV2() {
               style={{
                 width: '120px',
                 minWidth: '120px',
-                backgroundColor: '#f3f3f3',
+                backgroundColor: isCellSelected(item.id, rowIdx, 1) ? '#dbeafe' : '#f3f3f3',
                 borderTop: isTarget ? '2px solid #3b82f6' : undefined,
               }}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
+              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 1, PLAN_TABLE_COLS)}
             >
               <input
                 type="text"
                 value={rowValues[1] || ''}
                 onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
+                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
                 onFocus={handleInputFocus}
                 className="w-full bg-transparent focus:outline-none border-none"
                 style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
@@ -1062,14 +1094,17 @@ export default function StagingPageV2() {
               colSpan={2}
               className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
               style={{
-                backgroundColor: '#f3f3f3',
+                backgroundColor: isCellSelected(item.id, rowIdx, 2) ? '#dbeafe' : '#f3f3f3',
                 borderTop: isTarget ? '2px solid #3b82f6' : undefined,
               }}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 2, PLAN_TABLE_COLS)}
+              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 2, PLAN_TABLE_COLS)}
             >
               <input
                 type="text"
                 value={rowValues[2] || ''}
                 onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)}
+                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 2, PLAN_TABLE_COLS)}
                 onKeyDown={(e) => handleEnterKeyAddRow(e, item.id, rowIdx, 'response')}
                 onFocus={handleInputFocus}
                 className="w-full bg-transparent focus:outline-none border-none"
@@ -1085,14 +1120,17 @@ export default function StagingPageV2() {
               style={{
                 width: '140px',
                 minWidth: '140px',
-                backgroundColor: '#f3f3f3',
+                backgroundColor: isCellSelected(item.id, rowIdx, 4) ? '#dbeafe' : '#f3f3f3',
                 borderTop: isTarget ? '2px solid #3b82f6' : undefined,
               }}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 4, PLAN_TABLE_COLS)}
+              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 4, PLAN_TABLE_COLS)}
             >
               <select
                 className="w-full bg-transparent focus:outline-none border-none"
                 style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                 value={estimateValue}
+                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 4, PLAN_TABLE_COLS)}
                 onChange={(e) => handlePlanEstimateChange(item.id, rowIdx, e.target.value)}
                 data-plan-item={item.id}
                 data-plan-row={rowIdx}
@@ -1113,9 +1151,11 @@ export default function StagingPageV2() {
                 minWidth: '120px',
                 textAlign: 'right',
                 paddingRight: '10px',
-                backgroundColor: '#f3f3f3',
+                backgroundColor: isCellSelected(item.id, rowIdx, 5) ? '#dbeafe' : '#f3f3f3',
                 borderTop: isTarget ? '2px solid #3b82f6' : undefined,
               }}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 5, PLAN_TABLE_COLS)}
+              onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 5, PLAN_TABLE_COLS)}
             >
               <input
                 type="text"
@@ -1130,6 +1170,7 @@ export default function StagingPageV2() {
                   // Update estimate dropdown
                   handlePlanTableCellChange(item.id, rowIdx, 4, newEstimate);
                 }}
+                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 5, PLAN_TABLE_COLS)}
                 onFocus={handleInputFocus}
                 className="w-full bg-transparent text-right focus:outline-none border-none"
                 style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
@@ -1186,14 +1227,17 @@ export default function StagingPageV2() {
             style={{
               width: '120px',
               minWidth: '120px',
-              backgroundColor: '#f3f3f3',
+              backgroundColor: isCellSelected(item.id, rowIdx, 0) ? '#dbeafe' : '#f3f3f3',
               borderTop: isTarget ? '2px solid #3b82f6' : undefined,
             }}
+            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
+            onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 0, PLAN_TABLE_COLS)}
           >
             <input
               type="text"
               value={rowValues[0] || ''}
               onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
               onFocus={handleInputFocus}
               className="w-full bg-transparent focus:outline-none border-none"
               style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
@@ -1208,14 +1252,17 @@ export default function StagingPageV2() {
             style={{
               width: '120px',
               minWidth: '120px',
-              backgroundColor: '#f3f3f3',
+              backgroundColor: isCellSelected(item.id, rowIdx, 1) ? '#dbeafe' : '#f3f3f3',
               borderTop: isTarget ? '2px solid #3b82f6' : undefined,
             }}
+            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
+            onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 1, PLAN_TABLE_COLS)}
           >
             <input
               type="text"
               value={rowValues[1] || ''}
               onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
               onFocus={handleInputFocus}
               className="w-full bg-transparent focus:outline-none border-none"
               style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
@@ -1229,14 +1276,17 @@ export default function StagingPageV2() {
             colSpan={PLAN_TABLE_COLS - 2}
             className="border border-[#e5e7eb] px-3 py-2 min-h-[44px]"
             style={{
-              backgroundColor: '#f3f3f3',
+              backgroundColor: isCellSelected(item.id, rowIdx, 2) ? '#dbeafe' : '#f3f3f3',
               borderTop: isTarget ? '2px solid #3b82f6' : undefined,
             }}
+            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 2, PLAN_TABLE_COLS)}
+            onMouseEnter={() => handleCellMouseEnter(item.id, rowIdx, 2, PLAN_TABLE_COLS)}
           >
             <input
               type="text"
               value={rowValues[2] || ''}
               onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)}
+              onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 2, PLAN_TABLE_COLS)}
               onKeyDown={(e) => handleEnterKeyAddRow(e, item.id, rowIdx, 'response')}
               onFocus={handleInputFocus}
               className="w-full bg-transparent focus:outline-none border-none"
@@ -1306,6 +1356,7 @@ export default function StagingPageV2() {
                 onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)}
                 onKeyDown={(e) => handleEnterKeyAddRow(e, item.id, rowIdx, rowValues.__rowType || 'data')}
                 onFocus={handleInputFocus}
+                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
                 className="w-full bg-transparent focus:outline-none border-none"
                 style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                 data-plan-item={item.id}
@@ -1351,6 +1402,7 @@ export default function StagingPageV2() {
             type="text"
             value={rowValues[0] ?? ''}
             onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
+            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
             className="w-full bg-transparent focus:outline-none border-none"
             style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
             data-plan-item={item.id}
@@ -1369,6 +1421,7 @@ export default function StagingPageV2() {
             type="text"
             value={rowValues[1] ?? ''}
             onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
+            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
             placeholder={SECTION_CONFIG.Outcomes.prompt}
             className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
             style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
@@ -1437,6 +1490,7 @@ export default function StagingPageV2() {
                 onChange={(e) =>
                   handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
                 }
+                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
                 placeholder={SECTION_CONFIG.Outcomes.placeholder}
                 className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
@@ -1467,6 +1521,7 @@ export default function StagingPageV2() {
                 onChange={(e) =>
                   handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
                 }
+                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
                 className="w-full bg-transparent focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                 data-plan-item={item.id}
@@ -1520,6 +1575,7 @@ export default function StagingPageV2() {
                 onChange={(e) =>
                   handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
                 }
+                onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
                 onKeyDown={
                   isPromptCell
                     ? (event) => {
@@ -1559,6 +1615,7 @@ export default function StagingPageV2() {
             type="text"
             value={rowValues[0] ?? ''}
             onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 0, e.target.value)}
+            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 0, PLAN_TABLE_COLS)}
             className="w-full bg-transparent focus:outline-none border-none"
             style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
             data-plan-item={item.id}
@@ -1577,6 +1634,7 @@ export default function StagingPageV2() {
             type="text"
             value={rowValues[1] ?? ''}
             onChange={(e) => handlePlanTableCellChange(item.id, rowIdx, 1, e.target.value)}
+            onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, 1, PLAN_TABLE_COLS)}
             placeholder={SECTION_CONFIG.Actions.prompt}
             className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
             style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
@@ -1661,6 +1719,7 @@ export default function StagingPageV2() {
                   onChange={(e) =>
                     handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
                   }
+                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
                   placeholder="Plan"
                   className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
@@ -1689,6 +1748,7 @@ export default function StagingPageV2() {
                   className="w-full bg-transparent focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   value={estimateValue}
+                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
                   onChange={(e) =>
                     handlePlanEstimateChange(item.id, rowIdx, e.target.value)
                   }
@@ -1710,6 +1770,7 @@ export default function StagingPageV2() {
                     if (!isCustomEstimate) return;
                     handlePlanTableCellChange(item.id, rowIdx, 4, e.target.value);
                   }}
+                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
                   readOnly={!isCustomEstimate}
                   className="w-full bg-transparent text-right focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
@@ -1725,6 +1786,7 @@ export default function StagingPageV2() {
                   onChange={(e) =>
                     handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
                   }
+                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
                   className="w-full bg-transparent focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   data-plan-item={item.id}
@@ -1786,6 +1848,7 @@ export default function StagingPageV2() {
                   onChange={(e) =>
                     handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
                   }
+                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
                   placeholder={SECTION_CONFIG.Schedule.placeholder}
                   className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
@@ -1814,6 +1877,7 @@ export default function StagingPageV2() {
                   className="w-full bg-transparent focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   value={estimateValue}
+                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
                   onChange={(e) =>
                     handlePlanEstimateChange(item.id, rowIdx, e.target.value)
                   }
@@ -1835,6 +1899,7 @@ export default function StagingPageV2() {
                     if (!isCustomEstimate) return;
                     handlePlanTableCellChange(item.id, rowIdx, 4, e.target.value);
                   }}
+                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
                   readOnly={!isCustomEstimate}
                   className="w-full bg-transparent text-right focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
@@ -1850,6 +1915,7 @@ export default function StagingPageV2() {
                   onChange={(e) =>
                     handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
                   }
+                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
                   className="w-full bg-transparent focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   data-plan-item={item.id}
@@ -1908,6 +1974,7 @@ export default function StagingPageV2() {
                   onChange={(e) =>
                     handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
                   }
+                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
                   placeholder={SECTION_CONFIG.Subprojects.placeholder}
                   className="w-full bg-transparent text-slate-800 focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
@@ -1938,6 +2005,7 @@ export default function StagingPageV2() {
                   onChange={(e) =>
                     handlePlanTableCellChange(item.id, rowIdx, cellIdx, e.target.value)
                   }
+                  onMouseDown={(e) => handleCellMouseDown(e, item.id, rowIdx, cellIdx, PLAN_TABLE_COLS)}
                   className="w-full bg-transparent focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                   data-plan-item={item.id}
@@ -2316,6 +2384,7 @@ export default function StagingPageV2() {
                                         type="text"
                                         value={planEntries[1]?.[0] ?? ''}
                                         onChange={(e) => handlePlanTableCellChange(item.id, 1, 0, e.target.value)}
+                                        onMouseDown={(e) => handleCellMouseDown(e, item.id, 1, 0, PLAN_TABLE_COLS)}
                                         className="w-full bg-transparent focus:outline-none border-none"
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                         data-plan-item={item.id}
@@ -2451,6 +2520,7 @@ export default function StagingPageV2() {
                                         className="w-full bg-transparent focus:outline-none border-none"
                                         style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
                                         value={schedulePromptEstimate}
+                                        onMouseDown={(e) => handleCellMouseDown(e, item.id, schedulePromptRow, 3, PLAN_TABLE_COLS)}
                                         onChange={(e) =>
                                           handlePlanEstimateChange(item.id, schedulePromptRow, e.target.value)
                                         }
@@ -2484,6 +2554,7 @@ export default function StagingPageV2() {
                                           if (!schedulePromptIsCustom) return;
                                           handlePlanTableCellChange(item.id, schedulePromptRow, 4, e.target.value);
                                         }}
+                                        onMouseDown={(e) => handleCellMouseDown(e, item.id, schedulePromptRow, 4, PLAN_TABLE_COLS)}
                                         readOnly={!schedulePromptIsCustom}
                                         className="w-full bg-transparent text-right focus:outline-none border-none"
                                         style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}

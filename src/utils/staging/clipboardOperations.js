@@ -100,6 +100,10 @@ export const handlePasteOperation = ({
   const rows = clipboardText.split('\n').map((row) => row.split('\t'));
   if (rows.length === 0 || (rows.length === 1 && rows[0].length === 0)) return null;
 
+  // Check if this is a single value paste (fill mode) vs grid paste
+  const isSingleValue = rows.length === 1 && rows[0].length === 1;
+  const singleValue = isSingleValue ? rows[0][0] : null;
+
   // Find the anchor cell (first selected cell)
   const firstCellKey = Array.from(selectedCells)[0];
   const anchor = parseCellKey(firstCellKey);
@@ -107,7 +111,6 @@ export const handlePasteOperation = ({
 
   // Calculate target cells based on paste size and anchor
   const pasteRowCount = rows.length;
-  const pasteColCount = Math.max(...rows.map((r) => r.length));
 
   // Capture old state for undo
   let capturedState = null;
@@ -120,25 +123,82 @@ export const handlePasteOperation = ({
           capturedState = cloneStagingState(prev);
         }
 
+        // If single value and multiple cells selected, fill all selected cells
+        if (isSingleValue && selectedCells.size > 1) {
+          // Group cells by item
+          const cellsByItem = new Map();
+          selectedCells.forEach((cellKey) => {
+            const parsed = parseCellKey(cellKey);
+            if (!parsed) return;
+            if (!cellsByItem.has(parsed.itemId)) {
+              cellsByItem.set(parsed.itemId, []);
+            }
+            cellsByItem.get(parsed.itemId).push({ rowIdx: parsed.rowIdx, colIdx: parsed.colIdx });
+          });
+
+          return {
+            ...prev,
+            shortlist: prev.shortlist.map((item) => {
+              const cells = cellsByItem.get(item.id);
+              if (!cells) return item;
+
+              const nextEntries = item.planTableEntries.map(cloneRowWithMetadata);
+              cells.forEach(({ rowIdx, colIdx }) => {
+                if (nextEntries[rowIdx] && colIdx < nextEntries[rowIdx].length) {
+                  nextEntries[rowIdx][colIdx] = singleValue;
+                }
+              });
+
+              return { ...item, planTableEntries: nextEntries };
+            }),
+          };
+        }
+
+        // Grid paste: paste values to selected cells
+        // If multiple cells are selected, paste to all selected cells (repeating/tiling as needed)
+        // If only anchor is selected, paste grid starting from anchor
+
+        // Group selected cells by item
+        const cellsByItem = new Map();
+        selectedCells.forEach((cellKey) => {
+          const parsed = parseCellKey(cellKey);
+          if (!parsed) return;
+          if (!cellsByItem.has(parsed.itemId)) {
+            cellsByItem.set(parsed.itemId, []);
+          }
+          cellsByItem.get(parsed.itemId).push({ rowIdx: parsed.rowIdx, colIdx: parsed.colIdx });
+        });
+
         return {
           ...prev,
           shortlist: prev.shortlist.map((item) => {
-            if (item.id !== anchor.itemId) return item;
+            const cells = cellsByItem.get(item.id);
+            if (!cells) return item;
 
             const nextEntries = item.planTableEntries.map(cloneRowWithMetadata);
 
-            // Paste values starting from anchor
-            for (let r = 0; r < pasteRowCount; r++) {
-              const targetRowIdx = anchor.rowIdx + r;
-              if (targetRowIdx >= nextEntries.length) continue;
+            // Find the bounds of the selection for this item
+            const selectedRowIdxs = [...new Set(cells.map(c => c.rowIdx))].sort((a, b) => a - b);
+            const selectedColIdxs = [...new Set(cells.map(c => c.colIdx))].sort((a, b) => a - b);
 
-              for (let c = 0; c < rows[r].length; c++) {
-                const targetColIdx = anchor.colIdx + c;
-                if (targetColIdx >= nextEntries[targetRowIdx].length) continue;
+            // Create a set for quick lookup of selected cells
+            const selectedSet = new Set(cells.map(c => `${c.rowIdx}|${c.colIdx}`));
 
-                nextEntries[targetRowIdx][targetColIdx] = rows[r][c];
-              }
-            }
+            // Paste values - tile/repeat clipboard data across selected cells
+            selectedRowIdxs.forEach((targetRowIdx, selRowOffset) => {
+              selectedColIdxs.forEach((targetColIdx, selColOffset) => {
+                // Only paste to cells that are actually selected
+                if (!selectedSet.has(`${targetRowIdx}|${targetColIdx}`)) return;
+
+                // Map selection offset to clipboard data (with wrapping/tiling)
+                const clipboardRowIdx = selRowOffset % rows.length;
+                const clipboardColIdx = selColOffset % rows[clipboardRowIdx].length;
+
+                if (nextEntries[targetRowIdx] && targetColIdx < nextEntries[targetRowIdx].length) {
+                  nextEntries[targetRowIdx][targetColIdx] = rows[clipboardRowIdx][clipboardColIdx];
+                }
+              });
+            });
 
             return { ...item, planTableEntries: nextEntries };
           }),
