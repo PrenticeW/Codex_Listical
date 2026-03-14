@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import {
   clonePlanTableEntries,
+  cloneStagingState,
   parseEstimateLabelToMinutes,
   formatMinutesToHHmm,
   PLAN_TABLE_COLS,
@@ -35,9 +36,9 @@ export default function usePlanTableState({ setState, executeCommand }) {
         const command = {
           execute: () => {
             setState((prev) => {
-              // Capture state on first execute for undo
+              // Capture state on first execute for undo (use cloneStagingState to preserve row metadata)
               if (capturedPrevState === null) {
-                capturedPrevState = JSON.parse(JSON.stringify(prev));
+                capturedPrevState = cloneStagingState(prev);
               }
               return mutationFn(prev);
             });

@@ -172,7 +172,7 @@ export default function TableRow({
         <TextInputCell
           value={rowValues[2]}
           onChange={(val) => onCellChange(item.id, rowIdx, 2, val)}
-          onKeyDown={(e) => onEnterKeyAddRow(e, item.id, rowIdx, 'prompt')}
+          onKeyDown={(e) => onEnterKeyAddRow(e, item.id, rowIdx, 'prompt', sectionType)}
           onMouseDown={(e) => cellMouseDown(e, 2)}
           onMouseEnter={() => cellMouseEnter(2)}
           onFocus={onInputFocus}
@@ -244,7 +244,7 @@ export default function TableRow({
         <TextInputCell
           value={rowValues[1]}
           onChange={(val) => onCellChange(item.id, rowIdx, 1, val)}
-          onKeyDown={(e) => onEnterKeyAddRow(e, item.id, rowIdx, 'prompt')}
+          onKeyDown={(e) => onEnterKeyAddRow(e, item.id, rowIdx, 'prompt', sectionType)}
           onMouseDown={(e) => cellMouseDown(e, 1)}
           onMouseEnter={() => cellMouseEnter(1)}
           onFocus={onInputFocus}
@@ -316,7 +316,7 @@ export default function TableRow({
         <TextInputCell
           value={rowValues[2]}
           onChange={(val) => onCellChange(item.id, rowIdx, 2, val)}
-          onKeyDown={(e) => onEnterKeyAddRow(e, item.id, rowIdx, 'response')}
+          onKeyDown={(e) => onEnterKeyAddRow(e, item.id, rowIdx, 'response', sectionType)}
           onMouseDown={(e) => cellMouseDown(e, 2)}
           onMouseEnter={() => cellMouseEnter(2)}
           onFocus={onInputFocus}
@@ -396,7 +396,7 @@ export default function TableRow({
         <TextInputCell
           value={rowValues[2]}
           onChange={(val) => onCellChange(item.id, rowIdx, 2, val)}
-          onKeyDown={(e) => onEnterKeyAddRow(e, item.id, rowIdx, 'response')}
+          onKeyDown={(e) => onEnterKeyAddRow(e, item.id, rowIdx, 'response', sectionType)}
           onMouseDown={(e) => cellMouseDown(e, 2)}
           onMouseEnter={() => cellMouseEnter(2)}
           onFocus={onInputFocus}
@@ -425,7 +425,7 @@ export default function TableRow({
           key={`${item.id}-row-${rowIdx}-cell-${cellIdx}`}
           value={cellValue}
           onChange={(val) => onCellChange(item.id, rowIdx, cellIdx, val)}
-          onKeyDown={(e) => onEnterKeyAddRow(e, item.id, rowIdx, rowValues.__rowType || 'data')}
+          onKeyDown={(e) => onEnterKeyAddRow(e, item.id, rowIdx, rowValues.__rowType || 'data', sectionType)}
           onMouseDown={(e) => cellMouseDown(e, cellIdx)}
           onMouseEnter={() => cellMouseEnter(cellIdx)}
           onFocus={onInputFocus}

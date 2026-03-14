@@ -337,7 +337,7 @@ export default function useRowCommands({
    * Add a new row of the same type below (triggered by Enter key)
    */
   const addRowOnEnter = useCallback(
-    (e, itemId, rowIdx, rowType) => {
+    (e, itemId, rowIdx, rowType, sectionType) => {
       if (e.key !== 'Enter') return;
       e.preventDefault();
 
@@ -357,6 +357,10 @@ export default function useRowCommands({
         Subprojects: SECTION_CONFIG.Subprojects.prompt,
       };
 
+      // Schedule prompts use column 2, other prompts use column 1
+      const isSchedulePrompt = rowType === 'prompt' && sectionType === 'Schedule';
+      const promptCol = isSchedulePrompt ? 2 : 1;
+
       let capturedState = null;
       const command = {
         execute: () => {
@@ -369,15 +373,6 @@ export default function useRowCommands({
               shortlist: prev.shortlist.map((item) => {
                 if (item.id !== itemId) return item;
                 const entries = item.planTableEntries.map(cloneRowWithMetadata);
-
-                // Find the nearest header row above to determine the section
-                let sectionType = '';
-                for (let i = rowIdx; i >= 0; i--) {
-                  if (entries[i]?.__rowType === 'header') {
-                    sectionType = entries[i].__sectionType || '';
-                    break;
-                  }
-                }
 
                 const getDefaultText = () => {
                   if (rowType === 'response') {
@@ -392,7 +387,7 @@ export default function useRowCommands({
                 const defaultText = getDefaultText();
                 const newRow = Array.from({ length: PLAN_TABLE_COLS }, (_, i) => {
                   if (rowType === 'response' && i === 2) return defaultText;
-                  if (rowType === 'prompt' && i === 1) return defaultText;
+                  if (rowType === 'prompt' && i === promptCol) return defaultText;
                   return '';
                 });
 
@@ -418,7 +413,7 @@ export default function useRowCommands({
       executeCommand(command);
 
       // Set focus to the new row
-      const focusCol = rowType === 'prompt' ? 1 : 2;
+      const focusCol = rowType === 'prompt' ? promptCol : 2;
       if (pendingFocusRequestRef) {
         pendingFocusRequestRef.current = {
           itemId,

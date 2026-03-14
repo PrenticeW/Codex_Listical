@@ -156,17 +156,17 @@ export default function useStagingKeyboardHandlers({
         target.tagName === 'TEXTAREA' ||
         target.isContentEditable;
 
-      // Undo: Cmd/Ctrl+Z (not while editing)
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey && !isEditing) {
+      // Undo: Cmd/Ctrl+Z (works even while editing to undo row additions, etc.)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         undo();
         return;
       }
 
-      // Redo: Cmd/Ctrl+Shift+Z or Cmd/Ctrl+Y (not while editing)
+      // Redo: Cmd/Ctrl+Shift+Z or Cmd/Ctrl+Y (works even while editing)
       if (
-        ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey && !isEditing) ||
-        ((e.metaKey || e.ctrlKey) && e.key === 'y' && !isEditing)
+        ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) ||
+        ((e.metaKey || e.ctrlKey) && e.key === 'y')
       ) {
         e.preventDefault();
         redo();
