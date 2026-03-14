@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
-import { SquarePlus, Pencil } from 'lucide-react';
+import { SquarePlus, Pencil, CalendarCheck } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
@@ -449,7 +449,7 @@ export default function StagingPageV2() {
                             color: headerTextColor,
                             paddingLeft: '12px',
                             fontWeight: 600,
-                            gridTemplateColumns: '1fr auto 140px 120px 32px',
+                            gridTemplateColumns: '1fr auto 140px 24px 80px 32px',
                             alignItems: 'center',
                             gap: '12px',
                           }}
@@ -459,6 +459,16 @@ export default function StagingPageV2() {
                           </div>
                           <div></div>
                           <div style={{ width: '140px', minWidth: '140px' }}></div>
+                          <div
+                            style={{ width: '24px', minWidth: '24px' }}
+                            className="flex items-center justify-end"
+                          >
+                            {item.addedToPlan && (
+                              <div title="Added to scheduling plan">
+                                <CalendarCheck size={20} strokeWidth={2.5} color="#ffffff" />
+                              </div>
+                            )}
+                          </div>
                           <div
                             className="text-right font-semibold pr-2"
                             style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
