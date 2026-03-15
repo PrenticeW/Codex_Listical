@@ -1,13 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { loadStagingState, saveStagingState } from '../../lib/stagingStorage';
 import {
   buildProjectPlanSummary,
   clonePlanTableEntries,
-  cloneStagingState,
+  defineRowMetadata,
   PLAN_TABLE_COLS,
 } from '../../utils/staging/planTableHelpers';
 import { ensurePlanPairingMetadata } from '../../utils/staging/rowPairing';
 import { SECTION_CONFIG } from '../../utils/staging/sectionConfig';
+import { createStateMutationExecutor } from '../../utils/staging/commandHelpers';
 
 // Row type constants
 const ROW_TYPE = {
@@ -27,23 +28,7 @@ const createRow = (firstCellValue = '', rowType = ROW_TYPE.DATA, sectionType = n
   const row = Array.from({ length: PLAN_TABLE_COLS }, (_, i) =>
     i === 0 ? firstCellValue : ''
   );
-  // Store row type as non-enumerable property (won't be serialized to JSON by default)
-  Object.defineProperty(row, '__rowType', {
-    value: rowType,
-    writable: true,
-    configurable: true,
-    enumerable: false,
-  });
-  // Store section type for header rows (used to identify section even if header text changes)
-  if (sectionType) {
-    Object.defineProperty(row, '__sectionType', {
-      value: sectionType,
-      writable: true,
-      configurable: true,
-      enumerable: false,
-    });
-  }
-  return row;
+  return defineRowMetadata(row, { rowType, sectionType });
 };
 
 /**
@@ -53,13 +38,7 @@ const createPromptRow = (promptText) => {
   const row = Array.from({ length: PLAN_TABLE_COLS }, (_, i) =>
     i === 1 ? promptText : ''
   );
-  Object.defineProperty(row, '__rowType', {
-    value: ROW_TYPE.PROMPT,
-    writable: true,
-    configurable: true,
-    enumerable: false,
-  });
-  return row;
+  return defineRowMetadata(row, { rowType: ROW_TYPE.PROMPT });
 };
 
 /**
@@ -69,13 +48,7 @@ const createSchedulePromptRow = (promptText) => {
   const row = Array.from({ length: PLAN_TABLE_COLS }, (_, i) =>
     i === 2 ? promptText : ''
   );
-  Object.defineProperty(row, '__rowType', {
-    value: ROW_TYPE.PROMPT,
-    writable: true,
-    configurable: true,
-    enumerable: false,
-  });
-  return row;
+  return defineRowMetadata(row, { rowType: ROW_TYPE.PROMPT });
 };
 
 /**
@@ -86,13 +59,7 @@ const createResponseRow = (placeholder = '') => {
   const row = Array.from({ length: PLAN_TABLE_COLS }, (_, i) =>
     i === 2 ? placeholder : ''
   );
-  Object.defineProperty(row, '__rowType', {
-    value: ROW_TYPE.RESPONSE,
-    writable: true,
-    configurable: true,
-    enumerable: false,
-  });
-  return row;
+  return defineRowMetadata(row, { rowType: ROW_TYPE.RESPONSE });
 };
 
 /**
@@ -137,6 +104,12 @@ const createSimpleTable = () => {
 export default function useShortlistState({ currentYear, executeCommand }) {
   const [inputValue, setInputValue] = useState('');
   const [{ shortlist, archived }, setState] = useState(() => loadStagingState(currentYear));
+
+  // Create memoized state mutation executor
+  const executeStateMutation = useMemo(
+    () => createStateMutationExecutor(setState, executeCommand),
+    [setState, executeCommand]
+  );
 
   // Initialize pairing metadata on mount
   useEffect(() => {
@@ -232,103 +205,31 @@ export default function useShortlistState({ currentYear, executeCommand }) {
       isSimpleTable: true,
     };
 
-    if (executeCommand) {
-      let capturedState = null;
-
-      const command = {
-        execute: () => {
-          setState((prev) => {
-            if (capturedState === null) {
-              capturedState = cloneStagingState(prev);
-            }
-            return {
-              shortlist: [...prev.shortlist, newItem],
-              archived: prev.archived,
-            };
-          });
-        },
-        undo: () => {
-          if (capturedState) setState(capturedState);
-        },
-      };
-
-      executeCommand(command);
-    } else {
-      setState((prev) => ({
-        shortlist: [...prev.shortlist, newItem],
-        archived: prev.archived,
-      }));
-    }
+    executeStateMutation((prev) => ({
+      shortlist: [...prev.shortlist, newItem],
+      archived: prev.archived,
+    }));
     setInputValue('');
-  }, [inputValue, executeCommand]);
+  }, [inputValue, executeStateMutation]);
 
   // Remove item from shortlist
   const handleRemove = useCallback((id) => {
-    if (executeCommand) {
-      let capturedState = null;
-
-      const command = {
-        execute: () => {
-          setState((prev) => {
-            if (capturedState === null) {
-              capturedState = cloneStagingState(prev);
-            }
-            return {
-              shortlist: prev.shortlist.filter((item) => item.id !== id),
-              archived: prev.archived,
-            };
-          });
-        },
-        undo: () => {
-          if (capturedState) setState(capturedState);
-        },
-      };
-
-      executeCommand(command);
-    } else {
-      setState((prev) => ({
-        shortlist: prev.shortlist.filter((item) => item.id !== id),
-        archived: prev.archived,
-      }));
-    }
-  }, [executeCommand]);
+    executeStateMutation((prev) => ({
+      shortlist: prev.shortlist.filter((item) => item.id !== id),
+      archived: prev.archived,
+    }));
+  }, [executeStateMutation]);
 
   // Toggle plan table collapse state
   const togglePlanTable = useCallback((id) => {
-    if (executeCommand) {
-      let capturedState = null;
-
-      const command = {
-        execute: () => {
-          setState((prev) => {
-            if (capturedState === null) {
-              capturedState = cloneStagingState(prev);
-            }
-            return {
-              ...prev,
-              shortlist: prev.shortlist.map((item) => {
-                if (item.id !== id || !item.planTableVisible) return item;
-                return { ...item, planTableCollapsed: !item.planTableCollapsed };
-              }),
-            };
-          });
-        },
-        undo: () => {
-          if (capturedState) setState(capturedState);
-        },
-      };
-
-      executeCommand(command);
-    } else {
-      setState((prev) => ({
-        ...prev,
-        shortlist: prev.shortlist.map((item) => {
-          if (item.id !== id || !item.planTableVisible) return item;
-          return { ...item, planTableCollapsed: !item.planTableCollapsed };
-        }),
-      }));
-    }
-  }, [executeCommand]);
+    executeStateMutation((prev) => ({
+      ...prev,
+      shortlist: prev.shortlist.map((item) => {
+        if (item.id !== id || !item.planTableVisible) return item;
+        return { ...item, planTableCollapsed: !item.planTableCollapsed };
+      }),
+    }));
+  }, [executeStateMutation]);
 
   return {
     inputValue,

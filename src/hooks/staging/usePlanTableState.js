@@ -1,7 +1,6 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useMemo } from 'react';
 import {
   clonePlanTableEntries,
-  cloneStagingState,
   parseEstimateLabelToMinutes,
   formatMinutesToHHmm,
   PLAN_TABLE_COLS,
@@ -12,6 +11,7 @@ import {
   setRowPairId,
   ensurePlanPairingMetadata,
 } from '../../utils/staging/rowPairing';
+import { createStateMutationExecutor } from '../../utils/staging/commandHelpers';
 
 /**
  * Hook to manage plan table state operations (add/remove rows, cell updates, etc.)
@@ -22,39 +22,9 @@ import {
 export default function usePlanTableState({ setState, executeCommand }) {
   const pendingFocusRequestRef = useRef(null);
 
-  /**
-   * Helper to execute a state mutation, optionally wrapped in a command for undo/redo
-   * @param {Function} getNewState - Function that takes prev state and returns new state
-   * @param {Function} getOldState - Function that takes prev state and returns the state to restore on undo
-   */
-  const executeStateMutation = useCallback(
-    (mutationFn) => {
-      if (executeCommand) {
-        // Capture current state for undo
-        let capturedPrevState = null;
-
-        const command = {
-          execute: () => {
-            setState((prev) => {
-              // Capture state on first execute for undo (use cloneStagingState to preserve row metadata)
-              if (capturedPrevState === null) {
-                capturedPrevState = cloneStagingState(prev);
-              }
-              return mutationFn(prev);
-            });
-          },
-          undo: () => {
-            if (capturedPrevState !== null) {
-              setState(capturedPrevState);
-            }
-          },
-        };
-        executeCommand(command);
-      } else {
-        // No command pattern, just execute directly
-        setState(mutationFn);
-      }
-    },
+  // Create memoized state mutation executor
+  const executeStateMutation = useMemo(
+    () => createStateMutationExecutor(setState, executeCommand),
     [setState, executeCommand]
   );
 

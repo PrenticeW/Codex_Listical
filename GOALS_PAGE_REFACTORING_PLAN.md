@@ -115,12 +115,56 @@ const outcomePromptStart = outcomeHeadingRow + 1;
 - `src/pages/StagingPageV2.jsx` line 87: `currentPath` declared but never used
 - `src/hooks/staging/useShortlistState.js` lines 223-230: Legacy row counts initialized to 0 with comment about "simple tables" but still referenced in `usePlanTableState.js`
 
-### 9. Add Constants for Magic Numbers
-**Files:** Various
+### 9. Add Constants for Magic Numbers and Strings
+**Files:** Various (`StagingPageV2.jsx`, `usePlanTableState.js`, `TableRow.jsx`, `planTableHelpers.js`)
 
-**Problem:** Column indices like `row[5]` for time values appear without explanation.
+**Problem:**
+- Column indices like `row[5]` for time values, `row[4]` for estimates appear without explanation
+- Section names like `'Actions'`, `'Schedule'`, `'Outcomes'` are string literals scattered throughout (should use `SECTION_CONFIG` keys consistently)
 
-**Fix:** Add constants: `const COL_TIME_VALUE = 5;` etc.
+**Fix:**
+- Add column constants in `planTableHelpers.js`:
+  ```javascript
+  export const COL = {
+    DRAG_HANDLE: 0,
+    LABEL: 1,
+    CONTENT: 2,
+    // ...
+    ESTIMATE: 4,
+    TIME_VALUE: 5,
+  };
+  ```
+- Ensure all section type checks use `SECTION_CONFIG` keys or a `SECTION_TYPES` constant
+
+### 10. Add Type Definitions
+**Files:** Various hooks and utilities
+
+**Problem:** Complex data structures are hard to understand:
+- Item objects with nested `planTableEntries` arrays
+- Row arrays with non-enumerable metadata properties (`__rowType`, `__pairId`, etc.)
+- `planModal` state shape
+- Command pattern structure
+
+**Fix:** Add JSDoc type definitions at minimum. Consider TypeScript migration for new files. Key types to document:
+```javascript
+/**
+ * @typedef {Object} StagingItem
+ * @property {string} id
+ * @property {string} text
+ * @property {string} [projectName]
+ * @property {string} [color]
+ * @property {boolean} planTableVisible
+ * @property {boolean} planTableCollapsed
+ * @property {Array<RowArray>} planTableEntries
+ * @property {boolean} [showOutcomeTotals]
+ * @property {boolean} [addedToPlan]
+ * ...
+ */
+
+/**
+ * @typedef {Array<string> & { __rowType?: string, __pairId?: string, __sectionType?: string }} RowArray
+ */
+```
 
 ---
 
@@ -145,6 +189,7 @@ const outcomePromptStart = outcomeHeadingRow + 1;
 | 4 | Consolidate row metadata | Medium | High |
 | 5 | Share command pattern helper | Low | Medium |
 | 6 | Extract section boundaries calc | Medium | Medium |
-| 7 | Remove dead code | Low | Low |
-| 8 | Simplify TableRow | High | Medium |
-| 9 | Add constants for magic numbers | Low | Low |
+| 7 | Simplify TableRow | High | Medium |
+| 8 | Remove dead code | Low | Low |
+| 9 | Add constants for magic numbers/strings | Low | Low |
+| 10 | Add type definitions (JSDoc) | Medium | Medium |

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect } from 'react';
 import { SquarePlus, Pencil, CalendarCheck } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
 import { useYear } from '../contexts/YearContext';
+import { useAuth } from '../contexts/AuthContext';
 import NavigationBar from '../components/planner/NavigationBar';
 import usePageSize from '../hooks/usePageSize';
 import {
@@ -19,9 +19,11 @@ import {
 } from '../hooks/staging';
 import ContextMenu from '../components/staging/ContextMenu';
 import TableRow from '../components/staging/TableRow';
+import ProjectEditModal from '../components/staging/ProjectEditModal';
 import {
   clonePlanTableEntries,
   cloneStagingState,
+  COL,
   PLAN_TABLE_COLS,
   parseTimeValueToMinutes,
   formatMinutesToHHmm,
@@ -64,7 +66,7 @@ const calculateTimeTotals = (planEntries) => {
       currentSection = row.__sectionType || '';
     } else if (currentSection === 'Schedule') {
       if (row?.__rowType === 'response' || row?.__rowType === 'prompt') {
-        const value = row[5] ?? '';
+        const value = row[COL.TIME_VALUE] ?? '';
         const minutes = parseTimeValueToMinutes(value);
         scheduleTotalMinutes += minutes;
       }
@@ -83,9 +85,8 @@ const calculateTimeTotals = (planEntries) => {
  * Manages project shortlist and planning tables with unified row rendering
  */
 export default function StagingPageV2() {
-  const location = useLocation();
-  const currentPath = location.pathname;
   const { currentYear } = useYear();
+  const { isLoading: isAuthLoading } = useAuth();
 
   const { sizeScale } = usePageSize('goal');
   const textSizeScale = sizeScale;
@@ -316,6 +317,18 @@ export default function StagingPageV2() {
     }
   }, [selectedRows, clearSelection]);
 
+  // Wait for auth to complete before rendering content that depends on user-scoped data
+  if (isAuthLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Render the simple table (unified row rendering)
   const renderTable = (item) => {
     const entries = item.planTableEntries || [];
@@ -490,101 +503,14 @@ export default function StagingPageV2() {
                             </button>
                           </div>
                           {planModal.open && planModal.itemId === item.id && (
-                            <div
-                              className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-[#ced3d0] bg-white p-4 shadow-xl z-[9999]"
-                              style={{ backgroundColor: '#ffffff', color: '#0f172a' }}
-                            >
-                              <div className="space-y-3">
-                                <div className="space-y-2" style={{ paddingTop: '15px' }}>
-                                  <label
-                                    className="text-sm font-semibold text-slate-700"
-                                    htmlFor="plan-color-inline"
-                                  >
-                                    Project colour
-                                  </label>
-                                  <input
-                                    id="plan-color-inline"
-                                    type="color"
-                                    className="h-10 w-full cursor-pointer rounded border border-[#ced3d0] p-1"
-                                    value={planModal.color || '#c9daf8'}
-                                    onChange={(e) => updatePlanModal({ color: e.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-1" style={{ paddingTop: '15px' }}>
-                                  <label
-                                    className="text-sm font-semibold text-slate-700"
-                                    htmlFor="plan-name-inline"
-                                  >
-                                    Project Name
-                                  </label>
-                                  <input
-                                    id="plan-name-inline"
-                                    type="text"
-                                    value={planModal.projectName}
-                                    onChange={(e) =>
-                                      updatePlanModal({ projectName: e.target.value })
-                                    }
-                                    className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                                  />
-                                </div>
-                                <div className="space-y-1" style={{ paddingTop: '15px' }}>
-                                  <label
-                                    className="text-sm font-semibold text-slate-700"
-                                    htmlFor="plan-nickname-inline"
-                                  >
-                                    Project Nickname
-                                  </label>
-                                  <input
-                                    id="plan-nickname-inline"
-                                    type="text"
-                                    value={planModal.projectNickname}
-                                    onChange={(e) => {
-                                      const nextValue = (e.target.value || '').toUpperCase();
-                                      updatePlanModal({ projectNickname: nextValue });
-                                    }}
-                                    className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                                  />
-                                </div>
-                                <div
-                                  className="flex flex-wrap items-center justify-between gap-2"
-                                  style={{ paddingTop: '15px' }}
-                                >
-                                  <button
-                                    type="button"
-                                    className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-100"
-                                    onClick={() => handleRemove(item.id)}
-                                  >
-                                    Delete Project
-                                  </button>
-                                  <div className="flex gap-2">
-                                    {item.addedToPlan ? (
-                                      <button
-                                        type="button"
-                                        className="rounded border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700 shadow-sm hover:bg-orange-100"
-                                        onClick={() => handleTogglePlanStatus(item.id, false)}
-                                      >
-                                        Remove From Plan
-                                      </button>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm hover:bg-blue-100"
-                                        onClick={() => handleTogglePlanStatus(item.id, true)}
-                                      >
-                                        Add To Plan
-                                      </button>
-                                    )}
-                                    <button
-                                      type="button"
-                                      className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
-                                      onClick={handlePlanNext}
-                                    >
-                                      Close
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
+                            <ProjectEditModal
+                              item={item}
+                              planModal={planModal}
+                              updatePlanModal={updatePlanModal}
+                              handlePlanNext={handlePlanNext}
+                              handleRemove={handleRemove}
+                              handleTogglePlanStatus={handleTogglePlanStatus}
+                            />
                           )}
                         </div>
                         {item.planTableVisible && !item.planTableCollapsed

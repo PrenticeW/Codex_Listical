@@ -1,10 +1,12 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
-  cloneStagingState,
   cloneRowWithMetadata,
+  cloneStagingState,
+  defineRowMetadata,
   PLAN_TABLE_COLS,
 } from '../../utils/staging/planTableHelpers';
 import { SECTION_CONFIG } from '../../utils/staging/sectionConfig';
+import { createStateMutationExecutor } from '../../utils/staging/commandHelpers';
 
 /**
  * Hook that provides row manipulation commands (insert, delete, duplicate)
@@ -301,13 +303,7 @@ export default function useRowCommands({
                   if (rowType !== 'data' && i === textColumn) return placeholderText;
                   return '';
                 });
-
-                Object.defineProperty(newRow, '__rowType', {
-                  value: rowType,
-                  writable: true,
-                  configurable: true,
-                  enumerable: false,
-                });
+                defineRowMetadata(newRow, { rowType });
 
                 entries.splice(rowIdx + 1, 0, newRow);
                 return { ...item, planTableEntries: entries };
@@ -390,14 +386,8 @@ export default function useRowCommands({
                   if (rowType === 'prompt' && i === promptCol) return defaultText;
                   return '';
                 });
-
                 if (rowType) {
-                  Object.defineProperty(newRow, '__rowType', {
-                    value: rowType,
-                    writable: true,
-                    configurable: true,
-                    enumerable: false,
-                  });
+                  defineRowMetadata(newRow, { rowType });
                 }
 
                 entries.splice(rowIdx + 1, 0, newRow);

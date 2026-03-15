@@ -1,4 +1,5 @@
 import storage from './storageService';
+import { defineRowMetadata } from '../utils/staging/planTableHelpers';
 
 const STORAGE_KEY_TEMPLATE = 'staging-year-{yearNumber}-shortlist';
 export const STAGING_STORAGE_EVENT = 'staging-state-update';
@@ -50,39 +51,12 @@ const deserializeRow = (row) => {
   // Handle new format: { cells: [...], _rowType?, _pairId?, _sectionType?, _isTotalRow? }
   if (row && typeof row === 'object' && Array.isArray(row.cells)) {
     const deserialized = [...row.cells];
-    if (row._rowType) {
-      Object.defineProperty(deserialized, '__rowType', {
-        value: row._rowType,
-        writable: true,
-        configurable: true,
-        enumerable: false,
-      });
-    }
-    if (row._pairId) {
-      Object.defineProperty(deserialized, '__pairId', {
-        value: row._pairId,
-        writable: true,
-        configurable: true,
-        enumerable: false,
-      });
-    }
-    if (row._sectionType) {
-      Object.defineProperty(deserialized, '__sectionType', {
-        value: row._sectionType,
-        writable: true,
-        configurable: true,
-        enumerable: false,
-      });
-    }
-    if (row._isTotalRow) {
-      Object.defineProperty(deserialized, '__isTotalRow', {
-        value: row._isTotalRow,
-        writable: true,
-        configurable: true,
-        enumerable: false,
-      });
-    }
-    return deserialized;
+    return defineRowMetadata(deserialized, {
+      rowType: row._rowType,
+      pairId: row._pairId,
+      sectionType: row._sectionType,
+      isTotalRow: row._isTotalRow,
+    });
   }
   // Handle legacy format: plain array
   if (Array.isArray(row)) {
