@@ -73,8 +73,11 @@ export default function ProjectEditModal({
               const nextValue = (e.target.value || '').toUpperCase();
               updatePlanModal({ projectNickname: nextValue });
             }}
-            className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+            className={`w-full rounded border px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${!planModal.projectNickname.trim() ? 'border-red-400 bg-red-50' : 'border-[#ced3d0]'}`}
           />
+          {!planModal.projectNickname.trim() && (
+            <p className="text-xs text-red-600 font-medium">A nickname is required to add to plan</p>
+          )}
         </div>
         <div
           className="flex flex-wrap items-center justify-between gap-2"
@@ -99,7 +102,8 @@ export default function ProjectEditModal({
             ) : (
               <button
                 type="button"
-                className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm hover:bg-blue-100"
+                disabled={!planModal.projectNickname.trim()}
+                className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed"
                 onClick={() => handleTogglePlanStatus(item.id, true)}
               >
                 Add To Plan
