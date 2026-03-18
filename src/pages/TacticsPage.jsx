@@ -1806,16 +1806,20 @@ export default function TacticsPage() {
     return Math.ceil(maxText + padding);
   }, [textSizeScale, projectSummaries, hourRows, use24Hour, showAmPm, startHour]);
 
-  const gridTemplateColumns = useMemo(() => {
+  const { gridTemplateColumns, col0Width, tableWidth } = useMemo(() => {
     // Build grid template with specific pixel widths from columnWidths state, scaled by textSizeScale
     const columns = [];
+    let firstColWidth = 0;
+    let total = 0;
     for (let i = 0; i <= totalColumnCount; i++) {
       const baseWidth = columnWidths[i] || (i === 0 ? 120 : 140);
       const scaled = Math.round(baseWidth * textSizeScale);
       const width = i === 0 ? Math.max(scaled, col0MinWidth) : scaled;
+      if (i === 0) firstColWidth = width;
+      total += width;
       columns.push(`${width}px`);
     }
-    return columns.join(' ');
+    return { gridTemplateColumns: columns.join(' '), col0Width: firstColWidth, tableWidth: total };
   }, [totalColumnCount, columnWidths, textSizeScale, col0MinWidth]);
 
   // Column resize handler
@@ -2292,7 +2296,7 @@ export default function TacticsPage() {
     const originalBodyOverflow = body?.style.overflow;
     const originalRootHeight = root?.style.height;
 
-    // Set to visible/auto for scrolling - only body gets scrollbar to avoid double scrollbar
+    // Set to visible/auto for scrolling - only body gets vertical scrollbar to avoid double scrollbar
     if (root) {
       root.style.overflow = 'visible';
       root.style.height = 'auto';
@@ -2342,16 +2346,16 @@ export default function TacticsPage() {
         <div className="rounded border border-[#ced3d0] bg-white shadow-sm">
           <div
             ref={tableContainerRef}
-            className="p-4"
+            className="pt-4 pb-4"
             onDrop={handleTableDrop}
             onDragOver={handleTableDragOver}
-            style={{ display: 'block', paddingBottom: '440px', overflowX: 'auto' }}
+            style={{ display: 'block', paddingBottom: '440px', paddingRight: '100vw', overflowX: 'auto' }}
           >
           {renderDragOutline()}
           <table
             ref={tableElementRef}
             className="border-collapse text-[11px] text-slate-800"
-            style={{ display: 'table', width: 'auto', minWidth: '100%' }}
+            style={{ display: 'table', width: `${tableWidth}px`, minWidth: `${tableWidth}px` }}
           >
             <tbody>
               <tr className="grid text-sm" style={{ gridTemplateColumns }}>
@@ -2361,7 +2365,7 @@ export default function TacticsPage() {
                       <td
                         key={`blank-${index}`}
                         className="border border-[#e5e7eb] px-3 py-px text-center font-semibold"
-                        style={{ position: 'relative' }}
+                        style={index === 0 ? { position: 'sticky', left: 0, zIndex: 11, backgroundColor: 'white' } : { position: 'relative' }}
                       >
                         {/* Add resize handle */}
                         <div
@@ -2464,7 +2468,7 @@ export default function TacticsPage() {
                 <td
                   className="border border-[#e5e7eb] px-3 py-px font-semibold text-center"
                   data-row-id-anchor="sleep-start"
-                  style={{ fontSize: `${14 * textSizeScale}px` }}
+                  style={{ fontSize: `${14 * textSizeScale}px`, position: 'sticky', left: 0, zIndex: 11, backgroundColor: 'white' }}
                 >
                   {(() => {
                     if (!startHour) return '—';
@@ -2540,7 +2544,7 @@ export default function TacticsPage() {
                   <td
                     className="border border-[#e5e7eb] px-3 py-px font-semibold text-center"
                     data-row-id-anchor={`hour-${hourValue}`}
-                    style={{ fontSize: `${14 * textSizeScale}px` }}
+                    style={{ fontSize: `${14 * textSizeScale}px`, position: 'sticky', left: 0, zIndex: 11, backgroundColor: 'white' }}
                   >
                     {formatTime(hourValue, '00', { use24Hour, showAmPm })}
                   </td>
@@ -2612,7 +2616,7 @@ export default function TacticsPage() {
                 <td
                   className="border border-[#e5e7eb] px-3 py-px font-semibold text-center"
                   data-row-id-anchor="sleep-end"
-                  style={{ fontSize: `${14 * textSizeScale}px` }}
+                  style={{ fontSize: `${14 * textSizeScale}px`, position: 'sticky', left: 0, zIndex: 11, backgroundColor: 'white' }}
                 >
                   {(() => {
                     if (!startMinute) return '—';
@@ -2688,7 +2692,7 @@ export default function TacticsPage() {
                   <td
                     className="border border-[#e5e7eb] px-3 py-px font-semibold text-center"
                     data-row-id-anchor={`trailing-${rowIdx}`}
-                    style={{ fontSize: `${14 * textSizeScale}px` }}
+                    style={{ fontSize: `${14 * textSizeScale}px`, position: 'sticky', left: 0, zIndex: 11, backgroundColor: 'white' }}
                   >
                     {formatTime(
                       Math.floor(minutesValue / 60),
@@ -2787,7 +2791,7 @@ export default function TacticsPage() {
               >
                 <td
                   className="border border-[#e5e7eb] px-3 py-px text-center"
-                  style={{ backgroundColor: '#d9d9d9', color: '#000', fontWeight: 700, fontSize: `${14 * textSizeScale}px` }}
+                  style={{ backgroundColor: '#d9d9d9', color: '#000', fontWeight: 700, fontSize: `${14 * textSizeScale}px`, position: 'sticky', left: 0, zIndex: 11 }}
                 >
                   Sleep
                 </td>
@@ -2840,6 +2844,9 @@ export default function TacticsPage() {
                         color: '#ffffff',
                         fontWeight: 700,
                         fontSize: `${14 * textSizeScale}px`,
+                        position: 'sticky',
+                        left: 0,
+                        zIndex: 11,
                       }}
                     >
                       {summary.label}
@@ -2887,7 +2894,7 @@ export default function TacticsPage() {
               >
                 <td
                   className="border border-[#e5e7eb] px-3 py-px text-center"
-                  style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700, fontSize: `${14 * textSizeScale}px` }}
+                  style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700, fontSize: `${14 * textSizeScale}px`, position: 'sticky', left: 0, zIndex: 11 }}
                 >
                   REST
                 </td>
@@ -2946,6 +2953,9 @@ export default function TacticsPage() {
                     color: '#0f172a',
                     fontWeight: 700,
                     fontSize: `${14 * textSizeScale}px`,
+                    position: 'sticky',
+                    left: 0,
+                    zIndex: 11,
                   }}
                 >
                   Working Hours
@@ -2991,6 +3001,9 @@ export default function TacticsPage() {
                       backgroundColor: '#ffffff',
                       fontWeight: 700,
                       fontSize: `${14 * textSizeScale}px`,
+                      position: 'sticky',
+                      left: 0,
+                      zIndex: 11,
                     }}
                   >
                     Buffer
@@ -3032,7 +3045,7 @@ export default function TacticsPage() {
               >
                 <td
                   className="border border-[#e5e7eb] px-3 py-px text-center"
-                  style={{ backgroundColor: '#ffffff', color: '#000000', fontWeight: 700, fontSize: `${14 * textSizeScale}px` }}
+                  style={{ backgroundColor: '#ffffff', color: '#000000', fontWeight: 700, fontSize: `${14 * textSizeScale}px`, position: 'sticky', left: 0, zIndex: 11 }}
                 >
                   Available Hours
                 </td>
