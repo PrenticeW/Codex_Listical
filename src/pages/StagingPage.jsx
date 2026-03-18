@@ -259,15 +259,14 @@ const clonePlanTableEntries = (entries, ensureRows = PLAN_TABLE_ROWS) => {
 };
 
 const buildProjectPlanSummary = (item) => {
-  if (!item) return { subprojects: [], totalHours: '0.00' };
+  if (!item) return { scheduleItems: [], totalHours: '0.00' };
   const entries = clonePlanTableEntries(item.planTableEntries);
   const reasonRowCount = item.planReasonRowCount ?? 1;
   const outcomeRowCount = item.planOutcomeRowCount ?? 1;
   const questionRowCount = item.planOutcomeQuestionRowCount ?? 1;
   const needsQuestionRowCount = item.planNeedsQuestionRowCount ?? 1;
   const needsPlanRowCount = item.planNeedsPlanRowCount ?? 1;
-  const scheduleRowCount = item.planSubprojectRowCount ?? 1; // Changed from subprojectRowCount
-  const subprojectRowCount = item.planXxxRowCount ?? 1; // Changed from xxxRowCount
+  const scheduleRowCount = item.planSubprojectRowCount ?? 1;
   const outcomeHeadingRow = 2 + reasonRowCount;
   const outcomePromptStart = outcomeHeadingRow + 1;
   const outcomePromptEnd = outcomePromptStart + Math.max(outcomeRowCount - 1, 0);
@@ -277,18 +276,14 @@ const buildProjectPlanSummary = (item) => {
   const needsQuestionStart = needsHeadingRow + 1;
   const needsQuestionEnd = needsQuestionStart + Math.max(needsQuestionRowCount - 1, 0);
   const needsPlanStart = needsQuestionEnd + 1;
-  const scheduleHeadingRow = needsPlanStart + Math.max(needsPlanRowCount, 0); // Changed from subprojectsHeadingRow
-  const schedulePromptRow = scheduleHeadingRow + 1; // Changed from subprojectsPromptRow
-  const scheduleStart = schedulePromptRow + 1; // Changed from subprojectStart
-  const subprojectsHeadingRow = scheduleStart + Math.max(scheduleRowCount, 0); // Changed from xxxHeadingRow
-  const subprojectsPromptRow = subprojectsHeadingRow + 1; // Changed from xxxPromptRow
-  const subprojectStart = subprojectsPromptRow + 1; // Changed from xxxStart
-  const subprojects = [];
-  // Now extracting from the new Subprojects section (formerly XXX)
-  for (let idx = 0; idx < Math.max(subprojectRowCount, 0); idx += 1) {
-    const rowIdx = subprojectStart + idx;
+  const scheduleHeadingRow = needsPlanStart + Math.max(needsPlanRowCount, 0);
+  const schedulePromptRow = scheduleHeadingRow + 1;
+  const scheduleStart = schedulePromptRow + 1;
+  const scheduleItems = [];
+  for (let idx = 0; idx < Math.max(scheduleRowCount, 0); idx += 1) {
+    const rowIdx = scheduleStart + idx;
     const rowValues = entries[rowIdx] ?? Array.from({ length: PLAN_TABLE_COLS }, () => '');
-    subprojects.push({
+    scheduleItems.push({
       name: (rowValues[2] ?? '').trim(),
       timeValue: rowValues[4] ?? '0.00',
     });
@@ -300,12 +295,12 @@ const buildProjectPlanSummary = (item) => {
       return parseTimeValueToMinutes(rowValues[4] ?? '');
     }).reduce((sum, value) => sum + value, 0);
   const needsPlanTotalMinutes = calculateMinutes(needsPlanStart, needsPlanRowCount);
-  const scheduleTotalMinutes = calculateMinutes(scheduleStart, scheduleRowCount); // Changed from subprojectTotalMinutes
+  const scheduleTotalMinutes = calculateMinutes(scheduleStart, scheduleRowCount);
   const projectTotalMinutes = needsPlanTotalMinutes + scheduleTotalMinutes;
   return {
-    subprojects,
+    scheduleItems,
     needsPlanTotalMinutes,
-    scheduleTotalMinutes, // Changed from subprojectTotalMinutes
+    scheduleTotalMinutes,
     totalHours: formatMinutesToHHmm(projectTotalMinutes),
   };
 };
@@ -1368,10 +1363,10 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                                 type="text"
                                 value={cellValue}
                                 onChange={(e) =>
-                                  handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value)
+                                  handlePlanTableCellChange(item.id, rowIdx, 2, e.target.value.toUpperCase())
                                 }
-                                placeholder="Schedule Item"
-                                className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none"
+                                placeholder="SCHEDULE ITEM"
+                                className="w-full bg-transparent text-[14px] font-semibold text-slate-800 focus:outline-none border-none uppercase"
                                 data-plan-item={item.id}
                                 data-plan-row={rowIdx}
                                 data-plan-col={2}

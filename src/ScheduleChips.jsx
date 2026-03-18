@@ -1,24 +1,25 @@
 import React from 'react';
 
-export const buildSubprojectLayout = (highlightedProjects) => {
-  const subprojectsByProject = new Map();
+export const buildScheduleLayout = (highlightedProjects) => {
+  const scheduleItemsByProject = new Map();
   let maxRows = 0;
   highlightedProjects.forEach((project) => {
     const planSummary = project.planSummary ?? {};
-    const normalized = Array.isArray(planSummary.subprojects)
-      ? planSummary.subprojects.filter((entry) => Boolean(entry?.name || entry?.timeValue))
+    const items = planSummary.scheduleItems ?? planSummary.subprojects;
+    const normalized = Array.isArray(items)
+      ? items.filter((entry) => Boolean(entry?.name || entry?.timeValue))
       : [];
-    subprojectsByProject.set(project.id, normalized);
+    scheduleItemsByProject.set(project.id, normalized);
     if (normalized.length > maxRows) {
       maxRows = normalized.length;
     }
   });
-  return { subprojectsByProject, maxRows };
+  return { scheduleItemsByProject, maxRows };
 };
 
 const renderRowLabelCell = (label, rowId) => (
   <td
-    key={`subproject-label-${rowId}`}
+    key={`schedule-label-${rowId}`}
     className="border border-[#e5e7eb] px-3 py-2 font-semibold"
     data-row-id-anchor={rowId}
   >
@@ -26,12 +27,12 @@ const renderRowLabelCell = (label, rowId) => (
   </td>
 );
 
-export default function SubprojectChipsRows({
+export default function ScheduleChipsRows({
   gridTemplateColumns,
   dayColumnCount,
   stagingColumnConfigs,
   projectMetadata,
-  subprojectLayout,
+  scheduleLayout,
   displayedWeekDays,
   getProjectChipsByColumnIndex,
   highlightedBlockId,
@@ -44,16 +45,16 @@ export default function SubprojectChipsRows({
   handleCellContextMenu,
   topSpacerRowCount = 2,
 }) {
-  if (!gridTemplateColumns || !subprojectLayout?.maxRows) return null;
-  const { subprojectsByProject, maxRows } = subprojectLayout;
+  if (!gridTemplateColumns || !scheduleLayout?.maxRows) return null;
+  const { scheduleItemsByProject, maxRows } = scheduleLayout;
   const totalColumnCount = dayColumnCount + stagingColumnConfigs.length;
 
   const renderSpacerRow = (rowIdx) => (
-    <tr key={`subproject-spacer-${rowIdx}`} className="grid" style={{ gridTemplateColumns }}>
-      {renderRowLabelCell('', `sub-spacer-${rowIdx}`)}
+    <tr key={`schedule-spacer-${rowIdx}`} className="grid" style={{ gridTemplateColumns }}>
+      {renderRowLabelCell('', `sched-spacer-${rowIdx}`)}
       {Array.from({ length: totalColumnCount }, (_, index) => (
         <td
-          key={`sub-spacer-${rowIdx}-${index}`}
+          key={`sched-spacer-${rowIdx}-${index}`}
           className="border border-[#e5e7eb] px-3 py-2"
           data-day-column={index}
         />
@@ -63,12 +64,12 @@ export default function SubprojectChipsRows({
 
   const chipRows = Array.from({ length: maxRows }, (_, rowIdx) => (
     <tr
-      key={`subproject-row-${rowIdx}`}
+      key={`schedule-row-${rowIdx}`}
       className="grid"
       style={{ gridTemplateColumns }}
-      data-row-id={`subproject-row-${rowIdx}`}
+      data-row-id={`schedule-row-${rowIdx}`}
     >
-      {renderRowLabelCell('', `sub-${rowIdx}`)}
+      {renderRowLabelCell('', `sched-${rowIdx}`)}
       {Array.from({ length: totalColumnCount }, (_, index) => {
         const isDayColumn = index < dayColumnCount;
         const dayLabel = isDayColumn ? displayedWeekDays[index] ?? '' : '';
@@ -77,7 +78,7 @@ export default function SubprojectChipsRows({
         const stagingConfig = !isDayColumn ? stagingColumnConfigs[stagingIdx] : null;
         const isProjectColumn = !isDayColumn && stagingConfig?.type === 'project';
         const isInteractiveColumn = hasDay || isProjectColumn;
-        const rowId = `sub-${rowIdx}`;
+        const rowId = `sched-${rowIdx}`;
         const columnBlocks = isInteractiveColumn
           ? getProjectChipsByColumnIndex(index)
           : [];
@@ -102,9 +103,9 @@ export default function SubprojectChipsRows({
         }
         return (
           <td
-            key={`sub-row-${rowIdx}-${index}`}
+            key={`sched-row-${rowIdx}-${index}`}
             className={`relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible ${
-              cellSelected ? 'outline outline-[2px]' : ''
+              cellSelected ? 'outline-2' : ''
             }`}
             style={Object.keys(cellStyle).length ? cellStyle : undefined}
             data-row-id={rowId}

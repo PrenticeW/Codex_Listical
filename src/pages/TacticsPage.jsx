@@ -12,7 +12,7 @@ import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
 import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '../lib/stagingStorage';
 import { saveTacticsMetrics } from '../lib/tacticsMetricsStorage';
-import { buildSubprojectLayout } from '../SubprojectChips';
+import { buildScheduleLayout } from '../ScheduleChips';
 import storage from '../lib/storageService';
 import usePageSize from '../hooks/usePageSize';
 
@@ -409,8 +409,8 @@ export default function TacticsPage() {
         };
       });
   }, [stagingProjects]);
-  const subprojectLayout = useMemo(
-    () => buildSubprojectLayout(highlightedProjects),
+  const scheduleLayout = useMemo(
+    () => buildScheduleLayout(highlightedProjects),
     [highlightedProjects]
   );
   const customSequenceRef = useRef(0);
@@ -1645,7 +1645,7 @@ export default function TacticsPage() {
     }));
     return [...stagingColumnConfigs, ...placeholders];
   }, [stagingColumnConfigs, totalColumnCount]);
-  const hasInitializedSubprojects = useRef(false);
+  const hasInitializedScheduleChips = useRef(false);
   // Track previous staging projects to detect changes
   const prevStagingProjectsRef = useRef(null);
 
@@ -1656,8 +1656,8 @@ export default function TacticsPage() {
     prevStagingProjectsRef.current = stagingProjectsKey;
 
     // Only run if we have data, and either it's first load OR projects changed
-    if (!subprojectLayout?.subprojectsByProject || !timelineRowIds.length) return;
-    if (hasInitializedSubprojects.current && !hasProjectsChanged) return;
+    if (!scheduleLayout?.scheduleItemsByProject || !timelineRowIds.length) return;
+    if (hasInitializedScheduleChips.current && !hasProjectsChanged) return;
 
     setProjectChips((prev) => {
       const next = [...prev];
@@ -1666,13 +1666,13 @@ export default function TacticsPage() {
       stagingColumnConfigs.forEach((column, idx) => {
         if (column.type !== 'project') return;
         const columnIndex = DAY_COLUMN_COUNT + idx;
-        const subprojects = subprojectLayout.subprojectsByProject.get(column.project.id) ?? [];
+        const scheduleItems = scheduleLayout.scheduleItemsByProject.get(column.project.id) ?? [];
         let currentRowIdx = baseOffset;
-        subprojects.forEach((subproject, subIdx) => {
-          const chipId = `subproject-${column.project.id}-${subIdx}`;
+        scheduleItems.forEach((scheduleItem, itemIdx) => {
+          const chipId = `schedule-chip-${column.project.id}-${itemIdx}`;
           expectedIds.add(chipId);
-          const label = (subproject.name ?? '').trim() || 'Subproject';
-          const minutes = parseTimeValueToMinutes(subproject.timeValue);
+          const label = (scheduleItem.name ?? '').trim() || column.project.label || 'Schedule Item';
+          const minutes = parseTimeValueToMinutes(scheduleItem.timeValue);
           const span = Math.max(
             1,
             Math.ceil(
@@ -1709,13 +1709,13 @@ export default function TacticsPage() {
       });
       if (!expectedIds.size) return next;
       return next.filter(
-        (entry) => !entry.id.startsWith('subproject-') || expectedIds.has(entry.id)
+        (entry) => !entry.id.startsWith('schedule-chip-') || expectedIds.has(entry.id)
       );
     });
-    hasInitializedSubprojects.current = true;
+    hasInitializedScheduleChips.current = true;
   }, [
     stagingColumnConfigs,
-    subprojectLayout,
+    scheduleLayout,
     timelineRowIds,
     incrementMinutes,
     setProjectChips,
@@ -1724,23 +1724,23 @@ export default function TacticsPage() {
   const handleClearAllChips = useCallback(() => {
     if (typeof window !== 'undefined') {
       const confirmed = window.confirm(
-        'Clear all chips? This will reset to default sleep blocks and reload subprojects. Custom projects will stay in the dropdown.'
+        'Clear all chips? This will reset to default sleep blocks and reload schedule items. Custom projects will stay in the dropdown.'
       );
       if (!confirmed) return;
     }
     const baseChips = buildInitialSleepBlocks(displayedWeekDays);
     const rebuiltChips = [...baseChips];
-    if (subprojectLayout?.subprojectsByProject && timelineRowIds.length) {
+    if (scheduleLayout?.scheduleItemsByProject && timelineRowIds.length) {
       const baseOffset = 2;
       stagingColumnConfigs.forEach((column, idx) => {
         if (column.type !== 'project') return;
         const columnIndex = DAY_COLUMN_COUNT + idx;
-        const subprojects = subprojectLayout.subprojectsByProject.get(column.project.id) ?? [];
+        const scheduleItems = scheduleLayout.scheduleItemsByProject.get(column.project.id) ?? [];
         let currentRowIdx = baseOffset;
-        subprojects.forEach((subproject, subIdx) => {
-          const chipId = `subproject-${column.project.id}-${subIdx}`;
-          const label = (subproject.name ?? '').trim() || 'Subproject';
-          const minutes = parseTimeValueToMinutes(subproject.timeValue);
+        scheduleItems.forEach((scheduleItem, itemIdx) => {
+          const chipId = `schedule-chip-${column.project.id}-${itemIdx}`;
+          const label = (scheduleItem.name ?? '').trim() || column.project.label || 'Schedule Item';
+          const minutes = parseTimeValueToMinutes(scheduleItem.timeValue);
           const span = Math.max(
             1,
             Math.ceil(
@@ -1768,15 +1768,15 @@ export default function TacticsPage() {
           });
         });
       });
-      hasInitializedSubprojects.current = true;
+      hasInitializedScheduleChips.current = true;
     } else {
-      hasInitializedSubprojects.current = false;
+      hasInitializedScheduleChips.current = false;
     }
     setProjectChips(rebuiltChips);
     setSelectedBlockId(null);
     setSelectedCell(null);
     setCellMenu(null);
-  }, [displayedWeekDays, incrementMinutes, stagingColumnConfigs, subprojectLayout, timelineRowIds]);
+  }, [displayedWeekDays, incrementMinutes, stagingColumnConfigs, scheduleLayout, timelineRowIds]);
   // Compute the minimum width needed for column 0 to fit its longest string
   const col0MinWidth = useMemo(() => {
     const fontSize = 14 * textSizeScale;
@@ -1914,7 +1914,7 @@ export default function TacticsPage() {
       const blockHeight = getBlockHeight(block.startRowId, block.endRowId);
       const isCustomProject =
         typeof block.projectId === 'string' && block.projectId.startsWith('custom-');
-      const normalizedLabel = isCustomProject ? displayLabel.toUpperCase() : displayLabel;
+      const normalizedLabel = displayLabel.toUpperCase();
       const isEditing = editingChipId === block.id;
       const isChipBeingDragged =
         Boolean(dragPreview && dragPreview.sourceChipId === chipId);
