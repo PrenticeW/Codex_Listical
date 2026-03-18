@@ -428,6 +428,9 @@ export default function TacticsPage() {
   const transparentDragImageRef = useRef(null);
   const tableContainerRef = useRef(null);
   const tableElementRef = useRef(null);
+  const navBarRef = useRef(null);
+  const [navBarHeight, setNavBarHeight] = useState(0);
+  const headerContainerRef = useRef(null);
   const cellMenuRef = useRef(null);
   const hasLoadedInitialState = useRef(false);
   const [tableRect, setTableRect] = useState(null);
@@ -2284,6 +2287,27 @@ export default function TacticsPage() {
     finishColorEdit,
   ]);
 
+  // Sync sticky header horizontal scroll with table container
+  useEffect(() => {
+    const container = tableContainerRef.current;
+    const header = headerContainerRef.current;
+    if (!container || !header) return undefined;
+    const onScroll = () => { header.scrollLeft = container.scrollLeft; };
+    container.addEventListener('scroll', onScroll);
+    return () => container.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Measure nav bar height for sticky header offset
+  useEffect(() => {
+    if (!navBarRef.current) return undefined;
+    const observer = new ResizeObserver(() => {
+      setNavBarHeight(navBarRef.current?.offsetHeight ?? 0);
+    });
+    observer.observe(navBarRef.current);
+    setNavBarHeight(navBarRef.current.offsetHeight);
+    return () => observer.disconnect();
+  }, []);
+
   // Override global overflow:hidden to allow page scrolling
   useEffect(() => {
     const root = document.getElementById('root');
@@ -2322,6 +2346,7 @@ export default function TacticsPage() {
       onDrop={handleRootDrop}
     >
       <div className="p-4 space-y-4">
+        <div ref={navBarRef} style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#f3f4f6', paddingTop: '16px', paddingBottom: '16px' }}>
         <NavigationBar
           listicalButton={
             <ListicalMenu
@@ -2343,22 +2368,27 @@ export default function TacticsPage() {
             />
           }
         />
+        </div>
         <div className="rounded border border-[#ced3d0] bg-white shadow-sm">
+          {/* Sticky header row — outside the horizontal scroll container so it can stick vertically */}
           <div
-            ref={tableContainerRef}
-            className="pt-4 pb-4"
-            onDrop={handleTableDrop}
-            onDragOver={handleTableDragOver}
-            style={{ display: 'block', paddingBottom: '440px', paddingRight: `calc(100vw - ${col0Width}px)`, overflowX: 'auto' }}
+            style={{
+              position: 'sticky',
+              top: navBarHeight,
+              zIndex: 12,
+              backgroundColor: 'white',
+            }}
           >
-          {renderDragOutline()}
-          <table
-            ref={tableElementRef}
-            className="border-collapse text-[11px] text-slate-800"
-            style={{ display: 'table', width: `${tableWidth}px`, minWidth: `${tableWidth}px` }}
-          >
-            <tbody>
-              <tr className="grid text-sm" style={{ gridTemplateColumns }}>
+            <div
+              ref={headerContainerRef}
+              style={{ overflowX: 'hidden', paddingRight: `calc(100vw - ${col0Width}px)` }}
+            >
+            <table
+              className="border-collapse text-[11px] text-slate-800"
+              style={{ display: 'table', width: `${tableWidth}px`, minWidth: `${tableWidth}px` }}
+            >
+              <tbody>
+                <tr className="grid text-sm" style={{ gridTemplateColumns }}>
                 {Array.from({ length: 9 }, (_, index) => {
                   if (index === 0 || index === 8) {
                     return (
@@ -2463,7 +2493,25 @@ export default function TacticsPage() {
                       );
                     })}
                 {renderExtraColumnCells('header', true)}
-              </tr>
+                </tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+          {/* Scrollable body — horizontal scroll only */}
+          <div
+            ref={tableContainerRef}
+            onDrop={handleTableDrop}
+            onDragOver={handleTableDragOver}
+            style={{ display: 'block', paddingBottom: '440px', paddingRight: `calc(100vw - ${col0Width}px)`, overflowX: 'auto' }}
+          >
+          {renderDragOutline()}
+          <table
+            ref={tableElementRef}
+            className="border-collapse text-[11px] text-slate-800"
+            style={{ display: 'table', width: `${tableWidth}px`, minWidth: `${tableWidth}px` }}
+          >
+            <tbody>
               <tr className="grid" style={{ gridTemplateColumns }}>
                 <td
                   className="border border-[#e5e7eb] px-3 py-px font-semibold text-center"
