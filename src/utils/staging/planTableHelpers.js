@@ -443,36 +443,39 @@ export const buildProjectPlanSummary = (item) => {
   if (!item) return { subprojects: [], totalHours: '0.00' };
 
   const entries = clonePlanTableEntries(item.planTableEntries);
-  const bounds = calculateSectionBoundaries(item);
-  const {
-    needsPlanCount,
-    scheduleCount,
-    needsPlanStart,
-    scheduleStart,
-  } = bounds;
 
-  // Extract schedule items (these appear as "subprojects" in TacticsPage)
-  // The Schedule section contains weekly recurring activities
+  // Use row metadata to find Schedule prompt rows (works for the new simple table format)
   const subprojects = [];
-  for (let idx = 0; idx < Math.max(scheduleCount, 0); idx += 1) {
-    const rowIdx = scheduleStart + idx;
-    const rowValues = entries[rowIdx] ?? Array.from({ length: PLAN_TABLE_COLS }, () => '');
-    subprojects.push({
-      name: (rowValues[COL.CONTENT] ?? '').trim(),
-      timeValue: rowValues[COL.ESTIMATE] ?? '0.00',
-    });
+  let inScheduleSection = false;
+  let scheduleTotalMinutes = 0;
+  for (let rowIdx = 0; rowIdx < entries.length; rowIdx += 1) {
+    const row = entries[rowIdx];
+    if (row.__rowType === 'header') {
+      inScheduleSection = row.__sectionType === 'Schedule';
+      continue;
+    }
+    if (inScheduleSection && row.__rowType === 'prompt') {
+      const name = (row[COL.CONTENT] ?? '').trim();
+      const timeValue = row[COL.ESTIMATE] ?? '0.00';
+      subprojects.push({ name, timeValue });
+      scheduleTotalMinutes += parseTimeValueToMinutes(timeValue);
+    }
   }
 
-  // Calculate total minutes
-  const calculateMinutes = (baseIdx, rowCount) =>
-    Array.from({ length: Math.max(rowCount, 0) }, (_, idx) => {
-      const rowIdx = baseIdx + idx;
-      const rowValues = entries[rowIdx] ?? [];
-      return parseTimeValueToMinutes(rowValues[COL.ESTIMATE] ?? '');
-    }).reduce((sum, value) => sum + value, 0);
+  // Also sum Actions section (needsPlan rows) for total hours
+  let needsPlanTotalMinutes = 0;
+  let inActionsSection = false;
+  for (let rowIdx = 0; rowIdx < entries.length; rowIdx += 1) {
+    const row = entries[rowIdx];
+    if (row.__rowType === 'header') {
+      inActionsSection = row.__sectionType === 'Actions';
+      continue;
+    }
+    if (inActionsSection && row.__rowType === 'response') {
+      needsPlanTotalMinutes += parseTimeValueToMinutes(row[COL.TIME_VALUE] ?? '');
+    }
+  }
 
-  const needsPlanTotalMinutes = calculateMinutes(needsPlanStart, needsPlanCount);
-  const scheduleTotalMinutes = calculateMinutes(scheduleStart, scheduleCount);
   const projectTotalMinutes = needsPlanTotalMinutes + scheduleTotalMinutes;
 
   return {

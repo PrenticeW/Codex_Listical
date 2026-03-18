@@ -1692,6 +1692,9 @@ export default function TacticsPage() {
           currentRowIdx = endRowIdx + 1;
           const existingIndex = next.findIndex((entry) => entry.id === chipId);
           if (existingIndex >= 0) {
+            if (next[existingIndex].displayLabel !== label) {
+              next[existingIndex] = { ...next[existingIndex], displayLabel: label };
+            }
             return;
           }
           next.push({
