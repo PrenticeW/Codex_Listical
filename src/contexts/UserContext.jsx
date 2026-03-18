@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -170,7 +170,7 @@ export function UserProvider({ children }) {
   };
 
   // Check if migration is needed for this user
-  const needsUserMigration = () => {
+  const needsUserMigration = useCallback(() => {
     // TODO: Implement migration status check from database
     // Example:
     // const { data } = await supabase
@@ -180,7 +180,7 @@ export function UserProvider({ children }) {
     //   .single()
 
     return false; // MOCK: Assume no migration needed
-  };
+  }, []);
 
   const value = {
     // User data
