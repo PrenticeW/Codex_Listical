@@ -114,7 +114,7 @@ export default function ProjectEditModal({
               className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
               onClick={handlePlanNext}
             >
-              Close
+              Save
             </button>
           </div>
         </div>
