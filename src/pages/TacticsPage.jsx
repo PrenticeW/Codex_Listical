@@ -604,6 +604,7 @@ export default function TacticsPage() {
       return nextBlocks;
     });
   }, [displayedWeekDays, totalColumnCount]);
+
   useEffect(() => {
     setSelectedBlockId((prev) =>
       prev && projectChips.some((block) => block.id === prev) ? prev : null
@@ -622,6 +623,23 @@ export default function TacticsPage() {
     trailingMinuteRows.forEach((_, idx) => rows.push(`trailing-${idx}`));
     return rows;
   }, [hourRows, trailingMinuteRows]);
+
+  // Auto-fill unmodified sleep blocks to span from sleep-start up to (but not including) the
+  // wake-time row (sleep-end). The last hour-* row is the last full hour before wake time.
+  // Blocks the user has manually resized/moved are left alone.
+  useEffect(() => {
+    // Find the last hour-* row — that's the row just before sleep-end
+    const lastHourRow = [...timelineRowIds].reverse().find((id) => id.startsWith('hour-'));
+    if (!lastHourRow) return;
+    setProjectChips((prev) =>
+      prev.map((entry) => {
+        if (entry.projectId !== 'sleep') return entry;
+        if (entry.userModified) return entry;
+        return { ...entry, startRowId: 'sleep-start', endRowId: lastHourRow };
+      })
+    );
+  }, [timelineRowIds]);
+
   const rowIndexMap = useMemo(
     () => new Map(timelineRowIds.map((rowId, index) => [rowId, index])),
     [timelineRowIds]
@@ -695,6 +713,7 @@ export default function TacticsPage() {
             return {
               ...entry,
               endRowId: timelineRowIds[clampedIdx] ?? entry.startRowId,
+              ...(entry.projectId === 'sleep' ? { userModified: true } : {}),
             };
           });
           if (!updated) {
@@ -736,6 +755,7 @@ export default function TacticsPage() {
     startHour,
     startMinute,
     incrementMinutes,
+    textSizeScale,
   ]);
   useLayoutEffect(() => {
     const updateTableRect = () => {
@@ -980,6 +1000,7 @@ export default function TacticsPage() {
         columnIndex: targetColumnIndex,
         startRowId,
         endRowId,
+        ...(target.projectId === 'sleep' ? { userModified: true } : {}),
       };
       return next;
     });
@@ -1753,20 +1774,47 @@ export default function TacticsPage() {
     setSelectedCell(null);
     setCellMenu(null);
   }, [displayedWeekDays, incrementMinutes, stagingColumnConfigs, subprojectLayout, timelineRowIds]);
+  // Compute the minimum width needed for column 0 to fit its longest string
+  const col0MinWidth = useMemo(() => {
+    const fontSize = 14 * textSizeScale;
+    const font = `700 ${fontSize}px Inter, ui-sans-serif, system-ui, sans-serif`;
+    const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+    if (!canvas) return 120;
+    const ctx = canvas.getContext('2d');
+    ctx.font = font;
+    const padding = 24; // px-3 = 12px each side
+    const candidates = [
+      'Sleep', 'REST', 'Working Hours', 'Buffer', 'Available Hours',
+      ...projectSummaries.map((s) => s.label ?? ''),
+      ...hourRows.map((h) => formatTime(h, '00', { use24Hour, showAmPm })),
+    ];
+    if (startHour) {
+      const m = parseHour12ToMinutes(startHour);
+      if (m != null) {
+        candidates.push(formatTime(Math.floor(m / 60), (m % 60).toString().padStart(2, '0'), { use24Hour, showAmPm }));
+      }
+    }
+    const maxText = Math.max(...candidates.map((s) => ctx.measureText(s).width));
+    return Math.ceil(maxText + padding);
+  }, [textSizeScale, projectSummaries, hourRows, use24Hour, showAmPm, startHour]);
+
   const gridTemplateColumns = useMemo(() => {
-    // Build grid template with specific pixel widths from columnWidths state
+    // Build grid template with specific pixel widths from columnWidths state, scaled by textSizeScale
     const columns = [];
     for (let i = 0; i <= totalColumnCount; i++) {
-      const width = columnWidths[i] || (i === 0 ? 120 : 140);
+      const baseWidth = columnWidths[i] || (i === 0 ? 120 : 140);
+      const scaled = Math.round(baseWidth * textSizeScale);
+      const width = i === 0 ? Math.max(scaled, col0MinWidth) : scaled;
       columns.push(`${width}px`);
     }
     return columns.join(' ');
-  }, [totalColumnCount, columnWidths]);
+  }, [totalColumnCount, columnWidths, textSizeScale, col0MinWidth]);
 
   // Column resize handler
   const handleColumnResize = useCallback((columnIndex, startX, startWidth) => {
     const handleMouseMove = (e) => {
-      const diff = e.clientX - startX;
+      // diff is in screen pixels; divide by scale to get base-width units
+      const diff = (e.clientX - startX) / textSizeScale;
       const newWidth = Math.max(60, startWidth + diff); // Min width 60px
       setColumnWidths(prev => {
         const updated = [...prev];
@@ -1790,7 +1838,7 @@ export default function TacticsPage() {
     document.addEventListener('mouseup', handleMouseUp);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-  }, []);
+  }, [textSizeScale]);
   const renderExtraColumnCells = useCallback(
     (rowKey, showHeaderLabel = false) =>
       extendedStagingColumnConfigs.map((column, extraIndex) => {
@@ -1947,6 +1995,46 @@ export default function TacticsPage() {
             ) : (
               normalizedLabel
             )}
+            {isActive && projectId === 'sleep' && block.userModified ? (
+              <button
+                type="button"
+                aria-label="Reset sleep block to default"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  const lastHourRow = [...timelineRowIds].reverse().find((id) => id.startsWith('hour-'));
+                  if (!lastHourRow) return;
+                  setProjectChips((prev) =>
+                    prev.map((entry) =>
+                      entry.id === chipId
+                        ? { ...entry, startRowId: 'sleep-start', endRowId: lastHourRow, userModified: false }
+                        : entry
+                    )
+                  );
+                }}
+                style={{
+                  position: 'absolute',
+                  top: '-6px',
+                  right: '-6px',
+                  height: '12px',
+                  width: '12px',
+                  borderRadius: '9999px',
+                  border: '1px solid #666',
+                  backgroundColor: '#fff',
+                  padding: 0,
+                  fontSize: '8px',
+                  lineHeight: '10px',
+                  cursor: 'pointer',
+                  pointerEvents: 'auto',
+                  color: '#666',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                title="Reset to default sleep hours"
+              >
+                ↺
+              </button>
+            ) : null}
             {isActive ? (
               <button
                 type="button"
@@ -1988,6 +2076,8 @@ export default function TacticsPage() {
       editingChipIsCustom,
       isDragging,
       setSelectedCell,
+      setProjectChips,
+      timelineRowIds,
       dragPreview,
       textSizeScale,
     ]
@@ -3030,8 +3120,6 @@ function ListicalMenu({
 
   const handleBedTimeChange = (event) => {
     onStartHourChange(event.target.value);
-    // Reset rise time if it's no longer in the new minuteOptions
-    onStartMinuteChange('');
   };
 
   return (
