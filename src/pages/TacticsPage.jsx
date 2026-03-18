@@ -2349,7 +2349,7 @@ export default function TacticsPage() {
             className="pt-4 pb-4"
             onDrop={handleTableDrop}
             onDragOver={handleTableDragOver}
-            style={{ display: 'block', paddingBottom: '440px', paddingRight: '100vw', overflowX: 'auto' }}
+            style={{ display: 'block', paddingBottom: '440px', paddingRight: `calc(100vw - ${col0Width}px)`, overflowX: 'auto' }}
           >
           {renderDragOutline()}
           <table
