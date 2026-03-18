@@ -11,6 +11,7 @@ import { useLocation } from 'react-router-dom';
 import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
 import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '../lib/stagingStorage';
+import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
 import { saveTacticsMetrics } from '../lib/tacticsMetricsStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
 import storage from '../lib/storageService';
@@ -1671,7 +1672,9 @@ export default function TacticsPage() {
         scheduleItems.forEach((scheduleItem, itemIdx) => {
           const chipId = `schedule-chip-${column.project.id}-${itemIdx}`;
           expectedIds.add(chipId);
-          const label = (scheduleItem.name ?? '').trim() || column.project.label || 'Schedule Item';
+          const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
+          const trimmedName = (scheduleItem.name ?? '').trim();
+          const label = (trimmedName && trimmedName !== scheduleDefaultText ? trimmedName : null) ?? column.project.label ?? scheduleDefaultText;
           const minutes = parseTimeValueToMinutes(scheduleItem.timeValue);
           const span = Math.max(
             1,
@@ -1739,7 +1742,9 @@ export default function TacticsPage() {
         let currentRowIdx = baseOffset;
         scheduleItems.forEach((scheduleItem, itemIdx) => {
           const chipId = `schedule-chip-${column.project.id}-${itemIdx}`;
-          const label = (scheduleItem.name ?? '').trim() || column.project.label || 'Schedule Item';
+          const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
+          const trimmedName = (scheduleItem.name ?? '').trim();
+          const label = (trimmedName && trimmedName !== scheduleDefaultText ? trimmedName : null) ?? column.project.label ?? scheduleDefaultText;
           const minutes = parseTimeValueToMinutes(scheduleItem.timeValue);
           const span = Math.max(
             1,
