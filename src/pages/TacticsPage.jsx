@@ -36,7 +36,7 @@ const buildInitialSleepBlocks = (days) =>
     endRowId: 'sleep-start',
     projectId: 'sleep',
   }));
-const DEFAULT_SLEEP_CELL_HEIGHT = 44;
+const DEFAULT_SLEEP_CELL_HEIGHT = 16;
 let chipSequence = 0;
 const createProjectChipId = () => {
   chipSequence += 1;
@@ -70,7 +70,7 @@ const getTacticsChipsStorageKey = (yearNumber) => {
 const loadTacticsSettings = () => {
   try {
     const parsed = storage.getJSON(TACTICS_STORAGE_KEY, null);
-    if (!parsed) return { startHour: '', startMinute: '', incrementMinutes: 60 };
+    if (!parsed) return { startHour: '', startMinute: '', incrementMinutes: 60, showAmPm: true, use24Hour: false };
     return {
       startHour: typeof parsed?.startHour === 'string' ? parsed.startHour : '',
       startMinute: typeof parsed?.startMinute === 'string' ? parsed.startMinute : '',
@@ -78,10 +78,12 @@ const loadTacticsSettings = () => {
         typeof parsed?.incrementMinutes === 'number' && Number.isFinite(parsed.incrementMinutes)
           ? parsed.incrementMinutes
           : 60,
+      showAmPm: parsed?.showAmPm !== false,
+      use24Hour: parsed?.use24Hour === true,
     };
   } catch (error) {
     console.error('Failed to read tactics settings', error);
-    return { startHour: '', startMinute: '', incrementMinutes: 60 };
+    return { startHour: '', startMinute: '', incrementMinutes: 60, showAmPm: true, use24Hour: false };
   }
 };
 const loadTacticsChipsState = (yearNumber = null) => {
@@ -118,6 +120,17 @@ const formatHour12 = (hour, minutes = '00') => {
   const period = hour >= 12 ? 'PM' : 'AM';
   const normalizedHour = hour % 12 === 0 ? 12 : hour % 12;
   return `${normalizedHour}:${minutes} ${period}`;
+};
+
+const formatTime = (hour, minutes = '00', { use24Hour = false, showAmPm = true } = {}) => {
+  if (use24Hour) {
+    return `${hour.toString().padStart(2, '0')}:${minutes}`;
+  }
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const normalizedHour = hour % 12 === 0 ? 12 : hour % 12;
+  return showAmPm
+    ? `${normalizedHour}:${minutes} ${period}`
+    : `${normalizedHour}:${minutes}`;
 };
 
 const parseHour12ToMinutes = (value) => {
@@ -247,10 +260,12 @@ export default function TacticsPage() {
     });
   }, [startHour, incrementMinutes]);
   const [startMinute, setStartMinute] = useState(initialTacticsSettings.startMinute);
+  const [showAmPm, setShowAmPm] = useState(initialTacticsSettings.showAmPm);
+  const [use24Hour, setUse24Hour] = useState(initialTacticsSettings.use24Hour);
 
   useEffect(() => {
-    saveTacticsSettings({ startHour, startMinute, incrementMinutes });
-  }, [startHour, startMinute, incrementMinutes]);
+    saveTacticsSettings({ startHour, startMinute, incrementMinutes, showAmPm, use24Hour });
+  }, [startHour, startMinute, incrementMinutes, showAmPm, use24Hour]);
   const hourRows = useMemo(() => {
     if (!startHour || !startMinute) return [];
     const startMinutes = parseHour12ToMinutes(startHour);
@@ -1780,7 +1795,7 @@ export default function TacticsPage() {
     (rowKey, showHeaderLabel = false) =>
       extendedStagingColumnConfigs.map((column, extraIndex) => {
         const baseClass =
-          'border border-[#e5e7eb] px-3 py-2 text-center overflow-visible';
+          'border border-[#e5e7eb] px-3 py-px text-center overflow-visible';
         // The grid has 9 columns before extra columns (0-8), so project columns start at index 9
         const columnIndex = 9 + extraIndex;
 
@@ -2211,6 +2226,18 @@ export default function TacticsPage() {
               incrementMinutes={incrementMinutes}
               onIncrementChange={setIncrementMinutes}
               onClearAllChips={handleClearAllChips}
+              startDay={startDay}
+              onStartDayChange={setStartDay}
+              startHour={startHour}
+              onStartHourChange={setStartHour}
+              startMinute={startMinute}
+              onStartMinuteChange={setStartMinute}
+              hourOptions={hourOptions}
+              minuteOptions={minuteOptions}
+              showAmPm={showAmPm}
+              onShowAmPmChange={setShowAmPm}
+              use24Hour={use24Hour}
+              onUse24HourChange={setUse24Hour}
             />
           }
         />
@@ -2235,7 +2262,7 @@ export default function TacticsPage() {
                     return (
                       <td
                         key={`blank-${index}`}
-                        className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
+                        className="border border-[#e5e7eb] px-3 py-px text-center font-semibold"
                         style={{ position: 'relative' }}
                       >
                         {/* Add resize handle */}
@@ -2269,18 +2296,8 @@ export default function TacticsPage() {
                   }
                   if (index === 1) {
                     return (
-                      <td key="selector" className="border border-[#e5e7eb] px-3 py-2" style={{ position: 'relative' }}>
-                        <select
-                          className="w-full rounded border border-[#ced3d0] bg-white px-2 py-1 text-sm text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                          value={startDay}
-                          onChange={(event) => setStartDay(event.target.value)}
-                        >
-                          {DAYS_OF_WEEK.map((day) => (
-                            <option key={day} value={day}>
-                              {day}
-                            </option>
-                          ))}
-                        </select>
+                      <td key="selector" className="border border-[#e5e7eb] px-3 py-px text-center font-semibold" style={{ position: 'relative' }}>
+                        {startDay}
                         {/* Add resize handle */}
                         <div
                           onMouseDown={(e) => {
@@ -2312,7 +2329,7 @@ export default function TacticsPage() {
                   }
                   const dayIndex = index - 2;
                       return (
-                        <td key={`day-${index}`} className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold" style={{ position: 'relative' }}>
+                        <td key={`day-${index}`} className="border border-[#e5e7eb] px-3 py-px text-center font-semibold" style={{ position: 'relative' }}>
                           {sequence[dayIndex] ?? ''}
                           {/* Add resize handle */}
                           <div
@@ -2347,22 +2364,15 @@ export default function TacticsPage() {
               </tr>
               <tr className="grid" style={{ gridTemplateColumns }}>
                 <td
-                  className="border border-[#e5e7eb] px-3 py-2"
+                  className="border border-[#e5e7eb] px-3 py-px font-semibold text-center"
                   data-row-id-anchor="sleep-start"
+                  style={{ fontSize: `${14 * textSizeScale}px` }}
                 >
-                  <select
-                    className="w-full rounded border border-[#ced3d0] bg-white px-2 py-1 text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                    style={{ fontSize: `${14 * textSizeScale}px` }}
-                    value={startHour}
-                    onChange={(event) => setStartHour(event.target.value)}
-                  >
-                    <option value="">Sleep Start Time</option>
-                    {hourOptions.map((hour) => (
-                      <option key={hour} value={hour}>
-                        {hour}
-                      </option>
-                    ))}
-                  </select>
+                  {(() => {
+                    if (!startHour) return '—';
+                    const m = parseHour12ToMinutes(startHour);
+                    return m != null ? formatTime(Math.floor(m / 60), (m % 60).toString().padStart(2, '0'), { use24Hour, showAmPm }) : startHour;
+                  })()}
                 </td>
                 {Array.from({ length: totalColumnCount }, (_, index) => {
                   const isDayColumn = index < DAY_COLUMN_COUNT;
@@ -2404,7 +2414,7 @@ export default function TacticsPage() {
                   return (
                     <td
                       key={`time-row-${index}`}
-                      className={`relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible ${
+                      className={`relative border border-[#e5e7eb] px-3 py-px text-center overflow-visible ${
                         cellSelected ? 'outline outline-[2px]' : ''
                       }`}
                       style={Object.keys(cellStyle).length ? cellStyle : undefined}
@@ -2430,11 +2440,11 @@ export default function TacticsPage() {
               {hourRows.map((hourValue) => (
                 <tr key={`hour-row-${hourValue}`} className="grid" style={{ gridTemplateColumns }}>
                   <td
-                    className="border border-[#e5e7eb] px-3 py-2 font-semibold"
+                    className="border border-[#e5e7eb] px-3 py-px font-semibold text-center"
                     data-row-id-anchor={`hour-${hourValue}`}
                     style={{ fontSize: `${14 * textSizeScale}px` }}
                   >
-                    {formatHour12(hourValue)}
+                    {formatTime(hourValue, '00', { use24Hour, showAmPm })}
                   </td>
                   {Array.from({ length: totalColumnCount }, (_, index) => {
                     const isDayColumn = index < DAY_COLUMN_COUNT;
@@ -2476,7 +2486,7 @@ export default function TacticsPage() {
                     return (
                       <td
                         key={`hour-${hourValue}-${index}`}
-                        className={`relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible ${
+                        className={`relative border border-[#e5e7eb] px-3 py-px text-center overflow-visible ${
                           cellSelected ? 'outline outline-[2px]' : ''
                         }`}
                         style={Object.keys(cellStyle).length ? cellStyle : undefined}
@@ -2502,23 +2512,15 @@ export default function TacticsPage() {
               ))}
               <tr className="grid" style={{ gridTemplateColumns }}>
                 <td
-                  className="border border-[#e5e7eb] px-3 py-2"
+                  className="border border-[#e5e7eb] px-3 py-px font-semibold text-center"
                   data-row-id-anchor="sleep-end"
+                  style={{ fontSize: `${14 * textSizeScale}px` }}
                 >
-                  <select
-                    className="w-full rounded border border-[#ced3d0] bg-white px-2 py-1 text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                    style={{ fontSize: `${14 * textSizeScale}px` }}
-                    value={startMinute}
-                    onChange={(event) => setStartMinute(event.target.value)}
-                    disabled={!startHour}
-                  >
-                    <option value="">{startHour ? `${startHour}` : 'Sleep End Time'}</option>
-                    {minuteOptions.map((time) => (
-                      <option key={time} value={time}>
-                        {time}
-                      </option>
-                    ))}
-                  </select>
+                  {(() => {
+                    if (!startMinute) return '—';
+                    const m = parseHour12ToMinutes(startMinute);
+                    return m != null ? formatTime(Math.floor(m / 60), (m % 60).toString().padStart(2, '0'), { use24Hour, showAmPm }) : startMinute;
+                  })()}
                 </td>
                 {Array.from({ length: totalColumnCount }, (_, index) => {
                   const isDayColumn = index < DAY_COLUMN_COUNT;
@@ -2560,7 +2562,7 @@ export default function TacticsPage() {
                   return (
                     <td
                       key={`minute-row-${index}`}
-                      className={`relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible ${
+                      className={`relative border border-[#e5e7eb] px-3 py-px text-center overflow-visible ${
                         cellSelected ? 'outline outline-[2px]' : ''
                       }`}
                       style={Object.keys(cellStyle).length ? cellStyle : undefined}
@@ -2586,13 +2588,14 @@ export default function TacticsPage() {
               {trailingMinuteRows.map((minutesValue, rowIdx) => (
                 <tr key={`trailing-row-${rowIdx}`} className="grid" style={{ gridTemplateColumns }}>
                   <td
-                    className="border border-[#e5e7eb] px-3 py-2 font-semibold"
+                    className="border border-[#e5e7eb] px-3 py-px font-semibold text-center"
                     data-row-id-anchor={`trailing-${rowIdx}`}
                     style={{ fontSize: `${14 * textSizeScale}px` }}
                   >
-                    {formatHour12(
+                    {formatTime(
                       Math.floor(minutesValue / 60),
-                      (minutesValue % 60).toString().padStart(2, '0')
+                      (minutesValue % 60).toString().padStart(2, '0'),
+                      { use24Hour, showAmPm }
                     )}
                   </td>
                   {Array.from({ length: totalColumnCount }, (_, index) => {
@@ -2635,7 +2638,7 @@ export default function TacticsPage() {
                     return (
                       <td
                         key={`trailing-${rowIdx}-${index}`}
-                        className={`relative border border-[#e5e7eb] px-3 py-2 text-center overflow-visible ${
+                        className={`relative border border-[#e5e7eb] px-3 py-px text-center overflow-visible ${
                           cellSelected ? 'outline outline-[2px]' : ''
                         }`}
                         style={Object.keys(cellStyle).length ? cellStyle : undefined}
@@ -2685,7 +2688,7 @@ export default function TacticsPage() {
                 }}
               >
                 <td
-                  className="border border-[#e5e7eb] px-3 py-2 text-center"
+                  className="border border-[#e5e7eb] px-3 py-px text-center"
                   style={{ backgroundColor: '#d9d9d9', color: '#000', fontWeight: 700, fontSize: `${14 * textSizeScale}px` }}
                 >
                   Sleep
@@ -2695,7 +2698,7 @@ export default function TacticsPage() {
                   return (
                     <td
                       key={`sleep-row-${day}-${idx}`}
-                      className="border border-[#e5e7eb] px-3 py-2 text-center"
+                      className="border border-[#e5e7eb] px-3 py-px text-center"
                       style={{ backgroundColor: '#efefef', fontSize: `${14 * textSizeScale}px` }}
                     >
                       {formatDuration(minutes)}
@@ -2703,7 +2706,7 @@ export default function TacticsPage() {
                   );
                 })}
                 <td
-                  className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
+                  className="border border-[#e5e7eb] px-3 py-px text-center font-semibold"
                   style={{ backgroundColor: '#efefef', fontSize: `${14 * textSizeScale}px` }}
                 >
                   {formatDuration(totalSleepMinutes)}
@@ -2733,7 +2736,7 @@ export default function TacticsPage() {
                     }}
                   >
                     <td
-                      className="border border-[#e5e7eb] px-3 py-2 text-center"
+                      className="border border-[#e5e7eb] px-3 py-px text-center"
                       style={{
                         backgroundColor: summary.color || '#0f172a',
                         color: '#ffffff',
@@ -2746,14 +2749,14 @@ export default function TacticsPage() {
                     {displayedWeekDays.map((day, idx) => (
                       <td
                         key={`project-${summary.id}-${day}-${idx}`}
-                        className="border border-[#e5e7eb] px-3 py-2 text-center"
+                        className="border border-[#e5e7eb] px-3 py-px text-center"
                         style={{ backgroundColor: '#ffffff', fontSize: `${14 * textSizeScale}px` }}
                       >
                         {formatDuration(summary.columnTotals[idx] ?? 0)}
                       </td>
                     ))}
                     <td
-                      className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
+                      className="border border-[#e5e7eb] px-3 py-px text-center font-semibold"
                       style={{ backgroundColor: '#ffffff', fontSize: `${14 * textSizeScale}px` }}
                     >
                       {formatDuration(summary.totalMinutes)}
@@ -2785,7 +2788,7 @@ export default function TacticsPage() {
                 }}
               >
                 <td
-                  className="border border-[#e5e7eb] px-3 py-2 text-center"
+                  className="border border-[#e5e7eb] px-3 py-px text-center"
                   style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700, fontSize: `${14 * textSizeScale}px` }}
                 >
                   REST
@@ -2793,14 +2796,14 @@ export default function TacticsPage() {
                 {displayedWeekDays.map((day, idx) => (
                   <td
                     key={`rest-row-${day}-${idx}`}
-                    className="border border-[#e5e7eb] px-3 py-2 text-center"
+                    className="border border-[#e5e7eb] px-3 py-px text-center"
                     style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700, fontSize: `${14 * textSizeScale}px` }}
                   >
                     {formatDuration(restColumnTotals[idx] ?? 0)}
                   </td>
                 ))}
                 <td
-                  className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
+                  className="border border-[#e5e7eb] px-3 py-px text-center font-semibold"
                   style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700, fontSize: `${14 * textSizeScale}px` }}
                 >
                   {formatDuration(totalRestMinutes)}
@@ -2839,7 +2842,7 @@ export default function TacticsPage() {
                 }}
               >
                 <td
-                  className="border border-[#e5e7eb] px-3 py-2 text-center"
+                  className="border border-[#e5e7eb] px-3 py-px text-center"
                   style={{
                     backgroundColor: '#b6d7a8',
                     color: '#0f172a',
@@ -2852,14 +2855,14 @@ export default function TacticsPage() {
                 {displayedWeekDays.map((day, idx) => (
                   <td
                     key={`working-row-${day}-${idx}`}
-                    className="border border-[#e5e7eb] px-3 py-2 text-center"
+                    className="border border-[#e5e7eb] px-3 py-px text-center"
                     style={{ backgroundColor: '#d9ead3', fontSize: `${14 * textSizeScale}px` }}
                   >
                     {formatDuration(workingColumnTotals[idx] ?? 0)}
                   </td>
                 ))}
                 <td
-                  className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
+                  className="border border-[#e5e7eb] px-3 py-px text-center font-semibold"
                   style={{ backgroundColor: '#d9ead3', fontSize: `${14 * textSizeScale}px` }}
                   >
                     {formatDuration(totalWorkingMinutes)}
@@ -2885,7 +2888,7 @@ export default function TacticsPage() {
                 }}
               >
                   <td
-                    className="border border-[#e5e7eb] px-3 py-2 text-center text-[#000000]"
+                    className="border border-[#e5e7eb] px-3 py-px text-center text-[#000000]"
                     style={{
                       backgroundColor: '#ffffff',
                       fontWeight: 700,
@@ -2897,14 +2900,14 @@ export default function TacticsPage() {
                 {displayedWeekDays.map((day, idx) => (
                   <td
                     key={`buffer-row-${day}-${idx}`}
-                    className="border border-[#e5e7eb] px-3 py-2 text-center"
+                    className="border border-[#e5e7eb] px-3 py-px text-center"
                     style={{ backgroundColor: '#ffffff', fontSize: `${14 * textSizeScale}px` }}
                   >
                     {formatDuration(bufferColumnTotals[idx] ?? 0)}
                   </td>
                 ))}
                 <td
-                  className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
+                  className="border border-[#e5e7eb] px-3 py-px text-center font-semibold"
                   style={{ backgroundColor: '#ffffff', fontSize: `${14 * textSizeScale}px` }}
                 >
                   {formatDuration(totalBufferMinutes)}
@@ -2930,7 +2933,7 @@ export default function TacticsPage() {
                 }}
               >
                 <td
-                  className="border border-[#e5e7eb] px-3 py-2 text-center"
+                  className="border border-[#e5e7eb] px-3 py-px text-center"
                   style={{ backgroundColor: '#ffffff', color: '#000000', fontWeight: 700, fontSize: `${14 * textSizeScale}px` }}
                 >
                   Available Hours
@@ -2938,14 +2941,14 @@ export default function TacticsPage() {
                 {displayedWeekDays.map((day, idx) => (
                   <td
                     key={`available-row-${day}-${idx}`}
-                    className="border border-[#e5e7eb] px-3 py-2 text-center"
+                    className="border border-[#e5e7eb] px-3 py-px text-center"
                     style={{ backgroundColor: '#ffffff', fontSize: `${14 * textSizeScale}px` }}
                   >
                     {formatDuration(availableColumnTotals[idx] ?? 0)}
                   </td>
                 ))}
               <td
-                className="border border-[#e5e7eb] px-3 py-2 text-center font-semibold"
+                className="border border-[#e5e7eb] px-3 py-px text-center font-semibold"
                 style={{ backgroundColor: '#ffffff', fontSize: `${14 * textSizeScale}px` }}
               >
                 {formatDuration(totalAvailableMinutes)}
@@ -2962,7 +2965,24 @@ export default function TacticsPage() {
   );
 }
 
-function ListicalMenu({ incrementMinutes, onIncrementChange, onClearAllChips }) {
+
+function ListicalMenu({
+  incrementMinutes,
+  onIncrementChange,
+  onClearAllChips,
+  startDay,
+  onStartDayChange,
+  startHour,
+  onStartHourChange,
+  startMinute,
+  onStartMinuteChange,
+  hourOptions,
+  minuteOptions,
+  showAmPm,
+  onShowAmPmChange,
+  use24Hour,
+  onUse24HourChange,
+}) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
@@ -2979,7 +2999,7 @@ function ListicalMenu({ incrementMinutes, onIncrementChange, onClearAllChips }) 
         const rect = buttonRef.current.getBoundingClientRect();
         const calculatedLeft = Math.max(16, rect.left);
         setMenuStyle({
-          width: '320px',
+          width: '360px',
           top: rect.bottom + 8,
           left: calculatedLeft,
         });
@@ -3008,6 +3028,12 @@ function ListicalMenu({ incrementMinutes, onIncrementChange, onClearAllChips }) 
     };
   }, [open]);
 
+  const handleBedTimeChange = (event) => {
+    onStartHourChange(event.target.value);
+    // Reset rise time if it's no longer in the new minuteOptions
+    onStartMinuteChange('');
+  };
+
   return (
     <div>
       <button
@@ -3025,11 +3051,72 @@ function ListicalMenu({ incrementMinutes, onIncrementChange, onClearAllChips }) 
           className="fixed rounded-lg border border-[#94a3b8] p-4 shadow-2xl"
           style={{ ...menuStyle, backgroundColor: 'rgba(255, 255, 255, 0.97)', zIndex: 999999 }}
         >
-          <div className="flex items-center" style={{ gap: '10px' }}>
+          {/* Schedule section */}
+          <div className="flex flex-col" style={{ gap: '10px' }}>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Schedule</span>
+            {/* Start Day pills */}
+            <div className="flex flex-col" style={{ gap: '4px' }}>
+              <span className="text-xs font-semibold text-slate-700">Start Day</span>
+              <div className="flex flex-wrap" style={{ gap: '4px' }}>
+                {DAYS_OF_WEEK.map((day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => onStartDayChange(day)}
+                    className={`rounded px-2 py-1 text-[11px] font-semibold transition ${
+                      startDay === day
+                        ? 'bg-[#065f46] text-white border border-[#065f46]'
+                        : 'bg-white text-slate-700 border border-[#ced3d0] hover:bg-[#f2fdf6]'
+                    }`}
+                  >
+                    {day.slice(0, 3)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Bed Time / Rise Time */}
+            <div className="flex" style={{ gap: '12px' }}>
+              <div className="flex flex-col flex-1" style={{ gap: '4px' }}>
+                <label htmlFor="bed-time-select" className="text-xs font-semibold text-slate-700">
+                  Bed Time
+                </label>
+                <select
+                  id="bed-time-select"
+                  className="rounded border border-[#ced3d0] bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                  value={startHour}
+                  onChange={handleBedTimeChange}
+                >
+                  <option value="">—</option>
+                  {hourOptions.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col flex-1" style={{ gap: '4px' }}>
+                <label htmlFor="rise-time-select" className="text-xs font-semibold text-slate-700">
+                  Rise Time
+                </label>
+                <select
+                  id="rise-time-select"
+                  className="rounded border border-[#ced3d0] bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                  value={startMinute}
+                  onChange={(e) => onStartMinuteChange(e.target.value)}
+                  disabled={!startHour}
+                >
+                  <option value="">—</option>
+                  {minuteOptions.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Increment */}
+          <div className="mt-3 pt-3 border-t border-[#e2e8f0] flex items-center" style={{ gap: '10px' }}>
             <label
               className="text-xs font-semibold text-slate-700 whitespace-nowrap"
               htmlFor="increment-select"
-              style={{ backgroundColor: 'rgba(255, 255, 255, 0.97)' }}
             >
               Increment
             </label>
@@ -3044,6 +3131,30 @@ function ListicalMenu({ incrementMinutes, onIncrementChange, onClearAllChips }) 
               <option value={60}>1 hour</option>
             </select>
           </div>
+
+          {/* Clock format */}
+          <div className="mt-3 pt-3 border-t border-[#e2e8f0] flex flex-col" style={{ gap: '6px' }}>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Clock Format</span>
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showAmPm}
+                onChange={(e) => onShowAmPmChange(e.target.checked)}
+                disabled={use24Hour}
+              />
+              Show AM / PM
+            </label>
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={use24Hour}
+                onChange={(e) => onUse24HourChange(e.target.checked)}
+              />
+              24-hour clock
+            </label>
+          </div>
+
+          {/* Clear chips */}
           <div className="mt-3 pt-3 border-t border-[#e2e8f0]">
             <button
               type="button"
