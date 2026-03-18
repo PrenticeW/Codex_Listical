@@ -74,7 +74,8 @@ export default function ProjectRow({
     rowType === 'projectUnscheduled' || rowType === 'archivedProjectUnscheduled' || rowType === 'subprojectUnscheduled' ? 'Unscheduled' : '';
 
   // Get label (project name for project headers, subproject name for subproject headers)
-  const displayLabel = isSubprojectHeader ? subprojectName : projectName;
+  // Prefer nickname over full project name
+  const displayLabel = isSubprojectHeader ? subprojectName : (projectNickname || projectName);
 
   // Get weekly quota for this project (only for header rows)
   // Use nickname as key for quota lookup since that's how quotas are stored

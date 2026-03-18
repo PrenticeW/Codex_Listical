@@ -276,6 +276,11 @@ export default function StagingPageV2() {
   const handleTogglePlanStatus = useCallback(
     (itemId, addToPlan) => {
       let capturedState = null;
+      const modalMetadata = {
+        projectName: planModal.projectName,
+        projectNickname: planModal.projectNickname,
+        color: planModal.color,
+      };
       const command = {
         execute: () => {
           setState((prev) => {
@@ -285,7 +290,13 @@ export default function StagingPageV2() {
             return {
               ...prev,
               shortlist: prev.shortlist.map((item) =>
-                item.id === itemId ? { ...item, addedToPlan: addToPlan } : item
+                item.id === itemId
+                  ? {
+                      ...item,
+                      addedToPlan: addToPlan,
+                      ...(addToPlan ? modalMetadata : {}),
+                    }
+                  : item
               ),
             };
           });
@@ -297,7 +308,7 @@ export default function StagingPageV2() {
       executeCommand(command);
       closePlanModal();
     },
-    [setState, closePlanModal, executeCommand]
+    [setState, closePlanModal, executeCommand, planModal]
   );
 
   // Handle click on drag handle to select row
