@@ -12,6 +12,7 @@ import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
 import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '../lib/stagingStorage';
 import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
+import { parseEstimateLabelToMinutes } from '../utils/staging/planTableHelpers';
 import { saveTacticsMetrics } from '../lib/tacticsMetricsStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
 import storage from '../lib/storageService';
@@ -223,6 +224,39 @@ const dedupeChipsById = (chips = []) => {
   });
   return result;
 };
+
+function FitText({ text, maxFontSize, minFontSize = maxFontSize * 0.5, style }) {
+  const spanRef = useRef(null);
+  const [fontSize, setFontSize] = useState(maxFontSize);
+
+  useLayoutEffect(() => {
+    const el = spanRef.current;
+    if (!el) return;
+    let size = maxFontSize;
+    el.style.fontSize = `${size}px`;
+    while (el.scrollWidth > el.offsetWidth && size > minFontSize) {
+      size = Math.max(minFontSize, size - 0.5);
+      el.style.fontSize = `${size}px`;
+    }
+    setFontSize(size);
+  });
+
+  return (
+    <span
+      ref={spanRef}
+      style={{
+        display: 'block',
+        width: '100%',
+        overflow: 'hidden',
+        whiteSpace: 'nowrap',
+        fontSize: `${fontSize}px`,
+        ...style,
+      }}
+    >
+      {text}
+    </span>
+  );
+}
 
 export default function TacticsPage() {
   const location = useLocation();
@@ -641,6 +675,59 @@ export default function TacticsPage() {
       })
     );
   }, [timelineRowIds]);
+
+  // Refs to track previous timeline state for increment-change resize logic
+  const prevIncrementForResizeRef = useRef(null);
+  const prevTimelineRowIdsRef = useRef(null);
+
+  // When increment changes, recompute endRowId for all non-sleep chips to preserve their duration
+  useEffect(() => {
+    const prevIncrement = prevIncrementForResizeRef.current;
+    const prevRowIds = prevTimelineRowIdsRef.current;
+    prevIncrementForResizeRef.current = incrementMinutes;
+    prevTimelineRowIdsRef.current = timelineRowIds;
+
+    // Only act when increment actually changed (not on first render or other timeline changes)
+    if (prevIncrement === null || prevIncrement === incrementMinutes) return;
+    if (!prevRowIds || !timelineRowIds.length) return;
+
+    const prevRowIndexMap = new Map(prevRowIds.map((id, i) => [id, i]));
+    const newRowIndexMap = new Map(timelineRowIds.map((id, i) => [id, i]));
+
+    setProjectChips((prev) =>
+      prev.map((entry) => {
+        // Sleep chips are handled separately; schedule chips handled in their own effect
+        if (entry.projectId === 'sleep' || entry.id.startsWith('schedule-chip-')) return entry;
+
+        const startIdx = prevRowIndexMap.get(entry.startRowId);
+        const endIdx = prevRowIndexMap.get(entry.endRowId ?? entry.startRowId);
+        if (startIdx == null || endIdx == null) return entry;
+
+        // Compute duration in minutes using the old increment
+        let durationMinutes = 0;
+        for (let i = Math.min(startIdx, endIdx); i <= Math.max(startIdx, endIdx); i += 1) {
+          const rowId = prevRowIds[i];
+          if (!rowId) continue;
+          if (rowId === 'sleep-start' || rowId.startsWith('hour-')) {
+            durationMinutes += 60;
+          } else {
+            durationMinutes += prevIncrement;
+          }
+        }
+
+        // Recompute span using new increment
+        const newSpan = Math.max(1, Math.ceil(durationMinutes / Math.max(1, incrementMinutes)));
+        const newStartIdx = newRowIndexMap.get(entry.startRowId);
+        if (newStartIdx == null) return entry; // startRowId no longer in timeline, leave as-is
+
+        const newEndIdx = Math.min(newStartIdx + newSpan - 1, timelineRowIds.length - 1);
+        const newEndRowId = timelineRowIds[newEndIdx] ?? entry.startRowId;
+
+        if (newEndRowId === entry.endRowId) return entry;
+        return { ...entry, endRowId: newEndRowId };
+      })
+    );
+  }, [incrementMinutes, timelineRowIds, setProjectChips]);
 
   const rowIndexMap = useMemo(
     () => new Map(timelineRowIds.map((rowId, index) => [rowId, index])),
@@ -1650,6 +1737,8 @@ export default function TacticsPage() {
   const hasInitializedScheduleChips = useRef(false);
   // Track previous staging projects to detect changes
   const prevStagingProjectsRef = useRef(null);
+  // Track previous increment to detect changes and recompute spans
+  const prevIncrementMinutesRef = useRef(null);
 
   useEffect(() => {
     // Check if staging projects have changed (by comparing JSON stringify)
@@ -1657,14 +1746,19 @@ export default function TacticsPage() {
     const hasProjectsChanged = prevStagingProjectsRef.current !== stagingProjectsKey;
     prevStagingProjectsRef.current = stagingProjectsKey;
 
-    // Only run if we have data, and either it's first load OR projects changed
+    const hasIncrementChanged = prevIncrementMinutesRef.current !== null && prevIncrementMinutesRef.current !== incrementMinutes;
+    prevIncrementMinutesRef.current = incrementMinutes;
+
+    // Only run if we have data, and either it's first load OR projects changed OR increment changed
     if (!scheduleLayout?.scheduleItemsByProject || !timelineRowIds.length) return;
-    if (hasInitializedScheduleChips.current && !hasProjectsChanged) return;
+    if (hasInitializedScheduleChips.current && !hasProjectsChanged && !hasIncrementChanged) return;
 
     setProjectChips((prev) => {
       const next = [...prev];
       const expectedIds = new Set();
       const baseOffset = 2;
+      // Build a local rowIndexMap for this render
+      const localRowIndexMap = new Map(timelineRowIds.map((id, i) => [id, i]));
       stagingColumnConfigs.forEach((column, idx) => {
         if (column.type !== 'project') return;
         const columnIndex = DAY_COLUMN_COUNT + idx;
@@ -1675,39 +1769,58 @@ export default function TacticsPage() {
           expectedIds.add(chipId);
           const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
           const trimmedName = (scheduleItem.name ?? '').trim();
-          const label = (trimmedName && trimmedName !== scheduleDefaultText ? trimmedName : null) ?? column.project.label ?? scheduleDefaultText;
-          const minutes = parseTimeValueToMinutes(scheduleItem.timeValue);
+          const hasScheduleName = Boolean(trimmedName && trimmedName !== scheduleDefaultText);
+          const displayLabel = hasScheduleName ? trimmedName : null;
+          const minutes = parseEstimateLabelToMinutes(scheduleItem.timeValue);
+          const durationMinutes = Number.isFinite(minutes) ? minutes : incrementMinutes;
           const span = Math.max(
             1,
-            Math.ceil(
-              (Number.isFinite(minutes) ? minutes : incrementMinutes) /
-                Math.max(1, incrementMinutes)
-            )
+            Math.ceil(durationMinutes / Math.max(1, incrementMinutes))
           );
-          const startRowIdx = Math.min(currentRowIdx, timelineRowIds.length - 1);
-          const endRowIdx = Math.min(
-            startRowIdx + span - 1,
-            timelineRowIds.length - 1
-          );
-          const startRowId =
-            timelineRowIds[startRowIdx] ??
-            timelineRowIds[timelineRowIds.length - 1];
-          const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
-          currentRowIdx = endRowIdx + 1;
           const existingIndex = next.findIndex((entry) => entry.id === chipId);
           if (existingIndex >= 0) {
-            if (next[existingIndex].displayLabel !== label) {
-              next[existingIndex] = { ...next[existingIndex], displayLabel: label };
+            // Preserve the chip's current startRowId (its time position) and only
+            // recompute endRowId based on the new span so it resizes with increment changes.
+            const existingStartRowId = next[existingIndex].startRowId;
+            const existingStartIdx = localRowIndexMap.get(existingStartRowId);
+            if (existingStartIdx != null) {
+              const newEndIdx = Math.min(existingStartIdx + span - 1, timelineRowIds.length - 1);
+              const newEndRowId = timelineRowIds[newEndIdx] ?? existingStartRowId;
+              currentRowIdx = newEndIdx + 1;
+              const needsUpdate =
+                next[existingIndex].displayLabel !== displayLabel ||
+                next[existingIndex].hasScheduleName !== hasScheduleName ||
+                next[existingIndex].durationMinutes !== durationMinutes ||
+                next[existingIndex].endRowId !== newEndRowId;
+              if (needsUpdate) {
+                next[existingIndex] = { ...next[existingIndex], displayLabel, hasScheduleName, durationMinutes, endRowId: newEndRowId };
+              }
+            } else {
+              // startRowId no longer valid — fall back to sequential placement
+              const startRowIdx = Math.min(currentRowIdx, timelineRowIds.length - 1);
+              const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
+              const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
+              const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
+              currentRowIdx = endRowIdx + 1;
+              next[existingIndex] = { ...next[existingIndex], displayLabel, hasScheduleName, durationMinutes, startRowId, endRowId };
             }
             return;
           }
+          // New chip — place sequentially
+          const startRowIdx = Math.min(currentRowIdx, timelineRowIds.length - 1);
+          const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
+          const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
+          const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
+          currentRowIdx = endRowIdx + 1;
           next.push({
             id: chipId,
             columnIndex,
             startRowId,
             endRowId,
             projectId: column.project.id,
-            displayLabel: label,
+            displayLabel,
+            hasScheduleName,
+            durationMinutes,
           });
         });
       });
@@ -1745,23 +1858,14 @@ export default function TacticsPage() {
           const chipId = `schedule-chip-${column.project.id}-${itemIdx}`;
           const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
           const trimmedName = (scheduleItem.name ?? '').trim();
-          const label = (trimmedName && trimmedName !== scheduleDefaultText ? trimmedName : null) ?? column.project.label ?? scheduleDefaultText;
-          const minutes = parseTimeValueToMinutes(scheduleItem.timeValue);
-          const span = Math.max(
-            1,
-            Math.ceil(
-              (Number.isFinite(minutes) ? minutes : incrementMinutes) /
-                Math.max(1, incrementMinutes)
-            )
-          );
+          const hasScheduleName = Boolean(trimmedName && trimmedName !== scheduleDefaultText);
+          const displayLabel = hasScheduleName ? trimmedName : null;
+          const minutes = parseEstimateLabelToMinutes(scheduleItem.timeValue);
+          const durationMinutes = Number.isFinite(minutes) ? minutes : incrementMinutes;
+          const span = Math.max(1, Math.ceil(durationMinutes / Math.max(1, incrementMinutes)));
           const startRowIdx = Math.min(currentRowIdx, timelineRowIds.length - 1);
-          const endRowIdx = Math.min(
-            startRowIdx + span - 1,
-            timelineRowIds.length - 1
-          );
-          const startRowId =
-            timelineRowIds[startRowIdx] ??
-            timelineRowIds[timelineRowIds.length - 1];
+          const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
+          const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
           const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
           currentRowIdx = endRowIdx + 1;
           rebuiltChips.push({
@@ -1770,7 +1874,9 @@ export default function TacticsPage() {
             startRowId,
             endRowId,
             projectId: column.project.id,
-            displayLabel: label,
+            displayLabel,
+            hasScheduleName,
+            durationMinutes,
           });
         });
       });
@@ -1916,7 +2022,34 @@ export default function TacticsPage() {
       if (!block || block.startRowId !== rowId) return null;
       const projectId = block.projectId || 'sleep';
       const metadata = projectMetadata.get(projectId);
-      const displayLabel = block.displayLabel ?? metadata?.label ?? 'Project';
+      const isScheduleChip = block.id.startsWith('schedule-chip-');
+      let rawLabel;
+      if (isScheduleChip) {
+        // Derive label directly from schedule data at render time so it's always fresh
+        const itemIdxMatch = block.id.match(/-(\d+)$/);
+        const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
+        const scheduleItems = itemIdx != null
+          ? (scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [])
+          : [];
+        const scheduleItem = itemIdx != null ? scheduleItems[itemIdx] : null;
+const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
+        const itemName = scheduleItem ? (scheduleItem.name ?? '').trim() : '';
+        const hasName = Boolean(itemName && itemName !== scheduleDefaultText);
+        const baseName = hasName ? itemName : (metadata?.label ?? 'Project');
+        const mins = scheduleItem ? parseEstimateLabelToMinutes(scheduleItem.timeValue) : block.durationMinutes;
+        const displayMins = Number.isFinite(mins) && mins > 0 ? mins : null;
+        let timeStr = null;
+        if (displayMins != null) {
+          const h = Math.floor(displayMins / 60);
+          const m = displayMins % 60;
+          if (h === 0) timeStr = `${m}`;
+          else if (m === 0) timeStr = `${h}`;
+          else timeStr = `${h}.${String(m).padStart(2, '0')}`;
+        }
+        rawLabel = timeStr != null ? `${baseName}: ${timeStr}` : baseName;
+      } else {
+        rawLabel = block.displayLabel ?? metadata?.label ?? 'Project';
+      }
       const backgroundColor = metadata?.color ?? '#d9d9d9';
       const textColor = metadata?.textColor ?? '#000';
       const fontWeight = metadata?.fontWeight ?? 600;
@@ -1924,7 +2057,8 @@ export default function TacticsPage() {
       const blockHeight = getBlockHeight(block.startRowId, block.endRowId);
       const isCustomProject =
         typeof block.projectId === 'string' && block.projectId.startsWith('custom-');
-      const normalizedLabel = displayLabel.toUpperCase();
+      const normalizedLabel = rawLabel.toUpperCase();
+      const baseFontSize = 14 * textSizeScale;
       const isEditing = editingChipId === block.id;
       const isChipBeingDragged =
         Boolean(dragPreview && dragPreview.sourceChipId === chipId);
@@ -2006,7 +2140,7 @@ export default function TacticsPage() {
                 }}
               />
             ) : (
-              normalizedLabel
+              <FitText text={normalizedLabel} maxFontSize={baseFontSize} />
             )}
             {isActive && projectId === 'sleep' && block.userModified ? (
               <button
