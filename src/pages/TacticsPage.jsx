@@ -628,9 +628,8 @@ export default function TacticsPage() {
     return rows;
   }, [hourRows, trailingMinuteRows]);
 
-  // Auto-fill unmodified sleep blocks to span from sleep-start up to (but not including) the
-  // wake-time row (sleep-end). The last hour-* row is the last full hour before wake time.
-  // Blocks the user has manually resized/moved are left alone.
+  // Keep all sleep blocks spanning from sleep-start to the last hour row whenever
+  // the timeline changes (bed time, wake time, or increment changes).
   useEffect(() => {
     // Find the last hour-* row — that's the row just before sleep-end
     const lastHourRow = [...timelineRowIds].reverse().find((id) => id.startsWith('hour-'));
@@ -638,7 +637,6 @@ export default function TacticsPage() {
     setProjectChips((prev) =>
       prev.map((entry) => {
         if (entry.projectId !== 'sleep') return entry;
-        if (entry.userModified) return entry;
         return { ...entry, startRowId: 'sleep-start', endRowId: lastHourRow };
       })
     );
@@ -3146,6 +3144,23 @@ function ListicalMenu({
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
   const [menuStyle, setMenuStyle] = useState({});
+  const [incrementChanged, setIncrementChanged] = useState(false);
+
+  const timesValidForIncrement =
+    startHour && hourOptions.includes(startHour) &&
+    startMinute && minuteOptions.includes(startMinute);
+
+  const canClose = !incrementChanged || timesValidForIncrement;
+
+  useEffect(() => {
+    if (incrementChanged && timesValidForIncrement) {
+      setIncrementChanged(false);
+    }
+  }, [incrementChanged, timesValidForIncrement]);
+
+  const tryClose = () => {
+    if (canClose) setOpen(false);
+  };
 
   useEffect(() => {
     if (!open) {
@@ -3171,11 +3186,11 @@ function ListicalMenu({
     const handleClickOutside = (event) => {
       if (menuRef.current?.contains(event.target)) return;
       if (buttonRef.current?.contains(event.target)) return;
-      setOpen(false);
+      tryClose();
     };
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
-        setOpen(false);
+        tryClose();
       }
     };
     window.addEventListener('mousedown', handleClickOutside, true);
@@ -3185,10 +3200,15 @@ function ListicalMenu({
       window.removeEventListener('mousedown', handleClickOutside, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [open]);
+  }, [open, canClose]);
 
   const handleBedTimeChange = (event) => {
     onStartHourChange(event.target.value);
+  };
+
+  const handleIncrementChange = (event) => {
+    onIncrementChange(parseInt(event.target.value, 10) || 60);
+    setIncrementChanged(true);
   };
 
   return (
@@ -3197,7 +3217,7 @@ function ListicalMenu({
         type="button"
         ref={buttonRef}
         className="inline-flex items-center gap-2 rounded border border-[#ced3d0] bg-white px-3 py-2 font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6] hover:shadow-md"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => { if (open) { tryClose(); } else { setOpen(true); } }}
         aria-expanded={open}
       >
         <span>Listical</span>
@@ -3281,7 +3301,7 @@ function ListicalMenu({
               id="increment-select"
               className="flex-1 rounded border border-[#ced3d0] bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
               value={incrementMinutes}
-              onChange={(event) => onIncrementChange(parseInt(event.target.value, 10) || 60)}
+              onChange={handleIncrementChange}
             >
               <option value={15}>15 minutes</option>
               <option value={30}>30 minutes</option>
@@ -3310,6 +3330,15 @@ function ListicalMenu({
               24-hour clock
             </label>
           </div>
+
+          {/* Increment validation warning */}
+          {incrementChanged && !timesValidForIncrement && (
+            <div className="mt-3 pt-3 border-t border-[#e2e8f0]">
+              <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-300 rounded px-3 py-2">
+                Please set a Bed Time and Rise Time that match the new increment before closing.
+              </p>
+            </div>
+          )}
 
           {/* Clear chips */}
           <div className="mt-3 pt-3 border-t border-[#e2e8f0]">
