@@ -2255,7 +2255,7 @@ const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
     return (
       <div
         ref={cellMenuRef}
-        className="absolute z-30 rounded border border-[#94a3b8] shadow-2xl"
+        className="absolute z-10 rounded border border-[#94a3b8] shadow-2xl"
         style={{
           top: position?.top ?? 0,
           left: position?.left ?? 0,

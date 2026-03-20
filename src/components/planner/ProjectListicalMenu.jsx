@@ -41,7 +41,6 @@ export default function ProjectListicalMenu({
   const { currentYear, isCurrentYearArchived } = useYear();
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
-  const [menuStyle, setMenuStyle] = useState({});
   const [expandedSections, setExpandedSections] = useState({
     viewControls: true,
     history: false,
@@ -60,28 +59,7 @@ export default function ProjectListicalMenu({
   };
 
   useEffect(() => {
-    if (!isOpen) {
-      setMenuStyle({});
-      return undefined;
-    }
-
-    // Calculate position when menu opens
-    const updatePosition = () => {
-      if (buttonRef.current) {
-        const rect = buttonRef.current.getBoundingClientRect();
-        const calculatedLeft = Math.max(16, rect.left);
-
-        setMenuStyle({
-          width: '600px',
-          top: rect.bottom + 8,
-          left: calculatedLeft,
-        });
-      }
-    };
-
-    // Update immediately and after a short delay to ensure refs are ready
-    updatePosition();
-    const timer = setTimeout(updatePosition, 10);
+    if (!isOpen) return undefined;
 
     const handleClickOutside = (event) => {
       if (menuRef.current?.contains(event.target)) return;
@@ -96,14 +74,13 @@ export default function ProjectListicalMenu({
     window.addEventListener('mousedown', handleClickOutside, true);
     window.addEventListener('keydown', handleKeyDown);
     return () => {
-      clearTimeout(timer);
       window.removeEventListener('mousedown', handleClickOutside, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, onClose]);
 
   return (
-    <div>
+    <div className="relative">
       <button
         type="button"
         ref={buttonRef}
@@ -116,8 +93,8 @@ export default function ProjectListicalMenu({
       {isOpen && (
         <div
           ref={menuRef}
-          className="fixed z-20 rounded border border-[#ced3d0] bg-[#f2fdf6] shadow-lg"
-          style={menuStyle}
+          className="absolute top-full mt-2 z-30 rounded border border-[#ced3d0] bg-[#f2fdf6] shadow-lg"
+          style={{ width: '600px' }}
         >
           <div className="flex flex-col text-[12px] text-slate-800" style={{ padding: '16px', gap: '16px' }}>
             {/* Row Operations Section */}
