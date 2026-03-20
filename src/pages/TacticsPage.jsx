@@ -92,14 +92,15 @@ const loadTacticsChipsState = (yearNumber = null) => {
   try {
     const key = getTacticsChipsStorageKey(yearNumber);
     const parsed = storage.getJSON(key, null);
-    if (!parsed) return { projectChips: null, customProjects: null };
+    if (!parsed) return { projectChips: null, customProjects: null, chipTimeOverrides: null };
     return {
       projectChips: Array.isArray(parsed?.projectChips) ? parsed.projectChips : null,
       customProjects: Array.isArray(parsed?.customProjects) ? parsed.customProjects : null,
+      chipTimeOverrides: parsed?.chipTimeOverrides && typeof parsed.chipTimeOverrides === 'object' && !Array.isArray(parsed.chipTimeOverrides) ? parsed.chipTimeOverrides : null,
     };
   } catch (error) {
     console.error('Failed to read tactics chip state', error);
-    return { projectChips: null, customProjects: null };
+    return { projectChips: null, customProjects: null, chipTimeOverrides: null };
   }
 };
 const saveTacticsSettings = (payload) => {
@@ -437,7 +438,15 @@ export default function TacticsPage() {
   const [editingChipLabel, setEditingChipLabel] = useState('');
   const [editingChipIsCustom, setEditingChipIsCustom] = useState(false);
   const [editingCustomProjectId, setEditingCustomProjectId] = useState(null);
+  const [editingChipIsTime, setEditingChipIsTime] = useState(false);
+  const [editingChipMinutes, setEditingChipMinutes] = useState('');
+  const [chipTimeOverrides, setChipTimeOverrides] = useState(() => {
+    const chipState = loadTacticsChipsState(currentYear);
+    return chipState.chipTimeOverrides ?? {};
+  });
   const editingInputRef = useRef(null);
+  const editingMinutesRef = useRef(null);
+  const editingChipContainerRef = useRef(null);
   const [colorEditorProjectId, setColorEditorProjectId] = useState(null);
   const [colorEditorColor, setColorEditorColor] = useState('#c9daf8');
   const colorInputRef = useRef(null);
@@ -1400,8 +1409,8 @@ export default function TacticsPage() {
     timelineRowIds,
   ]);
   useEffect(() => {
-    saveTacticsChipsState({ projectChips, customProjects }, currentYear);
-  }, [projectChips, customProjects, currentYear]);
+    saveTacticsChipsState({ projectChips, customProjects, chipTimeOverrides }, currentYear);
+  }, [projectChips, customProjects, chipTimeOverrides, currentYear]);
   const handleRemoveSelectedChip = useCallback(() => {
     if (!removableBlockId) return;
     setProjectChips((prev) => dedupeChipsById(prev).filter((block) => block.id !== removableBlockId));
@@ -1535,19 +1544,68 @@ export default function TacticsPage() {
     (chipId) => {
       const block = getProjectChipById(chipId);
       if (!block) return;
+      const isScheduleChip = typeof block.id === 'string' && block.id.startsWith('schedule-chip-');
+      if (isScheduleChip) {
+        // For schedule chips, edit both name and time
+        const itemIdxMatch = block.id.match(/-(\d+)$/);
+        const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
+        const scheduleItems = itemIdx != null
+          ? (scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [])
+          : [];
+        const scheduleItem = itemIdx != null ? scheduleItems[itemIdx] : null;
+        const currentOverride = chipTimeOverrides[chipId];
+        let currentMinutes;
+        if (currentOverride != null) {
+          currentMinutes = currentOverride;
+        } else if (scheduleItem) {
+          currentMinutes = parseEstimateLabelToMinutes(scheduleItem.timeValue) ?? block.durationMinutes ?? 60;
+        } else {
+          currentMinutes = block.durationMinutes ?? 60;
+        }
+        const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
+        const rawName = scheduleItem ? (scheduleItem.name ?? '').trim() : '';
+        const currentName = rawName && rawName !== scheduleDefaultText ? rawName : (block.displayLabel ?? '');
+        setEditingChipIsTime(true);
+        setEditingChipIsCustom(false);
+        setEditingChipLabel(currentName);
+        setEditingChipMinutes(String(currentMinutes));
+        setEditingCustomProjectId(null);
+        setEditingChipId(chipId);
+        return;
+      }
       const metadata = projectMetadata.get(block.projectId);
       const fallbackLabel = metadata?.label ?? block.projectId ?? 'Project';
       const isCustom = typeof block.projectId === 'string' && block.projectId.startsWith('custom-');
       const labelValue = block.displayLabel ?? fallbackLabel;
+      setEditingChipIsTime(false);
       setEditingChipIsCustom(isCustom);
       setEditingChipLabel(isCustom ? labelValue.toUpperCase() : labelValue);
       setEditingCustomProjectId(isCustom ? block.projectId : null);
       setEditingChipId(chipId);
     },
-    [getProjectChipById, projectMetadata]
+    [getProjectChipById, projectMetadata, scheduleLayout, chipTimeOverrides]
   );
   const handleConfirmLabelEdit = useCallback(() => {
     if (!editingChipId) return;
+    if (editingChipIsTime) {
+      const parsedMins = parseInt(editingChipMinutes, 10);
+      if (Number.isFinite(parsedMins) && parsedMins > 0) {
+        setChipTimeOverrides((prev) => ({ ...prev, [editingChipId]: parsedMins }));
+      }
+      const trimmedName = editingChipLabel.trim();
+      setProjectChips((prev) =>
+        prev.map((block) =>
+          block.id === editingChipId
+            ? { ...block, displayLabel: trimmedName || null }
+            : block
+        )
+      );
+      setEditingChipId(null);
+      setEditingChipLabel('');
+      setEditingChipMinutes('');
+      setEditingChipIsTime(false);
+      return;
+    }
     const normalizedLabel = editingChipIsCustom
       ? editingChipLabel.toUpperCase()
       : editingChipLabel;
@@ -1571,17 +1629,31 @@ export default function TacticsPage() {
     setEditingCustomProjectId(null);
   }, [
     editingChipId,
+    editingChipIsTime,
     editingChipIsCustom,
     editingChipLabel,
+    editingChipMinutes,
     editingCustomProjectId,
     setProjectChips,
   ]);
   const handleCancelLabelEdit = useCallback(() => {
     setEditingChipId(null);
     setEditingChipLabel('');
+    setEditingChipMinutes('');
     setEditingChipIsCustom(false);
+    setEditingChipIsTime(false);
     setEditingCustomProjectId(null);
   }, []);
+  useEffect(() => {
+    if (!editingChipIsTime) return undefined;
+    const handleMouseDown = (event) => {
+      const container = editingChipContainerRef.current;
+      if (container && container.contains(event.target)) return;
+      handleConfirmLabelEdit();
+    };
+    window.addEventListener('mousedown', handleMouseDown, true);
+    return () => window.removeEventListener('mousedown', handleMouseDown, true);
+  }, [editingChipIsTime, handleConfirmLabelEdit]);
   const projectColumnTotals = useMemo(() => {
     const totals = new Map();
     const columnLength = visibleColumnCount || DAY_COLUMN_COUNT;
@@ -1598,15 +1670,20 @@ export default function TacticsPage() {
       const isScheduleChip = typeof block.id === 'string' && block.id.startsWith('schedule-chip-');
       const isSingleCell = block.startRowId === (block.endRowId ?? block.startRowId);
       if (isScheduleChip && isSingleCell) {
-        const itemIdxMatch = block.id.match(/-(\d+)$/);
-        const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
-        const scheduleItems = itemIdx != null
-          ? (scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [])
-          : [];
-        const scheduleItem = itemIdx != null ? scheduleItems[itemIdx] : null;
-        const parsedMins = scheduleItem ? parseEstimateLabelToMinutes(scheduleItem.timeValue) : null;
-        if (Number.isFinite(parsedMins) && parsedMins > 0) {
-          duration = parsedMins;
+        const overrideMins = chipTimeOverrides[block.id];
+        if (overrideMins != null && overrideMins > 0) {
+          duration = overrideMins;
+        } else {
+          const itemIdxMatch = block.id.match(/-(\d+)$/);
+          const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
+          const scheduleItems = itemIdx != null
+            ? (scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [])
+            : [];
+          const scheduleItem = itemIdx != null ? scheduleItems[itemIdx] : null;
+          const parsedMins = scheduleItem ? parseEstimateLabelToMinutes(scheduleItem.timeValue) : null;
+          if (Number.isFinite(parsedMins) && parsedMins > 0) {
+            duration = parsedMins;
+          }
         }
       }
       if (duration == null) {
@@ -1622,6 +1699,7 @@ export default function TacticsPage() {
     });
     return totals;
   }, [
+    chipTimeOverrides,
     incrementMinutes,
     projectChips,
     rowIndexMap,
@@ -2096,11 +2174,13 @@ export default function TacticsPage() {
           ? (scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [])
           : [];
         const scheduleItem = itemIdx != null ? scheduleItems[itemIdx] : null;
-const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
+        const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
+        // Prefer user-edited displayLabel, then scheduleItem name, then project label
         const itemName = scheduleItem ? (scheduleItem.name ?? '').trim() : '';
-        const hasName = Boolean(itemName && itemName !== scheduleDefaultText);
-        const baseName = hasName ? itemName : (metadata?.label ?? 'Project');
-        const mins = scheduleItem ? parseEstimateLabelToMinutes(scheduleItem.timeValue) : block.durationMinutes;
+        const hasScheduleName = Boolean(itemName && itemName !== scheduleDefaultText);
+        const baseName = block.displayLabel || (hasScheduleName ? itemName : (metadata?.label ?? 'Project'));
+        const overrideMins = chipTimeOverrides[chipId];
+        const mins = overrideMins != null ? overrideMins : (scheduleItem ? parseEstimateLabelToMinutes(scheduleItem.timeValue) : block.durationMinutes);
         const displayMins = Number.isFinite(mins) && mins > 0 ? mins : null;
         let timeStr = null;
         if (displayMins != null) {
@@ -2124,6 +2204,7 @@ const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
       const normalizedLabel = rawLabel.toUpperCase();
       const baseFontSize = 14 * textSizeScale;
       const isEditing = editingChipId === block.id;
+      const isEditingTime = isEditing && editingChipIsTime;
       const isChipBeingDragged =
         Boolean(dragPreview && dragPreview.sourceChipId === chipId);
       return (
@@ -2181,7 +2262,39 @@ const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
               handleStartLabelEdit(chipId);
             }}
           >
-            {isEditing ? (
+            {isEditingTime ? (
+              <div
+                ref={editingChipContainerRef}
+                className="flex w-full items-center gap-0.5"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <input
+                  ref={editingInputRef}
+                  placeholder="Name"
+                  className="min-w-0 flex-1 bg-transparent px-0.5 font-semibold text-slate-800 outline-none"
+                  style={{ fontSize: `${13 * textSizeScale}px`, borderBottom: '1px solid rgba(0,0,0,0.3)' }}
+                  value={editingChipLabel}
+                  onChange={(event) => setEditingChipLabel(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') { event.preventDefault(); editingMinutesRef.current?.focus(); }
+                    else if (event.key === 'Escape') { event.preventDefault(); handleCancelLabelEdit(); }
+                  }}
+                />
+                <span className="shrink-0 font-semibold text-slate-800" style={{ fontSize: `${13 * textSizeScale}px` }}>:</span>
+                <input
+                  ref={editingMinutesRef}
+                  placeholder="min"
+                  className="w-4 shrink-0 bg-transparent pr-0.5 font-semibold text-slate-800 outline-none"
+                  style={{ fontSize: `${13 * textSizeScale}px`, borderBottom: '1px solid rgba(0,0,0,0.3)' }}
+                  value={editingChipMinutes}
+                  onChange={(event) => setEditingChipMinutes(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') { event.preventDefault(); handleConfirmLabelEdit(); }
+                    else if (event.key === 'Escape') { event.preventDefault(); handleCancelLabelEdit(); }
+                  }}
+                />
+              </div>
+            ) : isEditing ? (
               <input
                 ref={editingInputRef}
                 className="w-full bg-white px-1 font-semibold text-slate-800 outline-none"
@@ -2285,6 +2398,10 @@ const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
       handleConfirmLabelEdit,
       handleCancelLabelEdit,
       editingChipIsCustom,
+      editingChipIsTime,
+      editingChipMinutes,
+      chipTimeOverrides,
+      scheduleLayout,
       isDragging,
       setSelectedCell,
       setProjectChips,
