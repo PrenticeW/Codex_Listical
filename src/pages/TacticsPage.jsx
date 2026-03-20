@@ -1824,37 +1824,48 @@ export default function TacticsPage() {
             1,
             Math.ceil(durationMinutes / Math.max(1, incrementMinutes))
           );
-          // Always place sequentially to avoid overlaps
+          const existingIndex = next.findIndex((entry) => entry.id === chipId);
+          if (existingIndex >= 0) {
+            // Preserve the chip's current startRowId (its user-placed time position).
+            // Only recompute endRowId based on new span.
+            // Only update columnIndex if the chip is still in a project column (not user-moved to a weekday column).
+            const existingChip = next[existingIndex];
+            const existingStartRowId = existingChip.startRowId;
+            const existingStartIdx = localRowIndexMap.get(existingStartRowId);
+            const chipIsInProjectColumn = existingChip.columnIndex >= DAY_COLUMN_COUNT;
+            const updatedColumnIndex = chipIsInProjectColumn ? columnIndex : existingChip.columnIndex;
+            if (existingStartIdx != null) {
+              const newEndIdx = Math.min(existingStartIdx + span - 1, timelineRowIds.length - 1);
+              const newEndRowId = timelineRowIds[newEndIdx] ?? existingStartRowId;
+              currentRowIdx = newEndIdx + 1;
+              const needsUpdate =
+                existingChip.displayLabel !== displayLabel ||
+                existingChip.hasScheduleName !== hasScheduleName ||
+                existingChip.durationMinutes !== durationMinutes ||
+                existingChip.endRowId !== newEndRowId ||
+                existingChip.columnIndex !== updatedColumnIndex;
+              if (needsUpdate) {
+                next[existingIndex] = { ...existingChip, displayLabel, hasScheduleName, durationMinutes, endRowId: newEndRowId, columnIndex: updatedColumnIndex };
+              }
+            } else {
+              // existingStartRowId no longer valid in timeline — fall back to sequential placement
+              const startRowIdx = Math.min(currentRowIdx, timelineRowIds.length - 1);
+              const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
+              const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
+              const newEndRowId = timelineRowIds[endRowIdx] ?? startRowId;
+              const newStartMinutes = rowIdToClockMinutes(startRowId, trailingMinuteRows);
+              currentRowIdx = endRowIdx + 1;
+              next[existingIndex] = { ...existingChip, displayLabel, hasScheduleName, durationMinutes, startRowId, endRowId: newEndRowId, startMinutes: newStartMinutes, columnIndex: updatedColumnIndex };
+            }
+            return;
+          }
+          // New chip — place sequentially
           const startRowIdx = Math.min(currentRowIdx, timelineRowIds.length - 1);
           const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
           const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
           const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
           const startMinutes = rowIdToClockMinutes(startRowId, trailingMinuteRows);
           currentRowIdx = endRowIdx + 1;
-          const existingIndex = next.findIndex((entry) => entry.id === chipId);
-          if (existingIndex >= 0) {
-            if (hasIncrementChanged) {
-              // Resize effect already repositioned this chip; only update metadata
-              const needsMetaUpdate =
-                next[existingIndex].displayLabel !== displayLabel ||
-                next[existingIndex].hasScheduleName !== hasScheduleName ||
-                next[existingIndex].durationMinutes !== durationMinutes;
-              if (needsMetaUpdate) {
-                next[existingIndex] = { ...next[existingIndex], displayLabel, hasScheduleName, durationMinutes };
-              }
-            } else {
-              const needsUpdate =
-                next[existingIndex].displayLabel !== displayLabel ||
-                next[existingIndex].hasScheduleName !== hasScheduleName ||
-                next[existingIndex].durationMinutes !== durationMinutes ||
-                next[existingIndex].startRowId !== startRowId ||
-                next[existingIndex].endRowId !== endRowId;
-              if (needsUpdate) {
-                next[existingIndex] = { ...next[existingIndex], displayLabel, hasScheduleName, durationMinutes, startRowId, endRowId, startMinutes };
-              }
-            }
-            return;
-          }
           next.push({
             id: chipId,
             columnIndex,
