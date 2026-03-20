@@ -661,6 +661,14 @@ export default function TacticsPage() {
   }, [displayedWeekDays, totalColumnCount]);
 
   useEffect(() => {
+    const removedProjectIds = new Set(
+      stagingProjects.filter((p) => p.addedToPlan !== true).map((p) => p.id)
+    );
+    if (removedProjectIds.size === 0) return;
+    setProjectChips((prev) => prev.filter((chip) => !removedProjectIds.has(chip.projectId)));
+  }, [stagingProjects]);
+
+  useEffect(() => {
     setSelectedBlockId((prev) =>
       prev && projectChips.some((block) => block.id === prev) ? prev : null
     );
