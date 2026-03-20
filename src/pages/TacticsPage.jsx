@@ -150,6 +150,23 @@ const parseHour12ToMinutes = (value) => {
   return hours * 60 + minutes;
 };
 
+// Returns the clock time in minutes (0–1439) for a given row ID.
+// trailingMinuteRows is the array of total-minutes values for trailing-N rows.
+const rowIdToClockMinutes = (rowId, trailingMinuteRows) => {
+  if (!rowId) return null;
+  if (rowId === 'sleep-start') return null;
+  if (rowId === 'sleep-end') return null;
+  if (rowId.startsWith('hour-')) {
+    const h = parseInt(rowId.slice(5), 10);
+    return Number.isFinite(h) ? h * 60 : null;
+  }
+  if (rowId.startsWith('trailing-')) {
+    const idx = parseInt(rowId.slice(9), 10);
+    return Number.isFinite(idx) ? (trailingMinuteRows[idx] ?? null) : null;
+  }
+  return null;
+};
+
 const getBlockDuration = (block, rowIndexMap, timelineRowIds, incrementMinutes) => {
   if (!block || !rowIndexMap || !timelineRowIds?.length || !incrementMinutes) {
     return 0;
@@ -679,55 +696,69 @@ export default function TacticsPage() {
   // Refs to track previous timeline state for increment-change resize logic
   const prevIncrementForResizeRef = useRef(null);
   const prevTimelineRowIdsRef = useRef(null);
+  const prevTrailingMinuteRowsRef = useRef([]);
 
   // When increment changes, recompute endRowId for all non-sleep chips to preserve their duration
   useEffect(() => {
     const prevIncrement = prevIncrementForResizeRef.current;
     const prevRowIds = prevTimelineRowIdsRef.current;
+    const prevTrailingMinuteRows = prevTrailingMinuteRowsRef.current;
     prevIncrementForResizeRef.current = incrementMinutes;
     prevTimelineRowIdsRef.current = timelineRowIds;
+    prevTrailingMinuteRowsRef.current = trailingMinuteRows;
 
     // Only act when increment actually changed (not on first render or other timeline changes)
     if (prevIncrement === null || prevIncrement === incrementMinutes) return;
     if (!prevRowIds || !timelineRowIds.length) return;
 
     const prevRowIndexMap = new Map(prevRowIds.map((id, i) => [id, i]));
-    const newRowIndexMap = new Map(timelineRowIds.map((id, i) => [id, i]));
 
     setProjectChips((prev) =>
       prev.map((entry) => {
-        // Sleep chips are handled separately; schedule chips handled in their own effect
-        if (entry.projectId === 'sleep' || entry.id.startsWith('schedule-chip-')) return entry;
+        if (entry.projectId === 'sleep') return entry;
 
-        const startIdx = prevRowIndexMap.get(entry.startRowId);
-        const endIdx = prevRowIndexMap.get(entry.endRowId ?? entry.startRowId);
-        if (startIdx == null || endIdx == null) return entry;
+        // Use stored startMinutes, or derive from current startRowId as fallback (e.g. chips loaded from storage)
+        const originalMinutes = entry.startMinutes ?? rowIdToClockMinutes(entry.startRowId, prevTrailingMinuteRows);
+        console.log('[resize]', entry.id, 'originalMinutes:', originalMinutes, 'new trailingMinuteRows:', trailingMinuteRows.slice(0,5), 'new timelineRowIds:', timelineRowIds.slice(0,10));
+        if (originalMinutes == null) return entry;
 
-        // Compute duration in minutes using the old increment
-        let durationMinutes = 0;
-        for (let i = Math.min(startIdx, endIdx); i <= Math.max(startIdx, endIdx); i += 1) {
-          const rowId = prevRowIds[i];
-          if (!rowId) continue;
-          if (rowId === 'sleep-start' || rowId.startsWith('hour-')) {
-            durationMinutes += 60;
-          } else {
-            durationMinutes += prevIncrement;
+        // Compute duration from old rows
+        let durationMinutes;
+        if (Number.isFinite(entry.durationMinutes)) {
+          durationMinutes = entry.durationMinutes;
+        } else {
+          const startIdx = prevRowIndexMap.get(entry.startRowId);
+          const endIdx = prevRowIndexMap.get(entry.endRowId ?? entry.startRowId);
+          if (startIdx == null || endIdx == null) return entry;
+          durationMinutes = 0;
+          for (let i = Math.min(startIdx, endIdx); i <= Math.max(startIdx, endIdx); i += 1) {
+            const rowId = prevRowIds[i];
+            if (!rowId) continue;
+            durationMinutes += (rowId === 'sleep-start' || rowId.startsWith('hour-')) ? 60 : prevIncrement;
           }
         }
 
-        // Recompute span using new increment
+        // Find the last new row whose clock time is <= originalMinutes (bias earlier)
+        let newStartIdx = null;
+        for (let i = 0; i < timelineRowIds.length; i += 1) {
+          const m = rowIdToClockMinutes(timelineRowIds[i], trailingMinuteRows);
+          if (m == null) continue;
+          if (m <= originalMinutes) newStartIdx = i;
+          else break;
+        }
+        console.log('[resize scan]', entry.id, 'originalMinutes:', originalMinutes, 'newStartIdx:', newStartIdx, 'newStartRowId:', timelineRowIds[newStartIdx]);
+        if (newStartIdx == null) return entry;
+
         const newSpan = Math.max(1, Math.ceil(durationMinutes / Math.max(1, incrementMinutes)));
-        const newStartIdx = newRowIndexMap.get(entry.startRowId);
-        if (newStartIdx == null) return entry; // startRowId no longer in timeline, leave as-is
-
+        const newStartRowId = timelineRowIds[newStartIdx];
         const newEndIdx = Math.min(newStartIdx + newSpan - 1, timelineRowIds.length - 1);
-        const newEndRowId = timelineRowIds[newEndIdx] ?? entry.startRowId;
+        const newEndRowId = timelineRowIds[newEndIdx] ?? newStartRowId;
 
-        if (newEndRowId === entry.endRowId) return entry;
-        return { ...entry, endRowId: newEndRowId };
+        if (newStartRowId === entry.startRowId && newEndRowId === entry.endRowId) return entry;
+        return { ...entry, startRowId: newStartRowId, endRowId: newEndRowId };
       })
     );
-  }, [incrementMinutes, timelineRowIds, setProjectChips]);
+  }, [incrementMinutes, timelineRowIds, trailingMinuteRows, setProjectChips]);
 
   const rowIndexMap = useMemo(
     () => new Map(timelineRowIds.map((rowId, index) => [rowId, index])),
@@ -1089,6 +1120,7 @@ export default function TacticsPage() {
         columnIndex: targetColumnIndex,
         startRowId,
         endRowId,
+        startMinutes: rowIdToClockMinutes(startRowId, trailingMinuteRows),
         ...(target.projectId === 'sleep' ? { userModified: true } : {}),
       };
       return next;
@@ -1100,7 +1132,7 @@ export default function TacticsPage() {
     setIsDragging(false);
     dragAnchorOffsetRef.current = 0;
     logDragDebug('Preview applied and cleared');
-  }, [dragPreview, getProjectChipById, setProjectChips, setSelectedCell]);
+  }, [dragPreview, getProjectChipById, setProjectChips, setSelectedCell, trailingMinuteRows]);
   const handleSleepDrop = useCallback(
     (event) => {
       if (!draggingSleepChipIdRef.current) return;
@@ -1797,17 +1829,29 @@ export default function TacticsPage() {
           const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
           const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
           const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
+          const startMinutes = rowIdToClockMinutes(startRowId, trailingMinuteRows);
           currentRowIdx = endRowIdx + 1;
           const existingIndex = next.findIndex((entry) => entry.id === chipId);
           if (existingIndex >= 0) {
-            const needsUpdate =
-              next[existingIndex].displayLabel !== displayLabel ||
-              next[existingIndex].hasScheduleName !== hasScheduleName ||
-              next[existingIndex].durationMinutes !== durationMinutes ||
-              next[existingIndex].startRowId !== startRowId ||
-              next[existingIndex].endRowId !== endRowId;
-            if (needsUpdate) {
-              next[existingIndex] = { ...next[existingIndex], displayLabel, hasScheduleName, durationMinutes, startRowId, endRowId };
+            if (hasIncrementChanged) {
+              // Resize effect already repositioned this chip; only update metadata
+              const needsMetaUpdate =
+                next[existingIndex].displayLabel !== displayLabel ||
+                next[existingIndex].hasScheduleName !== hasScheduleName ||
+                next[existingIndex].durationMinutes !== durationMinutes;
+              if (needsMetaUpdate) {
+                next[existingIndex] = { ...next[existingIndex], displayLabel, hasScheduleName, durationMinutes };
+              }
+            } else {
+              const needsUpdate =
+                next[existingIndex].displayLabel !== displayLabel ||
+                next[existingIndex].hasScheduleName !== hasScheduleName ||
+                next[existingIndex].durationMinutes !== durationMinutes ||
+                next[existingIndex].startRowId !== startRowId ||
+                next[existingIndex].endRowId !== endRowId;
+              if (needsUpdate) {
+                next[existingIndex] = { ...next[existingIndex], displayLabel, hasScheduleName, durationMinutes, startRowId, endRowId, startMinutes };
+              }
             }
             return;
           }
@@ -1816,6 +1860,7 @@ export default function TacticsPage() {
             columnIndex,
             startRowId,
             endRowId,
+            startMinutes,
             projectId: column.project.id,
             displayLabel,
             hasScheduleName,
@@ -1833,6 +1878,7 @@ export default function TacticsPage() {
     stagingColumnConfigs,
     scheduleLayout,
     timelineRowIds,
+    trailingMinuteRows,
     incrementMinutes,
     setProjectChips,
     stagingProjects,
