@@ -1552,12 +1552,26 @@ export default function TacticsPage() {
       if (columnIndex < 0 || columnIndex >= columnLength) {
         return;
       }
-      const duration = getBlockDuration(
-        block,
-        rowIndexMap,
-        timelineRowIds,
-        incrementMinutes
-      );
+      // If this is a single-cell schedule chip with an explicit timeValue, use
+      // that value directly instead of the increment-based grid duration.
+      let duration;
+      const isScheduleChip = typeof block.id === 'string' && block.id.startsWith('schedule-chip-');
+      const isSingleCell = block.startRowId === (block.endRowId ?? block.startRowId);
+      if (isScheduleChip && isSingleCell) {
+        const itemIdxMatch = block.id.match(/-(\d+)$/);
+        const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
+        const scheduleItems = itemIdx != null
+          ? (scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [])
+          : [];
+        const scheduleItem = itemIdx != null ? scheduleItems[itemIdx] : null;
+        const parsedMins = scheduleItem ? parseEstimateLabelToMinutes(scheduleItem.timeValue) : null;
+        if (Number.isFinite(parsedMins) && parsedMins > 0) {
+          duration = parsedMins;
+        }
+      }
+      if (duration == null) {
+        duration = getBlockDuration(block, rowIndexMap, timelineRowIds, incrementMinutes);
+      }
       if (duration <= 0) return;
       if (!totals.has(targetProjectId)) {
         totals.set(targetProjectId, Array.from({ length: columnLength }, () => 0));
@@ -1571,6 +1585,7 @@ export default function TacticsPage() {
     incrementMinutes,
     projectChips,
     rowIndexMap,
+    scheduleLayout,
     timelineRowIds,
     visibleColumnCount,
   ]);
