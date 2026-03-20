@@ -1777,41 +1777,25 @@ export default function TacticsPage() {
             1,
             Math.ceil(durationMinutes / Math.max(1, incrementMinutes))
           );
-          const existingIndex = next.findIndex((entry) => entry.id === chipId);
-          if (existingIndex >= 0) {
-            // Preserve the chip's current startRowId (its time position) and only
-            // recompute endRowId based on the new span so it resizes with increment changes.
-            const existingStartRowId = next[existingIndex].startRowId;
-            const existingStartIdx = localRowIndexMap.get(existingStartRowId);
-            if (existingStartIdx != null) {
-              const newEndIdx = Math.min(existingStartIdx + span - 1, timelineRowIds.length - 1);
-              const newEndRowId = timelineRowIds[newEndIdx] ?? existingStartRowId;
-              currentRowIdx = newEndIdx + 1;
-              const needsUpdate =
-                next[existingIndex].displayLabel !== displayLabel ||
-                next[existingIndex].hasScheduleName !== hasScheduleName ||
-                next[existingIndex].durationMinutes !== durationMinutes ||
-                next[existingIndex].endRowId !== newEndRowId;
-              if (needsUpdate) {
-                next[existingIndex] = { ...next[existingIndex], displayLabel, hasScheduleName, durationMinutes, endRowId: newEndRowId };
-              }
-            } else {
-              // startRowId no longer valid — fall back to sequential placement
-              const startRowIdx = Math.min(currentRowIdx, timelineRowIds.length - 1);
-              const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
-              const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
-              const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
-              currentRowIdx = endRowIdx + 1;
-              next[existingIndex] = { ...next[existingIndex], displayLabel, hasScheduleName, durationMinutes, startRowId, endRowId };
-            }
-            return;
-          }
-          // New chip — place sequentially
+          // Always place sequentially to avoid overlaps
           const startRowIdx = Math.min(currentRowIdx, timelineRowIds.length - 1);
           const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
           const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
           const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
           currentRowIdx = endRowIdx + 1;
+          const existingIndex = next.findIndex((entry) => entry.id === chipId);
+          if (existingIndex >= 0) {
+            const needsUpdate =
+              next[existingIndex].displayLabel !== displayLabel ||
+              next[existingIndex].hasScheduleName !== hasScheduleName ||
+              next[existingIndex].durationMinutes !== durationMinutes ||
+              next[existingIndex].startRowId !== startRowId ||
+              next[existingIndex].endRowId !== endRowId;
+            if (needsUpdate) {
+              next[existingIndex] = { ...next[existingIndex], displayLabel, hasScheduleName, durationMinutes, startRowId, endRowId };
+            }
+            return;
+          }
           next.push({
             id: chipId,
             columnIndex,
