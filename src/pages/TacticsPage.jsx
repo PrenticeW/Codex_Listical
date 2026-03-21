@@ -1680,8 +1680,6 @@ export default function TacticsPage() {
       if (columnIndex < 0 || columnIndex >= columnLength) {
         return;
       }
-      // If this is a single-cell schedule chip with an explicit timeValue, use
-      // that value directly instead of the increment-based grid duration.
       let duration;
       const isScheduleChip = typeof block.id === 'string' && block.id.startsWith('schedule-chip-');
       const isSingleCell = block.startRowId === (block.endRowId ?? block.startRowId);
@@ -1697,7 +1695,7 @@ export default function TacticsPage() {
             : [];
           const scheduleItem = itemIdx != null ? scheduleItems[itemIdx] : null;
           const parsedMins = scheduleItem ? parseEstimateLabelToMinutes(scheduleItem.timeValue) : null;
-          if (Number.isFinite(parsedMins) && parsedMins > 0) {
+          if (Number.isFinite(parsedMins) && parsedMins > 0 && parsedMins < incrementMinutes) {
             duration = parsedMins;
           }
         }
@@ -2182,6 +2180,7 @@ export default function TacticsPage() {
       const metadata = projectMetadata.get(projectId);
       const isScheduleChip = block.id.startsWith('schedule-chip-');
       let rawLabel;
+      let largeTimeStr = null;
       if (isScheduleChip) {
         // Derive label directly from schedule data at render time so it's always fresh
         const itemIdxMatch = block.id.match(/-(\d+)$/);
@@ -2198,7 +2197,7 @@ export default function TacticsPage() {
         const overrideMins = chipTimeOverrides[chipId];
         const mins = overrideMins != null ? overrideMins : (scheduleItem ? parseEstimateLabelToMinutes(scheduleItem.timeValue) : block.durationMinutes);
         const isMultiRow = block.endRowId && block.endRowId !== block.startRowId;
-        const displayMins = !isMultiRow && Number.isFinite(mins) && mins > 0 ? mins : null;
+        const displayMins = !isMultiRow && Number.isFinite(mins) && mins > 0 && (overrideMins != null || mins < incrementMinutes) ? mins : null;
         let timeStr = null;
         if (displayMins != null) {
           const h = Math.floor(displayMins / 60);
@@ -2206,6 +2205,20 @@ export default function TacticsPage() {
           if (h === 0) timeStr = `${m}`;
           else if (m === 0) timeStr = `${h}`;
           else timeStr = `${h}.${String(m).padStart(2, '0')}`;
+        }
+        if (isMultiRow) {
+          const startIdx = rowIndexMap.get(block.startRowId);
+          const endIdx = rowIndexMap.get(block.endRowId);
+          if (startIdx != null && endIdx != null) {
+            const rowCount = Math.abs(endIdx - startIdx) + 1;
+            const blockMins = rowCount * incrementMinutes;
+            if (Number.isFinite(blockMins) && blockMins > 0) {
+              const h = Math.floor(blockMins / 60);
+              const m = blockMins % 60;
+              if (m === 0) largeTimeStr = `${h}`;
+              else largeTimeStr = `${h}.${String(m).padStart(2, '0')}`;
+            }
+          }
         }
         rawLabel = timeStr != null ? `${baseName}: ${timeStr}` : baseName;
       } else {
@@ -2337,6 +2350,23 @@ export default function TacticsPage() {
             ) : (
               <FitText text={normalizedLabel} maxFontSize={baseFontSize} wrap={isScheduleChip && chipIsMultiRow && blockHeight >= baseFontSize * 2.8} />
             )}
+            {largeTimeStr && !isEditing ? (
+              <span
+                style={{
+                  position: 'absolute',
+                  bottom: '2px',
+                  left: 0,
+                  right: 0,
+                  textAlign: 'center',
+                  fontSize: `${14 * textSizeScale}px`,
+                  opacity: 0.75,
+                  lineHeight: 1,
+                  pointerEvents: 'none',
+                }}
+              >
+                {largeTimeStr}
+              </span>
+            ) : null}
             {isActive && projectId === 'sleep' && block.userModified ? (
               <button
                 type="button"
@@ -2424,6 +2454,8 @@ export default function TacticsPage() {
       setSelectedCell,
       setProjectChips,
       timelineRowIds,
+      rowIndexMap,
+      incrementMinutes,
       dragPreview,
       textSizeScale,
     ]
