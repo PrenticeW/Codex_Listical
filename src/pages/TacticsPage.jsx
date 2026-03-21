@@ -18,6 +18,7 @@ import { saveTacticsMetrics } from '../lib/tacticsMetricsStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
 import storage from '../lib/storageService';
 import usePageSize from '../hooks/usePageSize';
+import ColourPicker from '../components/ColourPicker';
 
 const DAYS_OF_WEEK = [
   'Sunday',
@@ -2695,17 +2696,13 @@ export default function TacticsPage() {
                         ) : null}
                   </div>
                   {colorEditorProjectId === project.id ? (
-                    <div className="px-3 py-1">
-                      <input
-                        ref={(node) => {
-                          colorInputRef.current = node;
-                        }}
-                        type="color"
-                        className="h-8 w-full cursor-pointer rounded border border-[#94a3b8] p-0"
+                    <div className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                      <ColourPicker
                         value={colorEditorColor}
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={(event) => handleColorChange(event.target.value)}
-                        onBlur={finishColorEdit}
+                        onChange={(colour) => {
+                          handleColorChange(colour);
+                          finishColorEdit();
+                        }}
                       />
                     </div>
                   ) : null}

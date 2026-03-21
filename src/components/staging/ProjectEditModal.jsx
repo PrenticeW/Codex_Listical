@@ -1,4 +1,5 @@
 import React from 'react';
+import ColourPicker from '../ColourPicker';
 
 /**
  * ProjectEditModal - Inline modal for editing project properties
@@ -29,18 +30,12 @@ export default function ProjectEditModal({
     >
       <div className="space-y-3">
         <div className="space-y-2" style={{ paddingTop: '15px' }}>
-          <label
-            className="text-sm font-semibold text-slate-700"
-            htmlFor="plan-color-inline"
-          >
+          <label className="text-sm font-semibold text-slate-700">
             Project colour
           </label>
-          <input
-            id="plan-color-inline"
-            type="color"
-            className="h-10 w-full cursor-pointer rounded border border-[#ced3d0] p-1"
+          <ColourPicker
             value={planModal.color || '#c9daf8'}
-            onChange={(e) => updatePlanModal({ color: e.target.value })}
+            onChange={(colour) => updatePlanModal({ color: colour })}
           />
         </div>
         <div className="space-y-1" style={{ paddingTop: '15px' }}>
