@@ -1,5 +1,7 @@
 import React from 'react';
 
+const SCHEDULE_PLACEHOLDER = 'Schedule Item';
+
 export const buildScheduleLayout = (highlightedProjects) => {
   const scheduleItemsByProject = new Map();
   let maxRows = 0;
@@ -7,7 +9,12 @@ export const buildScheduleLayout = (highlightedProjects) => {
     const planSummary = project.planSummary ?? {};
     const items = planSummary.scheduleItems ?? planSummary.subprojects;
     const normalized = Array.isArray(items)
-      ? items.filter((entry) => Boolean(entry?.name || entry?.timeValue))
+      ? items.filter((entry) => {
+          const name = (entry?.name ?? '').trim();
+          const timeValue = entry?.timeValue ?? '';
+          const isPlaceholder = name === SCHEDULE_PLACEHOLDER || name === '';
+          return !isPlaceholder || (timeValue && timeValue !== '0.00');
+        })
       : [];
     scheduleItemsByProject.set(project.id, normalized);
     if (normalized.length > maxRows) {
