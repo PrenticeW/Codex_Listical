@@ -24,7 +24,7 @@ export default function ProjectEditModal({
 }) {
   return (
     <div
-      className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-[#ced3d0] bg-white p-4 shadow-xl z-[9999]"
+      className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-[#ced3d0] bg-white p-4 shadow-xl z-10"
       style={{ backgroundColor: '#ffffff', color: '#0f172a' }}
     >
       <div className="space-y-3">

@@ -399,21 +399,22 @@ export default function StagingPageV2() {
 
   return (
     <>
-      <div className="min-h-screen bg-gray-100 text-slate-800 p-4 relative">
-        <NavigationBar
-          listicalButton={
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded border border-[#ced3d0] bg-white px-3 py-2 font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6] hover:shadow-md"
-            >
-              <span>Listical</span>
-            </button>
-          }
-        />
-        <div className="space-y-6" style={{ marginTop: '75px' }}>
+      <div className="h-screen overflow-y-auto bg-gray-100 text-slate-800">
+        <div
+          className="sticky top-0 z-20 bg-gray-100 px-4 pt-4 pb-2"
+        >
+          <NavigationBar
+            listicalButton={
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded border border-[#ced3d0] bg-white px-3 py-2 font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6] hover:shadow-md"
+              >
+                <span>Listical</span>
+              </button>
+            }
+          />
           <div
-            className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm"
-            style={{ marginBottom: '30px' }}
+            className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm mt-2"
           >
             <input
               id="staging-input"
@@ -431,7 +432,9 @@ export default function StagingPageV2() {
               placeholder="What would you like to get done?"
             />
           </div>
+        </div>
 
+        <div className="px-4 pb-4" style={{ isolation: 'isolate' }}>
           <div className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm">
             <div className="grid gap-[5px]">
               {shortlist.map((item) => {
