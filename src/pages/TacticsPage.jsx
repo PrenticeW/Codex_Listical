@@ -394,7 +394,9 @@ export default function TacticsPage() {
     // Load saved chips from storage first
     const chipState = loadTacticsChipsState(currentYear);
     if (chipState.projectChips) {
-      return dedupeChipsById(chipState.projectChips);
+      const deduped = dedupeChipsById(chipState.projectChips);
+      updateChipSequenceFromList(deduped);
+      return deduped;
     }
     // Fall back to initial sleep blocks if no saved state
     return buildInitialSleepBlocks(displayedWeekDays);
@@ -666,9 +668,10 @@ export default function TacticsPage() {
   useEffect(() => {
     setProjectChips((prev) => {
       const nextBlocks = dedupeChipsById(prev);
+      // Track columns that already have a default sleep chip (by ID), regardless of position
       const trackedColumns = new Set(
         nextBlocks
-          .filter((entry) => entry.startRowId === 'sleep-start')
+          .filter((entry) => typeof entry.id === 'string' && /^sleep-\d+$/.test(entry.id))
           .map((entry) => entry.columnIndex)
       );
       for (let columnIndex = 0; columnIndex < displayedWeekDays.length; columnIndex += 1) {
@@ -712,15 +715,24 @@ export default function TacticsPage() {
     return rows;
   }, [hourRows, trailingMinuteRows]);
 
-  // Keep all sleep blocks spanning from sleep-start to the last hour row whenever
-  // the timeline changes (bed time, wake time, or increment changes).
+  // Keep default sleep blocks (sleep-0, sleep-1, ...) spanning from sleep-start to the last hour row
+  // when the timeline actually changes (bed time, wake time, or increment changes).
+  // Skips on initial mount so saved positions are preserved across refreshes.
+  const prevTimelineForSleepRef = useRef(null);
   useEffect(() => {
+    const prevTimeline = prevTimelineForSleepRef.current;
+    prevTimelineForSleepRef.current = timelineRowIds;
+    // Skip on first mount — saved chip positions should be preserved
+    if (prevTimeline === null) return;
+    // Skip if timeline didn't actually change
+    if (prevTimeline === timelineRowIds) return;
     // Find the last hour-* row — that's the row just before sleep-end
     const lastHourRow = [...timelineRowIds].reverse().find((id) => id.startsWith('hour-'));
     if (!lastHourRow) return;
     setProjectChips((prev) =>
       prev.map((entry) => {
-        if (entry.projectId !== 'sleep') return entry;
+        // Only reset the built-in per-column sleep chips, not user-created ones
+        if (!/^sleep-\d+$/.test(entry.id)) return entry;
         return { ...entry, startRowId: 'sleep-start', endRowId: lastHourRow };
       })
     );
