@@ -2224,6 +2224,36 @@ export default function TacticsPage() {
       } else {
         rawLabel = block.displayLabel ?? metadata?.label ?? 'Project';
       }
+      // Compute sleep time info for sleep chips
+      let sleepTimeInfo = null;
+      if (projectId === 'sleep') {
+        const bedMins = parseHour12ToMinutes(startHour);
+        // Derive wake time from the row *after* the chip's end row in the timeline
+        let wakeMins = null;
+        const endRowIdx = rowIndexMap.get(block.endRowId);
+        if (endRowIdx != null) {
+          const nextRowId = timelineRowIds[endRowIdx + 1];
+          if (nextRowId === 'sleep-end' || nextRowId == null) {
+            wakeMins = parseHour12ToMinutes(startMinute);
+          } else {
+            wakeMins = rowIdToClockMinutes(nextRowId, trailingMinuteRows);
+          }
+        }
+        if (wakeMins == null) wakeMins = parseHour12ToMinutes(startMinute);
+        if (bedMins != null && wakeMins != null) {
+          const durationMins = ((wakeMins - bedMins) + 24 * 60) % (24 * 60);
+          const dh = Math.floor(durationMins / 60);
+          const dm = durationMins % 60;
+          const durationStr = dm === 0 ? `${dh}` : `${dh}.${String(dm).padStart(2, '0')}`;
+          const bedH = Math.floor(bedMins / 60);
+          const bedM = String(bedMins % 60).padStart(2, '0');
+          const wakeH = Math.floor(wakeMins / 60);
+          const wakeM = String(wakeMins % 60).padStart(2, '0');
+          const bedStr = formatTime(bedH, bedM, { use24Hour, showAmPm });
+          const wakeStr = formatTime(wakeH, wakeM, { use24Hour, showAmPm });
+          sleepTimeInfo = { durationStr, bedStr, wakeStr };
+        }
+      }
       const backgroundColor = metadata?.color ?? '#d9d9d9';
       const textColor = metadata?.textColor ?? '#000';
       const fontWeight = metadata?.fontWeight ?? 600;
@@ -2367,6 +2397,26 @@ export default function TacticsPage() {
                 {largeTimeStr}
               </span>
             ) : null}
+            {sleepTimeInfo && !isEditing ? (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '4px',
+                  left: 0,
+                  right: 0,
+                  textAlign: 'center',
+                  pointerEvents: 'none',
+                  lineHeight: 1.2,
+                }}
+              >
+                <div style={{ fontSize: `${13 * textSizeScale}px`, opacity: 0.8, fontWeight: 700 }}>
+                  {sleepTimeInfo.durationStr}
+                </div>
+                <div style={{ fontSize: `${11 * textSizeScale}px`, opacity: 0.65, fontWeight: 700 }}>
+                  {sleepTimeInfo.bedStr} – {sleepTimeInfo.wakeStr}
+                </div>
+              </div>
+            ) : null}
             {isActive && projectId === 'sleep' && block.userModified ? (
               <button
                 type="button"
@@ -2458,6 +2508,11 @@ export default function TacticsPage() {
       incrementMinutes,
       dragPreview,
       textSizeScale,
+      startHour,
+      startMinute,
+      use24Hour,
+      showAmPm,
+      trailingMinuteRows,
     ]
   );
   const renderDragOutline = useCallback(() => {
