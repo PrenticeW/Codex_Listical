@@ -505,6 +505,8 @@ export default function TacticsPage() {
   const draggingSleepChipIdRef = useRef(null);
   const dragAnchorOffsetRef = useRef(0);
   const transparentDragImageRef = useRef(null);
+  const dragScrollRafRef = useRef(null);
+  const dragScrollSpeedRef = useRef(0);
   const tableContainerRef = useRef(null);
   const tableElementRef = useRef(null);
   const navBarRef = useRef(null);
@@ -568,12 +570,53 @@ export default function TacticsPage() {
       setDragPreview(null);
       setIsDragging(false);
       dragAnchorOffsetRef.current = 0;
+      dragScrollSpeedRef.current = 0;
+      if (dragScrollRafRef.current) {
+        cancelAnimationFrame(dragScrollRafRef.current);
+        dragScrollRafRef.current = null;
+      }
     };
     window.addEventListener('dragend', handleDragEnd);
     return () => {
       window.removeEventListener('dragend', handleDragEnd);
     };
   }, [setSelectedBlockId]);
+  useEffect(() => {
+    const SCROLL_ZONE = 120; // px from left/right edge of container to trigger scroll
+    const MAX_SPEED = 20; // max px per frame
+    const scrollLoop = () => {
+      const speed = dragScrollSpeedRef.current;
+      if (speed !== 0 && tableContainerRef.current) {
+        tableContainerRef.current.scrollLeft += speed;
+      }
+      dragScrollRafRef.current = requestAnimationFrame(scrollLoop);
+    };
+    const handleDragOverScroll = (event) => {
+      if (!draggingSleepChipIdRef.current) return;
+      const container = tableContainerRef.current;
+      if (!container) return;
+      const { clientX } = event;
+      const rect = container.getBoundingClientRect();
+      const distFromLeft = clientX - rect.left;
+      const distFromRight = rect.right - clientX;
+      if (distFromLeft < SCROLL_ZONE && distFromLeft >= 0) {
+        dragScrollSpeedRef.current = -MAX_SPEED * (1 - distFromLeft / SCROLL_ZONE);
+      } else if (distFromRight < SCROLL_ZONE && distFromRight >= 0) {
+        dragScrollSpeedRef.current = MAX_SPEED * (1 - distFromRight / SCROLL_ZONE);
+      } else {
+        dragScrollSpeedRef.current = 0;
+      }
+    };
+    dragScrollRafRef.current = requestAnimationFrame(scrollLoop);
+    window.addEventListener('dragover', handleDragOverScroll);
+    return () => {
+      window.removeEventListener('dragover', handleDragOverScroll);
+      if (dragScrollRafRef.current) {
+        cancelAnimationFrame(dragScrollRafRef.current);
+        dragScrollRafRef.current = null;
+      }
+    };
+  }, []);
   useEffect(() => {
     if (transparentDragImageRef.current) return undefined;
     const img = document.createElement('img');
@@ -968,6 +1011,10 @@ export default function TacticsPage() {
       });
     };
     scheduleMeasure();
+    const containerEl = tableContainerRef.current;
+    if (containerEl) {
+      containerEl.addEventListener('scroll', scheduleMeasure);
+    }
     const tableBody = tableElementRef.current.querySelector('tbody');
     const target = tableBody || tableElementRef.current;
     const ResizeObserverClass = window.ResizeObserver;
@@ -989,6 +1036,9 @@ export default function TacticsPage() {
       if (animationFrame != null) {
         window.cancelAnimationFrame(animationFrame);
         animationFrame = null;
+      }
+      if (containerEl) {
+        containerEl.removeEventListener('scroll', scheduleMeasure);
       }
       if (resizeObserver) {
         resizeObserver.disconnect();
