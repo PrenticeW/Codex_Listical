@@ -243,7 +243,8 @@ const dedupeChipsById = (chips = []) => {
   return result;
 };
 
-function FitText({ text, maxFontSize, minFontSize = maxFontSize * 0.5, style }) {
+
+function FitText({ text, maxFontSize, minFontSize = maxFontSize * 0.5, style, wrap = false }) {
   const spanRef = useRef(null);
   const [fontSize, setFontSize] = useState(maxFontSize);
 
@@ -252,9 +253,17 @@ function FitText({ text, maxFontSize, minFontSize = maxFontSize * 0.5, style }) 
     if (!el) return;
     let size = maxFontSize;
     el.style.fontSize = `${size}px`;
-    while (el.scrollWidth > el.offsetWidth && size > minFontSize) {
-      size = Math.max(minFontSize, size - 0.5);
-      el.style.fontSize = `${size}px`;
+    // When wrapping is allowed, check scrollHeight vs offsetHeight instead
+    if (wrap) {
+      while (el.scrollHeight > el.offsetHeight && size > minFontSize) {
+        size = Math.max(minFontSize, size - 0.5);
+        el.style.fontSize = `${size}px`;
+      }
+    } else {
+      while (el.scrollWidth > el.offsetWidth && size > minFontSize) {
+        size = Math.max(minFontSize, size - 0.5);
+        el.style.fontSize = `${size}px`;
+      }
     }
     setFontSize(size);
   });
@@ -263,10 +272,17 @@ function FitText({ text, maxFontSize, minFontSize = maxFontSize * 0.5, style }) 
     <span
       ref={spanRef}
       style={{
-        display: 'block',
+        display: wrap ? 'flex' : 'block',
+        flexDirection: wrap ? 'column' : undefined,
+        alignItems: wrap ? 'center' : undefined,
+        justifyContent: wrap ? 'center' : undefined,
         width: '100%',
+        height: wrap ? '100%' : undefined,
         overflow: 'hidden',
-        whiteSpace: 'nowrap',
+        whiteSpace: wrap ? 'normal' : 'nowrap',
+        textAlign: wrap ? 'center' : undefined,
+        wordBreak: wrap ? 'break-word' : undefined,
+        lineHeight: wrap ? 1.1 : undefined,
         fontSize: `${fontSize}px`,
         ...style,
       }}
@@ -2204,6 +2220,7 @@ export default function TacticsPage() {
         typeof block.projectId === 'string' && block.projectId.startsWith('custom-');
       const normalizedLabel = rawLabel.toUpperCase();
       const baseFontSize = 14 * textSizeScale;
+      const chipIsMultiRow = block.endRowId && block.endRowId !== block.startRowId;
       const isEditing = editingChipId === block.id;
       const isEditingTime = isEditing && editingChipIsTime;
       const isChipBeingDragged =
@@ -2318,7 +2335,7 @@ export default function TacticsPage() {
                 }}
               />
             ) : (
-              <FitText text={normalizedLabel} maxFontSize={baseFontSize} />
+              <FitText text={normalizedLabel} maxFontSize={baseFontSize} wrap={isScheduleChip && chipIsMultiRow && blockHeight >= baseFontSize * 2.8} />
             )}
             {isActive && projectId === 'sleep' && block.userModified ? (
               <button
