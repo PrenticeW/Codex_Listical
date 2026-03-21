@@ -2227,31 +2227,28 @@ export default function TacticsPage() {
       // Compute sleep time info for sleep chips
       let sleepTimeInfo = null;
       if (projectId === 'sleep') {
-        const bedMins = parseHour12ToMinutes(startHour);
-        // Derive wake time from the row *after* the chip's end row in the timeline
-        let wakeMins = null;
-        const endRowIdx = rowIndexMap.get(block.endRowId);
-        if (endRowIdx != null) {
-          const nextRowId = timelineRowIds[endRowIdx + 1];
-          if (nextRowId === 'sleep-end' || nextRowId == null) {
-            wakeMins = parseHour12ToMinutes(startMinute);
-          } else {
-            wakeMins = rowIdToClockMinutes(nextRowId, trailingMinuteRows);
+        const isTopChip = block.startRowId === 'sleep-start';
+        let displayMins = null;
+        if (isTopChip) {
+          // Top chip: show wake time (row after endRowId)
+          const endRowIdx = rowIndexMap.get(block.endRowId);
+          if (endRowIdx != null) {
+            const nextRowId = timelineRowIds[endRowIdx + 1];
+            if (nextRowId === 'sleep-end' || nextRowId == null) {
+              displayMins = parseHour12ToMinutes(startMinute);
+            } else {
+              displayMins = rowIdToClockMinutes(nextRowId, trailingMinuteRows);
+            }
           }
+          if (displayMins == null) displayMins = parseHour12ToMinutes(startMinute);
+        } else {
+          // Bottom chip: show bed time (start of startRowId)
+          displayMins = rowIdToClockMinutes(block.startRowId, trailingMinuteRows);
         }
-        if (wakeMins == null) wakeMins = parseHour12ToMinutes(startMinute);
-        if (bedMins != null && wakeMins != null) {
-          const durationMins = ((wakeMins - bedMins) + 24 * 60) % (24 * 60);
-          const dh = Math.floor(durationMins / 60);
-          const dm = durationMins % 60;
-          const durationStr = dm === 0 ? `${dh}` : `${dh}.${String(dm).padStart(2, '0')}`;
-          const bedH = Math.floor(bedMins / 60);
-          const bedM = String(bedMins % 60).padStart(2, '0');
-          const wakeH = Math.floor(wakeMins / 60);
-          const wakeM = String(wakeMins % 60).padStart(2, '0');
-          const bedStr = formatTime(bedH, bedM, { use24Hour, showAmPm });
-          const wakeStr = formatTime(wakeH, wakeM, { use24Hour, showAmPm });
-          sleepTimeInfo = { durationStr, bedStr, wakeStr };
+        if (displayMins != null) {
+          const h = Math.floor(displayMins / 60);
+          const m = String(displayMins % 60).padStart(2, '0');
+          sleepTimeInfo = { timeStr: formatTime(h, m, { use24Hour, showAmPm }), isTopChip };
         }
       }
       const backgroundColor = metadata?.color ?? '#d9d9d9';
@@ -2397,26 +2394,30 @@ export default function TacticsPage() {
                 {largeTimeStr}
               </span>
             ) : null}
-            {sleepTimeInfo && !isEditing ? (
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: '4px',
-                  left: 0,
-                  right: 0,
-                  textAlign: 'center',
-                  pointerEvents: 'none',
-                  lineHeight: 1.2,
-                }}
-              >
-                <div style={{ fontSize: `${13 * textSizeScale}px`, opacity: 0.8, fontWeight: 700 }}>
-                  {sleepTimeInfo.durationStr}
+            {sleepTimeInfo && !isEditing ? (() => {
+              const startIdx = rowIndexMap.get(block.startRowId);
+              const endIdx = rowIndexMap.get(block.endRowId ?? block.startRowId);
+              const rowCount = startIdx != null && endIdx != null ? Math.abs(endIdx - startIdx) + 1 : 1;
+              if (rowCount < 3) return null;
+              return (
+                <div
+                  style={{
+                    position: 'absolute',
+                    [sleepTimeInfo.isTopChip ? 'bottom' : 'top']: '4px',
+                    left: 0,
+                    right: 0,
+                    textAlign: 'center',
+                    pointerEvents: 'none',
+                    fontSize: `${11 * textSizeScale}px`,
+                    opacity: 0.65,
+                    fontWeight: 700,
+                    lineHeight: 1,
+                  }}
+                >
+                  {sleepTimeInfo.timeStr} {sleepTimeInfo.isTopChip ? 'Wake' : 'Bed'}
                 </div>
-                <div style={{ fontSize: `${11 * textSizeScale}px`, opacity: 0.65, fontWeight: 700 }}>
-                  {sleepTimeInfo.bedStr} – {sleepTimeInfo.wakeStr}
-                </div>
-              </div>
-            ) : null}
+              );
+            })() : null}
             {isActive && projectId === 'sleep' && block.userModified ? (
               <button
                 type="button"
@@ -2508,7 +2509,6 @@ export default function TacticsPage() {
       incrementMinutes,
       dragPreview,
       textSizeScale,
-      startHour,
       startMinute,
       use24Hour,
       showAmPm,
