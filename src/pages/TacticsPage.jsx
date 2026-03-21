@@ -13,6 +13,7 @@ import NavigationBar from '../components/planner/NavigationBar';
 import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '../lib/stagingStorage';
 import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
 import { parseEstimateLabelToMinutes } from '../utils/staging/planTableHelpers';
+import { pickCustomChipColour } from '../utils/staging/projectColour';
 import { saveTacticsMetrics } from '../lib/tacticsMetricsStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
 import storage from '../lib/storageService';
@@ -1500,10 +1501,10 @@ export default function TacticsPage() {
     customSequenceRef.current += 1;
     const customId = `custom-${Date.now()}-${customSequenceRef.current}`;
     const label = `Custom ${customSequenceRef.current}`;
-    const customProject = { id: customId, label: label.toUpperCase(), color: '#c9daf8' };
+    const customProject = { id: customId, label: label.toUpperCase(), color: pickCustomChipColour(customProjects, stagingProjects) };
     setCustomProjects((prev) => [...prev, customProject]);
     handleProjectSelection(customId);
-  }, [handleProjectSelection]);
+  }, [customProjects, stagingProjects, handleProjectSelection]);
   const handleDeleteCustomProject = useCallback(
     (projectId) => {
       if (!projectId) return;
@@ -1590,6 +1591,10 @@ export default function TacticsPage() {
   const dropdownProjects = useMemo(
     () => [...customProjects, ...highlightedProjects],
     [customProjects, highlightedProjects]
+  );
+  const nextCustomChipColour = useMemo(
+    () => pickCustomChipColour(customProjects, stagingProjects),
+    [customProjects, stagingProjects]
   );
   const projectMetadata = useMemo(() => {
     const map = new Map();
@@ -2635,7 +2640,7 @@ export default function TacticsPage() {
           <button
             type="button"
             className="w-full px-3 py-2 text-center text-[11px] font-semibold rounded-sm hover:opacity-80"
-            style={{ backgroundColor: '#c9daf8', color: '#ffffff' }}
+            style={{ backgroundColor: nextCustomChipColour, color: '#ffffff' }}
             onClick={handleCreateCustomProject}
           >
             CUSTOM

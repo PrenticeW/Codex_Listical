@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { COLOR_PALETTE } from '../../utils/staging/planTableHelpers';
+import { pickProjectColour } from '../../utils/staging/projectColour';
 
 /**
  * Hook to manage plan modal state
@@ -10,7 +10,7 @@ export default function usePlanModal() {
     itemId: null,
     projectName: '',
     projectNickname: '',
-    color: COLOR_PALETTE[0],
+    color: pickProjectColour([]),
   });
 
   const openPlanModal = (item) => {
@@ -19,7 +19,7 @@ export default function usePlanModal() {
       itemId: item.id,
       projectName: item.projectName ?? item.text,
       projectNickname: item.projectNickname ?? '',
-      color: item.color ?? COLOR_PALETTE[0],
+      color: item.color ?? pickProjectColour([]),
     });
   };
 

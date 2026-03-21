@@ -9,6 +9,7 @@ import {
 import { ensurePlanPairingMetadata } from '../../utils/staging/rowPairing';
 import { SECTION_CONFIG } from '../../utils/staging/sectionConfig';
 import { createStateMutationExecutor } from '../../utils/staging/commandHelpers';
+import { pickProjectColour } from '../../utils/staging/projectColour';
 
 // Row type constants
 const ROW_TYPE = {
@@ -164,16 +165,6 @@ export default function useShortlistState({ currentYear, executeCommand }) {
     saveStagingState({ shortlist: enrichedShortlist, archived }, currentYear);
   }, [shortlist, archived, currentYear]);
 
-  // Generate a random color for new projects
-  const generateRandomColor = () => {
-    const colors = [
-      '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16',
-      '#22c55e', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6',
-      '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899',
-    ];
-    return colors[Math.floor(Math.random() * colors.length)];
-  };
-
   // Add new item to shortlist
   const handleAdd = useCallback(() => {
     const text = inputValue.trim();
@@ -187,7 +178,7 @@ export default function useShortlistState({ currentYear, executeCommand }) {
     const newItem = {
       id,
       text,
-      color: generateRandomColor(),
+      color: pickProjectColour(shortlist),
       planTableVisible: true,
       planTableCollapsed: false, // Start expanded for new simple tables
       hasPlan: true,
@@ -210,7 +201,7 @@ export default function useShortlistState({ currentYear, executeCommand }) {
       archived: prev.archived,
     }));
     setInputValue('');
-  }, [inputValue, executeStateMutation]);
+  }, [inputValue, shortlist, executeStateMutation]);
 
   // Remove item from shortlist
   const handleRemove = useCallback((id) => {
