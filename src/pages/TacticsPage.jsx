@@ -72,7 +72,7 @@ const getTacticsChipsStorageKey = (yearNumber) => {
 const loadTacticsSettings = () => {
   try {
     const parsed = storage.getJSON(TACTICS_STORAGE_KEY, null);
-    if (!parsed) return { startHour: '', startMinute: '', incrementMinutes: 60, showAmPm: true, use24Hour: false };
+    if (!parsed) return { startHour: '', startMinute: '', incrementMinutes: 60, showAmPm: true, use24Hour: false, startDay: DAYS_OF_WEEK[0] };
     return {
       startHour: typeof parsed?.startHour === 'string' ? parsed.startHour : '',
       startMinute: typeof parsed?.startMinute === 'string' ? parsed.startMinute : '',
@@ -82,10 +82,11 @@ const loadTacticsSettings = () => {
           : 60,
       showAmPm: parsed?.showAmPm !== false,
       use24Hour: parsed?.use24Hour === true,
+      startDay: DAYS_OF_WEEK.includes(parsed?.startDay) ? parsed.startDay : DAYS_OF_WEEK[0],
     };
   } catch (error) {
     console.error('Failed to read tactics settings', error);
-    return { startHour: '', startMinute: '', incrementMinutes: 60, showAmPm: true, use24Hour: false };
+    return { startHour: '', startMinute: '', incrementMinutes: 60, showAmPm: true, use24Hour: false, startDay: DAYS_OF_WEEK[0] };
   }
 };
 const loadTacticsChipsState = (yearNumber = null) => {
@@ -297,7 +298,7 @@ export default function TacticsPage() {
   const currentPath = location.pathname;
   const { currentYear } = useYear();
   const initialTacticsSettings = useMemo(() => loadTacticsSettings(), []);
-  const [startDay, setStartDay] = useState(DAYS_OF_WEEK[0]);
+  const [startDay, setStartDay] = useState(initialTacticsSettings.startDay);
   const [incrementMinutes, setIncrementMinutes] = useState(
     initialTacticsSettings.incrementMinutes
   );
@@ -333,8 +334,8 @@ export default function TacticsPage() {
   const [use24Hour, setUse24Hour] = useState(initialTacticsSettings.use24Hour);
 
   useEffect(() => {
-    saveTacticsSettings({ startHour, startMinute, incrementMinutes, showAmPm, use24Hour });
-  }, [startHour, startMinute, incrementMinutes, showAmPm, use24Hour]);
+    saveTacticsSettings({ startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay });
+  }, [startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay]);
   const hourRows = useMemo(() => {
     if (!startHour || !startMinute) return [];
     const startMinutes = parseHour12ToMinutes(startHour);
