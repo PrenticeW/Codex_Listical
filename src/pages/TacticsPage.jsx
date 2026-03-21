@@ -2181,7 +2181,8 @@ export default function TacticsPage() {
         const baseName = block.displayLabel || (hasScheduleName ? itemName : (metadata?.label ?? 'Project'));
         const overrideMins = chipTimeOverrides[chipId];
         const mins = overrideMins != null ? overrideMins : (scheduleItem ? parseEstimateLabelToMinutes(scheduleItem.timeValue) : block.durationMinutes);
-        const displayMins = Number.isFinite(mins) && mins > 0 ? mins : null;
+        const isMultiRow = block.endRowId && block.endRowId !== block.startRowId;
+        const displayMins = !isMultiRow && Number.isFinite(mins) && mins > 0 ? mins : null;
         let timeStr = null;
         if (displayMins != null) {
           const h = Math.floor(displayMins / 60);
