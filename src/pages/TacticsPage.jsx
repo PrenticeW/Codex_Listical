@@ -1375,19 +1375,28 @@ export default function TacticsPage() {
       if (!isInteractiveColumn) return;
       setSelectedCell({ columnIndex, rowId });
       const cellRect = event.currentTarget.getBoundingClientRect();
-      const scrollY = typeof window === 'undefined' ? 0 : window.scrollY || 0;
-      const scrollX = typeof window === 'undefined' ? 0 : window.scrollX || 0;
-      const containerRect = tableContainerRef.current?.getBoundingClientRect();
-      const containerTop = (containerRect?.top ?? 0) + scrollY;
-      const containerLeft = (containerRect?.left ?? 0) + scrollX;
+      const MENU_WIDTH = 260;
+      const VIEWPORT_PADDING = 8;
+      const stickyHeaderBottom = navBarRef.current
+        ? navBarRef.current.getBoundingClientRect().bottom
+        : 0;
+      // Clamp left so menu doesn't spill off the right edge of the viewport
+      const rawLeft = cellRect.left;
+      const maxLeft = window.innerWidth - MENU_WIDTH - VIEWPORT_PADDING;
+      const left = Math.min(Math.max(rawLeft, VIEWPORT_PADDING), maxLeft);
+      // Decide whether to open below or above the cell
+      const spaceBelow = window.innerHeight - cellRect.bottom - VIEWPORT_PADDING;
+      const spaceAbove = cellRect.top - stickyHeaderBottom - VIEWPORT_PADDING;
+      const openAbove = spaceBelow < 200 && spaceAbove > spaceBelow;
+      const maxHeight = Math.floor((openAbove ? spaceAbove : spaceBelow) - 4);
+      const top = openAbove
+        ? cellRect.top - 4  // menu will use `bottom` anchor instead
+        : Math.max(cellRect.bottom + 4, stickyHeaderBottom + VIEWPORT_PADDING);
+      setColorEditorProjectId(null);
       setCellMenu({
         columnIndex,
         rowId,
-        position: {
-          top: cellRect.bottom + scrollY - containerTop + 4,
-          left: cellRect.left + scrollX - containerLeft,
-          width: cellRect.width,
-        },
+        position: { top, left, width: cellRect.width, openAbove, maxHeight },
       });
     },
     [displayedWeekDays, totalColumnCount]
@@ -1510,6 +1519,13 @@ export default function TacticsPage() {
     setSelectedBlockId((prev) => (prev === removableBlockId ? null : prev));
     closeCellMenu();
   }, [closeCellMenu, removableBlockId, setProjectChips]);
+  const finishColorEdit = useCallback(() => {
+    setColorEditorProjectId(null);
+  }, []);
+  const startColorEdit = useCallback((projectId, currentColor = '#c9daf8') => {
+    setColorEditorProjectId(projectId);
+    setColorEditorColor(currentColor || '#c9daf8');
+  }, []);
   const handleCreateCustomProject = useCallback(() => {
     customSequenceRef.current += 1;
     const customId = `custom-${Date.now()}-${customSequenceRef.current}`;
@@ -1518,8 +1534,9 @@ export default function TacticsPage() {
     setCustomProjects((prev) => [...prev, customProject]);
     setPendingCustomId(customId);
     setPendingCustomLabel(label.toUpperCase());
+    startColorEdit(customId, customProject.color);
     setTimeout(() => pendingCustomInputRef.current?.focus(), 0);
-  }, [customProjects, stagingProjects]);
+  }, [customProjects, stagingProjects, startColorEdit]);
 
   const handlePendingCustomConfirm = useCallback(() => {
     if (!pendingCustomId) return;
@@ -1543,13 +1560,6 @@ export default function TacticsPage() {
     },
     [colorEditorProjectId]
   );
-  const finishColorEdit = useCallback(() => {
-    setColorEditorProjectId(null);
-  }, []);
-  const startColorEdit = useCallback((projectId, currentColor = '#c9daf8') => {
-    setColorEditorProjectId(projectId);
-    setColorEditorColor(currentColor || '#c9daf8');
-  }, []);
   const handleColorChange = useCallback(
     (value) => {
       if (!colorEditorProjectId) return;
@@ -2667,11 +2677,14 @@ export default function TacticsPage() {
     return (
       <div
         ref={cellMenuRef}
-        className="absolute z-10 rounded border border-[#94a3b8] shadow-2xl"
+        className="fixed z-50 rounded border border-[#94a3b8] shadow-2xl overflow-y-auto"
         style={{
-          top: position?.top ?? 0,
+          ...(position?.openAbove
+            ? { bottom: window.innerHeight - (position?.top ?? 0), top: 'auto' }
+            : { top: position?.top ?? 0 }),
           left: position?.left ?? 0,
           minWidth: Math.max(position?.width ?? 0, 260),
+          maxHeight: position?.maxHeight ?? '80vh',
           backgroundColor: '#f8fafc',
         }}
       >
@@ -2740,10 +2753,21 @@ export default function TacticsPage() {
                       {isPending ? (
                         /* ── Inline text edit for newly created chip ── */
                         <>
-                          <span
-                            className="shrink-0 h-3 w-3 rounded-sm"
-                            style={{ backgroundColor: project.color || '#c9daf8' }}
-                          />
+                          <button
+                            type="button"
+                            title="Change colour"
+                            className="shrink-0 rounded p-0.5 hover:opacity-80"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isEditingColor) { setColorEditorProjectId(null); }
+                              else { startColorEdit(project.id, project.color); }
+                            }}
+                          >
+                            <span
+                              className="block h-4 w-4 rounded-sm border border-[#94a3b8]"
+                              style={{ backgroundColor: project.color || '#c9daf8' }}
+                            />
+                          </button>
                           <input
                             ref={pendingCustomInputRef}
                             type="text"
