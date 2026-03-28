@@ -471,6 +471,9 @@ export default function TacticsPage() {
   const [colorEditorProjectId, setColorEditorProjectId] = useState(null);
   const [colorEditorColor, setColorEditorColor] = useState('#c9daf8');
   const colorInputRef = useRef(null);
+  const [menuRenamingChipId, setMenuRenamingChipId] = useState(null);
+  const [menuRenamingLabel, setMenuRenamingLabel] = useState('');
+  const menuRenameInputRef = useRef(null);
   const [customProjects, setCustomProjects] = useState(() => {
     // Load saved custom projects from storage first
     const chipState = loadTacticsChipsState(currentYear);
@@ -566,6 +569,12 @@ export default function TacticsPage() {
       colorInputRef.current.focus();
     }
   }, [colorEditorProjectId]);
+  useEffect(() => {
+    if (menuRenamingChipId && menuRenameInputRef.current) {
+      menuRenameInputRef.current.focus();
+      menuRenameInputRef.current.select();
+    }
+  }, [menuRenamingChipId]);
   useEffect(() => {
     const handleDragEnd = () => {
       draggingSleepChipIdRef.current = null;
@@ -1537,6 +1546,34 @@ export default function TacticsPage() {
     },
     [colorEditorProjectId]
   );
+  const handleMenuRenameStart = useCallback((chipId, currentLabel) => {
+    setMenuRenamingChipId(chipId);
+    setMenuRenamingLabel(currentLabel);
+  }, []);
+  const handleMenuRenameConfirm = useCallback(() => {
+    if (!menuRenamingChipId) return;
+    const trimmed = menuRenamingLabel.trim();
+    if (!trimmed) {
+      setMenuRenamingChipId(null);
+      setMenuRenamingLabel('');
+      return;
+    }
+    const block = projectChips.find((b) => b.id === menuRenamingChipId);
+    if (block) {
+      const isCustom = typeof block.projectId === 'string' && block.projectId.startsWith('custom-');
+      const normalized = isCustom ? trimmed.toUpperCase() : trimmed;
+      setProjectChips((prev) =>
+        prev.map((b) => (b.id === menuRenamingChipId ? { ...b, displayLabel: normalized } : b))
+      );
+      if (isCustom) {
+        setCustomProjects((prev) =>
+          prev.map((p) => (p.id === block.projectId ? { ...p, label: normalized } : p))
+        );
+      }
+    }
+    setMenuRenamingChipId(null);
+    setMenuRenamingLabel('');
+  }, [menuRenamingChipId, menuRenamingLabel, projectChips]);
   useEffect(() => {
     if (!cellMenu) return undefined;
     const handlePointerDown = (event) => {
@@ -2487,46 +2524,6 @@ export default function TacticsPage() {
                 </div>
               );
             })() : null}
-            {isActive && projectId === 'sleep' && block.userModified ? (
-              <button
-                type="button"
-                aria-label="Reset sleep block to default"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  const lastHourRow = [...timelineRowIds].reverse().find((id) => id.startsWith('hour-'));
-                  if (!lastHourRow) return;
-                  setProjectChips((prev) =>
-                    prev.map((entry) =>
-                      entry.id === chipId
-                        ? { ...entry, startRowId: 'sleep-start', endRowId: lastHourRow, userModified: false }
-                        : entry
-                    )
-                  );
-                }}
-                style={{
-                  position: 'absolute',
-                  top: '-6px',
-                  right: '-6px',
-                  height: '12px',
-                  width: '12px',
-                  borderRadius: '9999px',
-                  border: '1px solid #666',
-                  backgroundColor: '#fff',
-                  padding: 0,
-                  fontSize: '8px',
-                  lineHeight: '10px',
-                  cursor: 'pointer',
-                  pointerEvents: 'auto',
-                  color: '#666',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                title="Reset to default sleep hours"
-              >
-                ↺
-              </button>
-            ) : null}
             {isActive ? (
               <button
                 type="button"
@@ -2623,6 +2620,34 @@ export default function TacticsPage() {
   const renderCellProjectMenu = useCallback(() => {
     if (!cellMenu) return null;
     const { position } = cellMenu;
+
+    const stagedProjects = dropdownProjects.filter((p) => !p.id.startsWith('custom-'));
+    const customChips = dropdownProjects.filter((p) => p.id.startsWith('custom-'));
+
+    // Get the chip currently at the menu target cell (may be null)
+    const targetChip = cellMenuBlockId ? projectChips.find((b) => b.id === cellMenuBlockId) : null;
+
+    const renderRenameRow = (chipId, currentLabel) => {
+      const isRenaming = menuRenamingChipId === chipId;
+      if (!isRenaming) return null;
+      return (
+        <div className="px-3 pb-2" onClick={(e) => e.stopPropagation()}>
+          <input
+            ref={menuRenameInputRef}
+            type="text"
+            className="w-full rounded border border-[#94a3b8] bg-white px-2 py-1 text-[11px] text-slate-800 outline-none focus:border-blue-400"
+            value={menuRenamingLabel}
+            onChange={(e) => setMenuRenamingLabel(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); handleMenuRenameConfirm(); }
+              else if (e.key === 'Escape') { e.preventDefault(); setMenuRenamingChipId(null); setMenuRenamingLabel(''); }
+            }}
+            onBlur={handleMenuRenameConfirm}
+          />
+        </div>
+      );
+    };
+
     return (
       <div
         ref={cellMenuRef}
@@ -2630,133 +2655,200 @@ export default function TacticsPage() {
         style={{
           top: position?.top ?? 0,
           left: position?.left ?? 0,
-          minWidth: Math.max(position?.width ?? 0, 180),
+          minWidth: Math.max(position?.width ?? 0, 260),
           backgroundColor: '#f8fafc',
         }}
       >
-        <div className="border-b border-[#e5e7eb] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-          Staged Projects
+        {/* ── Projects section ──────────────────────────────────── */}
+        <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          Projects
         </div>
-        <div className="border-t border-[#e5e7eb] px-3 py-2">
-          <button
-            type="button"
-            className="w-full px-3 py-2 text-center text-[11px] font-semibold rounded-sm hover:opacity-80"
-            style={{ backgroundColor: nextCustomChipColour, color: '#ffffff' }}
-            onClick={handleCreateCustomProject}
-          >
-            CUSTOM
-          </button>
-        </div>
-        {dropdownProjects.length ? (
-          <ul className="max-h-60 overflow-auto py-1 list-none">
-                {dropdownProjects.map((project) => {
-                  const isCustom = project.id.startsWith('custom-');
-                  return (
-                    <li key={project.id}>
-                      <div className="px-3 py-2">
-                        <button
-                          type="button"
-                          className="w-full px-3 py-2 text-center text-[11px] font-semibold rounded-sm hover:opacity-80"
-                          style={{ backgroundColor: project.color || '#0f172a', color: '#ffffff' }}
-                          onClick={() => handleProjectSelection(project.id)}
-                        >
-                          {isCustom ? project.label.toUpperCase() : project.label}
-                        </button>
-                        {isCustom ? (
-                          <div className="flex items-center justify-center gap-1 mt-1">
-                            <button
-                              type="button"
-                              className="flex items-center gap-1 rounded border border-[#cbd5f5] px-2 py-1 text-[9px] font-semibold text-slate-700 hover:bg-[#eef2ff]"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                startColorEdit(project.id, project.color);
-                              }}
-                            >
-                              <span
-                                className="inline-flex h-3 w-3 flex-shrink-0 rounded-full border border-[#94a3b8]"
-                                style={{ backgroundColor: project.color || '#c9daf8' }}
-                              ></span>
-                              <span>Edit</span>
-                            </button>
-                            <button
-                              type="button"
-                              className="flex items-center gap-1 rounded border border-[#fecaca] px-2 py-1 text-[9px] font-semibold text-[#b91c1c] hover:bg-[#fee2e2]"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleDeleteCustomProject(project.id);
-                              }}
-                            >
-                              <span
-                                className="inline-flex h-3 w-3 flex-shrink-0 rounded-full border border-[#b91c1c]"
-                                style={{ backgroundColor: '#fee2e2' }}
-                              ></span>
-                              <span>Delete</span>
-                            </button>
-                          </div>
-                        ) : null}
-                  </div>
-                  {colorEditorProjectId === project.id ? (
-                    <div className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                      <ColourPicker
-                        value={colorEditorColor}
-                        onChange={(colour) => {
-                          handleColorChange(colour);
-                          finishColorEdit();
+
+        {stagedProjects.length ? (
+          <ul className="list-none pb-1">
+            {stagedProjects.map((project) => {
+              const chipForProject = targetChip?.projectId === project.id ? targetChip : null;
+              const chipId = chipForProject?.id ?? null;
+              const currentLabel = chipForProject?.displayLabel ?? project.label;
+              const isRenaming = chipId && menuRenamingChipId === chipId;
+              return (
+                <li key={project.id}>
+                  <div className="flex items-center gap-1 px-2 py-1">
+                    <button
+                      type="button"
+                      className="flex-1 px-2 py-1.5 text-left text-[11px] font-semibold rounded-sm hover:opacity-80 truncate"
+                      style={{ backgroundColor: project.color || '#0f172a', color: '#ffffff' }}
+                      onClick={() => handleProjectSelection(project.id)}
+                    >
+                      {project.label}
+                    </button>
+                    {chipId ? (
+                      <button
+                        type="button"
+                        title="Rename chip"
+                        className={`shrink-0 rounded p-1 text-slate-400 hover:text-slate-700 ${isRenaming ? 'text-blue-500' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isRenaming) { handleMenuRenameConfirm(); }
+                          else { handleMenuRenameStart(chipId, currentLabel); }
                         }}
-                      />
-                    </div>
-                  ) : null}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11.498 1.499a1.707 1.707 0 0 1 2.414 2.414l-9.5 9.5a1 1 0 0 1-.39.242l-3 1a1 1 0 0 1-1.268-1.268l1-3a1 1 0 0 1 .242-.39l9.502-9.498zm1 1-9.5 9.5-.646 1.94 1.94-.646 9.5-9.5a.707.707 0 0 0-1-1z"/></svg>
+                      </button>
+                    ) : null}
+                  </div>
+                  {chipId ? renderRenameRow(chipId, currentLabel) : null}
                 </li>
               );
             })}
           </ul>
         ) : (
-          <div className="px-3 py-2 text-[11px] text-slate-500">No staged projects found</div>
+          <div className="px-3 py-1 text-[11px] text-slate-400">No projects added to plan</div>
         )}
-        <div className="border-t border-[#e5e7eb] px-3 py-2">
+
+        {/* ── Custom chips section ──────────────────────────────── */}
+        {customChips.length ? (
+          <>
+            <div className="mx-3 my-1 border-t border-[#e5e7eb]" />
+            <ul className="list-none pb-1">
+              {customChips.map((project) => {
+                const chipForProject = targetChip?.projectId === project.id ? targetChip : null;
+                const chipId = chipForProject?.id ?? null;
+                const currentLabel = chipForProject?.displayLabel ?? project.label;
+                const isRenaming = chipId && menuRenamingChipId === chipId;
+                const isEditingColor = colorEditorProjectId === project.id;
+                return (
+                  <li key={project.id}>
+                    <div className="flex items-center gap-1 px-2 py-1">
+                      <button
+                        type="button"
+                        className="flex-1 px-2 py-1.5 text-left text-[11px] font-semibold rounded-sm hover:opacity-80 truncate"
+                        style={{ backgroundColor: project.color || '#0f172a', color: '#ffffff' }}
+                        onClick={() => handleProjectSelection(project.id)}
+                      >
+                        {project.label.toUpperCase()}
+                      </button>
+                      {/* Colour swatch button */}
+                      <button
+                        type="button"
+                        title="Change colour"
+                        className="shrink-0 rounded p-0.5 hover:opacity-80"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isEditingColor) { setColorEditorProjectId(null); }
+                          else { startColorEdit(project.id, project.color); }
+                        }}
+                      >
+                        <span
+                          className="block h-4 w-4 rounded-sm border border-[#94a3b8]"
+                          style={{ backgroundColor: project.color || '#c9daf8' }}
+                        />
+                      </button>
+                      {/* Rename button */}
+                      {chipId ? (
+                        <button
+                          type="button"
+                          title="Rename chip"
+                          className={`shrink-0 rounded p-1 text-slate-400 hover:text-slate-700 ${isRenaming ? 'text-blue-500' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isRenaming) { handleMenuRenameConfirm(); }
+                            else { handleMenuRenameStart(chipId, currentLabel); }
+                          }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11.498 1.499a1.707 1.707 0 0 1 2.414 2.414l-9.5 9.5a1 1 0 0 1-.39.242l-3 1a1 1 0 0 1-1.268-1.268l1-3a1 1 0 0 1 .242-.39l9.502-9.498zm1 1-9.5 9.5-.646 1.94 1.94-.646 9.5-9.5a.707.707 0 0 0-1-1z"/></svg>
+                        </button>
+                      ) : null}
+                      {/* Delete button */}
+                      <button
+                        type="button"
+                        title="Delete custom chip"
+                        className="shrink-0 rounded p-1 text-slate-300 hover:text-red-600"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCustomProject(project.id);
+                        }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1zm1.958 1-.846 10.58a1 1 0 0 1-.997.92h-6.23a1 1 0 0 1-.997-.92L3.042 3.5zm-7.487 1a.5.5 0 0 1 .528.47l.5 8.5a.5.5 0 0 1-.998.06L5 5.03a.5.5 0 0 1 .47-.53Zm5.058 0a.5.5 0 0 1 .47.53l-.5 8.5a.5.5 0 1 1-.998-.06l.5-8.5a.5.5 0 0 1 .528-.47M8 4.5a.5.5 0 0 1 .5.5v8.5a.5.5 0 0 1-1 0V5a.5.5 0 0 1 .5-.5"/></svg>
+                      </button>
+                    </div>
+                    {/* Inline colour picker */}
+                    {isEditingColor ? (
+                      <div className="px-3 pb-2" onClick={(e) => e.stopPropagation()}>
+                        <ColourPicker
+                          value={colorEditorColor}
+                          onChange={handleColorChange}
+                        />
+                      </div>
+                    ) : null}
+                    {chipId ? renderRenameRow(chipId, currentLabel) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        ) : null}
+
+        {/* Add custom button */}
+        <div className="px-2 pb-2">
           <button
             type="button"
-            className="w-full px-3 py-2 text-center text-[11px] font-semibold rounded-sm hover:opacity-80"
+            className="w-full px-3 py-1.5 text-center text-[11px] font-semibold rounded-sm border border-dashed border-[#94a3b8] text-slate-500 hover:border-slate-400 hover:text-slate-700 hover:bg-slate-50"
+            onClick={handleCreateCustomProject}
+          >
+            + Add custom
+          </button>
+        </div>
+
+        {/* ── Defaults section ──────────────────────────────────── */}
+        <div className="mx-3 my-1 border-t border-[#e5e7eb]" />
+        <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          Defaults
+        </div>
+        <div className="flex gap-1.5 px-2 pb-2">
+          <button
+            type="button"
+            className="flex-1 px-2 py-1.5 text-center text-[11px] font-semibold rounded-sm hover:opacity-80"
             style={{ backgroundColor: '#d9d9d9', color: '#000000' }}
             onClick={() => handleProjectSelection('sleep')}
           >
             Sleep
           </button>
-        </div>
-        <div className="border-t border-[#e5e7eb] px-3 py-2">
           <button
             type="button"
-            className="w-full px-3 py-2 text-center text-[11px] font-semibold rounded-sm hover:opacity-80"
-            style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700 }}
+            className="flex-1 px-2 py-1.5 text-center text-[11px] font-semibold rounded-sm hover:opacity-80"
+            style={{ backgroundColor: '#666666', color: '#ffffff' }}
             onClick={() => handleProjectSelection('rest')}
           >
             REST
           </button>
-        </div>
-        <div className="border-t border-[#e5e7eb] px-3 py-2">
           <button
             type="button"
-            className="w-full px-3 py-2 text-center text-[11px] font-semibold rounded-sm hover:opacity-80"
-            style={{ backgroundColor: '#fe8afe', color: '#ffffff', fontWeight: 700 }}
+            className="flex-1 px-2 py-1.5 text-center text-[11px] font-semibold rounded-sm hover:opacity-80"
+            style={{ backgroundColor: '#fe8afe', color: '#ffffff' }}
             onClick={() => handleProjectSelection('buffer')}
           >
             BUFFER
           </button>
         </div>
-        <div className="border-t border-[#e5e7eb] px-3 py-2">
+
+        {/* ── Remove chip ───────────────────────────────────────── */}
+        <div className="border-t border-[#e5e7eb] px-3 py-1.5">
           <button
             type="button"
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold text-red-600 hover:text-red-700 disabled:text-slate-400 disabled:cursor-not-allowed"
+            className="flex w-full items-center gap-2 py-1 text-left text-[11px] font-semibold text-red-500 hover:text-red-700 disabled:text-slate-300 disabled:cursor-not-allowed"
             onClick={handleRemoveSelectedChip}
             disabled={!removableBlockId}
           >
-            <span>Remove chip</span>
+            Remove chip
           </button>
         </div>
       </div>
     );
   }, [
     cellMenu,
+    cellMenuBlockId,
+    projectChips,
     handleProjectSelection,
     dropdownProjects,
     handleCreateCustomProject,
@@ -2767,7 +2859,13 @@ export default function TacticsPage() {
     colorEditorProjectId,
     colorEditorColor,
     handleColorChange,
-    finishColorEdit,
+    menuRenamingChipId,
+    menuRenamingLabel,
+    menuRenameInputRef,
+    handleMenuRenameStart,
+    handleMenuRenameConfirm,
+    setMenuRenamingChipId,
+    setMenuRenamingLabel,
   ]);
 
   // Sync sticky header horizontal scroll with table container
