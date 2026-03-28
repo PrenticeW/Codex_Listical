@@ -125,21 +125,23 @@ export default function ScheduleItemPanel({
                   const minutes = parseEstimateLabelToMinutes(item.timeValue) ?? incrementMinutes;
                   const heightPx = durationToPx(minutes);
                   const entry = projectCounts[itemIdx];
-                  const dayCount = entry?.dayColumns ?? 0;
-                  const totalCount = entry?.total ?? 0;
-                  const scheduledToDayColumn = dayCount > 0;
-                  const label = (item.name ?? '').trim() || project.label;
+                  const scheduledToDayColumn = (entry?.dayColumns ?? 0) > 0;
+                  const baseName = (item.name ?? '').trim() || project.label;
+                  const h = Math.floor(minutes / 60);
+                  const m = minutes % 60;
+                  const timeStr = h === 0 ? `${m}` : m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
+                  const chipLabel = `${baseName}: ${timeStr}`.toUpperCase();
 
                   return (
                     <div
                       key={itemIdx}
-                      className="flex items-stretch gap-2 mb-1"
+                      className="mb-1"
                       style={{ height: `${heightPx}px` }}
                     >
                       {/* Scaled chip block — draggable, dimmed once placed on a day column */}
                       <div
                         draggable
-                        className="flex-1 rounded-sm flex flex-col justify-center px-2 overflow-hidden cursor-grab active:cursor-grabbing"
+                        className="h-full rounded-sm flex items-center justify-center px-2 overflow-hidden cursor-grab active:cursor-grabbing font-semibold text-[14px] text-center select-none shadow-sm border border-white"
                         style={{
                           backgroundColor: bg,
                           color: fg,
@@ -147,31 +149,7 @@ export default function ScheduleItemPanel({
                         }}
                         onDragStart={(e) => onDragStart(project.id, itemIdx, e)}
                       >
-                        <span className="text-[11px] font-semibold leading-tight truncate">{label}</span>
-                        {minutes > 0 && (
-                          <span className="text-[10px] opacity-70 leading-tight">
-                            {minutes >= 60
-                              ? `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ''}`
-                              : `${minutes}m`}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Count badge + add button */}
-                      <div className="flex flex-col items-center justify-center gap-0.5 shrink-0 w-8">
-                        {dayCount > 0 && (
-                          <span className="text-[10px] font-semibold text-slate-400">×{dayCount}</span>
-                        )}
-                        <button
-                          type="button"
-                          title="Add to calendar"
-                          className="rounded p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-                          onClick={() => onAddChip(project.id, itemIdx)}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z"/>
-                          </svg>
-                        </button>
+                        <span className="truncate">{chipLabel}</span>
                       </div>
                     </div>
                   );
