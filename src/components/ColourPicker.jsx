@@ -64,11 +64,12 @@ const EYEDROPPER_SUPPORTED =
  * ColourPicker
  *
  * Props:
- *   value    {string}    Current colour (HSL string or hex).
- *   onChange {Function}  Called with new colour string on selection.
+ *   value       {string}    Current colour (HSL string or hex).
+ *   onChange    {Function}  Called with new colour string on selection.
+ *   defaultOpen {boolean}   If true, palette starts expanded (default false).
  */
-export default function ColourPicker({ value, onChange }) {
-  const [open, setOpen] = useState(false);
+export default function ColourPicker({ value, onChange, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [slide, setSlide] = useState(0); // 0 | 1 | 2
   const [customValue, setCustomValue] = useState(value || '#c9daf8');
   const customInputRef = useRef(null);

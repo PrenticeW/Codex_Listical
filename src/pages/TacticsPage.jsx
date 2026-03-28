@@ -474,6 +474,9 @@ export default function TacticsPage() {
   const [menuRenamingChipId, setMenuRenamingChipId] = useState(null);
   const [menuRenamingLabel, setMenuRenamingLabel] = useState('');
   const menuRenameInputRef = useRef(null);
+  const [pendingCustomId, setPendingCustomId] = useState(null);
+  const [pendingCustomLabel, setPendingCustomLabel] = useState('');
+  const pendingCustomInputRef = useRef(null);
   const [customProjects, setCustomProjects] = useState(() => {
     // Load saved custom projects from storage first
     const chipState = loadTacticsChipsState(currentYear);
@@ -1513,8 +1516,22 @@ export default function TacticsPage() {
     const label = `Custom ${customSequenceRef.current}`;
     const customProject = { id: customId, label: label.toUpperCase(), color: pickCustomChipColour(customProjects, stagingProjects) };
     setCustomProjects((prev) => [...prev, customProject]);
-    handleProjectSelection(customId);
-  }, [customProjects, stagingProjects, handleProjectSelection]);
+    setPendingCustomId(customId);
+    setPendingCustomLabel(label.toUpperCase());
+    setTimeout(() => pendingCustomInputRef.current?.focus(), 0);
+  }, [customProjects, stagingProjects]);
+
+  const handlePendingCustomConfirm = useCallback(() => {
+    if (!pendingCustomId) return;
+    const trimmed = pendingCustomLabel.trim();
+    const finalLabel = trimmed ? trimmed.toUpperCase() : `CUSTOM ${customSequenceRef.current}`;
+    setCustomProjects((prev) =>
+      prev.map((p) => (p.id === pendingCustomId ? { ...p, label: finalLabel } : p))
+    );
+    handleProjectSelection(pendingCustomId);
+    setPendingCustomId(null);
+    setPendingCustomLabel('');
+  }, [pendingCustomId, pendingCustomLabel, handleProjectSelection]);
   const handleDeleteCustomProject = useCallback(
     (projectId) => {
       if (!projectId) return;
@@ -1523,9 +1540,8 @@ export default function TacticsPage() {
       if (colorEditorProjectId === projectId) {
         setColorEditorProjectId(null);
       }
-      closeCellMenu();
     },
-    [colorEditorProjectId, closeCellMenu]
+    [colorEditorProjectId]
   );
   const finishColorEdit = useCallback(() => {
     setColorEditorProjectId(null);
@@ -2717,67 +2733,103 @@ export default function TacticsPage() {
                 const currentLabel = chipForProject?.displayLabel ?? project.label;
                 const isRenaming = chipId && menuRenamingChipId === chipId;
                 const isEditingColor = colorEditorProjectId === project.id;
+                const isPending = pendingCustomId === project.id;
                 return (
                   <li key={project.id}>
                     <div className="flex items-center gap-1 px-2 py-1">
-                      <button
-                        type="button"
-                        className="flex-1 px-2 py-1.5 text-left text-[11px] font-semibold rounded-sm hover:opacity-80 truncate"
-                        style={{ backgroundColor: project.color || '#0f172a', color: '#ffffff' }}
-                        onClick={() => handleProjectSelection(project.id)}
-                      >
-                        {project.label.toUpperCase()}
-                      </button>
-                      {/* Colour swatch button */}
-                      <button
-                        type="button"
-                        title="Change colour"
-                        className="shrink-0 rounded p-0.5 hover:opacity-80"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (isEditingColor) { setColorEditorProjectId(null); }
-                          else { startColorEdit(project.id, project.color); }
-                        }}
-                      >
-                        <span
-                          className="block h-4 w-4 rounded-sm border border-[#94a3b8]"
-                          style={{ backgroundColor: project.color || '#c9daf8' }}
-                        />
-                      </button>
-                      {/* Rename button */}
-                      {chipId ? (
-                        <button
-                          type="button"
-                          title="Rename chip"
-                          className={`shrink-0 rounded p-1 text-slate-400 hover:text-slate-700 ${isRenaming ? 'text-blue-500' : ''}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isRenaming) { handleMenuRenameConfirm(); }
-                            else { handleMenuRenameStart(chipId, currentLabel); }
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11.498 1.499a1.707 1.707 0 0 1 2.414 2.414l-9.5 9.5a1 1 0 0 1-.39.242l-3 1a1 1 0 0 1-1.268-1.268l1-3a1 1 0 0 1 .242-.39l9.502-9.498zm1 1-9.5 9.5-.646 1.94 1.94-.646 9.5-9.5a.707.707 0 0 0-1-1z"/></svg>
-                        </button>
-                      ) : null}
-                      {/* Delete button */}
-                      <button
-                        type="button"
-                        title="Delete custom chip"
-                        className="shrink-0 rounded p-1 text-slate-300 hover:text-red-600"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteCustomProject(project.id);
-                        }}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1zm1.958 1-.846 10.58a1 1 0 0 1-.997.92h-6.23a1 1 0 0 1-.997-.92L3.042 3.5zm-7.487 1a.5.5 0 0 1 .528.47l.5 8.5a.5.5 0 0 1-.998.06L5 5.03a.5.5 0 0 1 .47-.53Zm5.058 0a.5.5 0 0 1 .47.53l-.5 8.5a.5.5 0 1 1-.998-.06l.5-8.5a.5.5 0 0 1 .528-.47M8 4.5a.5.5 0 0 1 .5.5v8.5a.5.5 0 0 1-1 0V5a.5.5 0 0 1 .5-.5"/></svg>
-                      </button>
+                      {isPending ? (
+                        /* ── Inline text edit for newly created chip ── */
+                        <>
+                          <span
+                            className="shrink-0 h-3 w-3 rounded-sm"
+                            style={{ backgroundColor: project.color || '#c9daf8' }}
+                          />
+                          <input
+                            ref={pendingCustomInputRef}
+                            type="text"
+                            value={pendingCustomLabel}
+                            onChange={(e) => setPendingCustomLabel(e.target.value.toUpperCase())}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') { e.preventDefault(); handlePendingCustomConfirm(); }
+                              if (e.key === 'Escape') { e.preventDefault(); handlePendingCustomConfirm(); }
+                            }}
+                            className="flex-1 px-2 py-1 text-[11px] font-semibold rounded-sm border border-blue-400 bg-white text-slate-800 focus:outline-none uppercase"
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <button
+                            type="button"
+                            title="Confirm name"
+                            className="shrink-0 rounded p-1 text-blue-500 hover:text-blue-700"
+                            onClick={(e) => { e.stopPropagation(); handlePendingCustomConfirm(); }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
+                          </button>
+                        </>
+                      ) : (
+                        /* ── Normal chip row ── */
+                        <>
+                          <button
+                            type="button"
+                            className="flex-1 px-2 py-1.5 text-left text-[11px] font-semibold rounded-sm hover:opacity-80 truncate"
+                            style={{ backgroundColor: project.color || '#0f172a', color: '#ffffff' }}
+                            onClick={() => handleProjectSelection(project.id)}
+                          >
+                            {project.label.toUpperCase()}
+                          </button>
+                          {/* Colour swatch button — one click opens picker */}
+                          <button
+                            type="button"
+                            title="Change colour"
+                            className="shrink-0 rounded p-0.5 hover:opacity-80"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isEditingColor) { setColorEditorProjectId(null); }
+                              else { startColorEdit(project.id, project.color); }
+                            }}
+                          >
+                            <span
+                              className="block h-4 w-4 rounded-sm border border-[#94a3b8]"
+                              style={{ backgroundColor: project.color || '#c9daf8' }}
+                            />
+                          </button>
+                          {/* Rename button */}
+                          {chipId ? (
+                            <button
+                              type="button"
+                              title="Rename chip"
+                              className={`shrink-0 rounded p-1 text-slate-400 hover:text-slate-700 ${isRenaming ? 'text-blue-500' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isRenaming) { handleMenuRenameConfirm(); }
+                                else { handleMenuRenameStart(chipId, currentLabel); }
+                              }}
+                            >
+                              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11.498 1.499a1.707 1.707 0 0 1 2.414 2.414l-9.5 9.5a1 1 0 0 1-.39.242l-3 1a1 1 0 0 1-1.268-1.268l1-3a1 1 0 0 1 .242-.39l9.502-9.498zm1 1-9.5 9.5-.646 1.94 1.94-.646 9.5-9.5a.707.707 0 0 0-1-1z"/></svg>
+                            </button>
+                          ) : null}
+                          {/* Delete button */}
+                          <button
+                            type="button"
+                            title="Delete custom chip"
+                            className="shrink-0 rounded p-1 text-slate-300 hover:text-red-600"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteCustomProject(project.id);
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1zm1.958 1-.846 10.58a1 1 0 0 1-.997.92h-6.23a1 1 0 0 1-.997-.92L3.042 3.5zm-7.487 1a.5.5 0 0 1 .528.47l.5 8.5a.5.5 0 0 1-.998.06L5 5.03a.5.5 0 0 1 .47-.53Zm5.058 0a.5.5 0 0 1 .47.53l-.5 8.5a.5.5 0 1 1-.998-.06l.5-8.5a.5.5 0 0 1 .528-.47M8 4.5a.5.5 0 0 1 .5.5v8.5a.5.5 0 0 1-1 0V5a.5.5 0 0 1 .5-.5"/></svg>
+                          </button>
+                        </>
+                      )}
                     </div>
-                    {/* Inline colour picker */}
+                    {/* Inline colour picker — opens immediately (defaultOpen) */}
                     {isEditingColor ? (
                       <div className="px-3 pb-2" onClick={(e) => e.stopPropagation()}>
                         <ColourPicker
                           value={colorEditorColor}
                           onChange={handleColorChange}
+                          defaultOpen
                         />
                       </div>
                     ) : null}
@@ -2866,6 +2918,11 @@ export default function TacticsPage() {
     handleMenuRenameConfirm,
     setMenuRenamingChipId,
     setMenuRenamingLabel,
+    pendingCustomId,
+    pendingCustomLabel,
+    setPendingCustomLabel,
+    pendingCustomInputRef,
+    handlePendingCustomConfirm,
   ]);
 
   // Sync sticky header horizontal scroll with table container
