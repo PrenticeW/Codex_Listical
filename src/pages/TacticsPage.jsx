@@ -19,6 +19,7 @@ import { buildScheduleLayout } from '../ScheduleChips';
 import storage from '../lib/storageService';
 import usePageSize from '../hooks/usePageSize';
 import ColourPicker from '../components/ColourPicker';
+import { Pencil } from 'lucide-react';
 
 const DAYS_OF_WEEK = [
   'Sunday',
@@ -1370,6 +1371,8 @@ export default function TacticsPage() {
   );
   const closeCellMenu = useCallback(() => {
     setCellMenu(null);
+    setMenuRenamingProjectId(null);
+    setMenuRenamingProjectLabel('');
   }, []);
   const handleCellContextMenu = useCallback(
     (event, columnIndex, rowId) => {
@@ -1770,9 +1773,7 @@ export default function TacticsPage() {
       setEditingChipIsTime(false);
       return;
     }
-    const normalizedLabel = editingChipIsCustom
-      ? editingChipLabel.toUpperCase()
-      : editingChipLabel;
+    const normalizedLabel = editingChipLabel.toUpperCase();
     setProjectChips((prev) =>
       prev.map((block) =>
         block.id === editingChipId ? { ...block, displayLabel: normalizedLabel } : block
@@ -2468,7 +2469,7 @@ export default function TacticsPage() {
                   className="min-w-0 flex-1 bg-transparent px-0.5 font-semibold text-slate-800 outline-none"
                   style={{ fontSize: `${13 * textSizeScale}px`, borderBottom: '1px solid rgba(0,0,0,0.3)' }}
                   value={editingChipLabel}
-                  onChange={(event) => setEditingChipLabel(event.target.value)}
+                  onChange={(event) => setEditingChipLabel(event.target.value.toUpperCase())}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') { event.preventDefault(); editingMinutesRef.current?.focus(); }
                     else if (event.key === 'Escape') { event.preventDefault(); handleCancelLabelEdit(); }
@@ -2494,11 +2495,7 @@ export default function TacticsPage() {
                 className="w-full bg-white px-1 font-semibold text-slate-800 outline-none"
                 style={{ fontSize: `${14 * textSizeScale}px` }}
                 value={editingChipLabel}
-                onChange={(event) =>
-                  setEditingChipLabel(
-                    editingChipIsCustom ? event.target.value.toUpperCase() : event.target.value
-                  )
-                }
+                onChange={(event) => setEditingChipLabel(event.target.value.toUpperCase())}
                 onBlur={handleConfirmLabelEdit}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
@@ -2817,18 +2814,18 @@ export default function TacticsPage() {
                               style={{ backgroundColor: project.color || '#c9daf8' }}
                             />
                           </button>
-                          {/* Rename button — always visible, renames the definition */}
+                          {/* Rename button — renames the definition */}
                           <button
                             type="button"
                             title="Rename chip"
-                            className={`shrink-0 rounded p-1 text-slate-400 hover:text-slate-700 ${isRenamingDefinition ? 'text-blue-500' : ''}`}
+                            className={`shrink-0 rounded p-1 hover:text-slate-700 ${isRenamingDefinition ? 'text-blue-500' : 'text-slate-400'}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               if (isRenamingDefinition) { handleMenuDefinitionRenameConfirm(); }
                               else { handleMenuDefinitionRenameStart(project.id, project.label); }
                             }}
                           >
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11.498 1.499a1.707 1.707 0 0 1 2.414 2.414l-9.5 9.5a1 1 0 0 1-.39.242l-3 1a1 1 0 0 1-1.268-1.268l1-3a1 1 0 0 1 .242-.39l9.502-9.498zm1 1-9.5 9.5-.646 1.94 1.94-.646 9.5-9.5a.707.707 0 0 0-1-1z"/></svg>
+                            <Pencil size={14} />
                           </button>
                           {/* Delete button */}
                           <button
@@ -2861,7 +2858,7 @@ export default function TacticsPage() {
                           ref={menuRenameProjectInputRef}
                           type="text"
                           value={menuRenamingProjectLabel}
-                          onChange={(e) => setMenuRenamingProjectLabel(e.target.value)}
+                          onChange={(e) => setMenuRenamingProjectLabel(e.target.value.toUpperCase())}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') { e.preventDefault(); handleMenuDefinitionRenameConfirm(); }
                             else if (e.key === 'Escape') { e.preventDefault(); setMenuRenamingProjectId(null); setMenuRenamingProjectLabel(''); }
