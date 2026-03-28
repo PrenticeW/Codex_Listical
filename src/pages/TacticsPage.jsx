@@ -791,8 +791,13 @@ export default function TacticsPage() {
     prevTimelineForSleepRef.current = timelineRowIds;
     // Skip on first mount — saved chip positions should be preserved
     if (prevTimeline === null) return;
-    // Skip if timeline didn't actually change
-    if (prevTimeline === timelineRowIds) return;
+    // Skip if timeline didn't actually change (use value equality, not reference equality,
+    // because useMemo caches are cleared on hot reload producing a new array identity
+    // even when the values are identical — reference equality would falsely trigger a reset)
+    if (
+      prevTimeline.length === timelineRowIds.length &&
+      prevTimeline.every((id, i) => id === timelineRowIds[i])
+    ) return;
     // Find the last hour-* row — that's the row just before sleep-end
     const lastHourRow = [...timelineRowIds].reverse().find((id) => id.startsWith('hour-'));
     if (!lastHourRow) return;
