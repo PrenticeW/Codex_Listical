@@ -458,7 +458,6 @@ export default function TacticsPage() {
   const [editingChipId, setEditingChipId] = useState(null);
   const [editingChipLabel, setEditingChipLabel] = useState('');
   const [editingChipIsCustom, setEditingChipIsCustom] = useState(false);
-  const [editingCustomProjectId, setEditingCustomProjectId] = useState(null);
   const [editingChipIsTime, setEditingChipIsTime] = useState(false);
   const [editingChipMinutes, setEditingChipMinutes] = useState('');
   const [chipTimeOverrides, setChipTimeOverrides] = useState(() => {
@@ -474,6 +473,9 @@ export default function TacticsPage() {
   const [menuRenamingChipId, setMenuRenamingChipId] = useState(null);
   const [menuRenamingLabel, setMenuRenamingLabel] = useState('');
   const menuRenameInputRef = useRef(null);
+  const [menuRenamingProjectId, setMenuRenamingProjectId] = useState(null);
+  const [menuRenamingProjectLabel, setMenuRenamingProjectLabel] = useState('');
+  const menuRenameProjectInputRef = useRef(null);
   const [pendingCustomId, setPendingCustomId] = useState(null);
   const [pendingCustomLabel, setPendingCustomLabel] = useState('');
   const pendingCustomInputRef = useRef(null);
@@ -578,6 +580,12 @@ export default function TacticsPage() {
       menuRenameInputRef.current.select();
     }
   }, [menuRenamingChipId]);
+  useEffect(() => {
+    if (menuRenamingProjectId && menuRenameProjectInputRef.current) {
+      menuRenameProjectInputRef.current.focus();
+      menuRenameProjectInputRef.current.select();
+    }
+  }, [menuRenamingProjectId]);
   useEffect(() => {
     const handleDragEnd = () => {
       draggingSleepChipIdRef.current = null;
@@ -1591,15 +1599,25 @@ export default function TacticsPage() {
       setProjectChips((prev) =>
         prev.map((b) => (b.id === menuRenamingChipId ? { ...b, displayLabel: normalized } : b))
       );
-      if (isCustom) {
-        setCustomProjects((prev) =>
-          prev.map((p) => (p.id === block.projectId ? { ...p, label: normalized } : p))
-        );
-      }
     }
     setMenuRenamingChipId(null);
     setMenuRenamingLabel('');
   }, [menuRenamingChipId, menuRenamingLabel, projectChips]);
+  const handleMenuDefinitionRenameStart = useCallback((projectId, currentLabel) => {
+    setMenuRenamingProjectId(projectId);
+    setMenuRenamingProjectLabel(currentLabel);
+  }, []);
+  const handleMenuDefinitionRenameConfirm = useCallback(() => {
+    if (!menuRenamingProjectId) return;
+    const trimmed = menuRenamingProjectLabel.trim();
+    if (trimmed) {
+      setCustomProjects((prev) =>
+        prev.map((p) => (p.id === menuRenamingProjectId ? { ...p, label: trimmed.toUpperCase() } : p))
+      );
+    }
+    setMenuRenamingProjectId(null);
+    setMenuRenamingProjectLabel('');
+  }, [menuRenamingProjectId, menuRenamingProjectLabel]);
   useEffect(() => {
     if (!cellMenu) return undefined;
     const handlePointerDown = (event) => {
@@ -1717,7 +1735,6 @@ export default function TacticsPage() {
         setEditingChipIsCustom(false);
         setEditingChipLabel(currentName);
         setEditingChipMinutes(String(currentMinutes));
-        setEditingCustomProjectId(null);
         setEditingChipId(chipId);
         return;
       }
@@ -1728,7 +1745,6 @@ export default function TacticsPage() {
       setEditingChipIsTime(false);
       setEditingChipIsCustom(isCustom);
       setEditingChipLabel(isCustom ? labelValue.toUpperCase() : labelValue);
-      setEditingCustomProjectId(isCustom ? block.projectId : null);
       setEditingChipId(chipId);
     },
     [getProjectChipById, projectMetadata, scheduleLayout, chipTimeOverrides]
@@ -1762,26 +1778,15 @@ export default function TacticsPage() {
         block.id === editingChipId ? { ...block, displayLabel: normalizedLabel } : block
       )
     );
-    if (editingChipIsCustom && editingCustomProjectId) {
-      setCustomProjects((prev) =>
-        prev.map((project) =>
-          project.id === editingCustomProjectId
-            ? { ...project, label: normalizedLabel }
-            : project
-        )
-      );
-    }
     setEditingChipId(null);
     setEditingChipLabel('');
     setEditingChipIsCustom(false);
-    setEditingCustomProjectId(null);
   }, [
     editingChipId,
     editingChipIsTime,
     editingChipIsCustom,
     editingChipLabel,
     editingChipMinutes,
-    editingCustomProjectId,
     setProjectChips,
   ]);
   const handleCancelLabelEdit = useCallback(() => {
@@ -1790,7 +1795,6 @@ export default function TacticsPage() {
     setEditingChipMinutes('');
     setEditingChipIsCustom(false);
     setEditingChipIsTime(false);
-    setEditingCustomProjectId(null);
   }, []);
   useEffect(() => {
     if (!editingChipIsTime) return undefined;
@@ -2698,7 +2702,6 @@ export default function TacticsPage() {
             {stagedProjects.map((project) => {
               const chipForProject = targetChip?.projectId === project.id ? targetChip : null;
               const chipId = chipForProject?.id ?? null;
-              const currentLabel = chipForProject?.displayLabel ?? project.label;
               const isRenaming = chipId && menuRenamingChipId === chipId;
               return (
                 <li key={project.id}>
@@ -2719,14 +2722,14 @@ export default function TacticsPage() {
                         onClick={(e) => {
                           e.stopPropagation();
                           if (isRenaming) { handleMenuRenameConfirm(); }
-                          else { handleMenuRenameStart(chipId, currentLabel); }
+                          else { handleMenuRenameStart(chipId, project.label); }
                         }}
                       >
                         <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11.498 1.499a1.707 1.707 0 0 1 2.414 2.414l-9.5 9.5a1 1 0 0 1-.39.242l-3 1a1 1 0 0 1-1.268-1.268l1-3a1 1 0 0 1 .242-.39l9.502-9.498zm1 1-9.5 9.5-.646 1.94 1.94-.646 9.5-9.5a.707.707 0 0 0-1-1z"/></svg>
                       </button>
                     ) : null}
                   </div>
-                  {chipId ? renderRenameRow(chipId, currentLabel) : null}
+                  {chipId ? renderRenameRow(chipId, project.label) : null}
                 </li>
               );
             })}
@@ -2741,10 +2744,7 @@ export default function TacticsPage() {
             <div className="mx-3 my-1 border-t border-[#e5e7eb]" />
             <ul className="list-none pb-1">
               {customChips.map((project) => {
-                const chipForProject = targetChip?.projectId === project.id ? targetChip : null;
-                const chipId = chipForProject?.id ?? null;
-                const currentLabel = chipForProject?.displayLabel ?? project.label;
-                const isRenaming = chipId && menuRenamingChipId === chipId;
+                const isRenamingDefinition = menuRenamingProjectId === project.id;
                 const isEditingColor = colorEditorProjectId === project.id;
                 const isPending = pendingCustomId === project.id;
                 return (
@@ -2817,21 +2817,19 @@ export default function TacticsPage() {
                               style={{ backgroundColor: project.color || '#c9daf8' }}
                             />
                           </button>
-                          {/* Rename button */}
-                          {chipId ? (
-                            <button
-                              type="button"
-                              title="Rename chip"
-                              className={`shrink-0 rounded p-1 text-slate-400 hover:text-slate-700 ${isRenaming ? 'text-blue-500' : ''}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isRenaming) { handleMenuRenameConfirm(); }
-                                else { handleMenuRenameStart(chipId, currentLabel); }
-                              }}
-                            >
-                              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11.498 1.499a1.707 1.707 0 0 1 2.414 2.414l-9.5 9.5a1 1 0 0 1-.39.242l-3 1a1 1 0 0 1-1.268-1.268l1-3a1 1 0 0 1 .242-.39l9.502-9.498zm1 1-9.5 9.5-.646 1.94 1.94-.646 9.5-9.5a.707.707 0 0 0-1-1z"/></svg>
-                            </button>
-                          ) : null}
+                          {/* Rename button — always visible, renames the definition */}
+                          <button
+                            type="button"
+                            title="Rename chip"
+                            className={`shrink-0 rounded p-1 text-slate-400 hover:text-slate-700 ${isRenamingDefinition ? 'text-blue-500' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isRenamingDefinition) { handleMenuDefinitionRenameConfirm(); }
+                              else { handleMenuDefinitionRenameStart(project.id, project.label); }
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11.498 1.499a1.707 1.707 0 0 1 2.414 2.414l-9.5 9.5a1 1 0 0 1-.39.242l-3 1a1 1 0 0 1-1.268-1.268l1-3a1 1 0 0 1 .242-.39l9.502-9.498zm1 1-9.5 9.5-.646 1.94 1.94-.646 9.5-9.5a.707.707 0 0 0-1-1z"/></svg>
+                          </button>
                           {/* Delete button */}
                           <button
                             type="button"
@@ -2857,7 +2855,24 @@ export default function TacticsPage() {
                         />
                       </div>
                     ) : null}
-                    {chipId ? renderRenameRow(chipId, currentLabel) : null}
+                    {isRenamingDefinition ? (
+                      <div className="px-3 pb-2" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          ref={menuRenameProjectInputRef}
+                          type="text"
+                          value={menuRenamingProjectLabel}
+                          onChange={(e) => setMenuRenamingProjectLabel(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') { e.preventDefault(); handleMenuDefinitionRenameConfirm(); }
+                            else if (e.key === 'Escape') { e.preventDefault(); setMenuRenamingProjectId(null); setMenuRenamingProjectLabel(''); }
+                          }}
+                          onBlur={handleMenuDefinitionRenameConfirm}
+                          className="w-full px-2 py-1 text-[11px] font-semibold rounded-sm border border-blue-400 bg-white text-slate-800 focus:outline-none uppercase"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    ) : null}
                   </li>
                 );
               })}
@@ -2947,6 +2962,13 @@ export default function TacticsPage() {
     setPendingCustomLabel,
     pendingCustomInputRef,
     handlePendingCustomConfirm,
+    menuRenamingProjectId,
+    menuRenamingProjectLabel,
+    setMenuRenamingProjectLabel,
+    menuRenameProjectInputRef,
+    handleMenuDefinitionRenameStart,
+    handleMenuDefinitionRenameConfirm,
+    setMenuRenamingProjectId,
   ]);
 
   // Sync sticky header horizontal scroll with table container
