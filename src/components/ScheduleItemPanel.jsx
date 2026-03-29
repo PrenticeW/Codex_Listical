@@ -20,6 +20,7 @@ export default function ScheduleItemPanel({
   projects,
   scheduleLayout,
   projectChips,
+  chipTimeOverrides,
   incrementMinutes,
   rowMetrics,
   onAddChip,
@@ -41,28 +42,33 @@ export default function ScheduleItemPanel({
     return Math.max(24, (minutes / incrementMinutes) * incrementRowHeightPx);
   };
 
-  // Count placements per project+itemIdx
-  // counts[projectId][itemIdx] = { total, dayColumns }
-  // dayColumns counts placements in actual day columns (columnIndex < 8)
-  const placementCounts = useMemo(() => {
-    const counts = {};
-    if (!projectChips) return counts;
+  // Sum durationMinutes per project+itemIdx for chips placed in day columns (columnIndex < 8).
+  // Keyed by chip ID using the encoded itemIdx so renames to displayLabel never break the link.
+  // placedMinutes[projectId][itemIdx] = total minutes placed in day columns
+  const placedMinutes = useMemo(() => {
+    const result = {};
+    if (!projectChips) return result;
+    // Extra-copy chips: schedule-chip-{projectId}-{itemIdx}-extra-chip-{N}
+    // Split on "-extra-chip-" which is a fixed suffix, avoiding greedy regex over projectId.
     projectChips.forEach((chip) => {
       if (!chip.id.startsWith('schedule-chip-')) return;
-      const projectId = chip.projectId;
-      if (!projectId) return;
-      const prefix = `schedule-chip-${projectId}-`;
-      if (!chip.id.startsWith(prefix)) return;
-      const rest = chip.id.slice(prefix.length);
-      const itemIdx = parseInt(rest, 10);
-      if (!Number.isFinite(itemIdx)) return;
-      if (!counts[projectId]) counts[projectId] = {};
-      if (!counts[projectId][itemIdx]) counts[projectId][itemIdx] = { total: 0, dayColumns: 0 };
-      counts[projectId][itemIdx].total += 1;
-      if (chip.columnIndex < 8) counts[projectId][itemIdx].dayColumns += 1;
+      if (chip.columnIndex >= 8) return; // only day columns
+      const extraIdx = chip.id.indexOf('-extra-chip-');
+      if (extraIdx === -1) return; // canonical chips are never in day columns
+      const inner = chip.id.slice('schedule-chip-'.length, extraIdx); // "{projectId}-{itemIdx}"
+      const lastDash = inner.lastIndexOf('-');
+      if (lastDash === -1) return;
+      const projectId = inner.slice(0, lastDash);
+      const itemIdx = parseInt(inner.slice(lastDash + 1), 10);
+      if (!projectId || !Number.isFinite(itemIdx)) return;
+      // Override may be stored against the extra-copy ID or the canonical chip ID
+      const canonicalId = `schedule-chip-${inner}`;
+      const mins = chipTimeOverrides?.[chip.id] ?? chipTimeOverrides?.[canonicalId] ?? chip.durationMinutes ?? 0;
+      if (!result[projectId]) result[projectId] = {};
+      result[projectId][itemIdx] = (result[projectId][itemIdx] ?? 0) + mins;
     });
-    return counts;
-  }, [projectChips]);
+    return result;
+  }, [projectChips, chipTimeOverrides]);
 
   const hasAnyItems = projects.some(
     (p) => (scheduleLayout?.scheduleItemsByProject?.get(p.id) ?? []).length > 0
@@ -101,8 +107,8 @@ export default function ScheduleItemPanel({
             const items = scheduleLayout?.scheduleItemsByProject?.get(project.id) ?? [];
             if (!items.length) return null;
 
-            const projectCounts = placementCounts[project.id] ?? {};
-            const unscheduledCount = items.filter((_, idx) => !(projectCounts[idx]?.dayColumns > 0)).length;
+            const projectPlaced = placedMinutes[project.id] ?? {};
+            const unscheduledCount = items.filter((_, idx) => !(projectPlaced[idx] > 0)).length;
             const bg = project.color || '#d5a6bd';
             const fg = project.textColor || '#000000';
 
@@ -122,30 +128,26 @@ export default function ScheduleItemPanel({
 
                 {/* Items */}
                 {items.map((item, itemIdx) => {
-                  const minutes = parseEstimateLabelToMinutes(item.timeValue) ?? incrementMinutes;
-                  const heightPx = durationToPx(minutes);
-                  const entry = projectCounts[itemIdx];
-                  const scheduledToDayColumn = (entry?.dayColumns ?? 0) > 0;
+                  const targetMinutes = parseEstimateLabelToMinutes(item.timeValue) ?? incrementMinutes;
+                  const heightPx = durationToPx(incrementMinutes);
+                  const placed = projectPlaced[itemIdx] ?? 0;
+                  const remainingMinutes = Math.max(0, targetMinutes - placed);
+                  const fullyScheduled = placed > 0 && remainingMinutes === 0;
                   const baseName = (item.name ?? '').trim() || project.label;
-                  const h = Math.floor(minutes / 60);
-                  const m = minutes % 60;
-                  const timeStr = h === 0 ? `${m}` : m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
+                  const rh = Math.floor(remainingMinutes / 60);
+                  const rm = remainingMinutes % 60;
+                  const timeStr = rh === 0 ? `${rm}` : rm === 0 ? `${rh}` : `${rh}.${String(rm).padStart(2, '0')}`;
                   const chipLabel = `${baseName}: ${timeStr}`.toUpperCase();
 
                   return (
-                    <div
-                      key={itemIdx}
-                      className="mb-1"
-                      style={{ height: `${heightPx}px` }}
-                    >
-                      {/* Scaled chip block — draggable, dimmed once placed on a day column */}
+                    <div key={itemIdx} className="mb-1" style={{ height: `${heightPx}px` }}>
                       <div
                         draggable
                         className="h-full rounded-sm flex items-center justify-center px-2 overflow-hidden cursor-grab active:cursor-grabbing font-semibold text-[14px] text-center select-none shadow-sm border border-white"
                         style={{
                           backgroundColor: bg,
                           color: fg,
-                          opacity: scheduledToDayColumn ? 0.45 : 1,
+                          opacity: fullyScheduled ? 0.45 : 1,
                         }}
                         onDragStart={(e) => onDragStart(project.id, itemIdx, e)}
                       >

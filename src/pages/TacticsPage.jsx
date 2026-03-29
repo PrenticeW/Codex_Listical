@@ -1829,7 +1829,9 @@ export default function TacticsPage() {
       const isScheduleChip = typeof block.id === 'string' && block.id.startsWith('schedule-chip-');
       if (isScheduleChip) {
         // For schedule chips, edit both name and time
-        const itemIdxMatch = block.id.match(/-(\d+)$/);
+        const extraMarker = block.id.indexOf('-extra-chip-');
+        const idForParsing = extraMarker !== -1 ? block.id.slice(0, extraMarker) : block.id;
+        const itemIdxMatch = idForParsing.match(/-(\d+)$/);
         const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
         const scheduleItems = itemIdx != null
           ? (scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [])
@@ -1938,7 +1940,9 @@ export default function TacticsPage() {
         if (overrideMins != null && overrideMins > 0) {
           duration = overrideMins;
         } else {
-          const itemIdxMatch = block.id.match(/-(\d+)$/);
+          const extraMarker = block.id.indexOf('-extra-chip-');
+          const idForParsing = extraMarker !== -1 ? block.id.slice(0, extraMarker) : block.id;
+          const itemIdxMatch = idForParsing.match(/-(\d+)$/);
           const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
           const scheduleItems = itemIdx != null
             ? (scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [])
@@ -2544,8 +2548,13 @@ export default function TacticsPage() {
       let rawLabel;
       let largeTimeStr = null;
       if (isScheduleChip) {
-        // Derive label directly from schedule data at render time so it's always fresh
-        const itemIdxMatch = block.id.match(/-(\d+)$/);
+        // Derive label directly from schedule data at render time so it's always fresh.
+        // Extra-copy IDs: schedule-chip-{projectId}-{itemIdx}-extra-chip-{N}
+        // Canonical IDs:  schedule-chip-{projectId}-{itemIdx}
+        // Use fixed "-extra-chip-" split to avoid matching the trailing sequence number.
+        const extraMarker = block.id.indexOf('-extra-chip-');
+        const idForParsing = extraMarker !== -1 ? block.id.slice(0, extraMarker) : block.id;
+        const itemIdxMatch = idForParsing.match(/-(\d+)$/);
         const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
         const scheduleItems = itemIdx != null
           ? (scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [])
@@ -2557,7 +2566,7 @@ export default function TacticsPage() {
         const hasScheduleName = Boolean(itemName && itemName !== scheduleDefaultText);
         const baseName = block.displayLabel || (hasScheduleName ? itemName : (metadata?.label ?? 'Project'));
         const overrideMins = chipTimeOverrides[chipId];
-        const mins = overrideMins != null ? overrideMins : (scheduleItem ? parseEstimateLabelToMinutes(scheduleItem.timeValue) : block.durationMinutes);
+        const mins = overrideMins != null ? overrideMins : (scheduleItem ? (parseEstimateLabelToMinutes(scheduleItem.timeValue) ?? block.durationMinutes) : block.durationMinutes);
         const isMultiRow = block.endRowId && block.endRowId !== block.startRowId;
         const displayMins = !isMultiRow && Number.isFinite(mins) && mins > 0 && (overrideMins != null || mins < incrementMinutes) ? mins : null;
         let timeStr = null;
@@ -4050,6 +4059,7 @@ export default function TacticsPage() {
           })}
           scheduleLayout={scheduleLayout}
           projectChips={projectChips}
+          chipTimeOverrides={chipTimeOverrides}
           incrementMinutes={incrementMinutes}
           rowMetrics={rowMetrics}
           onAddChip={handleAddScheduleItemChip}
