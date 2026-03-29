@@ -134,8 +134,9 @@ export default function ScheduleItemPanel({
                   const remainingMinutes = Math.max(0, targetMinutes - placed);
                   const fullyScheduled = placed > 0 && remainingMinutes === 0;
                   const baseName = (item.name ?? '').trim() || project.label;
-                  const rh = Math.floor(remainingMinutes / 60);
-                  const rm = remainingMinutes % 60;
+                  const displayMinutes = fullyScheduled ? targetMinutes : remainingMinutes;
+                  const rh = Math.floor(displayMinutes / 60);
+                  const rm = displayMinutes % 60;
                   const timeStr = rh === 0 ? `${rm}` : rm === 0 ? `${rh}` : `${rh}.${String(rm).padStart(2, '0')}`;
                   const chipLabel = `${baseName}: ${timeStr}`.toUpperCase();
 
