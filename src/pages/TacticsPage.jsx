@@ -2612,6 +2612,20 @@ export default function TacticsPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [undo, redo]);
 
+  // Keyboard shortcut: Delete/Backspace to remove the selected chip
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable) return;
+      if (!selectedBlockId) return;
+      event.preventDefault();
+      handleRemoveSelectedChip();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedBlockId, handleRemoveSelectedChip]);
+
   // Compute the minimum width needed for column 0 to fit its longest string
   const col0MinWidth = useMemo(() => {
     const fontSize = 14 * textSizeScale;
