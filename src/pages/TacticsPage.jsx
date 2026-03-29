@@ -249,7 +249,39 @@ const dedupeChipsById = (chips = []) => {
 };
 
 
-function FitText({ text, maxFontSize, minFontSize = maxFontSize * 0.5, style, wrap = false }) {
+function ChipLabel({ normalizedLabel, baseFontSize, wrap, largeTimeStr, isEditing, textSizeScale, chipHeight }) {
+  const [hideNumber, setHideNumber] = useState(false);
+
+  const handleTextHeight = useCallback((h) => {
+    const numberZone = 14 * textSizeScale + 6;
+    setHideNumber(h + numberZone > chipHeight);
+  }, [textSizeScale, chipHeight]);
+
+  return (
+    <>
+      <FitText text={normalizedLabel} maxFontSize={baseFontSize} wrap={wrap} onTextHeight={handleTextHeight} />
+      {largeTimeStr && !isEditing && !hideNumber ? (
+        <span
+          style={{
+            position: 'absolute',
+            bottom: '2px',
+            left: 0,
+            right: 0,
+            textAlign: 'center',
+            fontSize: `${14 * textSizeScale}px`,
+            opacity: 0.75,
+            lineHeight: 1,
+            pointerEvents: 'none',
+          }}
+        >
+          {largeTimeStr}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+function FitText({ text, maxFontSize, minFontSize = maxFontSize * 0.5, style, wrap = false, onTextHeight }) {
   const spanRef = useRef(null);
   const [fontSize, setFontSize] = useState(maxFontSize);
 
@@ -271,6 +303,17 @@ function FitText({ text, maxFontSize, minFontSize = maxFontSize * 0.5, style, wr
       }
     }
     setFontSize(size);
+    if (onTextHeight) {
+      if (wrap) {
+        // Temporarily shrink to auto height to measure natural text block height
+        const prev = el.style.height;
+        el.style.height = 'auto';
+        onTextHeight(el.scrollHeight);
+        el.style.height = prev;
+      } else {
+        onTextHeight(el.scrollHeight);
+      }
+    }
   });
 
   return (
@@ -2791,25 +2834,16 @@ export default function TacticsPage() {
                 }}
               />
             ) : (
-              <FitText text={normalizedLabel} maxFontSize={baseFontSize} wrap={isScheduleChip && chipIsMultiRow && blockHeight >= baseFontSize * 2.8} />
+              <ChipLabel
+                normalizedLabel={normalizedLabel}
+                baseFontSize={baseFontSize}
+                wrap={isScheduleChip && chipIsMultiRow && blockHeight >= baseFontSize * 2.8}
+                largeTimeStr={largeTimeStr}
+                isEditing={isEditing}
+                textSizeScale={textSizeScale}
+                chipHeight={blockHeight}
+              />
             )}
-            {largeTimeStr && !isEditing ? (
-              <span
-                style={{
-                  position: 'absolute',
-                  bottom: '2px',
-                  left: 0,
-                  right: 0,
-                  textAlign: 'center',
-                  fontSize: `${14 * textSizeScale}px`,
-                  opacity: 0.75,
-                  lineHeight: 1,
-                  pointerEvents: 'none',
-                }}
-              >
-                {largeTimeStr}
-              </span>
-            ) : null}
             {sleepTimeInfo && !isEditing ? (() => {
               const startIdx = rowIndexMap.get(block.startRowId);
               const endIdx = rowIndexMap.get(block.endRowId ?? block.startRowId);
