@@ -42,30 +42,27 @@ export default function ScheduleItemPanel({
     return Math.max(24, (minutes / incrementMinutes) * incrementRowHeightPx);
   };
 
-  // Sum durationMinutes per project+itemIdx for chips placed in day columns (columnIndex < 8).
-  // Keyed by chip ID using the encoded itemIdx so renames to displayLabel never break the link.
-  // placedMinutes[projectId][itemIdx] = total minutes placed in day columns
-  const placedMinutes = useMemo(() => {
+  // Collect individual placed chip durations per project+itemIdx for chips in day columns.
+  // placedChips[projectId][itemIdx] = array of { id, minutes } for each placed instance
+  const placedChips = useMemo(() => {
     const result = {};
     if (!projectChips) return result;
-    // Extra-copy chips: schedule-chip-{projectId}-{itemIdx}-extra-chip-{N}
-    // Split on "-extra-chip-" which is a fixed suffix, avoiding greedy regex over projectId.
     projectChips.forEach((chip) => {
       if (!chip.id.startsWith('schedule-chip-')) return;
       if (chip.columnIndex >= 8) return; // only day columns
       const extraIdx = chip.id.indexOf('-extra-chip-');
       if (extraIdx === -1) return; // canonical chips are never in day columns
-      const inner = chip.id.slice('schedule-chip-'.length, extraIdx); // "{projectId}-{itemIdx}"
+      const inner = chip.id.slice('schedule-chip-'.length, extraIdx);
       const lastDash = inner.lastIndexOf('-');
       if (lastDash === -1) return;
       const projectId = inner.slice(0, lastDash);
       const itemIdx = parseInt(inner.slice(lastDash + 1), 10);
       if (!projectId || !Number.isFinite(itemIdx)) return;
-      // Override may be stored against the extra-copy ID or the canonical chip ID
       const canonicalId = `schedule-chip-${inner}`;
       const mins = chipTimeOverrides?.[chip.id] ?? chipTimeOverrides?.[canonicalId] ?? chip.durationMinutes ?? 0;
       if (!result[projectId]) result[projectId] = {};
-      result[projectId][itemIdx] = (result[projectId][itemIdx] ?? 0) + mins;
+      if (!result[projectId][itemIdx]) result[projectId][itemIdx] = [];
+      result[projectId][itemIdx].push({ id: chip.id, minutes: mins });
     });
     return result;
   }, [projectChips, chipTimeOverrides]);
@@ -107,8 +104,11 @@ export default function ScheduleItemPanel({
             const items = scheduleLayout?.scheduleItemsByProject?.get(project.id) ?? [];
             if (!items.length) return null;
 
-            const projectPlaced = placedMinutes[project.id] ?? {};
-            const unscheduledCount = items.filter((_, idx) => !(projectPlaced[idx] > 0)).length;
+            const projectPlacedChips = placedChips[project.id] ?? {};
+            const unscheduledCount = items.filter((_, idx) => {
+              const instances = projectPlacedChips[idx] ?? [];
+              return instances.length === 0;
+            }).length;
             const bg = project.color || '#d5a6bd';
             const fg = project.textColor || '#000000';
 
@@ -130,30 +130,55 @@ export default function ScheduleItemPanel({
                 {items.map((item, itemIdx) => {
                   const targetMinutes = parseEstimateLabelToMinutes(item.timeValue) ?? incrementMinutes;
                   const heightPx = durationToPx(incrementMinutes);
-                  const placed = projectPlaced[itemIdx] ?? 0;
-                  const remainingMinutes = Math.max(0, targetMinutes - placed);
-                  const fullyScheduled = placed > 0 && remainingMinutes === 0;
+                  const instances = projectPlacedChips[itemIdx] ?? [];
+                  const totalPlaced = instances.reduce((s, c) => s + c.minutes, 0);
+                  const remainingMinutes = Math.max(0, targetMinutes - totalPlaced);
                   const baseName = (item.name ?? '').trim() || project.label;
-                  const displayMinutes = fullyScheduled ? targetMinutes : remainingMinutes;
-                  const rh = Math.floor(displayMinutes / 60);
-                  const rm = displayMinutes % 60;
-                  const timeStr = rh === 0 ? `${rm}` : rm === 0 ? `${rh}` : `${rh}.${String(rm).padStart(2, '0')}`;
-                  const chipLabel = `${baseName}: ${timeStr}`.toUpperCase();
+
+                  const formatTime = (mins) => {
+                    const h = Math.floor(mins / 60);
+                    const m = mins % 60;
+                    return h === 0 ? `${m}` : m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
+                  };
 
                   return (
-                    <div key={itemIdx} className="mb-1" style={{ height: `${heightPx}px` }}>
-                      <div
-                        draggable
-                        className="h-full rounded-sm flex items-center justify-center px-2 overflow-hidden cursor-grab active:cursor-grabbing font-semibold text-[14px] text-center select-none shadow-sm border border-white"
-                        style={{
-                          backgroundColor: bg,
-                          color: fg,
-                          opacity: fullyScheduled ? 0.45 : 1,
-                        }}
-                        onDragStart={(e) => onDragStart(project.id, itemIdx, e)}
-                      >
-                        <span className="truncate">{chipLabel}</span>
-                      </div>
+                    <div key={itemIdx} className="mb-1 space-y-1">
+                      {/* One greyed chip per already-placed instance */}
+                      {instances.map((instance, i) => (
+                        <div key={instance.id} style={{ height: `${heightPx}px` }}>
+                          <div
+                            className="h-full rounded-sm flex items-center justify-center px-2 overflow-hidden font-semibold text-[14px] text-center select-none border border-white"
+                            style={{
+                              backgroundColor: bg,
+                              color: fg,
+                              opacity: 0.35,
+                            }}
+                            title={`Placed: ${formatTime(instance.minutes)} min`}
+                          >
+                            <span className="truncate">
+                              {`${baseName}: ${formatTime(instance.minutes)}`.toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                      {/* One active chip for the remaining unplaced time */}
+                      {remainingMinutes > 0 && (
+                        <div style={{ height: `${heightPx}px` }}>
+                          <div
+                            draggable
+                            className="h-full rounded-sm flex items-center justify-center px-2 overflow-hidden cursor-grab active:cursor-grabbing font-semibold text-[14px] text-center select-none shadow-sm border border-white"
+                            style={{
+                              backgroundColor: bg,
+                              color: fg,
+                            }}
+                            onDragStart={(e) => onDragStart(project.id, itemIdx, e)}
+                          >
+                            <span className="truncate">
+                              {`${baseName}: ${formatTime(remainingMinutes)}`.toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
