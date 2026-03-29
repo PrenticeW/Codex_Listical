@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import useCommandPattern from '../hooks/planner/useCommandPattern';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { useYear } from '../contexts/YearContext';
@@ -530,6 +531,17 @@ export default function TacticsPage() {
     const chipState = loadTacticsChipsState(currentYear);
     return chipState.customProjects || [];
   });
+
+  const { undoStack, redoStack, executeCommand, undo, redo } = useCommandPattern();
+
+  // Refs kept in sync so command execute/undo closures can read current state
+  const projectChipsRef = useRef(projectChips);
+  const customProjectsRef = useRef(customProjects);
+  const chipTimeOverridesRef = useRef(chipTimeOverrides);
+  useEffect(() => { projectChipsRef.current = projectChips; }, [projectChips]);
+  useEffect(() => { customProjectsRef.current = customProjects; }, [customProjects]);
+  useEffect(() => { chipTimeOverridesRef.current = chipTimeOverrides; }, [chipTimeOverrides]);
+
   const highlightedProjects = useMemo(() => {
     if (!stagingProjects.length) return [];
     return stagingProjects
@@ -1308,7 +1320,9 @@ export default function TacticsPage() {
     if (targetColumnIndex == null || Number.isNaN(targetColumnIndex)) return;
     const sourceBlock = getProjectChipById(sourceChipId);
     if (!sourceBlock) return;
-    setProjectChips((prev) => {
+
+    const prevChips = projectChipsRef.current;
+    const computeNextChips = (prev) => {
       const targetIndex = prev.findIndex((entry) => entry.id === sourceChipId);
       if (targetIndex < 0) return prev;
       const next = [...prev];
@@ -1345,6 +1359,12 @@ export default function TacticsPage() {
       }
 
       return next;
+    };
+    const nextChips = computeNextChips(prevChips);
+
+    executeCommand({
+      execute: () => setProjectChips(nextChips),
+      undo: () => setProjectChips(prevChips),
     });
     setSelectedCell(null);
     setSelectedBlockId(sourceChipId);
@@ -1355,6 +1375,7 @@ export default function TacticsPage() {
     logDragDebug('Preview applied and cleared');
   }, [
     dragPreview,
+    executeCommand,
     getProjectChipById,
     setProjectChips,
     setSelectedCell,
@@ -1542,31 +1563,33 @@ export default function TacticsPage() {
       const { startRowIdOverride, endRowIdOverride, displayLabelOverride } = options;
       const targetStartRowId = startRowIdOverride ?? rowId;
       const targetEndRowId = endRowIdOverride ?? targetStartRowId;
+
+      const prevChips = projectChipsRef.current;
       let assignedId = null;
-      setProjectChips((prev) => {
-        let updated = false;
-        const next = prev.map((entry) => {
-          if (entry.columnIndex === columnIndex && entry.startRowId === rowId) {
-            updated = true;
-            assignedId = entry.id;
-            return {
-              ...entry,
-              projectId,
-              endRowId: targetEndRowId,
-              startRowId: targetStartRowId,
-              displayLabel:
-                displayLabelOverride != null ? displayLabelOverride : entry.displayLabel,
-            };
-          }
-          return entry;
-        });
-        if (updated) {
-          return next;
+      let nextChips;
+      let updated = false;
+      const mapped = prevChips.map((entry) => {
+        if (entry.columnIndex === columnIndex && entry.startRowId === rowId) {
+          updated = true;
+          assignedId = entry.id;
+          return {
+            ...entry,
+            projectId,
+            endRowId: targetEndRowId,
+            startRowId: targetStartRowId,
+            displayLabel:
+              displayLabelOverride != null ? displayLabelOverride : entry.displayLabel,
+          };
         }
+        return entry;
+      });
+      if (updated) {
+        nextChips = mapped;
+      } else {
         const chipId = createProjectChipId();
         assignedId = chipId;
-        return [
-          ...prev,
+        nextChips = [
+          ...prevChips,
           {
             id: chipId,
             columnIndex,
@@ -1578,6 +1601,11 @@ export default function TacticsPage() {
               : {}),
           },
         ];
+      }
+
+      executeCommand({
+        execute: () => setProjectChips(nextChips),
+        undo: () => setProjectChips(prevChips),
       });
       if (assignedId) {
         setSelectedBlockId(assignedId);
@@ -1585,7 +1613,7 @@ export default function TacticsPage() {
       closeCellMenu();
       setSelectedCell(null);
     },
-    [cellMenu, closeCellMenu, selectedCell, setProjectChips, setSelectedBlockId, setSelectedCell]
+    [cellMenu, closeCellMenu, executeCommand, selectedCell, setProjectChips, setSelectedBlockId, setSelectedCell]
   );
   const handleCopySelectedBlock = useCallback(() => {
     if (!selectedBlockId) return;
@@ -1634,7 +1662,9 @@ export default function TacticsPage() {
   }, [projectChips, customProjects, chipTimeOverrides, currentYear]);
   const handleRemoveSelectedChip = useCallback(() => {
     if (!removableBlockId) return;
-    setProjectChips((prev) => {
+
+    const prevChips = projectChipsRef.current;
+    const computeNextChips = (prev) => {
       const chip = prev.find((b) => b.id === removableBlockId);
       const filtered = dedupeChipsById(prev).filter((block) => block.id !== removableBlockId);
 
@@ -1705,11 +1735,18 @@ export default function TacticsPage() {
       }
 
       return filtered;
+    };
+    const nextChips = computeNextChips(prevChips);
+
+    executeCommand({
+      execute: () => setProjectChips(nextChips),
+      undo: () => setProjectChips(prevChips),
     });
     setSelectedBlockId((prev) => (prev === removableBlockId ? null : prev));
     closeCellMenu();
   }, [
     closeCellMenu,
+    executeCommand,
     removableBlockId,
     setProjectChips,
     scheduleLayout,
@@ -1729,34 +1766,56 @@ export default function TacticsPage() {
     const customId = `custom-${Date.now()}-${customSequenceRef.current}`;
     const label = `Custom ${customSequenceRef.current}`;
     const customProject = { id: customId, label: label.toUpperCase(), color: pickCustomChipColour(customProjects, stagingProjects) };
-    setCustomProjects((prev) => [...prev, customProject]);
+    const prevCustomProjects = customProjectsRef.current;
+    const nextCustomProjects = [...prevCustomProjects, customProject];
+    executeCommand({
+      execute: () => setCustomProjects(nextCustomProjects),
+      undo: () => setCustomProjects(prevCustomProjects),
+    });
     setPendingCustomId(customId);
     setPendingCustomLabel(label.toUpperCase());
     startColorEdit(customId, customProject.color);
     setTimeout(() => pendingCustomInputRef.current?.focus(), 0);
-  }, [customProjects, stagingProjects, startColorEdit]);
+  }, [customProjects, executeCommand, stagingProjects, startColorEdit]);
 
   const handlePendingCustomConfirm = useCallback(() => {
     if (!pendingCustomId) return;
     const trimmed = pendingCustomLabel.trim();
     const finalLabel = trimmed ? trimmed.toUpperCase() : `CUSTOM ${customSequenceRef.current}`;
-    setCustomProjects((prev) =>
-      prev.map((p) => (p.id === pendingCustomId ? { ...p, label: finalLabel } : p))
+    const prevCustomProjects = customProjectsRef.current;
+    const nextCustomProjects = prevCustomProjects.map((p) =>
+      p.id === pendingCustomId ? { ...p, label: finalLabel } : p
     );
+    executeCommand({
+      execute: () => setCustomProjects(nextCustomProjects),
+      undo: () => setCustomProjects(prevCustomProjects),
+    });
     handleProjectSelection(pendingCustomId);
     setPendingCustomId(null);
     setPendingCustomLabel('');
-  }, [pendingCustomId, pendingCustomLabel, handleProjectSelection]);
+  }, [pendingCustomId, pendingCustomLabel, executeCommand, handleProjectSelection]);
   const handleDeleteCustomProject = useCallback(
     (projectId) => {
       if (!projectId) return;
-      setCustomProjects((prev) => prev.filter((project) => project.id !== projectId));
-      setProjectChips((prev) => prev.filter((block) => block.projectId !== projectId));
+      const prevCustomProjects = customProjectsRef.current;
+      const prevChips = projectChipsRef.current;
+      const nextCustomProjects = prevCustomProjects.filter((project) => project.id !== projectId);
+      const nextChips = prevChips.filter((block) => block.projectId !== projectId);
+      executeCommand({
+        execute: () => {
+          setCustomProjects(nextCustomProjects);
+          setProjectChips(nextChips);
+        },
+        undo: () => {
+          setCustomProjects(prevCustomProjects);
+          setProjectChips(prevChips);
+        },
+      });
       if (colorEditorProjectId === projectId) {
         setColorEditorProjectId(null);
       }
     },
-    [colorEditorProjectId]
+    [colorEditorProjectId, executeCommand]
   );
   const handleColorChange = useCallback(
     (value) => {
@@ -1782,17 +1841,22 @@ export default function TacticsPage() {
       setMenuRenamingLabel('');
       return;
     }
-    const block = projectChips.find((b) => b.id === menuRenamingChipId);
+    const prevChips = projectChipsRef.current;
+    const block = prevChips.find((b) => b.id === menuRenamingChipId);
     if (block) {
       const isCustom = typeof block.projectId === 'string' && block.projectId.startsWith('custom-');
       const normalized = isCustom ? trimmed.toUpperCase() : trimmed;
-      setProjectChips((prev) =>
-        prev.map((b) => (b.id === menuRenamingChipId ? { ...b, displayLabel: normalized } : b))
+      const nextChips = prevChips.map((b) =>
+        b.id === menuRenamingChipId ? { ...b, displayLabel: normalized } : b
       );
+      executeCommand({
+        execute: () => setProjectChips(nextChips),
+        undo: () => setProjectChips(prevChips),
+      });
     }
     setMenuRenamingChipId(null);
     setMenuRenamingLabel('');
-  }, [menuRenamingChipId, menuRenamingLabel, projectChips]);
+  }, [executeCommand, menuRenamingChipId, menuRenamingLabel]);
   const handleMenuDefinitionRenameStart = useCallback((projectId, currentLabel) => {
     setMenuRenamingProjectId(projectId);
     setMenuRenamingProjectLabel(currentLabel);
@@ -1801,13 +1865,18 @@ export default function TacticsPage() {
     if (!menuRenamingProjectId) return;
     const trimmed = menuRenamingProjectLabel.trim();
     if (trimmed) {
-      setCustomProjects((prev) =>
-        prev.map((p) => (p.id === menuRenamingProjectId ? { ...p, label: trimmed.toUpperCase() } : p))
+      const prevCustomProjects = customProjectsRef.current;
+      const nextCustomProjects = prevCustomProjects.map((p) =>
+        p.id === menuRenamingProjectId ? { ...p, label: trimmed.toUpperCase() } : p
       );
+      executeCommand({
+        execute: () => setCustomProjects(nextCustomProjects),
+        undo: () => setCustomProjects(prevCustomProjects),
+      });
     }
     setMenuRenamingProjectId(null);
     setMenuRenamingProjectLabel('');
-  }, [menuRenamingProjectId, menuRenamingProjectLabel]);
+  }, [executeCommand, menuRenamingProjectId, menuRenamingProjectLabel]);
   useEffect(() => {
     if (!cellMenu) return undefined;
     const handlePointerDown = (event) => {
@@ -1943,19 +2012,29 @@ export default function TacticsPage() {
   );
   const handleConfirmLabelEdit = useCallback(() => {
     if (!editingChipId) return;
+    const prevChips = projectChipsRef.current;
+    const prevOverrides = chipTimeOverridesRef.current;
     if (editingChipIsTime) {
       const parsedMins = parseInt(editingChipMinutes, 10);
-      if (Number.isFinite(parsedMins) && parsedMins > 0) {
-        setChipTimeOverrides((prev) => ({ ...prev, [editingChipId]: parsedMins }));
-      }
       const trimmedName = editingChipLabel.trim();
-      setProjectChips((prev) =>
-        prev.map((block) =>
-          block.id === editingChipId
-            ? { ...block, displayLabel: trimmedName || null }
-            : block
-        )
+      const nextOverrides = Number.isFinite(parsedMins) && parsedMins > 0
+        ? { ...prevOverrides, [editingChipId]: parsedMins }
+        : prevOverrides;
+      const nextChips = prevChips.map((block) =>
+        block.id === editingChipId
+          ? { ...block, displayLabel: trimmedName || null }
+          : block
       );
+      executeCommand({
+        execute: () => {
+          setChipTimeOverrides(nextOverrides);
+          setProjectChips(nextChips);
+        },
+        undo: () => {
+          setChipTimeOverrides(prevOverrides);
+          setProjectChips(prevChips);
+        },
+      });
       setEditingChipId(null);
       setEditingChipLabel('');
       setEditingChipMinutes('');
@@ -1963,11 +2042,13 @@ export default function TacticsPage() {
       return;
     }
     const normalizedLabel = editingChipLabel.toUpperCase();
-    setProjectChips((prev) =>
-      prev.map((block) =>
-        block.id === editingChipId ? { ...block, displayLabel: normalizedLabel } : block
-      )
+    const nextChips = prevChips.map((block) =>
+      block.id === editingChipId ? { ...block, displayLabel: normalizedLabel } : block
     );
+    executeCommand({
+      execute: () => setProjectChips(nextChips),
+      undo: () => setProjectChips(prevChips),
+    });
     setEditingChipId(null);
     setEditingChipLabel('');
     setEditingChipIsCustom(false);
@@ -1977,6 +2058,7 @@ export default function TacticsPage() {
     editingChipIsCustom,
     editingChipLabel,
     editingChipMinutes,
+    executeCommand,
     setProjectChips,
   ]);
   const handleCancelLabelEdit = useCallback(() => {
@@ -2278,10 +2360,16 @@ export default function TacticsPage() {
         durationMinutes,
       };
 
-      setProjectChips((prev) => [...prev, newChip]);
+      const prevChips = projectChipsRef.current;
+      const nextChips = [...prevChips, newChip];
+      executeCommand({
+        execute: () => setProjectChips(nextChips),
+        undo: () => setProjectChips(prevChips),
+      });
       return newChip;
     },
     [
+      executeCommand,
       stagingColumnConfigs,
       scheduleLayout,
       incrementMinutes,
@@ -2503,6 +2591,27 @@ export default function TacticsPage() {
     setSelectedCell(null);
     setCellMenu(null);
   }, [displayedWeekDays, incrementMinutes, stagingColumnConfigs, scheduleLayout, timelineRowIds]);
+
+  // Keyboard shortcuts: Cmd/Ctrl+Z to undo, Cmd/Ctrl+Shift+Z to redo
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      const isMac = navigator.platform.toUpperCase().includes('MAC');
+      const modifier = isMac ? event.metaKey : event.ctrlKey;
+      if (!modifier || event.key !== 'z') return;
+      // Don't intercept while a text input is focused
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable) return;
+      event.preventDefault();
+      if (event.shiftKey) {
+        redo();
+      } else {
+        undo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
+
   // Compute the minimum width needed for column 0 to fit its longest string
   const col0MinWidth = useMemo(() => {
     const fontSize = 14 * textSizeScale;
@@ -3421,6 +3530,10 @@ export default function TacticsPage() {
               onShowAmPmChange={setShowAmPm}
               use24Hour={use24Hour}
               onUse24HourChange={setUse24Hour}
+              undoStack={undoStack}
+              redoStack={redoStack}
+              undo={undo}
+              redo={redo}
             />
           }
         />
@@ -4213,6 +4326,10 @@ function ListicalMenu({
   onShowAmPmChange,
   use24Hour,
   onUse24HourChange,
+  undoStack,
+  redoStack,
+  undo,
+  redo,
 }) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef(null);
@@ -4413,6 +4530,39 @@ function ListicalMenu({
               </p>
             </div>
           )}
+
+          {/* History */}
+          <div className="mt-3 pt-3 border-t border-[#e2e8f0]">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">History</span>
+            <div className="flex gap-2 mt-2">
+              <button
+                type="button"
+                onClick={undo}
+                disabled={undoStack.length === 0}
+                className={`flex-1 px-3 py-1.5 rounded text-[12px] font-semibold transition-colors ${
+                  undoStack.length === 0
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
+                    : 'bg-white text-[#065f46] hover:bg-[#e6f7ed] border border-[#ced3d0]'
+                }`}
+                title={`Undo (⌘Z) — ${undoStack.length === 0 ? 'nothing to undo' : `${undoStack.length} action${undoStack.length > 1 ? 's' : ''}`}`}
+              >
+                ↶ Undo
+              </button>
+              <button
+                type="button"
+                onClick={redo}
+                disabled={redoStack.length === 0}
+                className={`flex-1 px-3 py-1.5 rounded text-[12px] font-semibold transition-colors ${
+                  redoStack.length === 0
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
+                    : 'bg-white text-[#065f46] hover:bg-[#e6f7ed] border border-[#ced3d0]'
+                }`}
+                title={`Redo (⌘⇧Z) — ${redoStack.length === 0 ? 'nothing to redo' : `${redoStack.length} action${redoStack.length > 1 ? 's' : ''}`}`}
+              >
+                ↷ Redo
+              </button>
+            </div>
+          </div>
 
           {/* Clear chips */}
           <div className="mt-3 pt-3 border-t border-[#e2e8f0]">
