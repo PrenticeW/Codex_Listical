@@ -3252,6 +3252,46 @@ export default function TacticsPage() {
           </button>
         </div>
 
+        {/* ── Rename schedule chip ──────────────────────────────── */}
+        {targetChip?.id?.startsWith('schedule-chip-') ? (() => {
+          const extraMarker = targetChip.id.indexOf('-extra-chip-');
+          const idForParsing = extraMarker !== -1 ? targetChip.id.slice(0, extraMarker) : targetChip.id;
+          const itemIdxMatch = idForParsing.match(/-(\d+)$/);
+          const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
+          const scheduleItems = itemIdx != null
+            ? (scheduleLayout.scheduleItemsByProject.get(targetChip.projectId) ?? [])
+            : [];
+          const scheduleItem = itemIdx != null ? scheduleItems[itemIdx] : null;
+          const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
+          const itemName = scheduleItem ? (scheduleItem.name ?? '').trim() : '';
+          const hasScheduleName = Boolean(itemName && itemName !== scheduleDefaultText);
+          const currentLabel = targetChip.displayLabel || (hasScheduleName ? itemName : (projectMetadata.get(targetChip.projectId)?.label ?? 'Project'));
+          const isRenaming = menuRenamingChipId === targetChip.id;
+          return (
+            <>
+              <div className="mx-3 my-1 border-t border-[#e5e7eb]" />
+              <div className="px-2 pb-1">
+                <div className="flex items-center gap-1 px-1 py-1">
+                  <span className="flex-1 px-1 text-[11px] text-slate-500 truncate">{currentLabel}</span>
+                  <button
+                    type="button"
+                    title="Rename chip"
+                    className={`shrink-0 rounded p-1 hover:text-slate-700 ${isRenaming ? 'text-blue-500' : 'text-slate-400'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isRenaming) { handleMenuRenameConfirm(); }
+                      else { handleMenuRenameStart(targetChip.id, currentLabel); }
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11.498 1.499a1.707 1.707 0 0 1 2.414 2.414l-9.5 9.5a1 1 0 0 1-.39.242l-3 1a1 1 0 0 1-1.268-1.268l1-3a1 1 0 0 1 .242-.39l9.502-9.498zm1 1-9.5 9.5-.646 1.94 1.94-.646 9.5-9.5a.707.707 0 0 0-1-1z"/></svg>
+                  </button>
+                </div>
+                {renderRenameRow(targetChip.id, currentLabel)}
+              </div>
+            </>
+          );
+        })() : null}
+
         {/* ── Remove chip ───────────────────────────────────────── */}
         <div className="border-t border-[#e5e7eb] px-3 py-1.5">
           <button
@@ -3299,6 +3339,8 @@ export default function TacticsPage() {
     handleMenuDefinitionRenameConfirm,
     setMenuRenamingProjectId,
     setScheduleItemPanelOpen,
+    scheduleLayout,
+    projectMetadata,
   ]);
 
   // Sync sticky header horizontal scroll with table container
