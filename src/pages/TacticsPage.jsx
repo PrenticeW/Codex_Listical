@@ -962,14 +962,45 @@ export default function TacticsPage() {
           return next;
         });
     };
-    const handleMouseUp = () => setResizingBlockId(null);
+    const handleMouseUp = () => {
+      setProjectChips((prev) => {
+        const chip = prev.find((c) => c.id === resizingBlockId);
+        if (
+          chip &&
+          chip.id.startsWith('schedule-chip-') &&
+          chip.id.includes('-extra-chip-') &&
+          chip.columnIndex < 8
+        ) {
+          const startIdx = rowIndexMap.get(chip.startRowId);
+          const endIdx = rowIndexMap.get(chip.endRowId);
+          if (startIdx != null && endIdx != null) {
+            const rowCount = Math.abs(endIdx - startIdx) + 1;
+            const newDuration = rowCount * incrementMinutes;
+            if (newDuration !== chip.durationMinutes) {
+              // Clear any time override so durationMinutes is the source of truth
+              setChipTimeOverrides((prev) => {
+                if (prev[resizingBlockId] == null) return prev;
+                const next = { ...prev };
+                delete next[resizingBlockId];
+                return next;
+              });
+              return prev.map((c) =>
+                c.id === resizingBlockId ? { ...c, durationMinutes: newDuration } : c
+              );
+            }
+          }
+        }
+        return prev;
+      });
+      setResizingBlockId(null);
+    };
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [findRowIdByPointerY, getProjectChipById, resizingBlockId, rowIndexMap, timelineRowIds]);
+  }, [findRowIdByPointerY, getProjectChipById, incrementMinutes, resizingBlockId, rowIndexMap, timelineRowIds]);
   useLayoutEffect(() => {
     if (timelineRowIds.length === 0) return;
     const next = {};
@@ -2153,7 +2184,24 @@ export default function TacticsPage() {
       if (!scheduleItem) return null;
 
       const minutes = parseEstimateLabelToMinutes(scheduleItem.timeValue);
-      const durationMinutes = Number.isFinite(minutes) ? minutes : incrementMinutes;
+      const totalMinutes = Number.isFinite(minutes) ? minutes : incrementMinutes;
+      // Compute how many minutes are already placed in day columns for this item
+      const canonicalId = `schedule-chip-${projectId}-${itemIdx}`;
+      const alreadyPlaced = projectChips.reduce((sum, c) => {
+        if (!c.id.startsWith('schedule-chip-')) return sum;
+        if (c.columnIndex >= 8) return sum;
+        const extraIdx = c.id.indexOf('-extra-chip-');
+        if (extraIdx === -1) return sum;
+        const inner = c.id.slice('schedule-chip-'.length, extraIdx);
+        const lastDash = inner.lastIndexOf('-');
+        if (lastDash === -1) return sum;
+        if (inner.slice(0, lastDash) !== projectId) return sum;
+        if (parseInt(inner.slice(lastDash + 1), 10) !== itemIdx) return sum;
+        const chipMins = chipTimeOverrides[c.id] ?? chipTimeOverrides[canonicalId] ?? c.durationMinutes ?? 0;
+        return sum + chipMins;
+      }, 0);
+      const remainingMinutes = Math.max(incrementMinutes, totalMinutes - alreadyPlaced);
+      const durationMinutes = remainingMinutes;
       const span = Math.max(1, Math.ceil(durationMinutes / Math.max(1, incrementMinutes)));
 
       const existingInCol = projectChips.filter(
@@ -2195,6 +2243,7 @@ export default function TacticsPage() {
       scheduleLayout,
       incrementMinutes,
       projectChips,
+      chipTimeOverrides,
       rowIndexMap,
       timelineRowIds,
       trailingMinuteRows,
