@@ -1837,10 +1837,7 @@ export default function TacticsPage() {
     const prevChips = projectChipsRef.current;
     const computeNextChips = (prev) => {
       const deduped = dedupeChipsById(prev);
-      const removedChips = deduped.filter((b) => idsToRemove.has(b.id));
       const filtered = deduped.filter((block) => !idsToRemove.has(block.id));
-      // Restore canonical schedule chips for any day-column schedule chips that were removed
-      removedChips.forEach((chip) => restoreCanonicalScheduleChip(chip, filtered));
       return filtered;
     };
     const nextChips = computeNextChips(prevChips);
@@ -1861,7 +1858,6 @@ export default function TacticsPage() {
     cellMenuBlockId,
     selectedBlockIds,
     setProjectChips,
-    restoreCanonicalScheduleChip,
   ]);
   const finishColorEdit = useCallback(() => {
     setColorEditorProjectId(null);
@@ -3696,7 +3692,7 @@ export default function TacticsPage() {
                         </td>
                       );
                     })}
-                {renderExtraColumnCells('header', true)}
+                {renderExtraColumnCells('header')}
                 </tr>
               </tbody>
             </table>
