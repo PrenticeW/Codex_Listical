@@ -2105,9 +2105,12 @@ export default function TacticsPage() {
       const fallbackLabel = metadata?.label ?? block.projectId ?? 'Project';
       const isCustom = typeof block.projectId === 'string' && block.projectId.startsWith('custom-');
       const labelValue = block.displayLabel ?? fallbackLabel;
-      setEditingChipIsTime(false);
+      const currentOverride = chipTimeOverrides[chipId];
+      const currentMinutes = currentOverride ?? block.durationMinutes ?? 0;
+      setEditingChipIsTime(true);
       setEditingChipIsCustom(isCustom);
-      setEditingChipLabel(isCustom ? labelValue.toUpperCase() : labelValue);
+      setEditingChipLabel(isCustom ? labelValue.toUpperCase() : labelValue.toUpperCase());
+      setEditingChipMinutes(String(currentMinutes));
       setEditingChipId(chipId);
     },
     [getProjectChipById, projectMetadata, scheduleLayout, chipTimeOverrides]
@@ -2141,6 +2144,7 @@ export default function TacticsPage() {
       setEditingChipLabel('');
       setEditingChipMinutes('');
       setEditingChipIsTime(false);
+      setEditingChipIsCustom(false);
       return;
     }
     const normalizedLabel = editingChipLabel.toUpperCase();
