@@ -1571,7 +1571,7 @@ export default function TacticsPage() {
             endRowId: targetEndRowId,
             startRowId: targetStartRowId,
             displayLabel:
-              displayLabelOverride != null ? displayLabelOverride : entry.displayLabel,
+              displayLabelOverride != null ? displayLabelOverride : null,
           };
         }
         return entry;
