@@ -39,6 +39,7 @@ const buildInitialSleepBlocks = (days) =>
   days.map((day, index) => ({
     id: `sleep-${index}`,
     columnIndex: index,
+    dayName: day,
     startRowId: 'sleep-start',
     endRowId: 'sleep-start',
     projectId: 'sleep',
@@ -445,7 +446,11 @@ export default function TacticsPage() {
     if (chipState.projectChips) {
       const deduped = dedupeChipsById(chipState.projectChips);
       updateChipSequenceFromList(deduped);
-      return deduped;
+      // Backfill dayName for chips saved before this field was introduced
+      return deduped.map((chip) => {
+        if (chip.dayName != null || chip.columnIndex >= DAY_COLUMN_COUNT) return chip;
+        return { ...chip, dayName: displayedWeekDays[chip.columnIndex] ?? null };
+      });
     }
     // Fall back to initial sleep blocks if no saved state
     return buildInitialSleepBlocks(displayedWeekDays);
@@ -541,6 +546,24 @@ export default function TacticsPage() {
   useEffect(() => { projectChipsRef.current = projectChips; }, [projectChips]);
   useEffect(() => { customProjectsRef.current = customProjects; }, [customProjects]);
   useEffect(() => { chipTimeOverridesRef.current = chipTimeOverrides; }, [chipTimeOverrides]);
+  const displayedWeekDaysRef = useRef(displayedWeekDays);
+  useEffect(() => { displayedWeekDaysRef.current = displayedWeekDays; }, [displayedWeekDays]);
+
+  // Remap day-column chips to their correct columnIndex when the start day changes
+  const handleStartDayChange = useCallback((newStartDay) => {
+    const newStartIndex = DAYS_OF_WEEK.indexOf(newStartDay);
+    if (newStartIndex < 0) { setStartDay(newStartDay); return; }
+    const newWeek = Array.from({ length: 7 }, (_, i) => DAYS_OF_WEEK[(newStartIndex + i) % DAYS_OF_WEEK.length]);
+    setProjectChips((prev) =>
+      prev.map((chip) => {
+        if (chip.columnIndex >= DAY_COLUMN_COUNT || !chip.dayName) return chip;
+        const newColIdx = newWeek.indexOf(chip.dayName);
+        if (newColIdx < 0 || newColIdx === chip.columnIndex) return chip;
+        return { ...chip, columnIndex: newColIdx };
+      })
+    );
+    setStartDay(newStartDay);
+  }, []);
 
   const highlightedProjects = useMemo(() => {
     if (!stagingProjects.length) return [];
@@ -741,13 +764,18 @@ export default function TacticsPage() {
 
     // Load tactics chips for current year when year changes
     const chipState = loadTacticsChipsState(currentYear);
+    const weekDays = displayedWeekDaysRef.current;
     if (chipState.projectChips) {
       const dedupedChips = dedupeChipsById(chipState.projectChips);
       updateChipSequenceFromList(dedupedChips);
-      setProjectChips(dedupedChips);
+      // Backfill dayName for chips saved before this field was introduced
+      setProjectChips(dedupedChips.map((chip) => {
+        if (chip.dayName != null || chip.columnIndex >= DAY_COLUMN_COUNT) return chip;
+        return { ...chip, dayName: weekDays[chip.columnIndex] ?? null };
+      }));
     } else {
       // Reset to initial sleep blocks if no saved chips for this year
-      setProjectChips(buildInitialSleepBlocks(displayedWeekDays));
+      setProjectChips(buildInitialSleepBlocks(weekDays));
     }
     if (chipState.customProjects) {
       setCustomProjects(chipState.customProjects);
@@ -757,7 +785,7 @@ export default function TacticsPage() {
 
     // Always reload projects for current year
     readProjects();
-  }, [currentYear, displayedWeekDays]);
+  }, [currentYear]);
 
   // Set up storage event listeners
   useEffect(() => {
@@ -1330,6 +1358,7 @@ export default function TacticsPage() {
       next[targetIndex] = {
         ...target,
         columnIndex: targetColumnIndex,
+        dayName: targetColumnIndex < DAY_COLUMN_COUNT ? (displayedWeekDays[targetColumnIndex] ?? null) : null,
         startRowId,
         endRowId,
         startMinutes: rowIdToClockMinutes(startRowId, trailingMinuteRows),
@@ -1593,6 +1622,7 @@ export default function TacticsPage() {
           {
             id: chipId,
             columnIndex,
+            dayName: columnIndex < DAY_COLUMN_COUNT ? (displayedWeekDays[columnIndex] ?? null) : null,
             startRowId: targetStartRowId,
             endRowId: targetEndRowId,
             projectId,
@@ -2351,6 +2381,7 @@ export default function TacticsPage() {
       const newChip = {
         id: `schedule-chip-${projectId}-${itemIdx}-extra-${createProjectChipId()}`,
         columnIndex,
+        dayName: null,
         startRowId,
         endRowId,
         startMinutes,
@@ -2501,6 +2532,7 @@ export default function TacticsPage() {
           next.push({
             id: chipId,
             columnIndex,
+            dayName: null,
             startRowId,
             endRowId,
             startMinutes,
@@ -2573,6 +2605,7 @@ export default function TacticsPage() {
           rebuiltChips.push({
             id: chipId,
             columnIndex,
+            dayName: null,
             startRowId,
             endRowId,
             projectId: column.project.id,
@@ -3533,7 +3566,7 @@ export default function TacticsPage() {
               onIncrementChange={setIncrementMinutes}
               onClearAllChips={handleClearAllChips}
               startDay={startDay}
-              onStartDayChange={setStartDay}
+              onStartDayChange={handleStartDayChange}
               startHour={startHour}
               onStartHourChange={setStartHour}
               startMinute={startMinute}
