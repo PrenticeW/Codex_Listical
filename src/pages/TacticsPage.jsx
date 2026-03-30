@@ -2199,6 +2199,9 @@ export default function TacticsPage() {
   const projectColumnTotals = useMemo(() => {
     const totals = new Map();
     const columnLength = visibleColumnCount || DAY_COLUMN_COUNT;
+
+    // First pass: compute duration for every chip
+    const chipDurations = new Map(); // chip.id -> { projectId, columnIndex, duration, startIdx, endIdx }
     projectChips.forEach((block) => {
       const targetProjectId = block.projectId || 'sleep';
       const columnIndex =
@@ -2239,13 +2242,51 @@ export default function TacticsPage() {
         duration = getBlockDuration(block, rowIndexMap, timelineRowIds, incrementMinutes);
       }
       if (duration <= 0) return;
-      if (!totals.has(targetProjectId)) {
-        totals.set(targetProjectId, Array.from({ length: columnLength }, () => 0));
-      }
-      const columnTotals = totals.get(targetProjectId);
-      if (!Array.isArray(columnTotals)) return;
-      columnTotals[columnIndex] += duration;
+
+      const startIdx = rowIndexMap.get(block.startRowId);
+      const endIdx = rowIndexMap.get(block.endRowId ?? block.startRowId);
+      if (startIdx == null || endIdx == null) return;
+
+      chipDurations.set(block.id, {
+        projectId: targetProjectId,
+        columnIndex,
+        duration,
+        startIdx: Math.min(startIdx, endIdx),
+        endIdx: Math.max(startIdx, endIdx),
+      });
     });
+
+    // Second pass: for each chip, check if it is spatially contained within a chip
+    // of a different project in the same column — if so, deduct this chip's duration
+    // from the containing chip's total (the smaller chip "eats into" the larger).
+    const deductions = new Map(); // chip.id -> minutes to deduct
+    const chipEntries = Array.from(chipDurations.entries());
+    chipEntries.forEach(([idA, infoA]) => {
+      chipEntries.forEach(([idB, infoB]) => {
+        if (idA === idB) return;
+        if (infoA.columnIndex !== infoB.columnIndex) return;
+        if (infoA.projectId === infoB.projectId) return;
+        // Check if B is fully contained within A
+        if (infoB.startIdx >= infoA.startIdx && infoB.endIdx <= infoA.endIdx) {
+          deductions.set(idA, (deductions.get(idA) ?? 0) + infoB.duration);
+        }
+      });
+    });
+
+    // Third pass: accumulate into totals, applying deductions
+    chipDurations.forEach((info, chipId) => {
+      const { projectId, columnIndex, duration } = info;
+      const deduction = deductions.get(chipId) ?? 0;
+      const effectiveDuration = Math.max(0, duration - deduction);
+      if (effectiveDuration <= 0) return;
+      if (!totals.has(projectId)) {
+        totals.set(projectId, Array.from({ length: columnLength }, () => 0));
+      }
+      const columnTotals = totals.get(projectId);
+      if (!Array.isArray(columnTotals)) return;
+      columnTotals[columnIndex] += effectiveDuration;
+    });
+
     return totals;
   }, [
     chipTimeOverrides,
