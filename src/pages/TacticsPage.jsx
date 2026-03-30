@@ -600,6 +600,24 @@ export default function TacticsPage() {
     (columnIndex) => dedupeChipsById(projectChips.filter((block) => block.columnIndex === columnIndex)),
     [projectChips]
   );
+  // Chips that cover at least one fully-hidden chip (same column + start + end)
+  const coveringChipIds = useMemo(() => {
+    const deduped = dedupeChipsById(projectChips);
+    const covering = new Set();
+    const groups = new Map();
+    deduped.forEach((chip) => {
+      const key = `${chip.columnIndex}|${chip.startRowId}|${chip.endRowId ?? chip.startRowId}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(chip.id);
+    });
+    groups.forEach((ids) => {
+      if (ids.length > 1) {
+        // The last chip in DOM order is the visible one covering the rest
+        covering.add(ids[ids.length - 1]);
+      }
+    });
+    return covering;
+  }, [projectChips]);
   const getProjectChipById = useCallback(
     (blockId) => dedupeChipsById(projectChips).find((block) => block.id === blockId) ?? null,
     [projectChips]
@@ -2996,6 +3014,7 @@ export default function TacticsPage() {
       const normalizedLabel = rawLabel.toUpperCase();
       const baseFontSize = 14 * textSizeScale;
       const chipIsMultiRow = block.endRowId && block.endRowId !== block.startRowId;
+      const isCovering = coveringChipIds.has(chipId);
       const isEditing = editingChipId === block.id;
       const isEditingTime = isEditing && editingChipIsTime;
       const isChipBeingDragged =
@@ -3041,7 +3060,7 @@ export default function TacticsPage() {
               backgroundColor,
               color: textColor,
               fontWeight,
-              border: '1px solid #ffffff',
+              border: isCovering ? '2px dashed #f97316' : '1px solid #ffffff',
               fontSize: `${14 * textSizeScale}px`,
               ...(isActive ? { outlineColor: '#000', outlineOffset: 0 } : null),
             }}
