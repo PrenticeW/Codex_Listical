@@ -907,72 +907,6 @@ export default function TacticsPage() {
     );
   }, [timelineRowIds]);
 
-  // Refs to track previous timeline state for increment-change resize logic
-  const prevIncrementForResizeRef = useRef(null);
-  const prevTimelineRowIdsRef = useRef(null);
-  const prevTrailingMinuteRowsRef = useRef([]);
-
-  // When increment changes, recompute endRowId for all non-sleep chips to preserve their duration
-  useEffect(() => {
-    const prevIncrement = prevIncrementForResizeRef.current;
-    const prevRowIds = prevTimelineRowIdsRef.current;
-    const prevTrailingMinuteRows = prevTrailingMinuteRowsRef.current;
-    prevIncrementForResizeRef.current = incrementMinutes;
-    prevTimelineRowIdsRef.current = timelineRowIds;
-    prevTrailingMinuteRowsRef.current = trailingMinuteRows;
-
-    // Only act when increment actually changed (not on first render or other timeline changes)
-    if (prevIncrement === null || prevIncrement === incrementMinutes) return;
-    if (!prevRowIds || !timelineRowIds.length) return;
-
-    const prevRowIndexMap = new Map(prevRowIds.map((id, i) => [id, i]));
-
-    setProjectChips((prev) =>
-      prev.map((entry) => {
-        if (entry.projectId === 'sleep') return entry;
-
-        // Use stored startMinutes, or derive from current startRowId as fallback (e.g. chips loaded from storage)
-        const originalMinutes = entry.startMinutes ?? rowIdToClockMinutes(entry.startRowId, prevTrailingMinuteRows);
-        console.log('[resize]', entry.id, 'originalMinutes:', originalMinutes, 'new trailingMinuteRows:', trailingMinuteRows.slice(0,5), 'new timelineRowIds:', timelineRowIds.slice(0,10));
-        if (originalMinutes == null) return entry;
-
-        // Compute duration from old rows
-        let durationMinutes;
-        if (Number.isFinite(entry.durationMinutes)) {
-          durationMinutes = entry.durationMinutes;
-        } else {
-          const startIdx = prevRowIndexMap.get(entry.startRowId);
-          const endIdx = prevRowIndexMap.get(entry.endRowId ?? entry.startRowId);
-          if (startIdx == null || endIdx == null) return entry;
-          durationMinutes = 0;
-          for (let i = Math.min(startIdx, endIdx); i <= Math.max(startIdx, endIdx); i += 1) {
-            const rowId = prevRowIds[i];
-            if (!rowId) continue;
-            durationMinutes += (rowId === 'sleep-start' || rowId.startsWith('hour-')) ? 60 : prevIncrement;
-          }
-        }
-
-        // Find the last new row whose clock time is <= originalMinutes (bias earlier)
-        let newStartIdx = null;
-        for (let i = 0; i < timelineRowIds.length; i += 1) {
-          const m = rowIdToClockMinutes(timelineRowIds[i], trailingMinuteRows);
-          if (m == null) continue;
-          if (m <= originalMinutes) newStartIdx = i;
-          else break;
-        }
-        console.log('[resize scan]', entry.id, 'originalMinutes:', originalMinutes, 'newStartIdx:', newStartIdx, 'newStartRowId:', timelineRowIds[newStartIdx]);
-        if (newStartIdx == null) return entry;
-
-        const newSpan = Math.max(1, Math.ceil(durationMinutes / Math.max(1, incrementMinutes)));
-        const newStartRowId = timelineRowIds[newStartIdx];
-        const newEndIdx = Math.min(newStartIdx + newSpan - 1, timelineRowIds.length - 1);
-        const newEndRowId = timelineRowIds[newEndIdx] ?? newStartRowId;
-
-        if (newStartRowId === entry.startRowId && newEndRowId === entry.endRowId) return entry;
-        return { ...entry, startRowId: newStartRowId, endRowId: newEndRowId };
-      })
-    );
-  }, [incrementMinutes, timelineRowIds, trailingMinuteRows, setProjectChips]);
 
   const rowIndexMap = useMemo(
     () => new Map(timelineRowIds.map((rowId, index) => [rowId, index])),
@@ -2574,8 +2508,6 @@ export default function TacticsPage() {
   const hasInitializedScheduleChips = useRef(false);
   // Track previous staging projects to detect changes
   const prevStagingProjectsRef = useRef(null);
-  // Track previous increment to detect changes and recompute spans
-  const prevIncrementMinutesRef = useRef(null);
 
   useEffect(() => {
     // Check if staging projects have changed (by comparing JSON stringify)
@@ -2583,12 +2515,9 @@ export default function TacticsPage() {
     const hasProjectsChanged = prevStagingProjectsRef.current !== stagingProjectsKey;
     prevStagingProjectsRef.current = stagingProjectsKey;
 
-    const hasIncrementChanged = prevIncrementMinutesRef.current !== null && prevIncrementMinutesRef.current !== incrementMinutes;
-    prevIncrementMinutesRef.current = incrementMinutes;
-
-    // Only run if we have data, and either it's first load OR projects changed OR increment changed
+    // Only run if we have data, and either it's first load OR projects changed
     if (!scheduleLayout?.scheduleItemsByProject || !timelineRowIds.length) return;
-    if (hasInitializedScheduleChips.current && !hasProjectsChanged && !hasIncrementChanged) return;
+    if (hasInitializedScheduleChips.current && !hasProjectsChanged) return;
 
     setProjectChips((prev) => {
       const next = [...prev];
@@ -2695,10 +2624,57 @@ export default function TacticsPage() {
     scheduleLayout,
     timelineRowIds,
     trailingMinuteRows,
-    incrementMinutes,
     setProjectChips,
     stagingProjects,
   ]);
+  const resetChips = useCallback((forIncrement) => {
+    const inc = forIncrement ?? incrementMinutes;
+    const baseChips = buildInitialSleepBlocks(displayedWeekDays);
+    const rebuiltChips = [...baseChips];
+    if (scheduleLayout?.scheduleItemsByProject && timelineRowIds.length) {
+      const baseOffset = 2;
+      stagingColumnConfigs.forEach((column, idx) => {
+        if (column.type !== 'project') return;
+        const columnIndex = DAY_COLUMN_COUNT + idx;
+        const scheduleItems = scheduleLayout.scheduleItemsByProject.get(column.project.id) ?? [];
+        let currentRowIdx = baseOffset;
+        scheduleItems.forEach((scheduleItem, itemIdx) => {
+          const chipId = `schedule-chip-${column.project.id}-${itemIdx}`;
+          const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
+          const trimmedName = (scheduleItem.name ?? '').trim();
+          const hasScheduleName = Boolean(trimmedName && trimmedName !== scheduleDefaultText);
+          const displayLabel = hasScheduleName ? trimmedName : null;
+          const minutes = parseEstimateLabelToMinutes(scheduleItem.timeValue);
+          const durationMinutes = Number.isFinite(minutes) ? minutes : inc;
+          const span = Math.max(1, Math.ceil(durationMinutes / Math.max(1, inc)));
+          const startRowIdx = Math.min(currentRowIdx, timelineRowIds.length - 1);
+          const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
+          const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
+          const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
+          currentRowIdx = endRowIdx + 1;
+          rebuiltChips.push({
+            id: chipId,
+            columnIndex,
+            dayName: null,
+            startRowId,
+            endRowId,
+            projectId: column.project.id,
+            displayLabel,
+            hasScheduleName,
+            durationMinutes,
+          });
+        });
+      });
+      hasInitializedScheduleChips.current = true;
+    } else {
+      hasInitializedScheduleChips.current = false;
+    }
+    setProjectChips(rebuiltChips);
+    setSelectedBlockId(null);
+    setSelectedCell(null);
+    setCellMenu(null);
+  }, [displayedWeekDays, incrementMinutes, stagingColumnConfigs, scheduleLayout, timelineRowIds]);
+
   const handleClearAllChips = useCallback(() => {
     if (typeof window !== 'undefined') {
       const confirmed = window.confirm(
@@ -3717,6 +3693,7 @@ export default function TacticsPage() {
             <ListicalMenu
               incrementMinutes={incrementMinutes}
               onIncrementChange={setIncrementMinutes}
+              onResetChips={resetChips}
               onClearAllChips={handleClearAllChips}
               startDay={startDay}
               onStartDayChange={handleStartDayChange}
@@ -4513,6 +4490,7 @@ export default function TacticsPage() {
 function ListicalMenu({
   incrementMinutes,
   onIncrementChange,
+  onResetChips,
   onClearAllChips,
   startDay,
   onStartDayChange,
@@ -4535,22 +4513,10 @@ function ListicalMenu({
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
   const [menuStyle, setMenuStyle] = useState({});
-  const [incrementChanged, setIncrementChanged] = useState(false);
-
-  const timesValidForIncrement =
-    startHour && hourOptions.includes(startHour) &&
-    startMinute && minuteOptions.includes(startMinute);
-
-  const canClose = !incrementChanged || timesValidForIncrement;
-
-  useEffect(() => {
-    if (incrementChanged && timesValidForIncrement) {
-      setIncrementChanged(false);
-    }
-  }, [incrementChanged, timesValidForIncrement]);
+  const [pendingIncrement, setPendingIncrement] = useState(null);
 
   const tryClose = () => {
-    if (canClose) setOpen(false);
+    if (pendingIncrement === null) setOpen(false);
   };
 
   useEffect(() => {
@@ -4591,15 +4557,27 @@ function ListicalMenu({
       window.removeEventListener('mousedown', handleClickOutside, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [open, canClose]);
+  }, [open, pendingIncrement]);
 
   const handleBedTimeChange = (event) => {
     onStartHourChange(event.target.value);
   };
 
   const handleIncrementChange = (event) => {
-    onIncrementChange(parseInt(event.target.value, 10) || 60);
-    setIncrementChanged(true);
+    const next = parseInt(event.target.value, 10) || 60;
+    if (next !== incrementMinutes) {
+      setPendingIncrement(next);
+    }
+  };
+
+  const confirmIncrementChange = () => {
+    onIncrementChange(pendingIncrement);
+    onResetChips(pendingIncrement);
+    setPendingIncrement(null);
+  };
+
+  const cancelIncrementChange = () => {
+    setPendingIncrement(null);
   };
 
   return (
@@ -4691,7 +4669,7 @@ function ListicalMenu({
             <select
               id="increment-select"
               className="flex-1 rounded border border-[#ced3d0] bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-              value={incrementMinutes}
+              value={pendingIncrement ?? incrementMinutes}
               onChange={handleIncrementChange}
             >
               <option value={15}>15 minutes</option>
@@ -4699,6 +4677,31 @@ function ListicalMenu({
               <option value={60}>1 hour</option>
             </select>
           </div>
+
+          {/* Increment change confirmation */}
+          {pendingIncrement !== null && (
+            <div className="mt-3 pt-3 border-t border-[#e2e8f0]">
+              <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-300 rounded px-3 py-2 mb-2">
+                Changing the increment will clear all placed chips. This cannot be undone.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={confirmIncrementChange}
+                  className="flex-1 px-3 py-1.5 rounded text-[12px] font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors"
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelIncrementChange}
+                  className="flex-1 px-3 py-1.5 rounded text-[12px] font-semibold bg-white text-slate-700 border border-[#ced3d0] hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Clock format */}
           <div className="mt-3 pt-3 border-t border-[#e2e8f0] flex flex-col" style={{ gap: '6px' }}>
@@ -4721,15 +4724,6 @@ function ListicalMenu({
               24-hour clock
             </label>
           </div>
-
-          {/* Increment validation warning */}
-          {incrementChanged && !timesValidForIncrement && (
-            <div className="mt-3 pt-3 border-t border-[#e2e8f0]">
-              <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-300 rounded px-3 py-2">
-                Please set a Bed Time and Rise Time that match the new increment before closing.
-              </p>
-            </div>
-          )}
 
           {/* History */}
           <div className="mt-3 pt-3 border-t border-[#e2e8f0]">
