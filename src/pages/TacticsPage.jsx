@@ -13,7 +13,7 @@ import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
 import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '../lib/stagingStorage';
 import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
-import { parseEstimateLabelToMinutes } from '../utils/staging/planTableHelpers';
+import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../utils/staging/planTableHelpers';
 import { pickCustomChipColour } from '../utils/staging/projectColour';
 import { saveTacticsMetrics } from '../lib/tacticsMetricsStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
@@ -1645,6 +1645,14 @@ export default function TacticsPage() {
             }
           }
         }
+        // Capture itemIdx so pasted chips get a schedule-chip-style ID and count toward quota
+        let scheduleItemIdx = null;
+        if (block.id.startsWith('schedule-chip-')) {
+          const extraMarker = block.id.indexOf('-extra-chip-');
+          const idForIdx = extraMarker !== -1 ? block.id.slice(0, extraMarker) : block.id;
+          const idxMatch = idForIdx.match(/-(\d+)$/);
+          if (idxMatch) scheduleItemIdx = parseInt(idxMatch[1], 10);
+        }
         return {
           projectId: block.projectId ?? 'sleep',
           displayLabel: block.displayLabel ?? null,
@@ -1652,6 +1660,7 @@ export default function TacticsPage() {
           endRowId: block.endRowId,
           timeOverride,
           durationMinutes: effectiveDurationMinutes,
+          ...(scheduleItemIdx != null ? { scheduleItemIdx } : {}),
         };
       })
     );
@@ -1687,7 +1696,12 @@ export default function TacticsPage() {
       const existing = prevChips.find(
         (c) => c.columnIndex === columnIndex && c.startRowId === targetStartRowId
       );
-      const chipId = existing ? existing.id : createProjectChipId();
+      const baseId = createProjectChipId();
+      const chipId = existing
+        ? existing.id
+        : entry.scheduleItemIdx != null
+          ? `schedule-chip-${entry.projectId}-${entry.scheduleItemIdx}-extra-${baseId}`
+          : baseId;
 
       if (existing) {
         newChips.push({
@@ -2083,13 +2097,16 @@ export default function TacticsPage() {
           : [];
         const scheduleItem = itemIdx != null ? scheduleItems[itemIdx] : null;
         const currentOverride = chipTimeOverrides[chipId];
+        const spanMinutes = getBlockDuration(block, rowIndexMap, timelineRowIds, incrementMinutes);
         let currentMinutes;
         if (currentOverride != null) {
           currentMinutes = currentOverride;
+        } else if (block.durationMinutes) {
+          currentMinutes = block.durationMinutes;
         } else if (scheduleItem) {
-          currentMinutes = parseEstimateLabelToMinutes(scheduleItem.timeValue) ?? block.durationMinutes ?? 60;
+          currentMinutes = parseEstimateLabelToMinutes(scheduleItem.timeValue) ?? spanMinutes;
         } else {
-          currentMinutes = block.durationMinutes ?? 60;
+          currentMinutes = spanMinutes;
         }
         const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
         const rawName = scheduleItem ? (scheduleItem.name ?? '').trim() : '';
@@ -2097,7 +2114,7 @@ export default function TacticsPage() {
         setEditingChipIsTime(true);
         setEditingChipIsCustom(false);
         setEditingChipLabel(currentName);
-        setEditingChipMinutes(String(currentMinutes));
+        setEditingChipMinutes(formatMinutesToHHmm(currentMinutes));
         setEditingChipId(chipId);
         return;
       }
@@ -2106,21 +2123,27 @@ export default function TacticsPage() {
       const isCustom = typeof block.projectId === 'string' && block.projectId.startsWith('custom-');
       const labelValue = block.displayLabel ?? fallbackLabel;
       const currentOverride = chipTimeOverrides[chipId];
-      const currentMinutes = currentOverride ?? block.durationMinutes ?? 0;
+      const storedMinutes = currentOverride ?? block.durationMinutes ?? 0;
+      const currentMinutes = storedMinutes > 0
+        ? storedMinutes
+        : getBlockDuration(block, rowIndexMap, timelineRowIds, incrementMinutes);
       setEditingChipIsTime(true);
       setEditingChipIsCustom(isCustom);
       setEditingChipLabel(isCustom ? labelValue.toUpperCase() : labelValue.toUpperCase());
-      setEditingChipMinutes(String(currentMinutes));
+      setEditingChipMinutes(formatMinutesToHHmm(currentMinutes));
       setEditingChipId(chipId);
     },
-    [getProjectChipById, projectMetadata, scheduleLayout, chipTimeOverrides]
+    [getProjectChipById, projectMetadata, scheduleLayout, chipTimeOverrides, rowIndexMap, timelineRowIds, incrementMinutes]
   );
   const handleConfirmLabelEdit = useCallback(() => {
     if (!editingChipId) return;
     const prevChips = projectChipsRef.current;
     const prevOverrides = chipTimeOverridesRef.current;
     if (editingChipIsTime) {
-      const parsedMins = parseInt(editingChipMinutes, 10);
+      const hhmmMatch = editingChipMinutes.match(/^(\d+)(?:[.,:](\d{1,2}))?$/);
+      const parsedMins = hhmmMatch
+        ? parseInt(hhmmMatch[1], 10) * 60 + parseInt(hhmmMatch[2] ?? '0', 10)
+        : parseInt(editingChipMinutes, 10);
       const trimmedName = editingChipLabel.trim();
       const nextOverrides = Number.isFinite(parsedMins) && parsedMins > 0
         ? { ...prevOverrides, [editingChipId]: parsedMins }
@@ -3111,8 +3134,8 @@ export default function TacticsPage() {
                 <span className="shrink-0 font-semibold text-slate-800" style={{ fontSize: `${13 * textSizeScale}px` }}>:</span>
                 <input
                   ref={editingMinutesRef}
-                  placeholder="min"
-                  className="w-4 shrink-0 bg-transparent pr-0.5 font-semibold text-slate-800 outline-none"
+                  placeholder="H.MM"
+                  className="w-8 shrink-0 bg-transparent pr-0.5 font-semibold text-slate-800 outline-none"
                   style={{ fontSize: `${13 * textSizeScale}px`, borderBottom: '1px solid rgba(0,0,0,0.3)' }}
                   value={editingChipMinutes}
                   onChange={(event) => setEditingChipMinutes(event.target.value)}
