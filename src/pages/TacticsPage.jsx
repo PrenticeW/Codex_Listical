@@ -869,13 +869,6 @@ export default function TacticsPage() {
     });
   }, [displayedWeekDays, totalColumnCount]);
 
-  useEffect(() => {
-    const removedProjectIds = new Set(
-      stagingProjects.filter((p) => p.addedToPlan !== true).map((p) => p.id)
-    );
-    if (removedProjectIds.size === 0) return;
-    setProjectChips((prev) => prev.filter((chip) => !removedProjectIds.has(chip.projectId)));
-  }, [stagingProjects]);
 
   useEffect(() => {
     setSelectedBlockIds((prev) => {
@@ -2555,223 +2548,42 @@ export default function TacticsPage() {
   const prevStagingProjectsRef = useRef(null);
 
   useEffect(() => {
-    // Check if staging projects have changed (by comparing JSON stringify)
-    const stagingProjectsKey = JSON.stringify(stagingProjects.map(p => ({ id: p.id, planSummary: p.planSummary })));
-    const hasProjectsChanged = prevStagingProjectsRef.current !== stagingProjectsKey;
-    prevStagingProjectsRef.current = stagingProjectsKey;
-
-    // Only run if we have data, and either it's first load OR projects changed
-    if (!scheduleLayout?.scheduleItemsByProject || !timelineRowIds.length) return;
-    if (hasInitializedScheduleChips.current && !hasProjectsChanged) return;
-
+    // Canonical schedule chips (those without '-extra-' in their ID) are no longer
+    // created for project columns — the side menu surfaces schedule items instead.
+    // Strip any stale canonical chips persisted from a previous session on mount.
+    // User-placed '-extra-' chips from the side menu are preserved.
     setProjectChips((prev) => {
-      const next = [...prev];
-      const expectedIds = new Set();
-      const baseOffset = 2;
-      // Build a local rowIndexMap for this render
-      const localRowIndexMap = new Map(timelineRowIds.map((id, i) => [id, i]));
-      stagingColumnConfigs.forEach((column, idx) => {
-        if (column.type !== 'project') return;
-        const columnIndex = DAY_COLUMN_COUNT + idx;
-        const scheduleItems = scheduleLayout.scheduleItemsByProject.get(column.project.id) ?? [];
-        let currentRowIdx = baseOffset;
-        scheduleItems.forEach((scheduleItem, itemIdx) => {
-          const chipId = `schedule-chip-${column.project.id}-${itemIdx}`;
-          expectedIds.add(chipId);
-          const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
-          const trimmedName = (scheduleItem.name ?? '').trim();
-          const hasScheduleName = Boolean(trimmedName && trimmedName !== scheduleDefaultText);
-          const displayLabel = hasScheduleName ? trimmedName : null;
-          const minutes = parseEstimateLabelToMinutes(scheduleItem.timeValue);
-          const durationMinutes = Number.isFinite(minutes) ? minutes : incrementMinutes;
-          const span = Math.max(
-            1,
-            Math.ceil(durationMinutes / Math.max(1, incrementMinutes))
-          );
-          const existingIndex = next.findIndex((entry) => entry.id === chipId);
-          if (existingIndex >= 0) {
-            // Preserve the chip's current startRowId (its user-placed time position).
-            // Only recompute endRowId based on new span.
-            // Only update columnIndex if the chip is still in a project column (not user-moved to a weekday column).
-            const existingChip = next[existingIndex];
-            const existingStartRowId = existingChip.startRowId;
-            const existingStartIdx = localRowIndexMap.get(existingStartRowId);
-            const chipIsInProjectColumn = existingChip.columnIndex >= DAY_COLUMN_COUNT;
-            const updatedColumnIndex = chipIsInProjectColumn ? columnIndex : existingChip.columnIndex;
-            if (existingStartIdx != null) {
-              const newEndIdx = Math.min(existingStartIdx + span - 1, timelineRowIds.length - 1);
-              const newEndRowId = timelineRowIds[newEndIdx] ?? existingStartRowId;
-              currentRowIdx = newEndIdx + 1;
-              const needsUpdate =
-                existingChip.displayLabel !== displayLabel ||
-                existingChip.hasScheduleName !== hasScheduleName ||
-                existingChip.durationMinutes !== durationMinutes ||
-                existingChip.endRowId !== newEndRowId ||
-                existingChip.columnIndex !== updatedColumnIndex;
-              if (needsUpdate) {
-                next[existingIndex] = { ...existingChip, displayLabel, hasScheduleName, durationMinutes, endRowId: newEndRowId, columnIndex: updatedColumnIndex };
-              }
-            } else {
-              // existingStartRowId no longer valid in timeline — fall back to sequential placement
-              const startRowIdx = Math.min(currentRowIdx, timelineRowIds.length - 1);
-              const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
-              const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
-              const newEndRowId = timelineRowIds[endRowIdx] ?? startRowId;
-              const newStartMinutes = rowIdToClockMinutes(startRowId, trailingMinuteRows);
-              currentRowIdx = endRowIdx + 1;
-              next[existingIndex] = { ...existingChip, displayLabel, hasScheduleName, durationMinutes, startRowId, endRowId: newEndRowId, startMinutes: newStartMinutes, columnIndex: updatedColumnIndex };
-            }
-            return;
-          }
-          // New chip — place sequentially
-          const startRowIdx = Math.min(currentRowIdx, timelineRowIds.length - 1);
-          const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
-          const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
-          const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
-          const startMinutes = rowIdToClockMinutes(startRowId, trailingMinuteRows);
-          currentRowIdx = endRowIdx + 1;
-          next.push({
-            id: chipId,
-            columnIndex,
-            dayName: null,
-            startRowId,
-            endRowId,
-            startMinutes,
-            projectId: column.project.id,
-            displayLabel,
-            hasScheduleName,
-            durationMinutes,
-          });
-        });
-      });
-      if (!expectedIds.size) return next;
-      // Collect still-valid project ids so user-added extra chips survive
-      const validProjectIds = new Set(
-        [...expectedIds].map((id) => {
-          // id is "schedule-chip-{projectId}-{itemIdx}"
-          const m = id.match(/^schedule-chip-(.+)-\d+$/);
-          return m ? m[1] : null;
-        }).filter(Boolean)
+      const filtered = prev.filter((entry) =>
+        !entry.id.startsWith('schedule-chip-') || entry.id.includes('-extra-')
       );
-      return next.filter((entry) => {
-        if (!entry.id.startsWith('schedule-chip-')) return true;
-        if (expectedIds.has(entry.id)) return true;
-        // Keep user-added extra chips as long as their project is still in plan
-        if (entry.id.includes('-extra-')) {
-          return validProjectIds.has(entry.projectId);
-        }
-        return false;
-      });
+      return filtered.length === prev.length ? prev : filtered;
     });
     hasInitializedScheduleChips.current = true;
-  }, [
-    stagingColumnConfigs,
-    scheduleLayout,
-    timelineRowIds,
-    trailingMinuteRows,
-    setProjectChips,
-    stagingProjects,
-  ]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const resetChips = useCallback((forIncrement) => {
-    const inc = forIncrement ?? incrementMinutes;
     const baseChips = buildInitialSleepBlocks(displayedWeekDays);
-    const rebuiltChips = [...baseChips];
-    if (scheduleLayout?.scheduleItemsByProject && timelineRowIds.length) {
-      const baseOffset = 2;
-      stagingColumnConfigs.forEach((column, idx) => {
-        if (column.type !== 'project') return;
-        const columnIndex = DAY_COLUMN_COUNT + idx;
-        const scheduleItems = scheduleLayout.scheduleItemsByProject.get(column.project.id) ?? [];
-        let currentRowIdx = baseOffset;
-        scheduleItems.forEach((scheduleItem, itemIdx) => {
-          const chipId = `schedule-chip-${column.project.id}-${itemIdx}`;
-          const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
-          const trimmedName = (scheduleItem.name ?? '').trim();
-          const hasScheduleName = Boolean(trimmedName && trimmedName !== scheduleDefaultText);
-          const displayLabel = hasScheduleName ? trimmedName : null;
-          const minutes = parseEstimateLabelToMinutes(scheduleItem.timeValue);
-          const durationMinutes = Number.isFinite(minutes) ? minutes : inc;
-          const span = Math.max(1, Math.ceil(durationMinutes / Math.max(1, inc)));
-          const startRowIdx = Math.min(currentRowIdx, timelineRowIds.length - 1);
-          const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
-          const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
-          const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
-          currentRowIdx = endRowIdx + 1;
-          rebuiltChips.push({
-            id: chipId,
-            columnIndex,
-            dayName: null,
-            startRowId,
-            endRowId,
-            projectId: column.project.id,
-            displayLabel,
-            hasScheduleName,
-            durationMinutes,
-          });
-        });
-      });
-      hasInitializedScheduleChips.current = true;
-    } else {
-      hasInitializedScheduleChips.current = false;
-    }
-    setProjectChips(rebuiltChips);
+    setProjectChips(baseChips);
+    hasInitializedScheduleChips.current = true;
     setSelectedBlockId(null);
     setSelectedCell(null);
     setCellMenu(null);
-  }, [displayedWeekDays, incrementMinutes, stagingColumnConfigs, scheduleLayout, timelineRowIds]);
+  }, [displayedWeekDays]);
 
   const handleClearAllChips = useCallback(() => {
     if (typeof window !== 'undefined') {
       const confirmed = window.confirm(
-        'Clear all chips? This will reset to default sleep blocks and reload schedule items. Custom projects will stay in the dropdown.'
+        'Clear all chips? This will reset to default sleep blocks. Custom projects will stay in the dropdown.'
       );
       if (!confirmed) return;
     }
     const baseChips = buildInitialSleepBlocks(displayedWeekDays);
-    const rebuiltChips = [...baseChips];
-    if (scheduleLayout?.scheduleItemsByProject && timelineRowIds.length) {
-      const baseOffset = 2;
-      stagingColumnConfigs.forEach((column, idx) => {
-        if (column.type !== 'project') return;
-        const columnIndex = DAY_COLUMN_COUNT + idx;
-        const scheduleItems = scheduleLayout.scheduleItemsByProject.get(column.project.id) ?? [];
-        let currentRowIdx = baseOffset;
-        scheduleItems.forEach((scheduleItem, itemIdx) => {
-          const chipId = `schedule-chip-${column.project.id}-${itemIdx}`;
-          const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
-          const trimmedName = (scheduleItem.name ?? '').trim();
-          const hasScheduleName = Boolean(trimmedName && trimmedName !== scheduleDefaultText);
-          const displayLabel = hasScheduleName ? trimmedName : null;
-          const minutes = parseEstimateLabelToMinutes(scheduleItem.timeValue);
-          const durationMinutes = Number.isFinite(minutes) ? minutes : incrementMinutes;
-          const span = Math.max(1, Math.ceil(durationMinutes / Math.max(1, incrementMinutes)));
-          const startRowIdx = Math.min(currentRowIdx, timelineRowIds.length - 1);
-          const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
-          const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
-          const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
-          currentRowIdx = endRowIdx + 1;
-          rebuiltChips.push({
-            id: chipId,
-            columnIndex,
-            dayName: null,
-            startRowId,
-            endRowId,
-            projectId: column.project.id,
-            displayLabel,
-            hasScheduleName,
-            durationMinutes,
-          });
-        });
-      });
-      hasInitializedScheduleChips.current = true;
-    } else {
-      hasInitializedScheduleChips.current = false;
-    }
-    setProjectChips(rebuiltChips);
+    setProjectChips(baseChips);
+    hasInitializedScheduleChips.current = true;
     setSelectedBlockId(null);
     setSelectedCell(null);
     setCellMenu(null);
-  }, [displayedWeekDays, incrementMinutes, stagingColumnConfigs, scheduleLayout, timelineRowIds]);
+  }, [displayedWeekDays]);
 
   // Keyboard shortcuts: Cmd/Ctrl+Z to undo, Cmd/Ctrl+Shift+Z to redo
   useEffect(() => {
