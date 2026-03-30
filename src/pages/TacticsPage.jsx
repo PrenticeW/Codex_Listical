@@ -2860,7 +2860,7 @@ export default function TacticsPage() {
           className="absolute left-0 top-0 flex w-full justify-center"
           style={{
             height: `${blockHeight}px`,
-            zIndex: 10,
+            zIndex: isActive || isEditing ? 11 : 10,
             pointerEvents: 'auto',
           }}
           draggable={!resizingBlockId && !isEditing}
