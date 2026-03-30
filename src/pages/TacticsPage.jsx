@@ -455,7 +455,18 @@ export default function TacticsPage() {
     // Fall back to initial sleep blocks if no saved state
     return buildInitialSleepBlocks(displayedWeekDays);
   });
-  const [selectedBlockId, setSelectedBlockId] = useState(null);
+  const [selectedBlockIds, setSelectedBlockIds] = useState(() => new Set());
+  // Derived: last/primary selected ID (for drag, resize, highlight, paste target)
+  const selectedBlockId = useMemo(() => {
+    const arr = [...selectedBlockIds];
+    return arr.length > 0 ? arr[arr.length - 1] : null;
+  }, [selectedBlockIds]);
+  const setSelectedBlockId = useCallback((idOrUpdater) => {
+    setSelectedBlockIds((prev) => {
+      const next = typeof idOrUpdater === 'function' ? idOrUpdater(prev.size > 0 ? [...prev][prev.size - 1] : null) : idOrUpdater;
+      return next ? new Set([next]) : new Set();
+    });
+  }, []);
   const [resizingBlockId, setResizingBlockId] = useState(null);
   const [rowMetrics, setRowMetrics] = useState({});
   const [dragPreview, setDragPreview] = useState(null);
@@ -849,9 +860,10 @@ export default function TacticsPage() {
   }, [stagingProjects]);
 
   useEffect(() => {
-    setSelectedBlockId((prev) =>
-      prev && projectChips.some((block) => block.id === prev) ? prev : null
-    );
+    setSelectedBlockIds((prev) => {
+      const next = new Set([...prev].filter((id) => projectChips.some((block) => block.id === id)));
+      return next.size === prev.size ? prev : next;
+    });
   }, [projectChips]);
   useEffect(() => {
     if (!resizingBlockId) return;
@@ -1646,124 +1658,230 @@ export default function TacticsPage() {
     [cellMenu, closeCellMenu, executeCommand, selectedCell, setProjectChips, setSelectedBlockId, setSelectedCell]
   );
   const handleCopySelectedBlock = useCallback(() => {
-    if (!selectedBlockId) return;
-    const block = getProjectChipById(selectedBlockId);
-    if (!block) return;
-    setClipboardProject({
-      projectId: block.projectId ?? 'sleep',
-      displayLabel: block.displayLabel ?? null,
-      startRowId: block.startRowId,
-      endRowId: block.endRowId,
-    });
-  }, [getProjectChipById, selectedBlockId]);
-  const handlePasteIntoCell = useCallback(() => {
-    if (!clipboardProject || !selectedCell) return;
-    const baseRowId = selectedCell.rowId;
-    if (!baseRowId) return;
-    const rowIdx = rowIndexMap.get(baseRowId);
-    if (rowIdx == null) return;
-    const sourceStartIdx = rowIndexMap.get(
-      clipboardProject.startRowId ?? clipboardProject.endRowId ?? baseRowId
-    );
-    const sourceEndIdx = rowIndexMap.get(
-      clipboardProject.endRowId ?? clipboardProject.startRowId ?? baseRowId
-    );
-    if (sourceStartIdx == null || sourceEndIdx == null) return;
-    const span = sourceEndIdx - sourceStartIdx;
-    const targetEndIdx = Math.min(
-      Math.max(rowIdx + span, 0),
-      timelineRowIds.length - 1
-    );
-    const endRowId = timelineRowIds[targetEndIdx] ?? baseRowId;
-    handleProjectSelection(clipboardProject.projectId, {
-      startRowIdOverride: baseRowId,
-      endRowIdOverride: endRowId,
-      displayLabelOverride: clipboardProject.displayLabel ?? undefined,
-    });
-  }, [
-    clipboardProject,
-    selectedCell,
-    handleProjectSelection,
-    rowIndexMap,
-    timelineRowIds,
-  ]);
-  useEffect(() => {
-    saveTacticsChipsState({ projectChips, customProjects, chipTimeOverrides }, currentYear);
-  }, [projectChips, customProjects, chipTimeOverrides, currentYear]);
-  const handleRemoveSelectedChip = useCallback(() => {
-    if (!removableBlockId) return;
-
-    const prevChips = projectChipsRef.current;
-    const computeNextChips = (prev) => {
-      const chip = prev.find((b) => b.id === removableBlockId);
-      const filtered = dedupeChipsById(prev).filter((block) => block.id !== removableBlockId);
-
-      // If the removed chip was a schedule chip in a day column, restore its canonical
-      // chip in the project column so the item reappears as available.
-      const isScheduleChip =
-        chip &&
-        chip.id.startsWith('schedule-chip-') &&
-        chip.columnIndex < DAY_COLUMN_COUNT &&
-        chip.projectId &&
-        chip.projectId !== 'sleep' &&
-        chip.projectId !== 'rest' &&
-        chip.projectId !== 'buffer';
-
-      if (isScheduleChip) {
-        const { projectId } = chip;
-        const prefix = `schedule-chip-${projectId}-`;
-        const rest = chip.id.slice(prefix.length);
-        const itemIdx = parseInt(rest, 10);
-        if (Number.isFinite(itemIdx)) {
-          const canonicalId = `schedule-chip-${projectId}-${itemIdx}`;
-          const alreadyExists = filtered.some((c) => c.id === canonicalId);
-          if (!alreadyExists) {
-            const colConfig = stagingColumnConfigsRef.current.find(
-              (c) => c.type === 'project' && c.project?.id === projectId
-            );
-            if (colConfig) {
-              const stagingIdx = stagingColumnConfigsRef.current.indexOf(colConfig);
-              const projectColumnIndex = DAY_COLUMN_COUNT + stagingIdx;
-              const schedItems = scheduleLayout?.scheduleItemsByProject?.get(projectId) ?? [];
-              const scheduleItem = schedItems[itemIdx];
-              if (scheduleItem) {
-                const minutes = parseEstimateLabelToMinutes(scheduleItem.timeValue);
-                const durationMinutes = Number.isFinite(minutes) ? minutes : incrementMinutes;
-                const span = Math.max(1, Math.ceil(durationMinutes / Math.max(1, incrementMinutes)));
-                // Place after any existing schedule chips in the project column
-                const existingInCol = filtered.filter(
-                  (c) => c.columnIndex === projectColumnIndex && c.id.startsWith('schedule-chip-')
-                );
-                const localRowIndexMap = new Map(timelineRowIds.map((id, i) => [id, i]));
-                let startRowIdx = 2;
-                existingInCol.forEach((c) => {
-                  const endIdx = localRowIndexMap.get(c.endRowId);
-                  if (endIdx != null && endIdx + 1 > startRowIdx) startRowIdx = endIdx + 1;
-                });
-                startRowIdx = Math.min(startRowIdx, timelineRowIds.length - 1);
-                const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
-                const newStartRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
-                const newEndRowId = timelineRowIds[endRowIdx] ?? newStartRowId;
-                const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
-                const trimmedName = (scheduleItem.name ?? '').trim();
-                const hasScheduleName = Boolean(trimmedName && trimmedName !== scheduleDefaultText);
-                filtered.push({
-                  id: canonicalId,
-                  columnIndex: projectColumnIndex,
-                  startRowId: newStartRowId,
-                  endRowId: newEndRowId,
-                  startMinutes: rowIdToClockMinutes(newStartRowId, trailingMinuteRows),
-                  projectId,
-                  displayLabel: hasScheduleName ? trimmedName : null,
-                  hasScheduleName,
-                  durationMinutes,
-                });
+    if (selectedBlockIds.size === 0) return;
+    // Collect all selected chips, sorted by their row index so paste order is top-to-bottom
+    const blocks = [...selectedBlockIds]
+      .map((id) => getProjectChipById(id))
+      .filter(Boolean)
+      .sort((a, b) => {
+        const ai = rowIndexMap.get(a.startRowId) ?? 0;
+        const bi = rowIndexMap.get(b.startRowId) ?? 0;
+        return ai - bi;
+      });
+    if (blocks.length === 0) return;
+    setClipboardProject(
+      blocks.map((block) => {
+        const timeOverride = chipTimeOverrides[block.id] ?? null;
+        // For schedule chips, derive the effective minutes from the schedule item's time value
+        // so that chips with sub-increment durations (e.g. 15 min on a 60-min grid) are
+        // preserved correctly on paste. block.durationMinutes may be clamped to incrementMinutes
+        // by buildAndAddScheduleItemChip, so it can't be trusted as the semantic time.
+        let effectiveDurationMinutes = timeOverride ?? block.durationMinutes ?? null;
+        if (timeOverride == null && block.id.startsWith('schedule-chip-')) {
+          const extraMarker = block.id.indexOf('-extra-chip-');
+          const idForParsing = extraMarker !== -1 ? block.id.slice(0, extraMarker) : block.id;
+          const itemIdxMatch = idForParsing.match(/-(\d+)$/);
+          const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
+          if (itemIdx != null) {
+            const scheduleItems = scheduleLayout?.scheduleItemsByProject?.get(block.projectId) ?? [];
+            const scheduleItem = scheduleItems[itemIdx];
+            if (scheduleItem) {
+              const parsedMins = parseEstimateLabelToMinutes(scheduleItem.timeValue);
+              if (Number.isFinite(parsedMins) && parsedMins > 0) {
+                effectiveDurationMinutes = parsedMins;
               }
             }
           }
         }
+        return {
+          projectId: block.projectId ?? 'sleep',
+          displayLabel: block.displayLabel ?? null,
+          startRowId: block.startRowId,
+          endRowId: block.endRowId,
+          timeOverride,
+          durationMinutes: effectiveDurationMinutes,
+        };
+      })
+    );
+  }, [getProjectChipById, selectedBlockIds, rowIndexMap, chipTimeOverrides, scheduleLayout]);
+  const handlePasteIntoCell = useCallback(() => {
+    if (!clipboardProject || !selectedCell) return;
+    const baseRowId = selectedCell.rowId;
+    if (!baseRowId) return;
+    const baseRowIdx = rowIndexMap.get(baseRowId);
+    if (baseRowIdx == null) return;
+
+    // Normalise clipboard to always be an array
+    const entries = Array.isArray(clipboardProject) ? clipboardProject : [clipboardProject];
+    if (entries.length === 0) return;
+
+    const prevChips = projectChipsRef.current;
+    const prevOverrides = chipTimeOverridesRef.current;
+    const { columnIndex } = selectedCell;
+    let cursorIdx = baseRowIdx;
+    const newChips = [];
+    const overridesToAdd = {};
+
+    entries.forEach((entry) => {
+      const sourceStartIdx = rowIndexMap.get(entry.startRowId ?? entry.endRowId ?? baseRowId) ?? 0;
+      const sourceEndIdx = rowIndexMap.get(entry.endRowId ?? entry.startRowId ?? baseRowId) ?? 0;
+      const span = Math.max(0, sourceEndIdx - sourceStartIdx);
+      const targetStartIdx = cursorIdx;
+      const targetEndIdx = Math.min(targetStartIdx + span, timelineRowIds.length - 1);
+      const targetStartRowId = timelineRowIds[targetStartIdx];
+      const targetEndRowId = timelineRowIds[targetEndIdx] ?? targetStartRowId;
+      if (!targetStartRowId) return;
+
+      const existing = prevChips.find(
+        (c) => c.columnIndex === columnIndex && c.startRowId === targetStartRowId
+      );
+      const chipId = existing ? existing.id : createProjectChipId();
+
+      if (existing) {
+        newChips.push({
+          ...existing,
+          projectId: entry.projectId,
+          endRowId: targetEndRowId,
+          displayLabel: entry.displayLabel ?? existing.displayLabel,
+          ...(entry.durationMinutes != null ? { durationMinutes: entry.durationMinutes } : {}),
+        });
+      } else {
+        newChips.push({
+          id: chipId,
+          columnIndex,
+          dayName: columnIndex < DAY_COLUMN_COUNT ? (displayedWeekDays[columnIndex] ?? null) : null,
+          startRowId: targetStartRowId,
+          endRowId: targetEndRowId,
+          projectId: entry.projectId,
+          ...(entry.displayLabel != null ? { displayLabel: entry.displayLabel } : {}),
+          ...(entry.durationMinutes != null ? { durationMinutes: entry.durationMinutes } : {}),
+        });
       }
 
+      if (entry.timeOverride != null) {
+        overridesToAdd[chipId] = entry.timeOverride;
+      }
+
+      cursorIdx = targetEndIdx + 1;
+    });
+
+    if (newChips.length === 0) return;
+
+    const nextChips = (() => {
+      const updated = prevChips.map((c) => {
+        const replacement = newChips.find((n) => n.id === c.id);
+        return replacement ?? c;
+      });
+      const added = newChips.filter((c) => !prevChips.some((p) => p.id === c.id));
+      return [...updated, ...added];
+    })();
+
+    const nextOverrides = Object.keys(overridesToAdd).length > 0
+      ? { ...prevOverrides, ...overridesToAdd }
+      : prevOverrides;
+
+    executeCommand({
+      execute: () => {
+        setProjectChips(nextChips);
+        if (nextOverrides !== prevOverrides) setChipTimeOverrides(nextOverrides);
+      },
+      undo: () => {
+        setProjectChips(prevChips);
+        if (nextOverrides !== prevOverrides) setChipTimeOverrides(prevOverrides);
+      },
+    });
+    setSelectedCell(null);
+    closeCellMenu();
+  }, [
+    clipboardProject,
+    selectedCell,
+    rowIndexMap,
+    timelineRowIds,
+    createProjectChipId,
+    displayedWeekDays,
+    executeCommand,
+    setProjectChips,
+    setChipTimeOverrides,
+    setSelectedCell,
+    closeCellMenu,
+  ]);
+  useEffect(() => {
+    saveTacticsChipsState({ projectChips, customProjects, chipTimeOverrides }, currentYear);
+  }, [projectChips, customProjects, chipTimeOverrides, currentYear]);
+  const restoreCanonicalScheduleChip = useCallback((chip, filtered) => {
+    const isScheduleChip =
+      chip &&
+      chip.id.startsWith('schedule-chip-') &&
+      chip.columnIndex < DAY_COLUMN_COUNT &&
+      chip.projectId &&
+      chip.projectId !== 'sleep' &&
+      chip.projectId !== 'rest' &&
+      chip.projectId !== 'buffer';
+    if (!isScheduleChip) return;
+    const { projectId } = chip;
+    const prefix = `schedule-chip-${projectId}-`;
+    const rest = chip.id.slice(prefix.length);
+    const itemIdx = parseInt(rest, 10);
+    if (!Number.isFinite(itemIdx)) return;
+    const canonicalId = `schedule-chip-${projectId}-${itemIdx}`;
+    if (filtered.some((c) => c.id === canonicalId)) return;
+    const colConfig = stagingColumnConfigsRef.current.find(
+      (c) => c.type === 'project' && c.project?.id === projectId
+    );
+    if (!colConfig) return;
+    const stagingIdx = stagingColumnConfigsRef.current.indexOf(colConfig);
+    const projectColumnIndex = DAY_COLUMN_COUNT + stagingIdx;
+    const schedItems = scheduleLayout?.scheduleItemsByProject?.get(projectId) ?? [];
+    const scheduleItem = schedItems[itemIdx];
+    if (!scheduleItem) return;
+    const minutes = parseEstimateLabelToMinutes(scheduleItem.timeValue);
+    const durationMinutes = Number.isFinite(minutes) ? minutes : incrementMinutes;
+    const span = Math.max(1, Math.ceil(durationMinutes / Math.max(1, incrementMinutes)));
+    const existingInCol = filtered.filter(
+      (c) => c.columnIndex === projectColumnIndex && c.id.startsWith('schedule-chip-')
+    );
+    const localRowIndexMap = new Map(timelineRowIds.map((id, i) => [id, i]));
+    let startRowIdx = 2;
+    existingInCol.forEach((c) => {
+      const endIdx = localRowIndexMap.get(c.endRowId);
+      if (endIdx != null && endIdx + 1 > startRowIdx) startRowIdx = endIdx + 1;
+    });
+    startRowIdx = Math.min(startRowIdx, timelineRowIds.length - 1);
+    const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
+    const newStartRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
+    const newEndRowId = timelineRowIds[endRowIdx] ?? newStartRowId;
+    const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
+    const trimmedName = (scheduleItem.name ?? '').trim();
+    const hasScheduleName = Boolean(trimmedName && trimmedName !== scheduleDefaultText);
+    filtered.push({
+      id: canonicalId,
+      columnIndex: projectColumnIndex,
+      startRowId: newStartRowId,
+      endRowId: newEndRowId,
+      startMinutes: rowIdToClockMinutes(newStartRowId, trailingMinuteRows),
+      projectId,
+      displayLabel: hasScheduleName ? trimmedName : null,
+      hasScheduleName,
+      durationMinutes,
+    });
+  }, [scheduleLayout, incrementMinutes, timelineRowIds, trailingMinuteRows]);
+
+  const handleRemoveSelectedChip = useCallback(() => {
+    if (!removableBlockId) return;
+
+    // Build the set of IDs to remove: context-menu target, or all selected chips
+    const idsToRemove = cellMenuBlockId
+      ? new Set([cellMenuBlockId])
+      : new Set(selectedBlockIds);
+    if (idsToRemove.size === 0) return;
+
+    const prevChips = projectChipsRef.current;
+    const computeNextChips = (prev) => {
+      const deduped = dedupeChipsById(prev);
+      const removedChips = deduped.filter((b) => idsToRemove.has(b.id));
+      const filtered = deduped.filter((block) => !idsToRemove.has(block.id));
+      // Restore canonical schedule chips for any day-column schedule chips that were removed
+      removedChips.forEach((chip) => restoreCanonicalScheduleChip(chip, filtered));
       return filtered;
     };
     const nextChips = computeNextChips(prevChips);
@@ -1772,17 +1890,19 @@ export default function TacticsPage() {
       execute: () => setProjectChips(nextChips),
       undo: () => setProjectChips(prevChips),
     });
-    setSelectedBlockId((prev) => (prev === removableBlockId ? null : prev));
+    setSelectedBlockIds((prev) => {
+      const next = new Set([...prev].filter((id) => !idsToRemove.has(id)));
+      return next;
+    });
     closeCellMenu();
   }, [
     closeCellMenu,
     executeCommand,
     removableBlockId,
+    cellMenuBlockId,
+    selectedBlockIds,
     setProjectChips,
-    scheduleLayout,
-    incrementMinutes,
-    timelineRowIds,
-    trailingMinuteRows,
+    restoreCanonicalScheduleChip,
   ]);
   const finishColorEdit = useCallback(() => {
     setColorEditorProjectId(null);
@@ -2138,6 +2258,13 @@ export default function TacticsPage() {
           if (Number.isFinite(parsedMins) && parsedMins > 0 && parsedMins < incrementMinutes) {
             duration = parsedMins;
           }
+        }
+      }
+      if (duration == null && isSingleCell) {
+        const overrideMins = chipTimeOverrides[block.id];
+        const effectiveMins = overrideMins ?? block.durationMinutes ?? null;
+        if (Number.isFinite(effectiveMins) && effectiveMins > 0) {
+          duration = effectiveMins;
         }
       }
       if (duration == null) {
@@ -2651,13 +2778,13 @@ export default function TacticsPage() {
       if (event.key !== 'Delete' && event.key !== 'Backspace') return;
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable) return;
-      if (!selectedBlockId) return;
+      if (selectedBlockIds.size === 0) return;
       event.preventDefault();
       handleRemoveSelectedChip();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedBlockId, handleRemoveSelectedChip]);
+  }, [selectedBlockIds, handleRemoveSelectedChip]);
 
   // Compute the minimum width needed for column 0 to fit its longest string
   const col0MinWidth = useMemo(() => {
@@ -2841,7 +2968,20 @@ export default function TacticsPage() {
         }
         rawLabel = timeStr != null ? `${baseName}: ${timeStr}` : baseName;
       } else {
-        rawLabel = block.displayLabel ?? metadata?.label ?? 'Project';
+        const baseName = block.displayLabel ?? metadata?.label ?? 'Project';
+        const overrideMins = chipTimeOverrides[chipId];
+        const effectiveMins = overrideMins ?? block.durationMinutes ?? null;
+        const isMultiRow = block.endRowId && block.endRowId !== block.startRowId;
+        const showTime = !isMultiRow && Number.isFinite(effectiveMins) && effectiveMins > 0 &&
+          (overrideMins != null || effectiveMins < incrementMinutes);
+        if (showTime) {
+          const h = Math.floor(effectiveMins / 60);
+          const m = effectiveMins % 60;
+          const timeStr = h === 0 ? `${m}` : m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
+          rawLabel = `${baseName}: ${timeStr}`;
+        } else {
+          rawLabel = baseName;
+        }
       }
       // Compute sleep time info for sleep chips
       let sleepTimeInfo = null;
@@ -2873,7 +3013,7 @@ export default function TacticsPage() {
       const backgroundColor = metadata?.color ?? '#d9d9d9';
       const textColor = metadata?.textColor ?? '#000';
       const fontWeight = metadata?.fontWeight ?? 600;
-      const isActive = highlightedBlockId === block.id;
+      const isActive = highlightedBlockId === block.id || selectedBlockIds.has(block.id);
       const blockHeight = getBlockHeight(block.startRowId, block.endRowId);
       const isCustomProject =
         typeof block.projectId === 'string' && block.projectId.startsWith('custom-');
@@ -2932,7 +3072,19 @@ export default function TacticsPage() {
             onClick={(event) => {
               event.stopPropagation();
               setSelectedCell(null);
-              setSelectedBlockId((prev) => (prev === chipId ? null : chipId));
+              if (event.shiftKey) {
+                setSelectedBlockIds((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(chipId)) {
+                    next.delete(chipId);
+                  } else {
+                    next.add(chipId);
+                  }
+                  return next;
+                });
+              } else {
+                setSelectedBlockIds((prev) => (prev.size === 1 && prev.has(chipId) ? new Set() : new Set([chipId])));
+              }
             }}
             onDoubleClick={(event) => {
               event.stopPropagation();
@@ -3055,6 +3207,7 @@ export default function TacticsPage() {
       handleResizeMouseDown,
       handleSleepDragStart,
       highlightedBlockId,
+      selectedBlockIds,
       projectMetadata,
       resizingBlockId,
       editingChipId,
