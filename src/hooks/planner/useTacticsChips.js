@@ -24,8 +24,10 @@ const DAY_COLUMN_COUNT = 7;
 function formatDuration(minutes) {
   if (!Number.isFinite(minutes) || minutes <= 0) return null;
   const hours = Math.floor(minutes / 60);
-  const remaining = Math.abs(minutes % 60);
-  return `${hours}:${remaining.toString().padStart(2, '0')}`;
+  const remaining = minutes % 60;
+  if (hours > 0 && remaining > 0) return `${hours} hour${hours !== 1 ? 's' : ''} ${remaining} minutes`;
+  if (hours > 0) return `${hours} hour${hours !== 1 ? 's' : ''}`;
+  return `${remaining} minutes`;
 }
 
 /**

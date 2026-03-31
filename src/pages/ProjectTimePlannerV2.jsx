@@ -770,23 +770,48 @@ export default function ProjectTimePlannerV2() {
       if (!isMounted) return;
 
       setData(prevData => {
-        // Build set of existing chip-based subproject header IDs
+        const currentChipIds = new Set(tacticsChips.map(c => c.id));
+
+        // Build label lookup for all current chips
+        const chipLabelMap = new Map(
+          tacticsChips.map(chip => {
+            const durationLabel = chip.formattedDuration
+              ? `${chip.formattedDuration} of ${chip.displayLabel || chip.projectNickname} on ${chip.dayName}`
+              : `${chip.displayLabel || chip.projectNickname} on ${chip.dayName}`;
+            return [chip.id, durationLabel];
+          })
+        );
+
+        // Remove rows for chips that no longer exist; update subprojectName on existing ones
+        let changed = false;
+        const filteredData = prevData
+          .filter(row => {
+            if (row._rowType === 'subprojectHeader' && row._chipId && !currentChipIds.has(row._chipId)) {
+              changed = true;
+              return false;
+            }
+            return true;
+          })
+          .map(row => {
+            if (row._rowType === 'subprojectHeader' && row._chipId && chipLabelMap.has(row._chipId)) {
+              const newLabel = chipLabelMap.get(row._chipId);
+              if (row.subprojectName !== newLabel) {
+                changed = true;
+                return { ...row, subprojectName: newLabel };
+              }
+            }
+            return row;
+          });
+
+        // Find chips that don't already have a row
         const existingChipHeaderIds = new Set(
-          prevData
+          filteredData
             .filter(row => row._rowType === 'subprojectHeader' && row._chipId)
             .map(row => row._chipId)
         );
-
-        // Find chips that don't already have a row
         const newChips = tacticsChips.filter(chip => !existingChipHeaderIds.has(chip.id));
 
-        // Remove subprojectHeader rows for chips that no longer exist
-        const currentChipIds = new Set(tacticsChips.map(c => c.id));
-        const filteredData = prevData.filter(row =>
-          !(row._rowType === 'subprojectHeader' && row._chipId && !currentChipIds.has(row._chipId))
-        );
-
-        if (newChips.length === 0 && filteredData.length === prevData.length) return prevData;
+        if (newChips.length === 0 && !changed) return prevData;
 
         const newData = [...filteredData];
 
@@ -817,9 +842,7 @@ export default function ProjectTimePlannerV2() {
           }
 
           const chipGroupId = `chip-${chip.id}`;
-          const durationLabel = chip.formattedDuration
-            ? `${chip.formattedDuration} of ${chip.displayLabel || chip.projectNickname} on ${chip.dayName}`
-            : `${chip.displayLabel || chip.projectNickname} on ${chip.dayName}`;
+          const durationLabel = chipLabelMap.get(chip.id);
 
           const subprojectHeaderRow = {
             id: `chip-header-${chip.id}`,
