@@ -1760,6 +1760,7 @@ export default function TacticsPage() {
         if (nextOverrides !== prevOverrides) setChipTimeOverrides(prevOverrides);
       },
     });
+    setSelectedBlockIds(new Set(newChips.map((c) => c.id)));
     setSelectedCell(null);
     closeCellMenu();
   }, [
@@ -1772,6 +1773,7 @@ export default function TacticsPage() {
     executeCommand,
     setProjectChips,
     setChipTimeOverrides,
+    setSelectedBlockIds,
     setSelectedCell,
     closeCellMenu,
   ]);
