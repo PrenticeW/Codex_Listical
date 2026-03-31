@@ -3,7 +3,7 @@
  * Manages all planner settings with localStorage persistence
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import useAutoPersist from '../common/useAutoPersist';
 import {
   readColumnSizing,
@@ -28,6 +28,7 @@ import {
   saveTotalDays,
   readVisibleDayColumns,
   saveVisibleDayColumns,
+  PLANNER_START_DATE_EVENT,
 } from '../../utils/planner/storage';
 import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
 
@@ -81,6 +82,18 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
   });
   const [sizeScale, setSizeScale] = useState(() => readSizeScale(projectId, yearNumber));
   const [startDate, setStartDate] = useState(() => readStartDate(projectId, yearNumber));
+
+  // Refresh startDate when another page (e.g. Plan's "Send to System") writes it externally
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.yearNumber === yearNumber) {
+        setStartDate(e.detail.startDate);
+      }
+    };
+    window.addEventListener(PLANNER_START_DATE_EVENT, handler);
+    return () => window.removeEventListener(PLANNER_START_DATE_EVENT, handler);
+  }, [yearNumber]);
+
   const [showRecurring, setShowRecurring] = useState(() => readShowRecurring(projectId, yearNumber));
   const [showSubprojects, setShowSubprojects] = useState(() => readShowSubprojects(projectId, yearNumber));
   const [showMaxMinRows, setShowMaxMinRows] = useState(() => readShowMaxMinRows(projectId, yearNumber));

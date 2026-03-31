@@ -141,8 +141,10 @@ export const readStartDate = (projectId = DEFAULT_PROJECT_ID, yearNumber = null)
   }
 };
 
+export const PLANNER_START_DATE_EVENT = 'planner-start-date-update';
+
 /**
- * Saves start date for a project
+ * Saves start date for a project and fires a custom event so System refreshes.
  * @param {string} startDate - Start date in YYYY-MM-DD format
  * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
  * @param {number|null} yearNumber - Year number (null for year-agnostic)
@@ -151,6 +153,7 @@ export const saveStartDate = (startDate, projectId = DEFAULT_PROJECT_ID, yearNum
   try {
     const key = getProjectKey(START_DATE_KEY_TEMPLATE, projectId, yearNumber);
     storage.setItem(key, startDate);
+    window.dispatchEvent(new CustomEvent(PLANNER_START_DATE_EVENT, { detail: { startDate, projectId, yearNumber } }));
   } catch (error) {
     console.error('Failed to save start date', error);
   }

@@ -276,14 +276,18 @@ export default function ProjectTimePlannerV2() {
 
       if (monthRowIndex === -1 || weekRowIndex === -1 || dayRowIndex === -1) return prevData;
 
-      // Check if update is needed by comparing current spans length with totalDays
+      // Check if update is needed by comparing current day labels with expected dates
+      const currentDayRow = prevData[dayRowIndex];
+      const firstExpectedDay = dates[0];
+      const firstExpectedLabel = firstExpectedDay
+        ? `${firstExpectedDay.getDate().toString().padStart(2, '0')}-${firstExpectedDay.toLocaleDateString('en-US', { month: 'short' })}`
+        : null;
+      const currentFirstDayLabel = currentDayRow?.[`day-0`];
       const currentMonthRow = prevData[monthRowIndex];
-
-      // Calculate expected number of days from current spans
       const currentDaysInSpans = currentMonthRow._monthSpans?.reduce((sum, span) => sum + span.span, 0) || 0;
 
-      // If the spans already match totalDays, no update needed
-      if (currentDaysInSpans === totalDays) {
+      // If spans match totalDays AND the first day label matches, no update needed
+      if (currentDaysInSpans === totalDays && currentFirstDayLabel === firstExpectedLabel) {
         return prevData;
       }
 
@@ -661,18 +665,11 @@ export default function ProjectTimePlannerV2() {
           }
         });
 
-        // Update projectName and projectTagline on existing header rows when staging data changes
-        const updatedData = prevData.map(row => {
-          if (row._rowType === 'projectHeader' && existingHeaderIds.has(row.projectNickname)) {
-            const key = row.projectNickname;
-            const fullProjectName = projectNamesMap[key] || key;
-            const tagline = projectTaglinesMap?.[key] || '';
-            if (row.projectName !== fullProjectName || row.projectTagline !== tagline) {
-              return { ...row, projectName: fullProjectName, projectTagline: tagline };
-            }
-          }
-          return row;
-        });
+        // Do not sync projectName/projectTagline from staging onto existing rows.
+        // Once a project header row exists in System, the user can edit its name/tagline
+        // directly and those edits must be preserved. The staging values are only used
+        // when first inserting a new project header row (below).
+        const updatedData = prevData;
 
         const newProjects = projects.filter(k => k !== '-' && !existingHeaderIds.has(k));
         if (newProjects.length === 0) return updatedData;
@@ -782,7 +779,8 @@ export default function ProjectTimePlannerV2() {
           })
         );
 
-        // Remove rows for chips that no longer exist; update subprojectName on existing ones
+        // Remove rows for chips that no longer exist.
+        // Do not update subprojectName on existing rows — the user may have edited it directly.
         let changed = false;
         const filteredData = prevData
           .filter(row => {
@@ -791,16 +789,6 @@ export default function ProjectTimePlannerV2() {
               return false;
             }
             return true;
-          })
-          .map(row => {
-            if (row._rowType === 'subprojectHeader' && row._chipId && chipLabelMap.has(row._chipId)) {
-              const newLabel = chipLabelMap.get(row._chipId);
-              if (row.subprojectName !== newLabel) {
-                changed = true;
-                return { ...row, subprojectName: newLabel };
-              }
-            }
-            return row;
           });
 
         // Find chips that don't already have a row

@@ -1,4 +1,5 @@
 import { GripVertical, ChevronRight, ChevronDown } from 'lucide-react';
+import { useState } from 'react';
 
 /**
  * ProjectRow Component
@@ -42,6 +43,7 @@ export default function ProjectRow({
   handleEditCancel,
   handleEditKeyDown,
 }) {
+  const [taglineEditValue, setTaglineEditValue] = useState('');
   const rowId = row.original.id;
   const rowType = row.original._rowType; // 'projectHeader', 'subprojectHeader', 'projectGeneral', 'projectUnscheduled', or archived variants
   const projectNickname = row.original.projectNickname || '';
@@ -203,28 +205,36 @@ export default function ProjectRow({
                     flexShrink: 0,
                     flexGrow: 0,
                     height: `${rowHeight}px`,
-                    userSelect: 'none',
+                    userSelect: isEditing ? 'text' : 'none',
                     boxSizing: 'border-box',
                   }}
                   className="p-0"
                   onMouseDown={(e) => {
+                    if (isEditing) return;
                     if ((isHeader || isSubprojectHeader) && handleCellMouseDown) {
                       handleCellMouseDown(e, rowId, editableColumnId);
                     }
                   }}
                   onMouseEnter={(e) => {
+                    if (isEditing) return;
                     if ((isHeader || isSubprojectHeader) && handleCellMouseEnter) {
                       handleCellMouseEnter(e, rowId, editableColumnId);
                     }
                   }}
                   onDoubleClick={(e) => {
                     if ((isHeader || isSubprojectHeader) && handleCellDoubleClick) {
-                      handleCellDoubleClick(rowId, editableColumnId, displayLabel);
+                      // For project headers, pre-fill with projectName (the actual field being edited)
+                      // and initialise tagline edit state
+                      const initialValue = isHeader ? projectName : displayLabel;
+                      if (isHeader) {
+                        setTaglineEditValue(projectTagline);
+                      }
+                      handleCellDoubleClick(rowId, editableColumnId, initialValue);
                     }
                   }}
                 >
                   <div
-                    className={`h-full flex items-center gap-2 ${(isHeader || isSubprojectHeader) && groupId ? 'cursor-pointer' : ''} ${isSelected ? 'selected-cell' : ''}`}
+                    className={`h-full flex items-center gap-2 ${(isHeader || isSubprojectHeader) && groupId && !isEditing ? 'cursor-pointer' : ''} ${isSelected ? 'selected-cell' : ''}`}
                     style={{
                       fontSize: `${cellFontSize}px`,
                       minHeight: `${rowHeight}px`,
@@ -247,37 +257,123 @@ export default function ProjectRow({
                       isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />
                     )}
                     {isEditing ? (
-                      <input
-                        type="text"
-                        value={editValue}
-                        onChange={(e) => {
-                          if (setEditValue) {
-                            setEditValue(e.target.value);
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (handleEditKeyDown) {
-                            handleEditKeyDown(e, rowId, editableColumnId, e.target.value);
-                          }
-                        }}
-                        onBlur={() => {
-                          if (handleEditComplete) {
-                            handleEditComplete(rowId, editableColumnId, editValue);
-                          }
-                        }}
-                        autoFocus
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          border: 'none',
-                          outline: 'none',
-                          background: 'transparent',
-                          fontSize: `${cellFontSize}px`,
-                          fontWeight: '600',
-                          padding: 0,
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                      />
+                      isHeader ? (
+                        // Project headers: two inputs for name and tagline
+                        <div style={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%', gap: 0 }} onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            value={editValue}
+                            onChange={(e) => setEditValue?.(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                // Commit both name and tagline
+                                handleEditComplete?.(rowId, editableColumnId, editValue);
+                                if (taglineEditValue !== projectTagline && handleEditComplete) {
+                                  // Tagline change is committed as a separate command via a direct call
+                                  handleEditComplete(rowId, 'projectTagline', taglineEditValue);
+                                }
+                              } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                setTaglineEditValue('');
+                                handleEditCancel?.(rowId, editableColumnId);
+                              } else if (e.key === 'Tab') {
+                                e.preventDefault();
+                                // Move focus to tagline input
+                                e.currentTarget.parentElement?.querySelector('.tagline-input')?.focus();
+                              }
+                            }}
+                            onBlur={(e) => {
+                              // Only commit if focus is leaving the whole editing area (not moving to tagline)
+                              if (!e.currentTarget.parentElement?.contains(e.relatedTarget)) {
+                                handleEditComplete?.(rowId, editableColumnId, editValue);
+                                if (taglineEditValue !== projectTagline && handleEditComplete) {
+                                  handleEditComplete(rowId, 'projectTagline', taglineEditValue);
+                                }
+                              }
+                            }}
+                            autoFocus
+                            style={{
+                              flex: '0 1 auto',
+                              minWidth: 0,
+                              height: '100%',
+                              border: 'none',
+                              outline: 'none',
+                              background: 'transparent',
+                              fontSize: `${cellFontSize}px`,
+                              fontWeight: '700',
+                              textTransform: 'uppercase',
+                              padding: 0,
+                            }}
+                          />
+                          <span style={{ fontWeight: 400, opacity: 0.7, flexShrink: 0, padding: '0 3px' }}>:</span>
+                          <input
+                            type="text"
+                            className="tagline-input"
+                            value={taglineEditValue}
+                            onChange={(e) => setTaglineEditValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleEditComplete?.(rowId, editableColumnId, editValue);
+                                if (taglineEditValue !== projectTagline && handleEditComplete) {
+                                  handleEditComplete(rowId, 'projectTagline', taglineEditValue);
+                                }
+                              } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                setTaglineEditValue('');
+                                handleEditCancel?.(rowId, editableColumnId);
+                              }
+                            }}
+                            onBlur={(e) => {
+                              if (!e.currentTarget.parentElement?.contains(e.relatedTarget)) {
+                                handleEditComplete?.(rowId, editableColumnId, editValue);
+                                if (taglineEditValue !== projectTagline && handleEditComplete) {
+                                  handleEditComplete(rowId, 'projectTagline', taglineEditValue);
+                                }
+                              }
+                            }}
+                            placeholder="tagline"
+                            style={{
+                              flex: '1 1 auto',
+                              minWidth: 0,
+                              height: '100%',
+                              border: 'none',
+                              outline: 'none',
+                              background: 'transparent',
+                              fontSize: `${cellFontSize}px`,
+                              fontWeight: '400',
+                              opacity: 0.7,
+                              padding: 0,
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        // Subproject headers: single input
+                        <input
+                          type="text"
+                          value={editValue}
+                          onChange={(e) => setEditValue?.(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (handleEditKeyDown) {
+                              handleEditKeyDown(e, rowId, editableColumnId, e.target.value);
+                            }
+                          }}
+                          onBlur={() => handleEditComplete?.(rowId, editableColumnId, editValue)}
+                          autoFocus
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            border: 'none',
+                            outline: 'none',
+                            background: 'transparent',
+                            fontSize: `${cellFontSize}px`,
+                            fontWeight: '600',
+                            padding: 0,
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      )
                     ) : (
                       <span>
                         {(isHeader || isSubprojectHeader) ? (
@@ -312,16 +408,18 @@ export default function ProjectRow({
                   flexShrink: 0,
                   flexGrow: 0,
                   height: `${rowHeight}px`,
-                  userSelect: 'none',
+                  userSelect: isEditing ? 'text' : 'none',
                   boxSizing: 'border-box',
                 }}
                 className="p-0"
                 onMouseDown={(e) => {
+                  if (isEditing) return;
                   if (handleCellMouseDown) {
                     handleCellMouseDown(e, rowId, editableColumnId);
                   }
                 }}
                 onMouseEnter={(e) => {
+                  if (isEditing) return;
                   if (handleCellMouseEnter) {
                     handleCellMouseEnter(e, rowId, editableColumnId);
                   }
