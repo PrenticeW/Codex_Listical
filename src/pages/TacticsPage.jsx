@@ -527,6 +527,7 @@ export default function TacticsPage() {
     storage.setJSON(storageKey, columnWidths);
   }, [columnWidths, currentYear]);
 
+
   const [clipboardProject, setClipboardProject] = useState(null);
   const [editingChipId, setEditingChipId] = useState(null);
   const [editingChipLabel, setEditingChipLabel] = useState('');
@@ -1552,7 +1553,7 @@ export default function TacticsPage() {
   const handleProjectSelection = useCallback(
     (projectId, options = {}) => {
       if (!projectId) return;
-      const target = selectedCell ?? cellMenu;
+      const target = cellMenu ?? selectedCell;
       if (!target) return;
       const { columnIndex, rowId } = target;
       if (columnIndex == null || !rowId) return;
@@ -3727,11 +3728,11 @@ export default function TacticsPage() {
           >
             <div
               ref={headerContainerRef}
-              style={{ overflowX: 'hidden', paddingRight: `calc(100vw - ${col0Width}px)` }}
+              style={{ overflowX: 'hidden', paddingRight: `calc(100vw - ${col0Width}px)`, userSelect: 'none' }}
             >
             <table
               className="border-collapse text-[11px] text-slate-800"
-              style={{ display: 'table', width: `${tableWidth}px`, minWidth: `${tableWidth}px` }}
+              style={{ display: 'table', width: `${tableWidth}px`, minWidth: `${tableWidth}px`, userSelect: 'none' }}
             >
               <tbody>
                 <tr className="grid text-sm" style={{ gridTemplateColumns }}>
@@ -3849,13 +3850,13 @@ export default function TacticsPage() {
             ref={tableContainerRef}
             onDrop={handleTableDrop}
             onDragOver={handleTableDragOver}
-            style={{ display: 'block', paddingBottom: '440px', paddingRight: `calc(100vw - ${col0Width}px)`, overflowX: 'auto' }}
+            style={{ display: 'block', paddingBottom: '440px', paddingRight: `calc(100vw - ${col0Width}px)`, overflowX: 'auto', userSelect: 'none' }}
           >
           {renderDragOutline()}
           <table
             ref={tableElementRef}
             className="border-collapse text-[11px] text-slate-800"
-            style={{ display: 'table', width: `${tableWidth}px`, minWidth: `${tableWidth}px` }}
+            style={{ display: 'table', width: `${tableWidth}px`, minWidth: `${tableWidth}px`, userSelect: 'none' }}
           >
             <tbody>
               <tr className="grid" style={{ gridTemplateColumns }}>
@@ -3917,6 +3918,7 @@ export default function TacticsPage() {
                       data-row-id={rowId}
                       data-day-column={index}
                       data-day={hasDay ? dayLabel : undefined}
+                      onMouseDown={isInteractiveColumn ? (event) => { if (event.shiftKey) event.preventDefault(); } : undefined}
                       onDragOver={isInteractiveColumn ? handleSleepDragOver : undefined}
                       onDrop={isInteractiveColumn ? handleSleepDrop : undefined}
                       onClick={
@@ -3989,6 +3991,7 @@ export default function TacticsPage() {
                         data-row-id={rowId}
                         data-day-column={index}
                         data-day={hasDay ? dayLabel : undefined}
+                        onMouseDown={isInteractiveColumn ? (event) => { if (event.shiftKey) event.preventDefault(); } : undefined}
                         onDragOver={isInteractiveColumn ? handleSleepDragOver : undefined}
                         onDrop={isInteractiveColumn ? handleSleepDrop : undefined}
                         onClick={
@@ -4065,6 +4068,7 @@ export default function TacticsPage() {
                       data-row-id={rowId}
                       data-day-column={index}
                       data-day={hasDay ? dayLabel : undefined}
+                      onMouseDown={isInteractiveColumn ? (event) => { if (event.shiftKey) event.preventDefault(); } : undefined}
                       onDragOver={isInteractiveColumn ? handleSleepDragOver : undefined}
                       onDrop={isInteractiveColumn ? handleSleepDrop : undefined}
                       onClick={
@@ -4141,6 +4145,7 @@ export default function TacticsPage() {
                         data-row-id={rowId}
                         data-day-column={index}
                         data-day={hasDay ? dayLabel : undefined}
+                        onMouseDown={isInteractiveColumn ? (event) => { if (event.shiftKey) event.preventDefault(); } : undefined}
                         onDragOver={isInteractiveColumn ? handleSleepDragOver : undefined}
                         onDrop={isInteractiveColumn ? handleSleepDrop : undefined}
                         onClick={
@@ -4175,6 +4180,7 @@ export default function TacticsPage() {
                     : { gridTemplateColumns }
                 }
                 tabIndex={0}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => toggleSummaryRowSelection('sleep-summary')}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -4223,6 +4229,7 @@ export default function TacticsPage() {
                         : { gridTemplateColumns }
                     }
                     tabIndex={0}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => toggleSummaryRowSelection(summary.id)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
@@ -4278,6 +4285,7 @@ export default function TacticsPage() {
                     : null),
                 }}
                 tabIndex={0}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => toggleSummaryRowSelection('rest-summary')}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -4332,6 +4340,7 @@ export default function TacticsPage() {
                     : { gridTemplateColumns }
                 }
                 tabIndex={0}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => toggleSummaryRowSelection('working-summary')}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -4381,6 +4390,7 @@ export default function TacticsPage() {
                     : { gridTemplateColumns }
                 }
                 tabIndex={0}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => toggleSummaryRowSelection('buffer-summary')}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -4429,6 +4439,7 @@ export default function TacticsPage() {
                     : { gridTemplateColumns }
                 }
                 tabIndex={0}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => toggleSummaryRowSelection('available-summary')}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
