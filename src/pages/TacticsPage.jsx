@@ -3539,7 +3539,7 @@ export default function TacticsPage() {
         })() : null}
 
         {/* ── Display mode ──────────────────────────────────────── */}
-        {targetChip && targetChip.projectId ? (() => {
+        {(() => {
           const currentMode = chipDisplayModes['__default__'] ?? 'label';
           const modes = [
             { value: 'label', label: 'Label' },
@@ -3573,7 +3573,7 @@ export default function TacticsPage() {
               </div>
             </>
           );
-        })() : null}
+        })()}
 
         {/* ── Remove chip ───────────────────────────────────────── */}
         <div className="border-t border-[#e5e7eb] px-3 py-1.5">
