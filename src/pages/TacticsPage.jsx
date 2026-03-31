@@ -2824,7 +2824,7 @@ export default function TacticsPage() {
         const overrideMins = chipTimeOverrides[chipId];
         const mins = overrideMins != null ? overrideMins : (scheduleItem ? (parseEstimateLabelToMinutes(scheduleItem.timeValue) ?? block.durationMinutes) : block.durationMinutes);
         const isMultiRow = block.endRowId && block.endRowId !== block.startRowId;
-        const displayMins = !isMultiRow && Number.isFinite(mins) && mins > 0 && (overrideMins != null || mins < incrementMinutes) ? mins : null;
+        const displayMins = !isMultiRow && Number.isFinite(mins) && mins > 0 && mins < incrementMinutes ? mins : null;
         let timeStr = null;
         if (displayMins != null) {
           const h = Math.floor(displayMins / 60);
@@ -2833,7 +2833,7 @@ export default function TacticsPage() {
           else if (m === 0) timeStr = `${h}`;
           else timeStr = `${h}.${String(m).padStart(2, '0')}`;
         }
-        if (isMultiRow) {
+        if (isMultiRow && displayMode !== 'label') {
           const startIdx = rowIndexMap.get(block.startRowId);
           const endIdx = rowIndexMap.get(block.endRowId);
           if (startIdx != null && endIdx != null) {
@@ -2886,7 +2886,7 @@ export default function TacticsPage() {
           }
         } else {
           const showTime = !isMultiRow && Number.isFinite(effectiveMins) && effectiveMins > 0 &&
-            (overrideMins != null || effectiveMins < incrementMinutes);
+            effectiveMins < incrementMinutes;
           if (showTime) {
             const h = Math.floor(effectiveMins / 60);
             const m = effectiveMins % 60;
