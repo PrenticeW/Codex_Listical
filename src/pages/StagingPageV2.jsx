@@ -481,8 +481,8 @@ export default function StagingPageV2() {
                             gap: '12px',
                           }}
                         >
-                          <div className="flex items-center gap-2 font-semibold">
-                            {item.projectName || item.text}
+                          <div className="w-full flex items-center gap-2 font-semibold min-w-0 overflow-hidden" style={{ maskImage: 'linear-gradient(to right, black 97%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to right, black 97%, transparent 100%)' }}>
+                            <span className="block truncate">{item.projectName || item.text}{item.projectTagline ? <><span className="font-semibold">:</span><span className="font-normal opacity-80"> {item.projectTagline}</span></> : null}</span>
                           </div>
                           <div></div>
                           <div style={{ width: '140px', minWidth: '140px' }}></div>

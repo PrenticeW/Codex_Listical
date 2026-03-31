@@ -9,7 +9,7 @@ import ColourPicker from '../ColourPicker';
  *
  * @param {Object} props
  * @param {Object} props.item - The project item being edited
- * @param {Object} props.planModal - Modal state with color, projectName, projectNickname
+ * @param {Object} props.planModal - Modal state with color, projectName, projectNickname, projectTagline
  * @param {Function} props.updatePlanModal - Function to update modal state
  * @param {Function} props.handlePlanNext - Function to close modal and save changes
  * @param {Function} props.handleRemove - Function to delete the project
@@ -50,6 +50,22 @@ export default function ProjectEditModal({
             type="text"
             value={planModal.projectName}
             onChange={(e) => updatePlanModal({ projectName: e.target.value })}
+            className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+          />
+        </div>
+        <div className="space-y-1" style={{ paddingTop: '15px' }}>
+          <label
+            className="text-sm font-semibold text-slate-700"
+            htmlFor="plan-tagline-inline"
+          >
+            Tagline
+          </label>
+          <input
+            id="plan-tagline-inline"
+            type="text"
+            value={planModal.projectTagline ?? ''}
+            onChange={(e) => updatePlanModal({ projectTagline: e.target.value })}
+            placeholder="e.g. a short phrase about this project"
             className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
           />
         </div>

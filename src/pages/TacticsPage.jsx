@@ -621,6 +621,7 @@ export default function TacticsPage() {
           label,
           color: project.color,
           planSummary: project.planSummary,
+          projectTagline: project.projectTagline ?? '',
         };
       });
   }, [stagingProjects]);

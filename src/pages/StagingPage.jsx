@@ -314,6 +314,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
     itemId: null,
     projectName: '',
     projectNickname: '',
+    projectTagline: '',
     color: COLOR_PALETTE[0],
   });
   const [pendingPlanFocus, setPendingPlanFocus] = useState(null);
@@ -437,6 +438,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
       itemId: item.id,
       projectName: item.projectName ?? item.text,
       projectNickname: item.projectNickname ?? '',
+      projectTagline: item.projectTagline ?? '',
       color: item.color ?? COLOR_PALETTE[0],
     });
   };
@@ -470,6 +472,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
           const nextProjectMetadata = {
             projectName: planModal.projectName,
             projectNickname: planModal.projectNickname,
+            projectTagline: planModal.projectTagline,
             color: planModal.color ?? item.color,
           };
           if (item.planTableVisible) {
@@ -1593,8 +1596,9 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                       ) : null}
                     </div>
                     <div className="flex-1 space-y-2">
+                      <div className="relative">
                       <div
-                        className="relative grid rounded border border-[#ced3d0] pr-3 py-2 shadow-inner"
+                        className="grid rounded border border-[#ced3d0] pr-3 py-2 shadow-inner"
                         style={{
                           backgroundColor: headerBackground,
                           color: headerTextColor,
@@ -1605,8 +1609,11 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                           gap: '12px',
                         }}
                       >
-                        <div className="flex items-center gap-2 font-semibold">
-                          {item.projectName || item.text}
+                        <div className="flex flex-col justify-center">
+                          <span className="font-semibold leading-tight">{item.projectName || item.text}</span>
+                          {item.projectTagline && (
+                            <span className="text-[11px] font-normal opacity-80 leading-tight mt-0.5">{item.projectTagline}</span>
+                          )}
                         </div>
                         <div></div>
                         <div style={{ width: '140px', minWidth: '140px' }}></div>
@@ -1627,80 +1634,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                             <Pencil size={14} />
                           </button>
                         </div>
-                        {planModal.open && planModal.itemId === item.id && (
-                          <div
-                            className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-[#ced3d0] bg-white p-4 shadow-xl z-[9999]"
-                            style={{ backgroundColor: '#ffffff', color: '#0f172a' }}
-                          >
-                            <div className="space-y-3">
-                              <div className="space-y-2" style={{ paddingTop: '15px' }}>
-                                <span className="text-sm font-semibold text-slate-700">Project colour</span>
-                                <ColorSwatchGrid
-                                  selectedColor={planModal.color}
-                                  onSelect={(color) =>
-                                    setPlanModal((prev) => ({ ...prev, color }))
-                                  }
-                                  buttonSize={28}
-                                  columns={4}
-                                />
-                              </div>
-                              <div className="space-y-1" style={{ paddingTop: '15px' }}>
-                                <label className="text-sm font-semibold text-slate-700" htmlFor="plan-name-inline">
-                                  Project Name
-                                </label>
-                                <input
-                                  id="plan-name-inline"
-                                  type="text"
-                                  value={planModal.projectName}
-                                  onChange={(e) =>
-                                    setPlanModal((prev) => ({ ...prev, projectName: e.target.value }))
-                                  }
-                                  className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                                />
-                              </div>
-                              <div className="space-y-1" style={{ paddingTop: '15px' }}>
-                                <label className="text-sm font-semibold text-slate-700" htmlFor="plan-nickname-inline">
-                                  Project Nickname
-                                </label>
-                                <input
-                                  id="plan-nickname-inline"
-                                  type="text"
-                                  value={planModal.projectNickname}
-                                  onChange={(e) => {
-                                    const nextValue = (e.target.value || '').toUpperCase();
-                                    setPlanModal((prev) => ({ ...prev, projectNickname: nextValue }));
-                                  }}
-                                  className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                                />
-                              </div>
-                              <div className="flex flex-wrap items-center justify-between gap-2" style={{ paddingTop: '15px' }}>
-                                <button
-                                  type="button"
-                                  className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-100"
-                                  onClick={() => handleRemove(item.id)}
-                                >
-                                  Delete Project
-                                </button>
-                                <div className="flex gap-2">
-                                  <button
-                                    type="button"
-                                    className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
-                                    onClick={handlePlanNext}
-                                  >
-                                    Next
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
-                                    onClick={handlePlanModalClose}
-                                  >
-                                    Close
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
+                      </div>
                       </div>
                       {item.planTableVisible && !item.planTableCollapsed ? (
                         <div className="rounded border border-dashed border-[#ced3d0] bg-white p-3">
@@ -1903,6 +1837,84 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
       </div>
       </div>
       {planModal.open && (() => {
+        const modalItem = shortlist.find((i) => i.id === planModal.itemId);
+        if (modalItem?.planTableVisible) {
+          const editContent = (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-4">
+              <div className="w-full max-w-md rounded-lg border border-[#ced3d0] bg-white p-5 shadow-xl">
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Edit Project</h3>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <span className="text-sm font-semibold text-slate-700">Project colour</span>
+                    <ColorSwatchGrid
+                      selectedColor={planModal.color}
+                      onSelect={(color) => setPlanModal((prev) => ({ ...prev, color }))}
+                      buttonSize={34}
+                      columns={5}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-semibold text-slate-700" htmlFor="edit-name">Project Name</label>
+                    <input
+                      id="edit-name"
+                      type="text"
+                      value={planModal.projectName}
+                      onChange={(e) => setPlanModal((prev) => ({ ...prev, projectName: e.target.value }))}
+                      className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-semibold text-slate-700" htmlFor="edit-tagline">Tagline</label>
+                    <input
+                      id="edit-tagline"
+                      type="text"
+                      value={planModal.projectTagline}
+                      onChange={(e) => setPlanModal((prev) => ({ ...prev, projectTagline: e.target.value }))}
+                      placeholder="e.g. a short phrase about this project"
+                      className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-semibold text-slate-700" htmlFor="edit-nickname">Project Nickname</label>
+                    <input
+                      id="edit-nickname"
+                      type="text"
+                      value={planModal.projectNickname}
+                      onChange={(e) => setPlanModal((prev) => ({ ...prev, projectNickname: (e.target.value || '').toUpperCase() }))}
+                      className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    />
+                  </div>
+                </div>
+                <div className="mt-5 flex items-center justify-between">
+                  <button
+                    type="button"
+                    className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-100"
+                    onClick={() => handleRemove(planModal.itemId)}
+                  >
+                    Delete Project
+                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+                      onClick={handlePlanNext}
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+                      onClick={handlePlanModalClose}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+          return typeof document !== 'undefined' ? createPortal(editContent, document.body) : editContent;
+        }
         const modalContent = (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-4">
             <div className="w-full max-w-md rounded-lg border border-[#ced3d0] bg-white p-5 shadow-xl">
@@ -1926,6 +1938,21 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                     type="text"
                     value={planModal.projectName}
                     onChange={(e) => setPlanModal((prev) => ({ ...prev, projectName: e.target.value }))}
+                    className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                  />
+                </div>
+                <div className="space-y-1" style={{ paddingTop: '15px' }}>
+                  <label className="text-sm font-semibold text-slate-700" htmlFor="plan-tagline">
+                    Tagline
+                  </label>
+                  <input
+                    id="plan-tagline"
+                    type="text"
+                    value={planModal.projectTagline}
+                    onChange={(e) =>
+                      setPlanModal((prev) => ({ ...prev, projectTagline: e.target.value }))
+                    }
+                    placeholder="e.g. a short phrase about this project"
                     className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                   />
                 </div>

@@ -10,6 +10,7 @@ export default function usePlanModal() {
     itemId: null,
     projectName: '',
     projectNickname: '',
+    projectTagline: '',
     color: pickProjectColour([]),
   });
 
@@ -19,6 +20,7 @@ export default function usePlanModal() {
       itemId: item.id,
       projectName: item.projectName ?? item.text,
       projectNickname: item.projectNickname ?? '',
+      projectTagline: item.projectTagline ?? '',
       color: item.color ?? pickProjectColour([]),
     });
   };

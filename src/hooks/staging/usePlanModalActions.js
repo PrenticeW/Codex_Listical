@@ -48,6 +48,7 @@ export default function usePlanModalActions({ planModal, setState, closePlanModa
                 const nextProjectMetadata = {
                   projectName: planModal.projectName,
                   projectNickname: planModal.projectNickname,
+                  projectTagline: planModal.projectTagline,
                   color: planModal.color ?? item.color,
                 };
 
