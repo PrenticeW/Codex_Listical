@@ -4,6 +4,8 @@ const TACTICS_SETTINGS_KEY = 'tactics-page-settings';
 const TACTICS_CHIPS_KEY_TEMPLATE = 'tactics-year-{yearNumber}-chips-state';
 const TACTICS_COLUMN_WIDTHS_KEY_TEMPLATE = 'tactics-column-widths-{yearNumber}';
 export const TACTICS_CHIPS_STORAGE_EVENT = 'tactics-chips-state-update';
+export const TACTICS_SEND_TO_SYSTEM_EVENT = 'tactics-send-to-system';
+export const TACTICS_SEND_TO_SYSTEM_TS_KEY = 'tactics-send-to-system-ts';
 
 const DEFAULT_SETTINGS = {
   startHour: '',

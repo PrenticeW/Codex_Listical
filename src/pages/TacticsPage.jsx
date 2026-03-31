@@ -25,6 +25,8 @@ import {
   saveTacticsChipsState,
   loadTacticsColumnWidths,
   saveTacticsColumnWidths,
+  TACTICS_SEND_TO_SYSTEM_EVENT,
+  TACTICS_SEND_TO_SYSTEM_TS_KEY,
 } from '../lib/tacticsStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
 import usePageSize from '../hooks/usePageSize';
@@ -2463,9 +2465,49 @@ export default function TacticsPage() {
     if (yearInfo?.startDate) {
       saveStartDate(yearInfo.startDate, undefined, currentYear);
     }
+
+    // Re-dispatch tactics metrics so System page reflects current totals and quotas
+    const projectWeeklyQuotas = projectSummaries.map((summary) => ({
+      id: summary.id,
+      label: summary.label,
+      weeklyHours: minutesToHourMinuteDecimal(summary.totalMinutes),
+    }));
+    const dailyBounds = displayedWeekDays.map((day, idx) => ({
+      day,
+      dailyMaxHours: minutesToHourMinuteDecimal(availableColumnTotals[idx] ?? 0),
+      dailyMinHours: minutesToHourMinuteDecimal(workingColumnTotals[idx] ?? 0),
+    }));
+    saveTacticsMetrics({
+      projectWeeklyQuotas,
+      dailyBounds,
+      weeklyTotals: {
+        availableHours: minutesToHourMinuteDecimal(totalAvailableMinutes),
+        workingHours: minutesToHourMinuteDecimal(totalWorkingMinutes),
+      },
+    }, currentYear);
+
+    // Re-dispatch chips state so System page reflects current subproject rows
+    saveTacticsChipsState({ projectChips, customProjects, chipTimeOverrides }, currentYear);
+
+    // Write timestamp so System page resets subproject labels even if it mounts after this fires
+    localStorage.setItem(TACTICS_SEND_TO_SYSTEM_TS_KEY, Date.now().toString());
+    // Also signal if System is already mounted
+    window.dispatchEvent(new CustomEvent(TACTICS_SEND_TO_SYSTEM_EVENT));
+
     setSendToSystemDone(true);
     setTimeout(() => setSendToSystemDone(false), 2000);
-  }, [currentYear]);
+  }, [
+    currentYear,
+    projectSummaries,
+    displayedWeekDays,
+    availableColumnTotals,
+    workingColumnTotals,
+    totalAvailableMinutes,
+    totalWorkingMinutes,
+    projectChips,
+    customProjects,
+    chipTimeOverrides,
+  ]);
 
   const stagingColumnConfigs = useMemo(() => {
     const columns = [{ id: 'extra-empty', type: 'empty' }];

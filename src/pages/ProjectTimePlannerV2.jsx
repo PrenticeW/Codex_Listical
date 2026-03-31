@@ -15,6 +15,7 @@ import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
 import useTacticsMetrics from '../hooks/planner/useTacticsMetrics';
 import useTacticsChips from '../hooks/planner/useTacticsChips';
+import { TACTICS_SEND_TO_SYSTEM_EVENT, TACTICS_SEND_TO_SYSTEM_TS_KEY } from '../lib/tacticsStorage';
 import usePlannerFilters from '../hooks/planner/usePlannerFilters';
 import { useFilteredData, useFilterValues } from '../hooks/planner/useFilteredData';
 import { useProjectTotals, useDailyTotals } from '../hooks/planner/useTotalsCalculation';
@@ -865,6 +866,58 @@ export default function ProjectTimePlannerV2() {
       clearTimeout(timeoutId);
     };
   }, [tacticsChips, totalDays]);
+
+  // Track the last send-to-system timestamp we've already acted on
+  const lastResetTsRef = useRef(null);
+
+  // Reset subproject row labels to Tactics-derived values.
+  // Called both on mount (timestamp check) and when the live event fires.
+  const resetSubprojectLabels = useCallback((chips) => {
+    if (!chips || chips.length === 0) return;
+    const chipLabelMap = new Map(
+      chips.map(chip => {
+        const durationLabel = chip.formattedDuration
+          ? `${chip.formattedDuration} of ${chip.displayLabel || chip.projectNickname} on ${chip.dayName}`
+          : `${chip.displayLabel || chip.projectNickname} on ${chip.dayName}`;
+        return [chip.id, durationLabel];
+      })
+    );
+    setData(prevData => {
+      let changed = false;
+      const newData = prevData.map(row => {
+        if (row._rowType === 'subprojectHeader' && row._chipId) {
+          const canonicalLabel = chipLabelMap.get(row._chipId);
+          if (canonicalLabel !== undefined && row.subprojectName !== canonicalLabel) {
+            changed = true;
+            return { ...row, subprojectName: canonicalLabel };
+          }
+        }
+        return row;
+      });
+      return changed ? newData : prevData;
+    });
+  }, []);
+
+  // On mount (or when chips load), check if "Send to System" was pressed since last reset
+  useEffect(() => {
+    if (!tacticsChips || tacticsChips.length === 0) return;
+    const ts = localStorage.getItem(TACTICS_SEND_TO_SYSTEM_TS_KEY);
+    if (ts && ts !== lastResetTsRef.current) {
+      lastResetTsRef.current = ts;
+      resetSubprojectLabels(tacticsChips);
+    }
+  }, [tacticsChips, resetSubprojectLabels]);
+
+  // Also handle the live event when System is already mounted and Tactics is open
+  useEffect(() => {
+    const handler = () => {
+      const ts = localStorage.getItem(TACTICS_SEND_TO_SYSTEM_TS_KEY);
+      lastResetTsRef.current = ts;
+      resetSubprojectLabels(tacticsChips);
+    };
+    window.addEventListener(TACTICS_SEND_TO_SYSTEM_EVENT, handler);
+    return () => window.removeEventListener(TACTICS_SEND_TO_SYSTEM_EVENT, handler);
+  }, [tacticsChips, resetSubprojectLabels]);
 
   // Calculate month spans for header
   const monthSpans = useMemo(() => {
