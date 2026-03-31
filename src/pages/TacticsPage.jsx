@@ -2800,7 +2800,7 @@ export default function TacticsPage() {
       const projectId = block.projectId || 'sleep';
       const metadata = projectMetadata.get(projectId);
       const isScheduleChip = block.id.startsWith('schedule-chip-');
-      const displayMode = chipDisplayModes[projectId] ?? 'label';
+      const displayMode = chipDisplayModes[projectId] ?? chipDisplayModes['__default__'] ?? 'label';
       let rawLabel;
       let largeTimeStr = null;
       if (isScheduleChip) {
@@ -2864,7 +2864,7 @@ export default function TacticsPage() {
         if (displayMode === 'duration') {
           if (!isMultiRow) {
             // Single-row: always show LABEL: HH.MM using block grid duration
-            const blockMins = overrideMins ?? incrementMinutes;
+            const blockMins = overrideMins ?? block.durationMinutes ?? incrementMinutes;
             const h = Math.floor(blockMins / 60);
             const m = blockMins % 60;
             const timeStr = h === 0 ? `${m}` : m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
@@ -3540,8 +3540,7 @@ export default function TacticsPage() {
 
         {/* ── Display mode ──────────────────────────────────────── */}
         {targetChip && targetChip.projectId ? (() => {
-          const pid = targetChip.projectId;
-          const currentMode = chipDisplayModes[pid] ?? 'label';
+          const currentMode = chipDisplayModes['__default__'] ?? 'label';
           const modes = [
             { value: 'label', label: 'Label' },
             { value: 'duration', label: 'Duration' },
@@ -3565,7 +3564,7 @@ export default function TacticsPage() {
                     }`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleSetChipDisplayMode(pid, value);
+                      handleSetChipDisplayMode('__default__', value);
                     }}
                   >
                     {label}
