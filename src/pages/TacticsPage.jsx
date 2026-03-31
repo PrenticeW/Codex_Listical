@@ -78,7 +78,7 @@ const getTacticsChipsStorageKey = (yearNumber) => {
 const loadTacticsSettings = () => {
   try {
     const parsed = storage.getJSON(TACTICS_STORAGE_KEY, null);
-    if (!parsed) return { startHour: '', startMinute: '', incrementMinutes: 60, showAmPm: true, use24Hour: false, startDay: DAYS_OF_WEEK[0] };
+    if (!parsed) return { startHour: '', startMinute: '', incrementMinutes: 60, showAmPm: true, use24Hour: false, startDay: DAYS_OF_WEEK[0], chipDisplayModes: {} };
     return {
       startHour: typeof parsed?.startHour === 'string' ? parsed.startHour : '',
       startMinute: typeof parsed?.startMinute === 'string' ? parsed.startMinute : '',
@@ -89,10 +89,11 @@ const loadTacticsSettings = () => {
       showAmPm: parsed?.showAmPm !== false,
       use24Hour: parsed?.use24Hour === true,
       startDay: DAYS_OF_WEEK.includes(parsed?.startDay) ? parsed.startDay : DAYS_OF_WEEK[0],
+      chipDisplayModes: parsed?.chipDisplayModes && typeof parsed.chipDisplayModes === 'object' && !Array.isArray(parsed.chipDisplayModes) ? parsed.chipDisplayModes : {},
     };
   } catch (error) {
     console.error('Failed to read tactics settings', error);
-    return { startHour: '', startMinute: '', incrementMinutes: 60, showAmPm: true, use24Hour: false, startDay: DAYS_OF_WEEK[0] };
+    return { startHour: '', startMinute: '', incrementMinutes: 60, showAmPm: true, use24Hour: false, startDay: DAYS_OF_WEEK[0], chipDisplayModes: {} };
   }
 };
 const loadTacticsChipsState = (yearNumber = null) => {
@@ -251,13 +252,17 @@ const dedupeChipsById = (chips = []) => {
 };
 
 
-function ChipLabel({ normalizedLabel, baseFontSize, wrap, largeTimeStr, isEditing, textSizeScale, chipHeight }) {
+function ChipLabel({ normalizedLabel, baseFontSize, wrap, largeTimeStr, isEditing, textSizeScale, chipHeight, displayMode, clockStr }) {
   const [hideNumber, setHideNumber] = useState(false);
 
   const handleTextHeight = useCallback((h) => {
     const numberZone = 14 * textSizeScale + 6;
     setHideNumber(h + numberZone > chipHeight);
   }, [textSizeScale, chipHeight]);
+
+  if (displayMode === 'clock' && clockStr) {
+    return <FitText text={clockStr} maxFontSize={baseFontSize} wrap={false} />;
+  }
 
   return (
     <>
@@ -381,10 +386,15 @@ export default function TacticsPage() {
   const [startMinute, setStartMinute] = useState(initialTacticsSettings.startMinute);
   const [showAmPm, setShowAmPm] = useState(initialTacticsSettings.showAmPm);
   const [use24Hour, setUse24Hour] = useState(initialTacticsSettings.use24Hour);
+  const [chipDisplayModes, setChipDisplayModes] = useState(initialTacticsSettings.chipDisplayModes);
+
+  const handleSetChipDisplayMode = useCallback((projectId, mode) => {
+    setChipDisplayModes((prev) => ({ ...prev, [projectId]: mode }));
+  }, []);
 
   useEffect(() => {
-    saveTacticsSettings({ startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay });
-  }, [startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay]);
+    saveTacticsSettings({ startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay, chipDisplayModes });
+  }, [startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay, chipDisplayModes]);
   const hourRows = useMemo(() => {
     if (!startHour || !startMinute) return [];
     const startMinutes = parseHour12ToMinutes(startHour);
@@ -1534,9 +1544,9 @@ export default function TacticsPage() {
     const { columnIndex, rowId } = target;
     if (columnIndex == null || !rowId) return null;
     const columnBlocks = getProjectChipsByColumnIndex(columnIndex);
-    const block = columnBlocks.find((entry) => entry.startRowId === rowId);
+    const block = columnBlocks.find((entry) => entry.startRowId === rowId) ?? columnBlocks.find((entry) => isRowWithinBlock(rowId, entry));
     return block?.id ?? null;
-  }, [cellMenu, selectedCell, getProjectChipsByColumnIndex]);
+  }, [cellMenu, selectedCell, getProjectChipsByColumnIndex, isRowWithinBlock]);
 
   const removableBlockId = cellMenuBlockId ?? selectedBlockId;
   const handleProjectSelection = useCallback(
@@ -2790,6 +2800,7 @@ export default function TacticsPage() {
       const projectId = block.projectId || 'sleep';
       const metadata = projectMetadata.get(projectId);
       const isScheduleChip = block.id.startsWith('schedule-chip-');
+      const displayMode = chipDisplayModes[projectId] ?? 'label';
       let rawLabel;
       let largeTimeStr = null;
       if (isScheduleChip) {
@@ -2836,21 +2847,54 @@ export default function TacticsPage() {
             }
           }
         }
-        rawLabel = timeStr != null ? `${baseName}: ${timeStr}` : baseName;
+        if (displayMode === 'duration' && !isMultiRow) {
+          const blockMins = overrideMins ?? incrementMinutes;
+          const h = Math.floor(blockMins / 60);
+          const m = blockMins % 60;
+          const durStr = h === 0 ? `${m}` : m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
+          rawLabel = `${baseName}: ${durStr}`;
+        } else {
+          rawLabel = timeStr != null ? `${baseName}: ${timeStr}` : baseName;
+        }
       } else {
         const baseName = block.displayLabel ?? metadata?.label ?? 'Project';
         const overrideMins = chipTimeOverrides[chipId];
         const effectiveMins = overrideMins ?? block.durationMinutes ?? null;
         const isMultiRow = block.endRowId && block.endRowId !== block.startRowId;
-        const showTime = !isMultiRow && Number.isFinite(effectiveMins) && effectiveMins > 0 &&
-          (overrideMins != null || effectiveMins < incrementMinutes);
-        if (showTime) {
-          const h = Math.floor(effectiveMins / 60);
-          const m = effectiveMins % 60;
-          const timeStr = h === 0 ? `${m}` : m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
-          rawLabel = `${baseName}: ${timeStr}`;
+        if (displayMode === 'duration') {
+          if (!isMultiRow) {
+            // Single-row: always show LABEL: HH.MM using block grid duration
+            const blockMins = overrideMins ?? incrementMinutes;
+            const h = Math.floor(blockMins / 60);
+            const m = blockMins % 60;
+            const timeStr = h === 0 ? `${m}` : m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
+            rawLabel = `${baseName}: ${timeStr}`;
+          } else {
+            rawLabel = baseName;
+            // Multi-row: show block duration as largeTimeStr (mirrors schedule chip behaviour)
+            const startIdx = rowIndexMap.get(block.startRowId);
+            const endIdx = rowIndexMap.get(block.endRowId);
+            if (startIdx != null && endIdx != null) {
+              const rowCount = Math.abs(endIdx - startIdx) + 1;
+              const blockMins = rowCount * incrementMinutes;
+              if (Number.isFinite(blockMins) && blockMins > 0) {
+                const h = Math.floor(blockMins / 60);
+                const m = blockMins % 60;
+                largeTimeStr = m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
+              }
+            }
+          }
         } else {
-          rawLabel = baseName;
+          const showTime = !isMultiRow && Number.isFinite(effectiveMins) && effectiveMins > 0 &&
+            (overrideMins != null || effectiveMins < incrementMinutes);
+          if (showTime) {
+            const h = Math.floor(effectiveMins / 60);
+            const m = effectiveMins % 60;
+            const timeStr = h === 0 ? `${m}` : m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
+            rawLabel = `${baseName}: ${timeStr}`;
+          } else {
+            rawLabel = baseName;
+          }
         }
       }
       // Compute sleep time info for sleep chips
@@ -2890,6 +2934,25 @@ export default function TacticsPage() {
       const normalizedLabel = rawLabel.toUpperCase();
       const baseFontSize = 14 * textSizeScale;
       const chipIsMultiRow = block.endRowId && block.endRowId !== block.startRowId;
+
+      // Clock mode
+      let clockStr = null;
+      if (displayMode === 'clock') {
+        const startMins = rowIdToClockMinutes(block.startRowId, trailingMinuteRows);
+        const endRowId = block.endRowId ?? block.startRowId;
+        const endMins = rowIdToClockMinutes(endRowId, trailingMinuteRows);
+        if (startMins != null) {
+          const startFormatted = formatTime(Math.floor(startMins / 60), (startMins % 60).toString().padStart(2, '0'), { use24Hour, showAmPm });
+          const endMinsAdjusted = endMins != null ? (endMins + incrementMinutes) % (24 * 60) : null;
+          if (endMinsAdjusted != null) {
+            const endFormatted = formatTime(Math.floor(endMinsAdjusted / 60), (endMinsAdjusted % 60).toString().padStart(2, '0'), { use24Hour, showAmPm });
+            clockStr = `${startFormatted} – ${endFormatted}`;
+          } else {
+            clockStr = startFormatted;
+          }
+        }
+      }
+
       const isCovering = coveringChipIds.has(chipId);
       const isEditing = editingChipId === block.id;
       const isEditingTime = isEditing && editingChipIsTime;
@@ -3021,6 +3084,8 @@ export default function TacticsPage() {
                 isEditing={isEditing}
                 textSizeScale={textSizeScale}
                 chipHeight={blockHeight}
+                displayMode={displayMode}
+                clockStr={clockStr}
               />
             )}
             {sleepTimeInfo && !isEditing ? (() => {
@@ -3103,6 +3168,7 @@ export default function TacticsPage() {
       use24Hour,
       showAmPm,
       trailingMinuteRows,
+      chipDisplayModes,
     ]
   );
   const renderDragOutline = useCallback(() => {
@@ -3472,6 +3538,44 @@ export default function TacticsPage() {
           );
         })() : null}
 
+        {/* ── Display mode ──────────────────────────────────────── */}
+        {targetChip && targetChip.projectId ? (() => {
+          const pid = targetChip.projectId;
+          const currentMode = chipDisplayModes[pid] ?? 'label';
+          const modes = [
+            { value: 'label', label: 'Label' },
+            { value: 'duration', label: 'Duration' },
+            { value: 'clock', label: 'Clock time' },
+          ];
+          return (
+            <>
+              <div className="mx-3 my-1 border-t border-[#e5e7eb]" />
+              <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                Display
+              </div>
+              <div className="flex gap-1 px-2 pb-2">
+                {modes.map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`flex-1 rounded-sm px-1.5 py-1 text-[10px] font-semibold transition-colors ${
+                      currentMode === value
+                        ? 'bg-slate-700 text-white'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSetChipDisplayMode(pid, value);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </>
+          );
+        })() : null}
+
         {/* ── Remove chip ───────────────────────────────────────── */}
         <div className="border-t border-[#e5e7eb] px-3 py-1.5">
           <button
@@ -3521,6 +3625,8 @@ export default function TacticsPage() {
     setScheduleItemPanelOpen,
     scheduleLayout,
     projectMetadata,
+    chipDisplayModes,
+    handleSetChipDisplayMode,
   ]);
 
   // Sync sticky header horizontal scroll with table container
