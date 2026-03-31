@@ -3,6 +3,7 @@ import storage from './storageService';
 const TACTICS_SETTINGS_KEY = 'tactics-page-settings';
 const TACTICS_CHIPS_KEY_TEMPLATE = 'tactics-year-{yearNumber}-chips-state';
 const TACTICS_COLUMN_WIDTHS_KEY_TEMPLATE = 'tactics-column-widths-{yearNumber}';
+export const TACTICS_CHIPS_STORAGE_EVENT = 'tactics-chips-state-update';
 
 const DEFAULT_SETTINGS = {
   startHour: '',
@@ -92,6 +93,14 @@ export const saveTacticsChipsState = (payload, yearNumber = null) => {
   try {
     const key = getChipsStorageKey(yearNumber);
     storage.setJSON(key, payload);
+
+    // Dispatch custom event for reactive updates
+    if (typeof window !== 'undefined') {
+      const event = typeof CustomEvent === 'function'
+        ? new CustomEvent(TACTICS_CHIPS_STORAGE_EVENT, { detail: payload })
+        : new Event(TACTICS_CHIPS_STORAGE_EVENT);
+      window.dispatchEvent(event);
+    }
   } catch (error) {
     console.error('Failed to save tactics chip state', error);
   }

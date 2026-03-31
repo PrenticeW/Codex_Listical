@@ -14,6 +14,7 @@ import usePlannerColumns from '../hooks/planner/usePlannerColumns';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
 import useTacticsMetrics from '../hooks/planner/useTacticsMetrics';
+import useTacticsChips from '../hooks/planner/useTacticsChips';
 import usePlannerFilters from '../hooks/planner/usePlannerFilters';
 import { useFilteredData, useFilterValues } from '../hooks/planner/useFilteredData';
 import { useProjectTotals, useDailyTotals } from '../hooks/planner/useTotalsCalculation';
@@ -204,6 +205,9 @@ export default function ProjectTimePlannerV2() {
 
   // Load daily bounds and project weekly quotas from Tactics page
   const { dailyBounds, projectWeeklyQuotas } = useTacticsMetrics();
+
+  // Load scheduled chips from Tactics page
+  const { chips: tacticsChips } = useTacticsChips();
 
   // Command pattern for undo/redo
   const { undoStack, redoStack, executeCommand, undo, redo } = useCommandPattern();
@@ -756,6 +760,100 @@ export default function ProjectTimePlannerV2() {
       clearTimeout(timeoutId);
     };
   }, [projects, projectNamesMap, projectTaglinesMap, totalDays]);
+
+  // Create subprojectHeader rows from Tactics chips
+  useEffect(() => {
+    if (!tacticsChips || tacticsChips.length === 0) return;
+
+    let isMounted = true;
+    const timeoutId = setTimeout(() => {
+      if (!isMounted) return;
+
+      setData(prevData => {
+        // Build set of existing chip-based subproject header IDs
+        const existingChipHeaderIds = new Set(
+          prevData
+            .filter(row => row._rowType === 'subprojectHeader' && row._chipId)
+            .map(row => row._chipId)
+        );
+
+        // Find chips that don't already have a row
+        const newChips = tacticsChips.filter(chip => !existingChipHeaderIds.has(chip.id));
+
+        // Remove subprojectHeader rows for chips that no longer exist
+        const currentChipIds = new Set(tacticsChips.map(c => c.id));
+        const filteredData = prevData.filter(row =>
+          !(row._rowType === 'subprojectHeader' && row._chipId && !currentChipIds.has(row._chipId))
+        );
+
+        if (newChips.length === 0 && filteredData.length === prevData.length) return prevData;
+
+        const newData = [...filteredData];
+
+        newChips.forEach(chip => {
+          if (!chip.projectNickname) return;
+
+          const projectGroupId = `project-${chip.projectNickname}`;
+          // Find the index of the project header for this chip's project
+          const projectHeaderIndex = newData.findIndex(
+            row => row._rowType === 'projectHeader' && row.projectNickname === chip.projectNickname
+          );
+          if (projectHeaderIndex === -1) return;
+
+          // Insert after the last existing row that belongs to this project group
+          // (projectHeader, projectGeneral, projectUnscheduled, or existing subprojectHeaders)
+          let insertAfterIndex = projectHeaderIndex;
+          for (let i = projectHeaderIndex + 1; i < newData.length; i++) {
+            const row = newData[i];
+            if (
+              row.parentGroupId === projectGroupId ||
+              row.groupId === projectGroupId ||
+              (row._rowType === 'subprojectHeader' && row._chipId && row.projectNickname === chip.projectNickname)
+            ) {
+              insertAfterIndex = i;
+            } else if (row._rowType === 'projectHeader') {
+              break;
+            }
+          }
+
+          const chipGroupId = `chip-${chip.id}`;
+          const durationLabel = chip.formattedDuration
+            ? `${chip.formattedDuration} of ${chip.displayLabel || chip.projectNickname} on ${chip.dayName}`
+            : `${chip.displayLabel || chip.projectNickname} on ${chip.dayName}`;
+
+          const subprojectHeaderRow = {
+            id: `chip-header-${chip.id}`,
+            _rowType: 'subprojectHeader',
+            _chipId: chip.id,
+            groupId: chipGroupId,
+            parentGroupId: projectGroupId,
+            projectNickname: chip.projectNickname,
+            projectName: '',
+            subprojectName: durationLabel,
+            rowNum: '',
+            checkbox: '',
+            project: '',
+            subproject: '',
+            status: '',
+            task: '',
+            recurring: '',
+            estimate: '',
+            timeValue: '',
+            ...createEmptyDayColumns(totalDays),
+          };
+
+          newData.splice(insertAfterIndex + 1, 0, subprojectHeaderRow);
+        });
+
+        return newData;
+      });
+    }, 50);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, [tacticsChips, totalDays]);
 
   // Calculate month spans for header
   const monthSpans = useMemo(() => {
