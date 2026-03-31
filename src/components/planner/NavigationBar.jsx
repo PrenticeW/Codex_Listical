@@ -16,6 +16,7 @@ const PAGE_CONFIG = {
 export default function NavigationBar({
   listicalButton = null,
   yearSelector = null,
+  actionButton = null,
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -110,6 +111,7 @@ export default function NavigationBar({
       </div>
 
       <div className="flex items-center gap-4">
+        {actionButton || null}
         {yearSelector || <YearSelector />}
         {user && (
           <>

@@ -52,6 +52,7 @@ function extractProjectsData(shortlist) {
       subprojects: ['-'],
       projectSubprojectsMap: {},
       projectNamesMap: {},
+      projectTaglinesMap: {},
     };
   }
 
@@ -59,6 +60,7 @@ function extractProjectsData(shortlist) {
   const allSubprojects = new Set(['-']);
   const projectSubprojectsMap = {};
   const projectNamesMap = {}; // Map from nickname/key to full project name
+  const projectTaglinesMap = {}; // Map from nickname/key to tagline
 
   shortlist.forEach(item => {
     const fullProjectName = (item.projectName || '').trim();
@@ -73,6 +75,9 @@ function extractProjectsData(shortlist) {
 
       // Store the mapping from key to full project name
       projectNamesMap[projectKey] = fullProjectName || projectKey;
+
+      // Store tagline
+      projectTaglinesMap[projectKey] = (item.projectTagline || '').trim();
 
       // Extract subprojects from planSummary
       if (item.planSummary && Array.isArray(item.planSummary.subprojects)) {
@@ -92,5 +97,6 @@ function extractProjectsData(shortlist) {
     subprojects: Array.from(allSubprojects),
     projectSubprojectsMap,
     projectNamesMap,
+    projectTaglinesMap,
   };
 }

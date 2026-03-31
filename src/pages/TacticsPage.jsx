@@ -16,6 +16,8 @@ import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../utils/staging/planTableHelpers';
 import { pickCustomChipColour } from '../utils/staging/projectColour';
 import { saveTacticsMetrics } from '../lib/tacticsMetricsStorage';
+import { getYearInfo } from '../lib/yearMetadataStorage';
+import { saveStartDate } from '../utils/planner/storage';
 import {
   loadTacticsSettings,
   saveTacticsSettings,
@@ -2455,6 +2457,16 @@ export default function TacticsPage() {
     currentYear,
     workingColumnTotals,
   ]);
+  const [sendToSystemDone, setSendToSystemDone] = useState(false);
+  const handleSendToSystem = useCallback(() => {
+    const yearInfo = getYearInfo(currentYear);
+    if (yearInfo?.startDate) {
+      saveStartDate(yearInfo.startDate, undefined, currentYear);
+    }
+    setSendToSystemDone(true);
+    setTimeout(() => setSendToSystemDone(false), 2000);
+  }, [currentYear]);
+
   const stagingColumnConfigs = useMemo(() => {
     const columns = [{ id: 'extra-empty', type: 'empty' }];
     highlightedProjects.forEach((project) => {
@@ -3714,6 +3726,15 @@ export default function TacticsPage() {
               undo={undo}
               redo={redo}
             />
+          }
+          actionButton={
+            <button
+              type="button"
+              onClick={handleSendToSystem}
+              className="px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 border border-slate-200 bg-white text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900"
+            >
+              {sendToSystemDone ? 'Sent ✓' : 'Send to System →'}
+            </button>
           }
         />
         </div>

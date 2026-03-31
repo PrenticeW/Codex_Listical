@@ -200,7 +200,7 @@ export default function ProjectTimePlannerV2() {
   const [addTasksCount, setAddTasksCount] = useState('');
 
   // Load projects and subprojects from Staging
-  const { projects, subprojects, projectSubprojectsMap, projectNamesMap } = useProjectsData();
+  const { projects, subprojects, projectSubprojectsMap, projectNamesMap, projectTaglinesMap } = useProjectsData();
 
   // Load daily bounds and project weekly quotas from Tactics page
   const { dailyBounds, projectWeeklyQuotas } = useTacticsMetrics();
@@ -643,18 +643,28 @@ export default function ProjectTimePlannerV2() {
         const filterRowIndex = prevData.findIndex(row => row._isFilterRow);
         if (filterRowIndex === -1) return prevData;
 
-        // Check if project rows already exist
-        const hasProjectRows = prevData.some(row => row._rowType === 'projectHeader');
+        const existingHeaderIds = new Set(
+          prevData
+            .filter(row => row._rowType === 'projectHeader')
+            .map(row => row.projectNickname)
+        );
 
-        // If project rows exist, nothing to do
-        if (hasProjectRows) return prevData;
+        // Find the last existing project header to insert new ones after it
+        let lastProjectHeaderIndex = filterRowIndex;
+        prevData.forEach((row, i) => {
+          if (row._rowType === 'projectHeader' || row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled') {
+            lastProjectHeaderIndex = i;
+          }
+        });
+
+        const newProjects = projects.filter(k => k !== '-' && !existingHeaderIds.has(k));
+        if (newProjects.length === 0) return prevData;
 
         const newData = [...prevData];
-        let insertIndex = filterRowIndex + 1;
+        let insertIndex = lastProjectHeaderIndex + 1;
 
-        // Insert project rows for each project (skip '-')
-        projects.forEach(projectKey => {
-            if (projectKey === '-') return;
+        // Insert project rows for any project that doesn't have a header yet (skip '-')
+        newProjects.forEach(projectKey => {
 
             // Get full project name from the map (projectKey might be a nickname)
             const fullProjectName = projectNamesMap[projectKey] || projectKey;
@@ -669,6 +679,7 @@ export default function ProjectTimePlannerV2() {
               groupId: projectGroupId,
               projectName: fullProjectName,
               projectNickname: projectKey,
+              projectTagline: projectTaglinesMap?.[projectKey] || '',
               rowNum: '',
               checkbox: '',
               project: '',
@@ -731,7 +742,7 @@ export default function ProjectTimePlannerV2() {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [projects, projectNamesMap, totalDays]);
+  }, [projects, projectNamesMap, projectTaglinesMap, totalDays]);
 
   // Calculate month spans for header
   const monthSpans = useMemo(() => {

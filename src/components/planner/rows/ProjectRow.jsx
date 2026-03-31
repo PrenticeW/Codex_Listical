@@ -46,6 +46,7 @@ export default function ProjectRow({
   const rowType = row.original._rowType; // 'projectHeader', 'subprojectHeader', 'projectGeneral', 'projectUnscheduled', or archived variants
   const projectNickname = row.original.projectNickname || '';
   const projectName = row.original.projectName || '';
+  const projectTagline = row.original.projectTagline || '';
   const subprojectName = row.original.subprojectName || '';
   const subprojectLabel = row.original.subprojectLabel || ''; // Custom label for new subproject rows
   const groupId = row.original.groupId; // For project and subproject headers
@@ -278,7 +279,13 @@ export default function ProjectRow({
                         onClick={(e) => e.stopPropagation()}
                       />
                     ) : (
-                      <span>{(isHeader || isSubprojectHeader) ? displayLabel : '\u00A0'}</span>
+                      <span>
+                        {(isHeader || isSubprojectHeader) ? (
+                          isHeader && projectTagline ? (
+                            <>{projectName}<span style={{ fontWeight: 400, opacity: 0.7 }}>: {projectTagline}</span></>
+                          ) : displayLabel
+                        ) : '\u00A0'}
+                      </span>
                     )}
                   </div>
                 </td>
