@@ -3749,8 +3749,8 @@ export default function TacticsPage() {
       onDragOver={handleRootDragOver}
       onDrop={handleRootDrop}
     >
-      <div className="p-4 space-y-4">
-        <div ref={navBarRef} style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#f3f4f6', paddingTop: '16px', paddingBottom: '16px' }}>
+      <div className="space-y-4">
+        <div ref={navBarRef} className="sticky top-0 z-20 bg-gray-100 px-4 pt-4 pb-4">
         <NavigationBar
           listicalButton={
             <ListicalMenu
@@ -3778,7 +3778,7 @@ export default function TacticsPage() {
           }
         />
         </div>
-        <div className="rounded border border-[#ced3d0] bg-white shadow-sm">
+        <div className="rounded border border-[#ced3d0] bg-white shadow-sm mx-4 mb-4">
           {/* Sticky header row — outside the horizontal scroll container so it can stick vertically */}
           <div
             style={{

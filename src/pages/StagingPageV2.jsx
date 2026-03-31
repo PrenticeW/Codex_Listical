@@ -401,7 +401,7 @@ export default function StagingPageV2() {
     <>
       <div className="h-screen overflow-y-auto bg-gray-100 text-slate-800">
         <div
-          className="sticky top-0 z-20 bg-gray-100 px-4 pt-4 pb-2"
+          className="sticky top-0 z-20 bg-gray-100 px-4 pt-4 pb-4"
         >
           <NavigationBar
             listicalButton={
