@@ -78,7 +78,7 @@ const getTacticsChipsStorageKey = (yearNumber) => {
 const loadTacticsSettings = () => {
   try {
     const parsed = storage.getJSON(TACTICS_STORAGE_KEY, null);
-    if (!parsed) return { startHour: '', startMinute: '', incrementMinutes: 60, showAmPm: true, use24Hour: false, startDay: DAYS_OF_WEEK[0], chipDisplayModes: { __default__: { duration: false, clock: false } } };
+    if (!parsed) return { startHour: '', startMinute: '', incrementMinutes: 60, showAmPm: true, use24Hour: false, startDay: DAYS_OF_WEEK[0], chipDisplayModes: { __default__: { duration: false, clock: false } }, summaryRowOrder: null };
     return {
       startHour: typeof parsed?.startHour === 'string' ? parsed.startHour : '',
       startMinute: typeof parsed?.startMinute === 'string' ? parsed.startMinute : '',
@@ -90,10 +90,11 @@ const loadTacticsSettings = () => {
       use24Hour: parsed?.use24Hour === true,
       startDay: DAYS_OF_WEEK.includes(parsed?.startDay) ? parsed.startDay : DAYS_OF_WEEK[0],
       chipDisplayModes: parsed?.chipDisplayModes && typeof parsed.chipDisplayModes === 'object' && !Array.isArray(parsed.chipDisplayModes) ? parsed.chipDisplayModes : { __default__: { duration: false, clock: false } },
+      summaryRowOrder: Array.isArray(parsed?.summaryRowOrder) ? parsed.summaryRowOrder : null,
     };
   } catch (error) {
     console.error('Failed to read tactics settings', error);
-    return { startHour: '', startMinute: '', incrementMinutes: 60, showAmPm: true, use24Hour: false, startDay: DAYS_OF_WEEK[0], chipDisplayModes: { __default__: { duration: false, clock: false } } };
+    return { startHour: '', startMinute: '', incrementMinutes: 60, showAmPm: true, use24Hour: false, startDay: DAYS_OF_WEEK[0], chipDisplayModes: { __default__: { duration: false, clock: false } }, summaryRowOrder: null };
   }
 };
 const loadTacticsChipsState = (yearNumber = null) => {
@@ -395,6 +396,7 @@ export default function TacticsPage() {
   const [showAmPm, setShowAmPm] = useState(initialTacticsSettings.showAmPm);
   const [use24Hour, setUse24Hour] = useState(initialTacticsSettings.use24Hour);
   const [chipDisplayModes, setChipDisplayModes] = useState(initialTacticsSettings.chipDisplayModes);
+  const [summaryRowOrder, setSummaryRowOrder] = useState(initialTacticsSettings.summaryRowOrder);
 
   const handleToggleChipDisplayFlag = useCallback((projectId, flag) => {
     setChipDisplayModes((prev) => {
@@ -404,8 +406,8 @@ export default function TacticsPage() {
   }, []);
 
   useEffect(() => {
-    saveTacticsSettings({ startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay, chipDisplayModes });
-  }, [startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay, chipDisplayModes]);
+    saveTacticsSettings({ startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay, chipDisplayModes, summaryRowOrder });
+  }, [startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay, chipDisplayModes, summaryRowOrder]);
   const hourRows = useMemo(() => {
     if (!startHour || !startMinute) return [];
     const startMinutes = parseHour12ToMinutes(startHour);
@@ -517,6 +519,15 @@ export default function TacticsPage() {
   );
   const totalColumnCount = Math.max(DAY_COLUMN_COUNT + stagingColumnCount, maxChipColumnIndex + 1);
   const [selectedSummaryRowId, setSelectedSummaryRowId] = useState(null);
+  useEffect(() => {
+    const handler = (e) => {
+      if (!e.target.closest('[data-summary-row]')) {
+        setSelectedSummaryRowId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
   const [selectedCell, setSelectedCell] = useState(null);
   const [cellMenu, setCellMenu] = useState(null);
   const [scheduleItemPanelOpen, setScheduleItemPanelOpen] = useState(false);
@@ -1489,6 +1500,40 @@ export default function TacticsPage() {
   const toggleSummaryRowSelection = useCallback((rowId) => {
     setSelectedSummaryRowId((prev) => (prev === rowId ? null : rowId));
   }, []);
+  const summaryDragRef = useRef(null);
+  const [summaryDragOverId, setSummaryDragOverId] = useState(null);
+  const handleSummaryDragStart = useCallback((e, id) => {
+    summaryDragRef.current = id;
+    e.dataTransfer.effectAllowed = 'move';
+  }, []);
+  const handleSummaryDragOver = useCallback((e, id) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setSummaryDragOverId(id);
+  }, []);
+  const handleSummaryDragLeave = useCallback((e) => {
+    // Only clear when leaving the row entirely, not when moving between child cells
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setSummaryDragOverId(null);
+    }
+  }, []);
+  const handleSummaryDrop = useCallback((e, targetId, currentIds) => {
+    e.preventDefault();
+    setSummaryDragOverId(null);
+    const sourceId = summaryDragRef.current;
+    summaryDragRef.current = null;
+    if (!sourceId || sourceId === targetId) return;
+    setSummaryRowOrder((prev) => {
+      const base = prev ?? currentIds;
+      const from = base.indexOf(sourceId);
+      const to = base.indexOf(targetId);
+      if (from === -1 || to === -1) return base;
+      const next = [...base];
+      next.splice(from, 1);
+      next.splice(to, 0, sourceId);
+      return next;
+    });
+  }, []);
   const toggleCellSelection = useCallback((columnIndex, rowId) => {
     if (columnIndex == null || rowId == null) return;
     setSelectedBlockId(null);
@@ -2432,6 +2477,16 @@ export default function TacticsPage() {
       }),
     [highlightedProjects, projectColumnTotals, visibleColumnCount]
   );
+  const orderedProjectSummaries = useMemo(() => {
+    if (!summaryRowOrder || summaryRowOrder.length === 0) return projectSummaries;
+    const indexMap = new Map(summaryRowOrder.map((id, i) => [id, i]));
+    const sorted = [...projectSummaries].sort((a, b) => {
+      const ai = indexMap.has(a.id) ? indexMap.get(a.id) : Infinity;
+      const bi = indexMap.has(b.id) ? indexMap.get(b.id) : Infinity;
+      return ai - bi;
+    });
+    return sorted;
+  }, [projectSummaries, summaryRowOrder]);
   useEffect(() => {
     const projectWeeklyQuotas = projectSummaries.map((summary) => ({
       id: summary.id,
@@ -4178,6 +4233,7 @@ export default function TacticsPage() {
                 ></td>
               </tr>
               <tr
+                data-summary-row
                 className={`grid text-sm cursor-pointer ${
                   selectedSummaryRowId === 'sleep-summary' ? 'outline outline-[2px]' : ''
                 }`}
@@ -4222,11 +4278,13 @@ export default function TacticsPage() {
                 </td>
                 {renderExtraColumnCells('summary-sleep')}
               </tr>
-              {projectSummaries.map((summary) => {
+              {orderedProjectSummaries.map((summary) => {
                 const rowSelected = selectedSummaryRowId === summary.id;
+                const isDragOver = summaryDragOverId === summary.id;
                 return (
                   <tr
                     key={`project-summary-${summary.id}`}
+                    data-summary-row
                     className={`grid text-sm cursor-pointer ${
                       rowSelected ? 'outline outline-[2px]' : ''
                     }`}
@@ -4236,7 +4294,11 @@ export default function TacticsPage() {
                         : { gridTemplateColumns }
                     }
                     tabIndex={0}
-                    onMouseDown={(e) => e.preventDefault()}
+                    draggable
+                    onDragStart={(e) => handleSummaryDragStart(e, summary.id)}
+                    onDragOver={(e) => handleSummaryDragOver(e, summary.id)}
+                    onDragLeave={handleSummaryDragLeave}
+                    onDrop={(e) => handleSummaryDrop(e, summary.id, orderedProjectSummaries.map((s) => s.id))}
                     onClick={() => toggleSummaryRowSelection(summary.id)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
@@ -4246,7 +4308,7 @@ export default function TacticsPage() {
                     }}
                   >
                     <td
-                      className="border border-[#e5e7eb] px-3 py-px text-center"
+                      className="border border-[#e5e7eb] py-px text-center"
                       style={{
                         backgroundColor: summary.color || '#0f172a',
                         color: '#ffffff',
@@ -4255,22 +4317,39 @@ export default function TacticsPage() {
                         position: 'sticky',
                         left: 0,
                         zIndex: 11,
+                        display: 'grid',
+                        gridTemplateColumns: '20px 1fr',
+                        alignItems: 'center',
+                        cursor: 'grab',
+                        paddingRight: '12px',
+                        ...(isDragOver ? { borderTop: '2px solid #111111' } : {}),
                       }}
                     >
-                      {summary.label}
+                      <span style={{ opacity: 0.45, fontSize: '11px', lineHeight: 1, userSelect: 'none', textAlign: 'center' }}>⠿</span>
+                      <span style={{ textAlign: 'center' }}>{summary.label}</span>
                     </td>
-                    {displayedWeekDays.map((day, idx) => (
-                      <td
-                        key={`project-${summary.id}-${day}-${idx}`}
-                        className="border border-[#e5e7eb] px-3 py-px text-center"
-                        style={{ backgroundColor: '#ffffff', fontSize: `${14 * textSizeScale}px` }}
-                      >
-                        {formatDuration(summary.columnTotals[idx] ?? 0)}
-                      </td>
-                    ))}
+                    {displayedWeekDays.map((day, idx) => {
+                      const val = summary.columnTotals[idx] ?? 0;
+                      const hasValue = val > 0;
+                      return (
+                        <td
+                          key={`project-${summary.id}-${day}-${idx}`}
+                          className="border border-[#e5e7eb] px-3 py-px text-center"
+                          style={{
+                            backgroundColor: hasValue ? '#f5f5f5' : '#ffffff',
+                            fontWeight: hasValue ? 700 : 400,
+                            color: hasValue ? '#111111' : '#9ca3af',
+                            fontSize: `${14 * textSizeScale}px`,
+                            ...(isDragOver ? { borderTop: '2px solid #111111' } : {}),
+                          }}
+                        >
+                          {formatDuration(val)}
+                        </td>
+                      );
+                    })}
                     <td
                       className="border border-[#e5e7eb] px-3 py-px text-center font-semibold"
-                      style={{ backgroundColor: '#ffffff', fontSize: `${14 * textSizeScale}px` }}
+                      style={{ backgroundColor: '#ffffff', fontSize: `${14 * textSizeScale}px`, ...(isDragOver ? { borderTop: '2px solid #111111' } : {}) }}
                     >
                       {formatDuration(summary.totalMinutes)}
                     </td>
@@ -4279,6 +4358,7 @@ export default function TacticsPage() {
                 );
               })}
               <tr
+                data-summary-row
                 className={`grid text-sm cursor-pointer ${
                   selectedSummaryRowId === 'rest-summary' ? 'outline outline-[2px]' : ''
                 }`}
@@ -4338,6 +4418,7 @@ export default function TacticsPage() {
                 {renderExtraColumnCells('summary-spacer')}
               </tr>
               <tr
+                data-summary-row
                 className={`grid text-sm cursor-pointer ${
                   selectedSummaryRowId === 'working-summary' ? 'outline outline-[2px]' : ''
                 }`}
@@ -4388,6 +4469,7 @@ export default function TacticsPage() {
                   {renderExtraColumnCells('summary-working')}
                 </tr>
               <tr
+                data-summary-row
                 className={`grid text-sm cursor-pointer ${
                   selectedSummaryRowId === 'buffer-summary' ? 'outline outline-[2px]' : ''
                 }`}
@@ -4437,6 +4519,7 @@ export default function TacticsPage() {
                 {renderExtraColumnCells('summary-buffer')}
               </tr>
               <tr
+                data-summary-row
                 className={`grid text-sm cursor-pointer ${
                   selectedSummaryRowId === 'available-summary' ? 'outline outline-[2px]' : ''
                 }`}
