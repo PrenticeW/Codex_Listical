@@ -657,10 +657,23 @@ export default function ProjectTimePlannerV2() {
           }
         });
 
-        const newProjects = projects.filter(k => k !== '-' && !existingHeaderIds.has(k));
-        if (newProjects.length === 0) return prevData;
+        // Update projectName and projectTagline on existing header rows when staging data changes
+        const updatedData = prevData.map(row => {
+          if (row._rowType === 'projectHeader' && existingHeaderIds.has(row.projectNickname)) {
+            const key = row.projectNickname;
+            const fullProjectName = projectNamesMap[key] || key;
+            const tagline = projectTaglinesMap?.[key] || '';
+            if (row.projectName !== fullProjectName || row.projectTagline !== tagline) {
+              return { ...row, projectName: fullProjectName, projectTagline: tagline };
+            }
+          }
+          return row;
+        });
 
-        const newData = [...prevData];
+        const newProjects = projects.filter(k => k !== '-' && !existingHeaderIds.has(k));
+        if (newProjects.length === 0) return updatedData;
+
+        const newData = [...updatedData];
         let insertIndex = lastProjectHeaderIndex + 1;
 
         // Insert project rows for any project that doesn't have a header yet (skip '-')

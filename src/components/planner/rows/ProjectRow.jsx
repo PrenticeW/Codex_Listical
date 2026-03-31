@@ -281,8 +281,10 @@ export default function ProjectRow({
                     ) : (
                       <span>
                         {(isHeader || isSubprojectHeader) ? (
-                          isHeader && projectTagline ? (
-                            <>{projectName}<span style={{ fontWeight: 400, opacity: 0.7 }}>: {projectTagline}</span></>
+                          isHeader ? (
+                            projectTagline ? (
+                              <>{(projectName || displayLabel).toUpperCase()}<span style={{ fontWeight: 400, opacity: 0.7 }}>: {projectTagline}</span></>
+                            ) : (projectName || displayLabel).toUpperCase()
                           ) : displayLabel
                         ) : '\u00A0'}
                       </span>
