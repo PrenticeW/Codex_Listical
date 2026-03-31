@@ -2800,7 +2800,7 @@ export default function TacticsPage() {
       const projectId = block.projectId || 'sleep';
       const metadata = projectMetadata.get(projectId);
       const isScheduleChip = block.id.startsWith('schedule-chip-');
-      const displayMode = chipDisplayModes[projectId] ?? chipDisplayModes['__default__'] ?? 'label';
+      const displayMode = chipDisplayModes['__default__'] ?? 'label';
       let rawLabel;
       let largeTimeStr = null;
       if (isScheduleChip) {
@@ -2848,7 +2848,7 @@ export default function TacticsPage() {
           }
         }
         if (displayMode === 'duration' && !isMultiRow) {
-          const blockMins = overrideMins ?? incrementMinutes;
+          const blockMins = (Number.isFinite(mins) && mins > 0) ? mins : incrementMinutes;
           const h = Math.floor(blockMins / 60);
           const m = blockMins % 60;
           const durStr = h === 0 ? `${m}` : m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
