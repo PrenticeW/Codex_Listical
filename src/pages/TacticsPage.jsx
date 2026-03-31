@@ -16,8 +16,15 @@ import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../utils/staging/planTableHelpers';
 import { pickCustomChipColour } from '../utils/staging/projectColour';
 import { saveTacticsMetrics } from '../lib/tacticsMetricsStorage';
+import {
+  loadTacticsSettings,
+  saveTacticsSettings,
+  loadTacticsChipsState,
+  saveTacticsChipsState,
+  loadTacticsColumnWidths,
+  saveTacticsColumnWidths,
+} from '../lib/tacticsStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
-import storage from '../lib/storageService';
 import usePageSize from '../hooks/usePageSize';
 import ColourPicker from '../components/ColourPicker';
 import ScheduleItemPanel from '../components/ScheduleItemPanel';
@@ -62,71 +69,6 @@ const updateChipSequenceFromList = (chips = []) => {
 };
 const logDragDebug = () => {}; // Debug logging disabled
 
-const TACTICS_STORAGE_KEY = 'tactics-page-settings';
-const TACTICS_CHIPS_STORAGE_KEY_TEMPLATE = 'tactics-year-{yearNumber}-chips-state';
-
-/**
- * Get year-specific storage key for tactics chips
- */
-const getTacticsChipsStorageKey = (yearNumber) => {
-  if (yearNumber === null || yearNumber === undefined) {
-    return 'tactics-chips-state'; // Legacy key for backward compatibility
-  }
-  return TACTICS_CHIPS_STORAGE_KEY_TEMPLATE.replace('{yearNumber}', yearNumber.toString());
-};
-
-const loadTacticsSettings = () => {
-  try {
-    const parsed = storage.getJSON(TACTICS_STORAGE_KEY, null);
-    if (!parsed) return { startHour: '', startMinute: '', incrementMinutes: 60, showAmPm: true, use24Hour: false, startDay: DAYS_OF_WEEK[0], chipDisplayModes: { __default__: { duration: false, clock: false } }, summaryRowOrder: null };
-    return {
-      startHour: typeof parsed?.startHour === 'string' ? parsed.startHour : '',
-      startMinute: typeof parsed?.startMinute === 'string' ? parsed.startMinute : '',
-      incrementMinutes:
-        typeof parsed?.incrementMinutes === 'number' && Number.isFinite(parsed.incrementMinutes)
-          ? parsed.incrementMinutes
-          : 60,
-      showAmPm: parsed?.showAmPm !== false,
-      use24Hour: parsed?.use24Hour === true,
-      startDay: DAYS_OF_WEEK.includes(parsed?.startDay) ? parsed.startDay : DAYS_OF_WEEK[0],
-      chipDisplayModes: parsed?.chipDisplayModes && typeof parsed.chipDisplayModes === 'object' && !Array.isArray(parsed.chipDisplayModes) ? parsed.chipDisplayModes : { __default__: { duration: false, clock: false } },
-      summaryRowOrder: Array.isArray(parsed?.summaryRowOrder) ? parsed.summaryRowOrder : null,
-    };
-  } catch (error) {
-    console.error('Failed to read tactics settings', error);
-    return { startHour: '', startMinute: '', incrementMinutes: 60, showAmPm: true, use24Hour: false, startDay: DAYS_OF_WEEK[0], chipDisplayModes: { __default__: { duration: false, clock: false } }, summaryRowOrder: null };
-  }
-};
-const loadTacticsChipsState = (yearNumber = null) => {
-  try {
-    const key = getTacticsChipsStorageKey(yearNumber);
-    const parsed = storage.getJSON(key, null);
-    if (!parsed) return { projectChips: null, customProjects: null, chipTimeOverrides: null };
-    return {
-      projectChips: Array.isArray(parsed?.projectChips) ? parsed.projectChips : null,
-      customProjects: Array.isArray(parsed?.customProjects) ? parsed.customProjects : null,
-      chipTimeOverrides: parsed?.chipTimeOverrides && typeof parsed.chipTimeOverrides === 'object' && !Array.isArray(parsed.chipTimeOverrides) ? parsed.chipTimeOverrides : null,
-    };
-  } catch (error) {
-    console.error('Failed to read tactics chip state', error);
-    return { projectChips: null, customProjects: null, chipTimeOverrides: null };
-  }
-};
-const saveTacticsSettings = (payload) => {
-  try {
-    storage.setJSON(TACTICS_STORAGE_KEY, payload);
-  } catch (error) {
-    console.error('Failed to save tactics settings', error);
-  }
-};
-const saveTacticsChipsState = (payload, yearNumber = null) => {
-  try {
-    const key = getTacticsChipsStorageKey(yearNumber);
-    storage.setJSON(key, payload);
-  } catch (error) {
-    console.error('Failed to save tactics chip state', error);
-  }
-};
 
 const formatHour12 = (hour, minutes = '00') => {
   const period = hour >= 12 ? 'PM' : 'AM';
@@ -534,19 +476,15 @@ export default function TacticsPage() {
 
   // Column widths for resizing (index 0 is the time column, rest are day/project columns)
   const [columnWidths, setColumnWidths] = useState(() => {
-    const storageKey = `tactics-column-widths-${currentYear}`;
-    const saved = storage.getJSON(storageKey, null);
-    if (saved && Array.isArray(saved)) {
-      return saved;
-    }
+    const saved = loadTacticsColumnWidths(currentYear);
+    if (saved) return saved;
     // Default: 120px for time column, 140px for all other columns
     return Array.from({ length: 30 }, (_, i) => i === 0 ? 120 : 140);
   });
 
   // Save column widths to storage when they change
   useEffect(() => {
-    const storageKey = `tactics-column-widths-${currentYear}`;
-    storage.setJSON(storageKey, columnWidths);
+    saveTacticsColumnWidths(columnWidths, currentYear);
   }, [columnWidths, currentYear]);
 
 
