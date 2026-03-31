@@ -281,12 +281,12 @@ function ChipLabel({ normalizedLabel, baseFontSize, wrap, largeTimeStr, isEditin
           }}
         >
           {largeTimeStr ? (
-            <span style={{ fontSize: `${14 * textSizeScale}px`, opacity: 0.9, color: 'white' }}>
+            <span style={{ fontSize: `${14 * textSizeScale}px`, opacity: 0.9, color: 'inherit' }}>
               {largeTimeStr}
             </span>
           ) : null}
           {clockStr ? (
-            <span style={{ fontSize: `${11 * textSizeScale}px`, opacity: 0.9, color: 'white' }}>
+            <span style={{ fontSize: `${11 * textSizeScale}px`, opacity: 0.9, color: 'inherit' }}>
               {clockStr}
             </span>
           ) : null}
@@ -2906,9 +2906,9 @@ export default function TacticsPage() {
           rawLabel = baseName;
         }
       }
-      // Compute sleep time info for sleep chips
+      // Compute sleep time info for sleep chips (only shown when clock mode is on)
       let sleepTimeInfo = null;
-      if (projectId === 'sleep') {
+      if (projectId === 'sleep' && showClock) {
         const isTopChip = block.startRowId === 'sleep-start';
         let displayMins = null;
         if (isTopChip) {
@@ -3093,7 +3093,7 @@ export default function TacticsPage() {
                 isEditing={isEditing}
                 textSizeScale={textSizeScale}
                 chipHeight={blockHeight}
-                clockStr={clockStr}
+                clockStr={projectId === 'sleep' ? null : clockStr}
                 bottomOffset={sleepTimeInfo?.isTopChip ? '18px' : '2px'}
               />
             )}
