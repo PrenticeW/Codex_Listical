@@ -39,6 +39,7 @@ import ContextMenu from '../components/planner/ContextMenu';
 import useContextMenu from '../hooks/planner/useContextMenu';
 import { createInitialData } from '../utils/planner/dataCreators';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../constants/planner/rowTypes';
+import { minutesToEstimateLabel } from '../utils/staging/planTableHelpers';
 import { mapDailyBoundsToTimeline } from '../utils/planner/dailyBoundsMapper';
 import { createEmptyTaskRows } from '../utils/planner/taskRowGenerator';
 import {
@@ -796,6 +797,10 @@ export default function ProjectTimePlannerV2() {
             return [chip.id, durationLabel];
           })
         );
+        // Short label: just the chip display text (what's shown on the chip itself)
+        const chipShortLabelMap = new Map(
+          tacticsChips.map(chip => [chip.id, toTitleCase(chip.displayLabel || chip.projectNickname)])
+        );
 
         // Remove rows for chips that no longer exist.
         // Update subprojectName on existing rows only when the user hasn't edited it
@@ -870,17 +875,49 @@ export default function ProjectTimePlannerV2() {
         }
         if (reorderChanged) changed = true;
 
-        // Find chips that don't already have a row
+        // Find chips that don't already have a header row
         const existingChipHeaderIds = new Set(
           reordered
             .filter(row => row._rowType === 'subprojectHeader' && row._chipId)
             .map(row => row._chipId)
         );
+        // Find chips that don't already have a task row
+        const existingChipTaskIds = new Set(
+          reordered
+            .filter(row => row._rowType === 'projectTask' && row._chipId)
+            .map(row => row._chipId)
+        );
         const newChips = tacticsChips.filter(chip => !existingChipHeaderIds.has(chip.id));
+        // Chips that have a header but are missing a task row (e.g. pre-existing sessions)
+        const chipsNeedingTaskRow = tacticsChips.filter(
+          chip => existingChipHeaderIds.has(chip.id) && !existingChipTaskIds.has(chip.id)
+        );
 
-        if (newChips.length === 0 && !changed) return prevData;
+        if (newChips.length === 0 && chipsNeedingTaskRow.length === 0 && !changed) return prevData;
 
         const newData = [...reordered];
+
+        // Helper to build a task row for a chip
+        const buildChipTaskRow = (chip, chipGroupId, taskLabel) => {
+          const estimateLabel = minutesToEstimateLabel(chip.durationMinutes);
+          const timeVal = chip.durationMinutes ? formatMinutesToHHmm(chip.durationMinutes) : '';
+          return {
+            id: `chip-task-${chip.id}`,
+            _rowType: 'projectTask',
+            _chipId: chip.id,
+            parentGroupId: chipGroupId,
+            projectNickname: chip.projectNickname,
+            checkbox: false,
+            project: chip.projectNickname,
+            subproject: '',
+            status: '-',
+            task: taskLabel,
+            recurring: 'Recurring',
+            estimate: estimateLabel,
+            timeValue: timeVal,
+            ...createEmptyDayColumns(totalDays),
+          };
+        };
 
         newChips.forEach(chip => {
           if (!chip.projectNickname) return;
@@ -932,6 +969,19 @@ export default function ProjectTimePlannerV2() {
           };
 
           newData.splice(insertAfterIndex + 1, 0, subprojectHeaderRow);
+          newData.splice(insertAfterIndex + 2, 0, buildChipTaskRow(chip, chipGroupId, chipShortLabelMap.get(chip.id)));
+        });
+
+        // For chips that already have a header but were missing a task row, insert one after the header
+        chipsNeedingTaskRow.forEach(chip => {
+          if (!chip.projectNickname) return;
+          const chipGroupId = `chip-${chip.id}`;
+          const durationLabel = chipLabelMap.get(chip.id);
+          const headerIndex = newData.findIndex(
+            row => row._rowType === 'subprojectHeader' && row._chipId === chip.id
+          );
+          if (headerIndex === -1) return;
+          newData.splice(headerIndex + 1, 0, buildChipTaskRow(chip, chipGroupId, chipShortLabelMap.get(chip.id)));
         });
 
         return newData;
@@ -951,16 +1001,24 @@ export default function ProjectTimePlannerV2() {
   // Called both on mount (timestamp check) and when the live event fires.
   const resetSubprojectLabels = useCallback((chips) => {
     if (!chips || chips.length === 0) return;
+    const toTitleCase = (str) => str ? str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase()) : str;
     const chipLabelMap = new Map(
       chips.map(chip => {
-        const durationLabel = chip.formattedDuration
-          ? `${chip.formattedDuration} of ${chip.displayLabel || chip.projectNickname} on ${chip.dayName}`
-          : `${chip.displayLabel || chip.projectNickname} on ${chip.dayName}`;
+        const name = toTitleCase(chip.displayLabel || chip.projectNickname);
+        const day = toTitleCase(chip.dayName);
+        const duration = chip.formattedDuration ? chip.formattedDuration.toLowerCase() : null;
+        const durationLabel = duration
+          ? `${duration} of ${name} on ${day}`
+          : `${name} on ${day}`;
         return [chip.id, durationLabel];
       })
     );
+    const chipShortLabelMap = new Map(
+      chips.map(chip => [chip.id, toTitleCase(chip.displayLabel || chip.projectNickname)])
+    );
     setData(prevData => {
       let changed = false;
+      // Update existing subprojectHeader and chip task rows
       const newData = prevData.map(row => {
         if (row._rowType === 'subprojectHeader' && row._chipId) {
           const canonicalLabel = chipLabelMap.get(row._chipId);
@@ -969,11 +1027,58 @@ export default function ProjectTimePlannerV2() {
             return { ...row, subprojectName: canonicalLabel, _chipLabel: canonicalLabel };
           }
         }
+        if (row._rowType === 'projectTask') {
+          const chipId = row._chipId || (row.id?.startsWith('chip-task-') ? row.id.slice('chip-task-'.length) : null);
+          if (chipId) {
+            const shortLabel = chipShortLabelMap.get(chipId);
+            const chip = chips.find(c => c.id === chipId);
+            if (chip && shortLabel !== undefined) {
+              const estimateLabel = minutesToEstimateLabel(chip.durationMinutes);
+              const timeVal = chip.durationMinutes ? formatMinutesToHHmm(chip.durationMinutes) : '';
+              if (row.task !== shortLabel || row.estimate !== estimateLabel || row.timeValue !== timeVal || row.recurring !== 'true') {
+                changed = true;
+                return { ...row, _chipId: chipId, task: shortLabel, estimate: estimateLabel, timeValue: timeVal, recurring: 'true' };
+              }
+            }
+          }
+        }
         return row;
+      });
+      // Insert task rows for any chip headers that are still missing one
+      const existingChipTaskIds = new Set(
+        newData
+          .filter(r => r._rowType === 'projectTask' && (r._chipId || r.id?.startsWith('chip-task-')))
+          .map(r => r._chipId || r.id.slice('chip-task-'.length))
+      );
+      chips.forEach(chip => {
+        if (!chip.projectNickname || existingChipTaskIds.has(chip.id)) return;
+        const headerIndex = newData.findIndex(r => r._rowType === 'subprojectHeader' && r._chipId === chip.id);
+        if (headerIndex === -1) return;
+        const chipGroupId = `chip-${chip.id}`;
+        const estimateLabel = minutesToEstimateLabel(chip.durationMinutes);
+        const timeVal = chip.durationMinutes ? formatMinutesToHHmm(chip.durationMinutes) : '';
+        const taskRow = {
+          id: `chip-task-${chip.id}`,
+          _rowType: 'projectTask',
+          _chipId: chip.id,
+          parentGroupId: chipGroupId,
+          projectNickname: chip.projectNickname,
+          checkbox: false,
+          project: chip.projectNickname,
+          subproject: '',
+          status: '-',
+          task: chipShortLabelMap.get(chip.id),
+          recurring: 'true',
+          estimate: estimateLabel,
+          timeValue: timeVal,
+          ...createEmptyDayColumns(totalDays),
+        };
+        newData.splice(headerIndex + 1, 0, taskRow);
+        changed = true;
       });
       return changed ? newData : prevData;
     });
-  }, []);
+  }, [totalDays]);
 
   // On mount (or when chips load), check if "Send to System" was pressed since last reset
   useEffect(() => {
