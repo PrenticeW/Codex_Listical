@@ -181,6 +181,10 @@ export const useKeyboardHandlers = ({
       // Don't interfere if we're editing
       if (editingCell) return;
 
+      // Don't interfere if focus is inside an input/textarea outside the table (e.g. a modal)
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
       // Copy: Cmd/Ctrl+C (handled by copy event listener)
       // Paste: Cmd/Ctrl+V (handled by paste event listener)
 
