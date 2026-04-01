@@ -490,9 +490,9 @@ export default function ProjectRow({
                           handleEditKeyDown(e, rowId, editableColumnId, e.target.value);
                         }
                       }}
-                      onBlur={() => {
+                      onBlur={(e) => {
                         if (handleEditComplete) {
-                          handleEditComplete(rowId, editableColumnId, editValue);
+                          handleEditComplete(rowId, editableColumnId, e.target.value);
                         }
                       }}
                       autoFocus

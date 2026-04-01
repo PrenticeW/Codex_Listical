@@ -1137,8 +1137,12 @@ export default function ProjectTimePlannerV2() {
       });
       return;
     }
+    // Commit any active edit before moving to another cell
+    if (editingCell && (editingCell.rowId !== rowId || editingCell.columnId !== columnId)) {
+      handleEditComplete(editingCell.rowId, editingCell.columnId, editValue);
+    }
     handleCellMouseDown(e, rowId, columnId);
-  }, [handleCellMouseDown, handleContextMenu, getCellKey, selectedCells, selectedRows]);
+  }, [handleCellMouseDown, handleContextMenu, getCellKey, selectedCells, selectedRows, editingCell, editValue, handleEditComplete]);
 
   // Handle context menu event (right-click) to prevent default browser menu
   const handleCellContextMenu = useCallback((e, rowId, columnId) => {

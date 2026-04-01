@@ -46,8 +46,12 @@ export default function useEditState({
     // Get the old value before updating
     const row = data.find(r => r.id === rowId);
 
-    // For subproject section rows with custom labels, save to subprojectLabel field
-    const actualColumnId = (columnId === 'task' && row?.subprojectLabel) ? 'subprojectLabel' : columnId;
+    // For subproject header rows, save to subprojectName; for subproject section rows with custom labels, save to subprojectLabel
+    const actualColumnId = columnId === 'task'
+      ? row?._rowType === 'subprojectHeader' ? 'subprojectName'
+      : row?.subprojectLabel ? 'subprojectLabel'
+      : columnId
+      : columnId;
     const oldValue = row?.[actualColumnId] || '';
 
     // Don't create command if value hasn't changed
