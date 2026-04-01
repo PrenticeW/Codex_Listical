@@ -781,7 +781,8 @@ export default function ProjectTimePlannerV2() {
         );
 
         // Remove rows for chips that no longer exist.
-        // Do not update subprojectName on existing rows — the user may have edited it directly.
+        // Update subprojectName on existing rows only when the user hasn't edited it
+        // (detected by comparing against the last chip-derived label stored in _chipLabel).
         let changed = false;
         const filteredData = prevData
           .filter(row => {
@@ -790,6 +791,22 @@ export default function ProjectTimePlannerV2() {
               return false;
             }
             return true;
+          })
+          .map(row => {
+            if (row._rowType !== 'subprojectHeader' || !row._chipId) return row;
+            const newLabel = chipLabelMap.get(row._chipId);
+            if (newLabel === undefined) return row;
+            // Only update subprojectName if the user hasn't edited it from the chip-derived value
+            const userEdited = row._chipLabel !== undefined && row.subprojectName !== row._chipLabel;
+            if (userEdited) {
+              // Keep user's edit but track new chip label for future comparisons
+              if (row._chipLabel === newLabel) return row;
+              changed = true;
+              return { ...row, _chipLabel: newLabel };
+            }
+            if (row.subprojectName === newLabel && row._chipLabel === newLabel) return row;
+            changed = true;
+            return { ...row, subprojectName: newLabel, _chipLabel: newLabel };
           });
 
         // Find chips that don't already have a row
@@ -837,6 +854,7 @@ export default function ProjectTimePlannerV2() {
             id: `chip-header-${chip.id}`,
             _rowType: 'subprojectHeader',
             _chipId: chip.id,
+            _chipLabel: durationLabel,
             groupId: chipGroupId,
             parentGroupId: projectGroupId,
             projectNickname: chip.projectNickname,
@@ -887,9 +905,9 @@ export default function ProjectTimePlannerV2() {
       const newData = prevData.map(row => {
         if (row._rowType === 'subprojectHeader' && row._chipId) {
           const canonicalLabel = chipLabelMap.get(row._chipId);
-          if (canonicalLabel !== undefined && row.subprojectName !== canonicalLabel) {
+          if (canonicalLabel !== undefined && (row.subprojectName !== canonicalLabel || row._chipLabel !== canonicalLabel)) {
             changed = true;
-            return { ...row, subprojectName: canonicalLabel };
+            return { ...row, subprojectName: canonicalLabel, _chipLabel: canonicalLabel };
           }
         }
         return row;

@@ -899,6 +899,28 @@ export default function TacticsPage() {
     () => new Map(timelineRowIds.map((rowId, index) => [rowId, index])),
     [timelineRowIds]
   );
+
+  // One-time backfill: set durationMinutes on day-column chips that are missing it.
+  // This handles chips saved before durationMinutes was introduced.
+  const hasDurationBackfilledRef = useRef(false);
+  useEffect(() => {
+    if (hasDurationBackfilledRef.current) return;
+    if (!timelineRowIds.length || !rowIndexMap.size || !incrementMinutes) return;
+    hasDurationBackfilledRef.current = true;
+    setProjectChips((prev) => {
+      let changed = false;
+      const next = prev.map((chip) => {
+        if (chip.durationMinutes != null) return chip;
+        if (chip.columnIndex >= DAY_COLUMN_COUNT) return chip;
+        const duration = getBlockDuration(chip, rowIndexMap, timelineRowIds, incrementMinutes);
+        if (!duration) return chip;
+        changed = true;
+        return { ...chip, durationMinutes: duration };
+      });
+      return changed ? next : prev;
+    });
+  }, [timelineRowIds, rowIndexMap, incrementMinutes]);
+
   const isRowWithinBlock = useCallback(
     (rowId, block) => {
       if (!block) return false;
