@@ -539,9 +539,6 @@ export default function ProjectRow({
           } else if (columnId === 'estimate' && isHeader) {
             // Total scheduled tasks in estimate column for header rows
             cellContent = projectTotal;
-          } else if (columnId === 'estimate' && isSubprojectHeader) {
-            // Chip duration from Tactics in estimate column for subproject header rows
-            cellContent = row.original.estimate || '\u00A0';
           } else if (columnId === 'timeValue' && isHeader) {
             // Weekly quota in timeValue column for header rows
             cellContent = `of ${formattedQuota}`;
