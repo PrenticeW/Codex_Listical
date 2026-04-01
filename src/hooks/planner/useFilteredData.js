@@ -35,6 +35,9 @@ export const useFilteredData = ({
   coerceNumber,
 }) => {
   return useMemo(() => {
+    // Strip tombstone rows — these are internal bookkeeping only and must never render
+    const visibleData = computedData.filter(row => row._rowType !== 'deletedChip');
+
     // If no filters and no collapsed groups, return all data
     if (dayColumnFilters.size === 0 &&
         !selectedProjectFilters.size &&
@@ -43,7 +46,7 @@ export const useFilteredData = ({
         !selectedRecurringFilters.size &&
         !selectedEstimateFilters.size &&
         collapsedGroups.size === 0) {
-      return computedData;
+      return visibleData;
     }
 
     // Helper: Check if a row or any of its ancestors are collapsed
@@ -105,7 +108,7 @@ export const useFilteredData = ({
       return selectedEstimateFilters.has(getNormalizedColumnValue(row, 'estimate'));
     };
 
-    const filtered = computedData.filter(row => {
+    const filtered = visibleData.filter(row => {
       // Filter out rows that belong to collapsed groups (archive weeks and projects)
       // Use recursive check to handle nested groups (e.g., archive week > project > sections)
       if (isInCollapsedGroup(row)) {

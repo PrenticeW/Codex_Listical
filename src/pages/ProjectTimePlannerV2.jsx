@@ -59,6 +59,8 @@ import {
 } from '../utils/planner/clipboardOperations';
 import { createSortInboxCommand } from '../utils/planner/sortInbox';
 import { createSortPlannerCommand } from '../utils/planner/sortPlanner';
+import { saveTaskRows } from '../utils/planner/storage';
+import { DEFAULT_PROJECT_ID } from '../constants/plannerStorageKeys';
 import {
   calculateWeekRange,
   calculateWeekNumber,
@@ -130,7 +132,7 @@ export default function ProjectTimePlannerV2() {
   const { sizeScale } = usePageSize('system');
 
   // Initialize data from storage or create new
-  const [data, setData] = useState(() => {
+  const [data, setDataRaw] = useState(() => {
     // Try to load from storage first
     if (taskRows && taskRows.length > 0) {
       return taskRows;
@@ -139,14 +141,38 @@ export default function ProjectTimePlannerV2() {
     return createInitialData(20, totalDays, startDate);
   });
 
-  // Save data to storage when it changes
+  // Keep a ref to the latest committed data value, updated synchronously alongside setData.
+  // This lets the unmount flush always write the newest data, even if React hasn't re-rendered.
+  const latestDataRef = useRef(data);
+
+  // Wrap setData so the ref stays in sync with every enqueued state update.
+  const setData = useCallback((updater) => {
+    setDataRaw(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      latestDataRef.current = next;
+      return next;
+    });
+  }, []);
+
+  // Save data to storage when it changes (debounced).
+  // On unmount, flush immediately so navigation away doesn't lose pending edits.
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       setTaskRows(data);
     }, 500); // Debounce saves by 500ms to avoid too many writes
 
-    return () => clearTimeout(timeoutId);
+    return () => {
+      clearTimeout(timeoutId);
+    };
   }, [data, setTaskRows]);
+
+  // Flush unsaved data to storage on unmount (bypasses debounce so navigation away doesn't lose edits)
+  useEffect(() => {
+    return () => {
+      saveTaskRows(latestDataRef.current, DEFAULT_PROJECT_ID, currentYear);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [selectedCells, setSelectedCells] = useState(new Set()); // Set of "rowId|columnId"
   const [selectedRows, setSelectedRows] = useState(new Set()); // Set of rowIds for row highlight
@@ -875,7 +901,12 @@ export default function ProjectTimePlannerV2() {
         }
         if (reorderChanged) changed = true;
 
-        // Find chips that don't already have a header row
+        // Find chips that don't already have a header row (or were intentionally deleted)
+        const deletedChipIds = new Set(
+          reordered
+            .filter(row => row._rowType === 'deletedChip' && row._chipId)
+            .map(row => row._chipId)
+        );
         const existingChipHeaderIds = new Set(
           reordered
             .filter(row => row._rowType === 'subprojectHeader' && row._chipId)
@@ -887,10 +918,10 @@ export default function ProjectTimePlannerV2() {
             .filter(row => row._rowType === 'projectTask' && row._chipId)
             .map(row => row._chipId)
         );
-        const newChips = tacticsChips.filter(chip => !existingChipHeaderIds.has(chip.id));
+        const newChips = tacticsChips.filter(chip => !existingChipHeaderIds.has(chip.id) && !deletedChipIds.has(chip.id));
         // Chips that have a header but are missing a task row (e.g. pre-existing sessions)
         const chipsNeedingTaskRow = tacticsChips.filter(
-          chip => existingChipHeaderIds.has(chip.id) && !existingChipTaskIds.has(chip.id)
+          chip => existingChipHeaderIds.has(chip.id) && !existingChipTaskIds.has(chip.id) && !deletedChipIds.has(chip.id)
         );
 
         if (newChips.length === 0 && chipsNeedingTaskRow.length === 0 && !changed) return prevData;
@@ -1022,9 +1053,13 @@ export default function ProjectTimePlannerV2() {
       const newData = prevData.map(row => {
         if (row._rowType === 'subprojectHeader' && row._chipId) {
           const canonicalLabel = chipLabelMap.get(row._chipId);
-          if (canonicalLabel !== undefined && (row.subprojectName !== canonicalLabel || row._chipLabel !== canonicalLabel)) {
-            changed = true;
-            return { ...row, subprojectName: canonicalLabel, _chipLabel: canonicalLabel };
+          if (canonicalLabel !== undefined) {
+            // Respect user edits: only reset if the user hasn't changed the label
+            const userEdited = row._chipLabel !== undefined && row.subprojectName !== row._chipLabel;
+            if (!userEdited && (row.subprojectName !== canonicalLabel || row._chipLabel !== canonicalLabel)) {
+              changed = true;
+              return { ...row, subprojectName: canonicalLabel, _chipLabel: canonicalLabel };
+            }
           }
         }
         if (row._rowType === 'projectTask') {
@@ -1367,6 +1402,16 @@ export default function ProjectTimePlannerV2() {
       .map((row, i) => ({ row, index: rowIndices[i] }))
       .sort((a, b) => a.index - b.index);
 
+    // For chip-linked subproject headers being deleted, create tombstone rows
+    // so the sync effect doesn't re-insert them on next mount.
+    const tombstones = sortedDeletions
+      .filter(({ row }) => row._rowType === 'subprojectHeader' && row._chipId)
+      .map(({ row }) => ({
+        id: `deleted-chip-${row._chipId}`,
+        _rowType: 'deletedChip',
+        _chipId: row._chipId,
+      }));
+
     // Create command for row deletion
     const command = {
       execute: () => {
@@ -1376,6 +1421,12 @@ export default function ProjectTimePlannerV2() {
           [...sortedDeletions].reverse().forEach(({ index }) => {
             newData.splice(index, 1);
           });
+          // Add tombstones so the sync won't re-insert these chips
+          tombstones.forEach(t => {
+            if (!newData.some(r => r.id === t.id)) {
+              newData.push(t);
+            }
+          });
           return newData;
         });
         // Clear selection after deletion
@@ -1384,7 +1435,7 @@ export default function ProjectTimePlannerV2() {
       },
       undo: () => {
         setData(prev => {
-          const newData = [...prev];
+          const newData = prev.filter(r => !tombstones.some(t => t.id === r.id));
           // Restore in original order
           sortedDeletions.forEach(({ row, index }) => {
             newData.splice(index, 0, row);
