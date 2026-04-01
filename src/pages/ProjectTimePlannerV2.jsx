@@ -913,7 +913,7 @@ export default function ProjectTimePlannerV2() {
             status: '',
             task: '',
             recurring: '',
-            estimate: '',
+            estimate: chip.formattedDuration || '',
             timeValue: '',
             ...createEmptyDayColumns(totalDays),
           };

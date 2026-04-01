@@ -133,7 +133,7 @@ function enrichChips(projectChips, idToNicknameMap, chipTimeOverrides, increment
       const storedMinutes = (chipTimeOverrides?.[chip.id] ?? chip.durationMinutes) ?? null;
       const durationMinutes = storedMinutes ?? estimateDurationFromRowIds(chip.startRowId, chip.endRowId, incrementMinutes);
       const formattedDuration = durationMinutes != null ? formatDuration(durationMinutes) : null;
-      return { ...chip, projectNickname, formattedDuration };
+      return { ...chip, projectNickname, durationMinutes, formattedDuration };
     });
 }
 

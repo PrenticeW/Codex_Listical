@@ -2123,10 +2123,10 @@ export default function TacticsPage() {
         let currentMinutes;
         if (currentOverride != null) {
           currentMinutes = currentOverride;
+        } else if (scheduleItem) {
+          currentMinutes = parseEstimateLabelToMinutes(scheduleItem.timeValue) ?? block.durationMinutes ?? spanMinutes;
         } else if (block.durationMinutes) {
           currentMinutes = block.durationMinutes;
-        } else if (scheduleItem) {
-          currentMinutes = parseEstimateLabelToMinutes(scheduleItem.timeValue) ?? spanMinutes;
         } else {
           currentMinutes = spanMinutes;
         }
@@ -2585,8 +2585,8 @@ export default function TacticsPage() {
         return sum + chipMins;
       }, 0);
       const remainingMinutes = Math.max(incrementMinutes, totalMinutes - alreadyPlaced);
-      const durationMinutes = remainingMinutes;
-      const span = Math.max(1, Math.ceil(durationMinutes / Math.max(1, incrementMinutes)));
+      const durationMinutes = Math.max(1, totalMinutes - alreadyPlaced);
+      const span = Math.max(1, Math.ceil(remainingMinutes / Math.max(1, incrementMinutes)));
 
       const existingInCol = projectChips.filter(
         (c) => c.columnIndex === columnIndex && c.id.startsWith('schedule-chip-')
