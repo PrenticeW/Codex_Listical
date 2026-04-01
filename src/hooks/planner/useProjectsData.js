@@ -3,7 +3,7 @@
  * Loads projects and subprojects from Staging storage
  */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useYear } from '../../contexts/YearContext';
 import { loadStagingState, STAGING_STORAGE_EVENT } from '../../lib/stagingStorage';
 import useStorageSync from '../common/useStorageSync';
@@ -79,15 +79,35 @@ function extractProjectsData(shortlist) {
       // Store tagline
       projectTaglinesMap[projectKey] = (item.projectTagline || '').trim();
 
-      // Extract subprojects from planSummary
-      if (item.planSummary && Array.isArray(item.planSummary.subprojects)) {
-        item.planSummary.subprojects.forEach(subproject => {
-          const subprojectName = (subproject.name || '').trim();
-          if (subprojectName && subprojectName !== '-') {
-            allSubprojects.add(subprojectName);
-            projectSubprojectsMap[projectKey].push(subprojectName);
+      // Extract subprojects by scanning for rows in the Subprojects section.
+      // StagingPageV2 inserts subproject rows as 'prompt' type (name at col 1)
+      // or legacy 'data' type (name at col 0). Section membership is determined
+      // by walking backwards from each row to find the nearest 'header' row with
+      // __sectionType === 'Subprojects'.
+      if (Array.isArray(item.planTableEntries) && item.planTableEntries.length > 0) {
+        let inSubprojectsSection = false;
+        for (const row of item.planTableEntries) {
+          if (row?.__rowType === 'header') {
+            inSubprojectsSection = row.__sectionType === 'Subprojects';
+            continue;
           }
-        });
+          if (!inSubprojectsSection) continue;
+          if (row?.__rowType === 'prompt') {
+            // Prompt rows: name is at col 1 (Schedule uses col 2, Subprojects uses col 1)
+            const name = (row[1] ?? '').trim();
+            if (name && name !== '-') {
+              allSubprojects.add(name);
+              projectSubprojectsMap[projectKey].push(name);
+            }
+          } else if (row?.__rowType === 'data' || !row?.__rowType) {
+            // Legacy data rows: name may be at col 0
+            const name = (row[0] ?? '').trim();
+            if (name && name !== '-') {
+              allSubprojects.add(name);
+              projectSubprojectsMap[projectKey].push(name);
+            }
+          }
+        }
       }
     }
   });

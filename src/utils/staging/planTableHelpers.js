@@ -443,26 +443,27 @@ export const buildProjectPlanSummary = (item) => {
   if (!item) return { subprojects: [], totalHours: '0.00' };
 
   const entries = clonePlanTableEntries(item.planTableEntries);
+  const bounds = calculateSectionBoundaries(item);
 
-  // Use row metadata to find Schedule prompt rows (works for the new simple table format)
+  // Extract subprojects from the Subprojects section (position-based, not __sectionType-based,
+  // because __sectionType on header rows may be stale from earlier section order changes)
   const subprojects = [];
-  let inScheduleSection = false;
-  let scheduleTotalMinutes = 0;
-  for (let rowIdx = 0; rowIdx < entries.length; rowIdx += 1) {
+  for (let rowIdx = bounds.subprojectStart; rowIdx <= bounds.subprojectEnd; rowIdx += 1) {
     const row = entries[rowIdx];
-    if (row.__rowType === 'header') {
-      inScheduleSection = row.__sectionType === 'Schedule';
-      continue;
-    }
-    if (inScheduleSection && row.__rowType === 'prompt') {
-      const name = (row[COL.CONTENT] ?? '').trim();
-      const timeValue = row[COL.ESTIMATE] ?? '0.00';
-      subprojects.push({ name, timeValue });
-      scheduleTotalMinutes += parseTimeValueToMinutes(timeValue);
-    }
+    if (!row) continue;
+    const name = (row[COL.CONTENT] ?? '').trim();
+    if (name) subprojects.push({ name, timeValue: '0.00' });
   }
 
-  // Also sum Actions section (needsPlan rows) for total hours
+  // Sum Schedule section rows for scheduled hours
+  let scheduleTotalMinutes = 0;
+  for (let rowIdx = bounds.scheduleStart; rowIdx <= bounds.scheduleEnd; rowIdx += 1) {
+    const row = entries[rowIdx];
+    if (!row) continue;
+    scheduleTotalMinutes += parseTimeValueToMinutes(row[COL.ESTIMATE] ?? '0.00');
+  }
+
+  // Sum Actions section response rows for total hours
   let needsPlanTotalMinutes = 0;
   let inActionsSection = false;
   for (let rowIdx = 0; rowIdx < entries.length; rowIdx += 1) {
