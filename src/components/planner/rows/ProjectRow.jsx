@@ -178,7 +178,7 @@ export default function ProjectRow({
           // Section rows: merge A through D (checkbox, project, subproject, status)
           const columnsToMergeHeader = ['checkbox', 'project', 'subproject', 'status', 'task'];
           const columnsToMergeSection = ['checkbox', 'project', 'subproject', 'status'];
-          const columnsToMerge = (isHeader || isSubprojectHeader) ? columnsToMergeHeader : columnsToMergeSection;
+          const columnsToMerge = isHeader ? columnsToMergeHeader : columnsToMergeSection;
 
           if (columnsToMerge.includes(columnId)) {
             // Render merged cell on first occurrence
@@ -190,6 +190,9 @@ export default function ProjectRow({
                 const column = row.getAllCells().find(c => c.column.id === colId)?.column;
                 return sum + (column ? column.getSize() : 0);
               }, 0);
+
+              // For subproject headers: chevron sits at the right edge of the merged A–D cell (left of column E).
+              const chevronRight = 0;
 
               // For project headers, the editable column is 'projectName'
               // For subproject headers, the editable column is 'subprojectName'
@@ -236,6 +239,7 @@ export default function ProjectRow({
                   <div
                     className={`h-full flex items-center gap-2 ${(isHeader || isSubprojectHeader) && groupId && !isEditing ? 'cursor-pointer' : ''} ${isSelected ? 'selected-cell' : ''}`}
                     style={{
+                      position: 'relative',
                       fontSize: `${cellFontSize}px`,
                       minHeight: `${rowHeight}px`,
                       backgroundColor: bgColor,
@@ -253,8 +257,36 @@ export default function ProjectRow({
                       }
                     }}
                   >
-                    {(isHeader || isSubprojectHeader) && groupId && (
+                    {isHeader && groupId && (
                       isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />
+                    )}
+                    {isSubprojectHeader && groupId && (
+                      <span style={{
+                        position: 'absolute',
+                        right: chevronRight + 4,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: '#c9a8b8',
+                        display: 'flex',
+                        alignItems: 'center',
+                        pointerEvents: 'none',
+                      }}>
+                        {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                      </span>
+                    )}
+                    {!isHeader && !isSubprojectHeader && (
+                      <span style={{
+                        position: 'absolute',
+                        right: chevronRight + 4,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: '#c9a8b8',
+                        display: 'flex',
+                        alignItems: 'center',
+                        pointerEvents: 'none',
+                      }}>
+                        <ChevronRight size={14} />
+                      </span>
                     )}
                     {isEditing ? (
                       isHeader ? (
@@ -376,12 +408,10 @@ export default function ProjectRow({
                       )
                     ) : (
                       <span>
-                        {(isHeader || isSubprojectHeader) ? (
-                          isHeader ? (
-                            projectTagline ? (
-                              <>{(projectName || displayLabel).toUpperCase()}<span style={{ fontWeight: 400, opacity: 0.7 }}>: {projectTagline}</span></>
-                            ) : (projectName || displayLabel).toUpperCase()
-                          ) : displayLabel
+                        {isHeader ? (
+                          projectTagline ? (
+                            <>{(projectName || displayLabel).toUpperCase()}<span style={{ fontWeight: 400, opacity: 0.7 }}>: {projectTagline}</span></>
+                          ) : (projectName || displayLabel).toUpperCase()
                         ) : '\u00A0'}
                       </span>
                     )}
@@ -394,8 +424,9 @@ export default function ProjectRow({
             }
           }
 
-          // For section rows, render task column (E) with section label (editable)
+          // For section and subproject header rows, render task column (E) with label
           if (!isHeader && columnId === 'task') {
+            const label = isSubprojectHeader ? displayLabel : sectionLabel;
             const editableColumnId = 'task';
             const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === editableColumnId;
             const isSelected = isCellSelected?.(rowId, editableColumnId);
@@ -426,7 +457,7 @@ export default function ProjectRow({
                 }}
                 onDoubleClick={(e) => {
                   if (handleCellDoubleClick) {
-                    handleCellDoubleClick(rowId, editableColumnId, sectionLabel);
+                    handleCellDoubleClick(rowId, editableColumnId, label);
                   }
                 }}
               >
@@ -477,7 +508,7 @@ export default function ProjectRow({
                       }}
                     />
                   ) : (
-                    sectionLabel
+                    label
                   )}
                 </div>
               </td>

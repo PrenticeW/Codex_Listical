@@ -813,9 +813,53 @@ export default function ProjectTimePlannerV2() {
             return { ...row, subprojectName: newLabel, _chipLabel: newLabel };
           });
 
+        // Reorder: ensure subprojectHeader rows appear before General/Unscheduled section rows
+        // within each project group (fixes rows loaded from storage in wrong order).
+        const sectionRowTypes = new Set(['projectGeneral', 'projectUnscheduled', 'subprojectGeneral', 'subprojectUnscheduled']);
+        const reordered = [...filteredData];
+        let reorderChanged = false;
+        let i = 0;
+        while (i < reordered.length) {
+          if (reordered[i]._rowType === 'projectHeader') {
+            const projectGroupId = reordered[i].groupId;
+            // Collect indices of subprojectHeader and section rows for this project
+            const subHeaderIndices = [];
+            const sectionIndices = [];
+            let j = i + 1;
+            while (j < reordered.length && reordered[j]._rowType !== 'projectHeader') {
+              if (reordered[j]._rowType === 'subprojectHeader' && reordered[j].parentGroupId === projectGroupId) {
+                subHeaderIndices.push(j);
+              } else if (sectionRowTypes.has(reordered[j]._rowType)) {
+                sectionIndices.push(j);
+              }
+              j++;
+            }
+            // Check if any subprojectHeader appears after any section row
+            const firstSection = sectionIndices.length ? sectionIndices[0] : Infinity;
+            const misplacedSubs = subHeaderIndices.filter(idx => idx > firstSection);
+            if (misplacedSubs.length > 0) {
+              reorderChanged = true;
+              // Extract the misplaced subprojectHeader rows
+              const subRows = misplacedSubs.map(idx => reordered[idx]);
+              // Remove them (highest index first to avoid shifting)
+              for (let k = misplacedSubs.length - 1; k >= 0; k--) {
+                reordered.splice(misplacedSubs[k], 1);
+              }
+              // Re-find the first section row index (indices shifted after removal)
+              const newFirstSectionIdx = reordered.findIndex(
+                (r, idx) => idx > i && sectionRowTypes.has(r._rowType)
+              );
+              const insertAt = newFirstSectionIdx !== -1 ? newFirstSectionIdx : i + 1;
+              reordered.splice(insertAt, 0, ...subRows);
+            }
+          }
+          i++;
+        }
+        if (reorderChanged) changed = true;
+
         // Find chips that don't already have a row
         const existingChipHeaderIds = new Set(
-          filteredData
+          reordered
             .filter(row => row._rowType === 'subprojectHeader' && row._chipId)
             .map(row => row._chipId)
         );
@@ -823,7 +867,7 @@ export default function ProjectTimePlannerV2() {
 
         if (newChips.length === 0 && !changed) return prevData;
 
-        const newData = [...filteredData];
+        const newData = [...reordered];
 
         newChips.forEach(chip => {
           if (!chip.projectNickname) return;
@@ -835,19 +879,17 @@ export default function ProjectTimePlannerV2() {
           );
           if (projectHeaderIndex === -1) return;
 
-          // Insert after the last existing row that belongs to this project group
-          // (projectHeader, projectGeneral, projectUnscheduled, or existing subprojectHeaders)
+          // Insert after the last existing subprojectHeader for this project,
+          // but before General/Unscheduled section rows.
           let insertAfterIndex = projectHeaderIndex;
           for (let i = projectHeaderIndex + 1; i < newData.length; i++) {
             const row = newData[i];
+            if (row._rowType === 'projectHeader') break;
             if (
-              row.parentGroupId === projectGroupId ||
-              row.groupId === projectGroupId ||
-              (row._rowType === 'subprojectHeader' && row._chipId && row.projectNickname === chip.projectNickname)
+              row._rowType === 'subprojectHeader' &&
+              (row.parentGroupId === projectGroupId || row.projectNickname === chip.projectNickname)
             ) {
               insertAfterIndex = i;
-            } else if (row._rowType === 'projectHeader') {
-              break;
             }
           }
 
