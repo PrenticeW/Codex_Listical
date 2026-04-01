@@ -638,7 +638,7 @@ export default function ProjectTimePlannerV2() {
   // Insert project rows into data structure
   useEffect(() => {
     // Early exit conditions - don't modify state if not needed
-    if (!projects || projects.length <= 1) return; // Only '-' means no projects
+    if (!projects) return;
 
     // Use a flag to prevent updating during mount
     let isMounted = true;
@@ -658,9 +658,23 @@ export default function ProjectTimePlannerV2() {
             .map(row => row.projectNickname)
         );
 
+        const activeProjectKeys = new Set(projects.filter(k => k !== '-'));
+
+        // Remove rows belonging to projects no longer in the plan
+        const removedProjects = [...existingHeaderIds].filter(k => !activeProjectKeys.has(k));
+        let filteredData = prevData;
+        if (removedProjects.length > 0) {
+          const removedGroupIds = new Set(removedProjects.map(k => `project-${k}`));
+          filteredData = prevData.filter(row => {
+            if (row._rowType === 'projectHeader' && removedProjects.includes(row.projectNickname)) return false;
+            if (row.parentGroupId && removedGroupIds.has(row.parentGroupId)) return false;
+            return true;
+          });
+        }
+
         // Find the last existing project header to insert new ones after it
         let lastProjectHeaderIndex = filterRowIndex;
-        prevData.forEach((row, i) => {
+        filteredData.forEach((row, i) => {
           if (row._rowType === 'projectHeader' || row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled') {
             lastProjectHeaderIndex = i;
           }
@@ -670,12 +684,11 @@ export default function ProjectTimePlannerV2() {
         // Once a project header row exists in System, the user can edit its name/tagline
         // directly and those edits must be preserved. The staging values are only used
         // when first inserting a new project header row (below).
-        const updatedData = prevData;
-
         const newProjects = projects.filter(k => k !== '-' && !existingHeaderIds.has(k));
-        if (newProjects.length === 0) return updatedData;
+        if (newProjects.length === 0 && removedProjects.length === 0) return prevData;
+        if (newProjects.length === 0) return filteredData;
 
-        const newData = [...updatedData];
+        const newData = [...filteredData];
         let insertIndex = lastProjectHeaderIndex + 1;
 
         // Insert project rows for any project that doesn't have a header yet (skip '-')
