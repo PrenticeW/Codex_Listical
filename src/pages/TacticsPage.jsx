@@ -1983,8 +1983,7 @@ export default function TacticsPage() {
     const prevChips = projectChipsRef.current;
     const block = prevChips.find((b) => b.id === menuRenamingChipId);
     if (block) {
-      const isCustom = typeof block.projectId === 'string' && block.projectId.startsWith('custom-');
-      const normalized = isCustom ? trimmed.toUpperCase() : trimmed;
+      const normalized = trimmed;
       const nextChips = prevChips.map((b) =>
         b.id === menuRenamingChipId ? { ...b, displayLabel: normalized } : b
       );

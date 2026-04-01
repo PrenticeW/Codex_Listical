@@ -771,11 +771,15 @@ export default function ProjectTimePlannerV2() {
         const currentChipIds = new Set(tacticsChips.map(c => c.id));
 
         // Build label lookup for all current chips
+        const toTitleCase = (str) => str ? str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase()) : str;
         const chipLabelMap = new Map(
           tacticsChips.map(chip => {
-            const durationLabel = chip.formattedDuration
-              ? `${chip.formattedDuration} of ${chip.displayLabel || chip.projectNickname} on ${chip.dayName}`
-              : `${chip.displayLabel || chip.projectNickname} on ${chip.dayName}`;
+            const name = toTitleCase(chip.displayLabel || chip.projectNickname);
+            const day = toTitleCase(chip.dayName);
+            const duration = chip.formattedDuration ? chip.formattedDuration.toLowerCase() : null;
+            const durationLabel = duration
+              ? `${duration} of ${name} on ${day}`
+              : `${name} on ${day}`;
             return [chip.id, durationLabel];
           })
         );
