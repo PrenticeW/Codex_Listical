@@ -193,9 +193,14 @@ export const useKeyboardHandlers = ({
         return;
       }
 
-      // Delete/Backspace to clear cells or rows
+      // Delete/Backspace: delete selected rows entirely, or clear selected cells
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        handleCellsDelete(e);
+        e.preventDefault();
+        if (selectedRows.size > 0) {
+          handleDeleteRows();
+        } else {
+          handleCellsDelete(e);
+        }
         return;
       }
 

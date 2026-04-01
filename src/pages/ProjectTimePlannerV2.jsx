@@ -1385,11 +1385,33 @@ export default function ProjectTimePlannerV2() {
   const handleDeleteRows = useCallback(() => {
     if (selectedRows.size === 0) return;
 
+    // Expand selection to include all child rows of any selected project/subproject headers
+    const expandedRowIds = new Set(selectedRows);
+
+    selectedRows.forEach(rowId => {
+      const row = data.find(r => r.id === rowId);
+      if (!row) return;
+
+      if (row._rowType === 'projectHeader') {
+        // For project headers, collect all child rows recursively
+        const groupsToExpand = [row.groupId];
+        while (groupsToExpand.length > 0) {
+          const groupId = groupsToExpand.pop();
+          data.forEach(r => {
+            if (r.parentGroupId === groupId && !expandedRowIds.has(r.id)) {
+              expandedRowIds.add(r.id);
+              if (r.groupId) groupsToExpand.push(r.groupId);
+            }
+          });
+        }
+      }
+    });
+
     // Store deleted rows and their positions for undo
     const deletedRows = [];
     const rowIndices = [];
 
-    selectedRows.forEach(rowId => {
+    expandedRowIds.forEach(rowId => {
       const rowIndex = data.findIndex(r => r.id === rowId);
       if (rowIndex !== -1) {
         deletedRows.push({ ...data[rowIndex] });

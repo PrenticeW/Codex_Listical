@@ -214,8 +214,8 @@ export default function ProjectRow({
                   className="p-0"
                   onMouseDown={(e) => {
                     if (isEditing) return;
-                    if ((isHeader || isSubprojectHeader) && handleCellMouseDown) {
-                      handleCellMouseDown(e, rowId, editableColumnId);
+                    if ((isHeader || isSubprojectHeader) && handleRowNumberClick) {
+                      handleRowNumberClick(e, rowId);
                     }
                   }}
                   onMouseEnter={(e) => {
@@ -242,7 +242,7 @@ export default function ProjectRow({
                       position: 'relative',
                       fontSize: `${cellFontSize}px`,
                       minHeight: `${rowHeight}px`,
-                      backgroundColor: bgColor,
+                      backgroundColor: isRowSelected ? '#e8f0fe' : bgColor,
                       borderBottom: '1px solid #d3d3d3',
                       borderRight: '1px solid #d3d3d3',
                       paddingLeft: '8px',
@@ -445,14 +445,8 @@ export default function ProjectRow({
                 className="p-0"
                 onMouseDown={(e) => {
                   if (isEditing) return;
-                  if (handleCellMouseDown) {
-                    handleCellMouseDown(e, rowId, editableColumnId);
-                  }
-                }}
-                onMouseEnter={(e) => {
-                  if (isEditing) return;
-                  if (handleCellMouseEnter) {
-                    handleCellMouseEnter(e, rowId, editableColumnId);
+                  if (handleRowNumberClick) {
+                    handleRowNumberClick(e, rowId);
                   }
                 }}
                 onDoubleClick={(e) => {
@@ -466,7 +460,7 @@ export default function ProjectRow({
                   style={{
                     fontSize: `${cellFontSize}px`,
                     minHeight: `${rowHeight}px`,
-                    backgroundColor: bgColor,
+                    backgroundColor: isRowSelected ? '#e8f0fe' : bgColor,
                     borderBottom: '1px solid #d3d3d3',
                     borderRight: '1px solid #d3d3d3',
                     paddingLeft: '8px',
@@ -556,13 +550,16 @@ export default function ProjectRow({
                 boxSizing: 'border-box',
               }}
               className="p-0"
+              onMouseDown={(e) => {
+                if (handleRowNumberClick) handleRowNumberClick(e, rowId);
+              }}
             >
               <div
                 className="h-full flex items-center"
                 style={{
                   fontSize: `${cellFontSize}px`,
                   minHeight: `${rowHeight}px`,
-                  backgroundColor: isDayColumn ? 'transparent' : bgColor, // No background for day columns
+                  backgroundColor: isDayColumn ? 'transparent' : (isRowSelected ? '#e8f0fe' : bgColor), // No background for day columns
                   borderBottom: '1px solid #d3d3d3',
                   borderRight: borderRightStyle,
                   paddingLeft: '3px',
