@@ -69,7 +69,7 @@ function extractProjectsData(shortlist) {
     // Use nickname as key if available, otherwise use full name
     const projectKey = nickname || fullProjectName;
 
-    if (projectKey && projectKey !== '-') {
+    if (projectKey && projectKey !== '-' && item.addedToPlan === true) {
       projects.push(projectKey);
       projectSubprojectsMap[projectKey] = ['-'];
 
