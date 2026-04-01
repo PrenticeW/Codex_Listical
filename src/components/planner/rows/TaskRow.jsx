@@ -365,7 +365,22 @@ const TaskRow = React.memo(function TaskRow({
                       )}
                     </div>
                   ) : columnId === 'subproject' ? (
-                    <div className="w-full flex items-center" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
+                    <div className="w-full flex items-center relative" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
+                      {!value && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            width: '6px',
+                            height: '12px',
+                            backgroundColor: '#fca5a5',
+                            borderRadius: '0 6px 6px 0',
+                            pointerEvents: 'none',
+                          }}
+                        />
+                      )}
                       <div
                         className="flex items-center justify-between gap-1 flex-1"
                         style={{
