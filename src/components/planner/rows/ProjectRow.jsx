@@ -51,6 +51,7 @@ export default function ProjectRow({
   const projectTagline = row.original.projectTagline || '';
   const subprojectName = row.original.subprojectName || '';
   const subprojectLabel = row.original.subprojectLabel || ''; // Custom label for new subproject rows
+  const customSectionLabel = row.original.sectionLabel || ''; // Custom label for general/unscheduled rows
   const groupId = row.original.groupId; // For project and subproject headers
 
   // Check if this row is being dragged or is a drop target
@@ -73,8 +74,8 @@ export default function ProjectRow({
   // For subproject rows with custom label, use that; otherwise use standard labels
   const sectionLabel =
     subprojectLabel ? subprojectLabel : // Use custom label if present (e.g., "New")
-    rowType === 'projectGeneral' || rowType === 'archivedProjectGeneral' || rowType === 'subprojectGeneral' ? 'General' :
-    rowType === 'projectUnscheduled' || rowType === 'archivedProjectUnscheduled' || rowType === 'subprojectUnscheduled' ? 'Unscheduled' : '';
+    rowType === 'projectGeneral' || rowType === 'archivedProjectGeneral' || rowType === 'subprojectGeneral' ? (customSectionLabel || 'General') :
+    rowType === 'projectUnscheduled' || rowType === 'archivedProjectUnscheduled' || rowType === 'subprojectUnscheduled' ? (customSectionLabel || 'Unscheduled') : '';
 
   // Get label (project name for project headers, subproject name for subproject headers)
   // Prefer nickname over full project name
