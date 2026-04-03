@@ -2,6 +2,19 @@ import { useMemo } from 'react';
 import { isSpecialRow } from '../../utils/planner/rowTypeChecks';
 import { createDayColumnUpdates, forEachDayColumn } from '../../utils/planner/dayColumnHelpers';
 import { coerceToNumber, formatNumber } from '../../utils/planner/valueNormalizers';
+import { formatMinutesToHHmm } from '../../constants/planner/rowTypes';
+
+/**
+ * Parse HH.mm format (e.g. "2.30" = 2h 30m) to total minutes
+ */
+function parseHHmmToMinutes(value) {
+  if (!value || value === '0.00') return 0;
+  const parsed = parseFloat(value);
+  if (isNaN(parsed)) return 0;
+  const hours = Math.floor(parsed);
+  const mins = Math.round((parsed - hours) * 100);
+  return hours * 60 + mins;
+}
 
 /**
  * Custom hook for calculating project totals
@@ -12,26 +25,31 @@ import { coerceToNumber, formatNumber } from '../../utils/planner/valueNormalize
  */
 export const useProjectTotals = (computedData) => {
   return useMemo(() => {
-    const totals = {};
+    const totalsMinutes = {};
     let currentProjectHeaderId = null;
 
     computedData.forEach((row) => {
       // Track which project header we're under
       if (row._rowType === 'projectHeader') {
         currentProjectHeaderId = row.id;
-        totals[currentProjectHeaderId] = 0;
+        totalsMinutes[currentProjectHeaderId] = 0;
         return;
       }
 
-      // Reset when we encounter inbox, archive, or subproject headers - these signal end of project section
-      if (row._isInboxRow || row._isArchiveRow || row._rowType === 'subprojectHeader') {
+      // Reset only when we leave the project entirely
+      if (row._isInboxRow || row._isArchiveRow) {
         currentProjectHeaderId = null;
         return;
       }
 
-      // Keep context when we're still within the project section
-      if (row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled') {
-        // Still within the project, don't reset
+      // Skip all structural rows without resetting project context
+      if (
+        row._rowType === 'subprojectHeader' ||
+        row._rowType === 'subprojectGeneral' ||
+        row._rowType === 'subprojectUnscheduled' ||
+        row._rowType === 'projectGeneral' ||
+        row._rowType === 'projectUnscheduled'
+      ) {
         return;
       }
 
@@ -41,21 +59,15 @@ export const useProjectTotals = (computedData) => {
 
         // Only count Scheduled and Done tasks
         if (status === 'Scheduled' || status === 'Done') {
-          const timeValue = row.timeValue || '0.00';
-
-          // Parse timeValue (format: "HH.mm" or "H.mm")
-          const parsed = parseFloat(timeValue);
-          if (!isNaN(parsed)) {
-            totals[currentProjectHeaderId] += parsed;
-          }
+          totalsMinutes[currentProjectHeaderId] += parseHHmmToMinutes(row.timeValue);
         }
       }
     });
 
-    // Format totals to 2 decimal places
+    // Format totals back to HH.mm
     const formattedTotals = {};
-    Object.entries(totals).forEach(([key, total]) => {
-      formattedTotals[key] = total.toFixed(2);
+    Object.entries(totalsMinutes).forEach(([key, minutes]) => {
+      formattedTotals[key] = formatMinutesToHHmm(minutes);
     });
 
     return formattedTotals;

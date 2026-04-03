@@ -39,7 +39,7 @@ export const isSpecialRow = (row: any): boolean => {
     row._isFilterRow ||
     row._isInboxRow ||
     row._isArchiveRow ||
-    row._rowType ||
+    (row._rowType && row._rowType !== 'projectTask') ||
     isTimelineRow(row) ||
     isMetricsRow(row) ||
     isAnyArchiveRow(row)
