@@ -110,6 +110,14 @@ export const TOTAL_DAYS_KEY_TEMPLATE = 'planner-v2-{projectId}-total-days';
  */
 export const VISIBLE_DAY_COLUMNS_KEY_TEMPLATE = 'planner-v2-{projectId}-visible-day-columns';
 
+/**
+ * Collapsed groups storage key template
+ * Stores array of group IDs that are currently collapsed
+ *
+ * Example: planner-v2-project-1-collapsed-groups
+ */
+export const COLLAPSED_GROUPS_KEY_TEMPLATE = 'planner-v2-{projectId}-collapsed-groups';
+
 // ============================================================
 // LEGACY KEYS (Backward Compatibility)
 // ============================================================

@@ -244,7 +244,7 @@ export default function ProjectTimePlannerV2() {
   const { dayColumnFilters, toggleDayFilter: handleDayColumnFilterToggle, isDayFiltered, clearAllDayFilters } = useDayColumnFilters();
 
   // Collapsible groups hook
-  const { collapsedGroups, setCollapsedGroups, toggleGroupCollapse, isCollapsed } = useCollapsibleGroups();
+  const { collapsedGroups, setCollapsedGroups, toggleGroupCollapse, isCollapsed } = useCollapsibleGroups({ projectId: DEFAULT_PROJECT_ID, yearNumber: currentYear });
 
   // Context menu hook
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();

@@ -16,6 +16,7 @@ import {
   TASK_ROWS_KEY_TEMPLATE,
   TOTAL_DAYS_KEY_TEMPLATE,
   VISIBLE_DAY_COLUMNS_KEY_TEMPLATE,
+  COLLAPSED_GROUPS_KEY_TEMPLATE,
   DEFAULT_PROJECT_ID,
 } from '../../constants/plannerStorageKeys';
 
@@ -463,6 +464,42 @@ export const saveVisibleDayColumns = (visibleDayColumns, projectId = DEFAULT_PRO
     storage.setJSON(key, visibleDayColumns);
   } catch (error) {
     console.error('Failed to save visible day columns', error);
+  }
+};
+
+// ============================================================
+// COLLAPSED GROUPS
+// ============================================================
+
+/**
+ * Reads collapsed group IDs for a project
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ * @param {number|null} yearNumber - Year number (null for year-agnostic)
+ * @returns {Set<string>} Set of collapsed group IDs
+ */
+export const readCollapsedGroups = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+  try {
+    const key = getProjectKey(COLLAPSED_GROUPS_KEY_TEMPLATE, projectId, yearNumber);
+    const parsed = storage.getJSON(key, null);
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch (error) {
+    console.error('Failed to read collapsed groups', error);
+    return new Set();
+  }
+};
+
+/**
+ * Saves collapsed group IDs for a project
+ * @param {Set<string>} collapsedGroups - Set of collapsed group IDs
+ * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
+ * @param {number|null} yearNumber - Year number (null for year-agnostic)
+ */
+export const saveCollapsedGroups = (collapsedGroups, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+  try {
+    const key = getProjectKey(COLLAPSED_GROUPS_KEY_TEMPLATE, projectId, yearNumber);
+    storage.setJSON(key, Array.from(collapsedGroups));
+  } catch (error) {
+    console.error('Failed to save collapsed groups', error);
   }
 };
 
