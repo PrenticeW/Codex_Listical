@@ -1210,7 +1210,7 @@ export default function ProjectTimePlannerV2() {
   }, [dates]);
 
   // Calculate sizes based on scale (normalized to 14px base like other pages)
-  const rowHeight = Math.round(28 * sizeScale);
+  const rowHeight = Math.round(24 * sizeScale);
   const cellFontSize = Math.round(14 * sizeScale);
   const headerFontSize = Math.round(12 * sizeScale);
   const gripIconSize = Math.round(16 * sizeScale);

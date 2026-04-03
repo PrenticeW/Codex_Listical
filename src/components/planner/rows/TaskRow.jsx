@@ -320,13 +320,14 @@ const TaskRow = React.memo(function TaskRow({
                     <div className="w-full flex items-center" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
                       {value && value !== '' && value !== '-' ? (
                         <div
-                          className="py-0.5 rounded-full font-medium text-xs flex items-center justify-between gap-1 flex-1"
+                          className="rounded-full text-xs flex items-center justify-between gap-1 flex-1"
                           style={{
                             backgroundColor: '#e5e5e5',
                             color: '#000000',
                             fontSize: `${cellFontSize}px`,
-                            paddingLeft: '8px',
-                            paddingRight: '8px'
+                            paddingLeft: '6px',
+                            paddingRight: '6px',
+                            border: '2px solid white'
                           }}
                         >
                           <span>{value}</span>
@@ -341,13 +342,14 @@ const TaskRow = React.memo(function TaskRow({
                         </div>
                       ) : (
                         <div
-                          className="py-0.5 rounded-full font-medium text-xs flex items-center justify-between gap-1 flex-1"
+                          className="rounded-full text-xs flex items-center justify-between gap-1 flex-1"
                           style={{
                             backgroundColor: '#ffffff',
                             color: '#000000',
                             fontSize: `${cellFontSize}px`,
-                            paddingLeft: '8px',
-                            paddingRight: '8px'
+                            paddingLeft: '6px',
+                            paddingRight: '6px',
+                            border: '2px solid white'
                           }}
                         >
                           <span>-</span>
@@ -380,12 +382,13 @@ const TaskRow = React.memo(function TaskRow({
                         />
                       )}
                       <div
-                        className="flex items-center justify-between gap-1 flex-1"
+                        className="rounded-full flex items-center justify-between gap-1 flex-1"
                         style={{
                           fontSize: `${cellFontSize}px`,
                           paddingLeft: '8px',
                           paddingRight: '8px',
-                          color: '#000000'
+                          color: '#000000',
+                          border: '1px solid white'
                         }}
                       >
                         <span>{value || '-'}</span>
@@ -403,13 +406,14 @@ const TaskRow = React.memo(function TaskRow({
                     <div className="w-full flex items-center" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
                       {value && value !== '' ? (
                         <div
-                          className="py-0.5 rounded-full font-medium text-xs flex items-center justify-between gap-1 flex-1"
+                          className="rounded-full text-xs flex items-center justify-between gap-1 flex-1"
                           style={{
                             backgroundColor: PILLBOX_COLORS[value]?.bg || PILLBOX_COLORS['-'].bg,
                             color: PILLBOX_COLORS[value]?.text || PILLBOX_COLORS['-'].text,
                             fontSize: `${cellFontSize}px`,
-                            paddingLeft: '8px',
-                            paddingRight: '8px'
+                            paddingLeft: '6px',
+                            paddingRight: '6px',
+                            border: '2px solid white'
                           }}
                         >
                           <span>{value}</span>
@@ -424,13 +428,14 @@ const TaskRow = React.memo(function TaskRow({
                         </div>
                       ) : (
                         <div
-                          className="py-0.5 rounded-full font-medium text-xs flex items-center justify-between gap-1 flex-1"
+                          className="rounded-full text-xs flex items-center justify-between gap-1 flex-1"
                           style={{
                             backgroundColor: PILLBOX_COLORS['-'].bg,
                             color: PILLBOX_COLORS['-'].text,
                             fontSize: `${cellFontSize}px`,
-                            paddingLeft: '8px',
-                            paddingRight: '8px'
+                            paddingLeft: '6px',
+                            paddingRight: '6px',
+                            border: '2px solid white'
                           }}
                         >
                           <span>-</span>
