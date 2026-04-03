@@ -428,6 +428,7 @@ export const resetRecurringTasks = (data, totalDays = 84) => {
     if (row.recurring && ['Done', 'Abandoned'].includes(row.status)) {
       const updates = {
         status: 'Not Scheduled',
+        checkbox: '',
       };
 
       // Clear all day entries
