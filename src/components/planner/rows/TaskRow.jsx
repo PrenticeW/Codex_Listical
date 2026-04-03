@@ -366,7 +366,7 @@ const TaskRow = React.memo(function TaskRow({
                     </div>
                   ) : columnId === 'subproject' ? (
                     <div className="w-full flex items-center relative" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
-                      {!value && (
+                      {!value && currentProject && currentProject !== '-' && projectSubprojectsMap[currentProject]?.some(s => s !== '-') && (
                         <div
                           style={{
                             position: 'absolute',
