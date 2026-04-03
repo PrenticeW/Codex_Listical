@@ -798,7 +798,8 @@ const TableRow = React.memo(function TableRow({
               className="h-full flex items-center justify-center"
               style={{
                 minHeight: `${rowHeight}px`,
-                fontSize: `${cellFontSize}px`,
+                fontSize: (isDailyMinRow || isDailyMaxRow) ? '0.6875rem' : `${cellFontSize}px`,
+                fontStyle: (isDailyMinRow || isDailyMaxRow) ? 'italic' : undefined,
                 backgroundColor: bgColor,
                 borderTop: isDayRow ? '1.5px solid black' : (isDayOfWeekRow ? '1.5px solid black' : undefined),
                 borderBottom: (isDayOfWeekRow || isDailyMaxRow) ? '1.5px solid black' : (isDailyMinRow ? 'none' : (isDayRow ? '1px solid black' : '1px solid #d3d3d3')),
@@ -964,7 +965,7 @@ const TableRow = React.memo(function TableRow({
                 paddingRight: '2px',
               }}
             >
-              <span className="text-xs text-right flex-1 pr-2">{value}</span>
+              <span className="text-right flex-1 pr-2" style={{ fontSize: `${cellFontSize}px`, fontWeight: 'bold' }}>{value}</span>
               {isFilterActive ? (
                 <Filter
                   size={10}
