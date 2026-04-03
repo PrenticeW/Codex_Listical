@@ -106,8 +106,14 @@ export default function useComputedDataV2({
 
   // Sync computed status, estimate, and timeValue changes back to source data
   useEffect(() => {
-    const hasChanges = data.some((row, index) => {
-      const computed = computedData[index];
+    // Build a map from row id to computed row for safe lookup by identity
+    const computedById = new Map<string, PlannerRow>();
+    computedData.forEach(row => {
+      if (row.id) computedById.set(row.id, row);
+    });
+
+    const hasChanges = data.some(row => {
+      const computed = row.id ? computedById.get(row.id) : undefined;
       return computed && (
         row.status !== computed.status ||
         row.estimate !== computed.estimate ||
@@ -118,8 +124,8 @@ export default function useComputedDataV2({
 
     if (hasChanges) {
       setData(prevData =>
-        prevData.map((row, index) => {
-          const computed = computedData[index];
+        prevData.map(row => {
+          const computed = row.id ? computedById.get(row.id) : undefined;
           if (!computed) return row;
 
           const updatedRow: any = {
