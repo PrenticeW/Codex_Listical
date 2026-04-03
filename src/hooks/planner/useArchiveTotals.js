@@ -46,7 +46,7 @@ export const useArchivedProjectTotals = (data, totalDays = 84) => {
       // Tasks have parentGroupId = archived project's groupId
       else if (currentArchivedProject && row.parentGroupId === currentArchivedProject.groupId) {
         // Only count regular task rows (not project general/unscheduled section rows)
-        if (!row._rowType && row.task) {
+        if (row._rowType === 'projectTask') {
           currentProjectTasks.push(row);
         }
       }
@@ -139,7 +139,7 @@ export const useArchivedWeekTotals = (data, archivedProjectTotals, totalDays = 8
       // Collect tasks that belong to current archive week
       else if (currentArchiveWeek && row.parentGroupId === currentArchiveWeek.id) {
         // Only count regular task rows (not archived project structure rows)
-        if (!row._rowType && row.task) {
+        if (row._rowType === 'projectTask') {
           currentWeekTasks.push(row);
         }
       }
