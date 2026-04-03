@@ -799,6 +799,28 @@ export default function ProjectTimePlannerV2() {
     };
   }, [projects, projectNamesMap, projectTaglinesMap, totalDays]);
 
+  // Repair rows whose parentGroupId points to a groupId that no longer exists in data.
+  // This happens when a subprojectHeader is deleted — its child task rows keep a stale
+  // parentGroupId that prevents them from collapsing with their project.
+  // Clearing parentGroupId lets assignParentGroupIds re-assign them positionally.
+  useEffect(() => {
+    setData(prevData => {
+      const validGroupIds = new Set(prevData.map(r => r.groupId).filter(Boolean));
+      let needsRepair = false;
+      const repaired = prevData.map(row => {
+        // Skip rows still linked to a chip — their parentGroupId is validated by the chip sync effect
+        if (row._chipId) return row;
+        if (row.parentGroupId && !validGroupIds.has(row.parentGroupId)) {
+          needsRepair = true;
+          const { parentGroupId: _removed, ...rest } = row;
+          return rest;
+        }
+        return row;
+      });
+      return needsRepair ? repaired : prevData;
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Create subprojectHeader rows from Tactics chips
   useEffect(() => {
     if (!tacticsChips || tacticsChips.length === 0) return;
