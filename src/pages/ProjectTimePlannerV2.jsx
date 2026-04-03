@@ -1818,36 +1818,56 @@ export default function ProjectTimePlannerV2() {
   const handleDuplicateRow = useCallback(() => {
     setIsListicalMenuOpen(false);
 
-    // Find the selected row
-    if (selectedRows.size === 0) {
-      // No row selected, do nothing
-      return;
-    }
+    // Determine which row to duplicate: prefer selected rows, fall back to context menu row
+    const targetRowId = selectedRows.size > 0
+      ? Array.from(selectedRows)[0]
+      : contextMenu.rowId;
 
-    // Get the first (or only) selected row
-    const selectedRowId = Array.from(selectedRows)[0];
-    const selectedRowIndex = data.findIndex(r => r.id === selectedRowId);
+    if (!targetRowId) return;
+
+    const selectedRowIndex = data.findIndex(r => r.id === targetRowId);
 
     if (selectedRowIndex === -1) return;
 
     const selectedRow = data[selectedRowIndex];
 
-    // Don't duplicate special rows (headers, filters, etc.)
+    // Don't duplicate auto-generated structural rows (calendar rows, filters, archive)
     if (selectedRow._isMonthRow || selectedRow._isWeekRow || selectedRow._isDayRow ||
         selectedRow._isDayOfWeekRow || selectedRow._isDailyMinRow || selectedRow._isDailyMaxRow ||
         selectedRow._isFilterRow || selectedRow._isInboxRow || selectedRow._isArchiveRow ||
-        selectedRow._rowType === 'projectHeader' || selectedRow._rowType === 'projectGeneral' ||
-        selectedRow._rowType === 'projectUnscheduled' || selectedRow._rowType === 'archiveHeader' ||
-        selectedRow._rowType === 'subprojectHeader' || selectedRow._rowType === 'subprojectGeneral' ||
-        selectedRow._rowType === 'subprojectUnscheduled') {
-      // Can't duplicate special rows
+        selectedRow._rowType === 'archiveHeader') {
       return;
     }
 
-    // Create a duplicate of the row with a new unique ID
+    // Determine which field holds the row's display name
+    const nameField =
+      selectedRow._rowType === 'projectHeader' ? 'projectName' :
+      selectedRow._rowType === 'subprojectHeader' ? 'subprojectName' :
+      (selectedRow._rowType === 'subprojectGeneral' || selectedRow._rowType === 'subprojectUnscheduled') ? 'subprojectLabel' :
+      (selectedRow._rowType === 'projectGeneral' || selectedRow._rowType === 'projectUnscheduled') ? 'sectionLabel' :
+      'task';
+
+    // Increment the name Google-Sheets-style: "Foo" → "Foo 1", "Foo 1" → "Foo 2"
+    // Fall back to the rendered label for rows whose name field is typically empty
+    const fallbackLabel =
+      selectedRow._rowType === 'projectGeneral' || selectedRow._rowType === 'subprojectGeneral' ? 'General' :
+      selectedRow._rowType === 'projectUnscheduled' || selectedRow._rowType === 'subprojectUnscheduled' ? 'Unscheduled' :
+      '';
+    const currentName = selectedRow[nameField] || fallbackLabel;
+    const trailingNumber = currentName.match(/\s(\d+)$/);
+    const nextName = trailingNumber
+      ? `${currentName.slice(0, -trailingNumber[0].length)} ${parseInt(trailingNumber[1], 10) + 1}`
+      : `${currentName} 1`.trimStart();
+
     const duplicatedRow = {
       ...selectedRow,
       id: `row-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+      // Clear chip linkage so the duplicate is independent of Tactics sync
+      _chipId: undefined,
+      groupId: selectedRow._rowType === 'subprojectHeader'
+        ? `group-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+        : selectedRow.groupId,
+      [nameField]: nextName,
     };
 
     // Store the insertion index for undo (insert right after the selected row)
@@ -1872,7 +1892,7 @@ export default function ProjectTimePlannerV2() {
     };
 
     executeCommand(command);
-  }, [selectedRows, data, executeCommand]);
+  }, [selectedRows, contextMenu.rowId, data, executeCommand]);
 
   const handleAddWeek = useCallback(() => {
     setIsListicalMenuOpen(false);
