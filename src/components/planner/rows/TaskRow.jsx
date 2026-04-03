@@ -481,7 +481,7 @@ const TaskRow = React.memo(function TaskRow({
                       {value || '\u00A0'}
                     </div>
                   ) : (
-                    <div className="w-full px-1">
+                    <div className="w-full" style={{ paddingLeft: '8px', paddingRight: '3px' }}>
                       {value || '\u00A0'}
                     </div>
                   )
