@@ -65,6 +65,13 @@ export default function useEditState({
       return;
     }
 
+    // Prevent manually setting status to "Scheduled" — only the system sets this
+    if (columnId === 'status' && newValue === 'Scheduled') {
+      setEditingCell(null);
+      setEditValue('');
+      return;
+    }
+
     // Special handling for status column when set to "Abandoned"
     if (columnId === 'status' && newValue === 'Abandoned') {
       // Store old day column values for undo

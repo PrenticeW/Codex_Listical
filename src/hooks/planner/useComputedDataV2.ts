@@ -77,16 +77,15 @@ export default function useComputedDataV2({
         }
       } else {
         // Task has content
+        const manualStatuses = ['Done', 'Blocked', 'On Hold', 'Abandoned'];
         if (hasScheduledTime) {
-          // Auto-update to Scheduled if status is '-', 'Not Scheduled', or 'Abandoned'
-          // Don't override 'Done', 'Blocked', or 'On Hold'
-          if (status === '-' || status === 'Not Scheduled' || status === 'Abandoned') {
+          // Auto-update to Scheduled only if no manual status has been set
+          if (status === '-' || status === 'Not Scheduled') {
             status = 'Scheduled';
           }
         } else {
-          // No scheduled time - set to 'Not Scheduled', unless status is 'Abandoned'
-          // Abandoned tasks can exist without scheduled time
-          if (status !== 'Abandoned') {
+          // No scheduled time - reset to 'Not Scheduled' only if no manual status has been set
+          if (!manualStatuses.includes(status) && status !== 'Scheduled') {
             status = 'Not Scheduled';
           }
         }
