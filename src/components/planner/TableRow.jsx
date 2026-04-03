@@ -802,7 +802,11 @@ const TableRow = React.memo(function TableRow({
                 backgroundColor: bgColor,
                 borderTop: isDayRow ? '1.5px solid black' : (isDayOfWeekRow ? '1.5px solid black' : undefined),
                 borderBottom: (isDayOfWeekRow || isDailyMaxRow) ? '1.5px solid black' : (isDailyMinRow ? 'none' : (isDayRow ? '1px solid black' : '1px solid #d3d3d3')),
-                borderRight: isLastDayOfWeek ? '1.5px solid black' : (isDayRow ? '1px solid black' : '1px solid #d3d3d3')
+                borderRight: isLastDayOfWeek ? '1.5px solid black' : (isDayRow ? '1px solid black' : '1px solid #d3d3d3'),
+                // Align text right-edge with filter row: button(10px) + gap(8px) + right-pad(2px) = 20px
+                paddingRight: (isDailyMinRow || isDailyMaxRow) ? '20px' : undefined,
+                paddingLeft: (isDailyMinRow || isDailyMaxRow) ? '2px' : undefined,
+                justifyContent: (isDailyMinRow || isDailyMaxRow) ? 'flex-end' : 'center',
               }}
             >
               {value || '\u00A0'}
@@ -949,24 +953,24 @@ const TableRow = React.memo(function TableRow({
             className="p-0"
           >
             <div
-              className="h-full flex items-center justify-center relative"
+              className="h-full flex items-center justify-between"
               style={{
                 minHeight: `${rowHeight}px`,
                 fontSize: `${cellFontSize}px`,
                 backgroundColor: '#ead1dc',
                 borderBottom: '1px solid #d3d3d3',
                 borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3',
-                position: 'relative',
-                paddingRight: '14px'
+                paddingLeft: '2px',
+                paddingRight: '2px',
               }}
             >
-              <span className="text-xs">{value}</span>
+              <span className="text-xs text-right flex-1 pr-2">{value}</span>
               {isFilterActive ? (
                 <Filter
                   size={10}
                   fill="#065f46"
-                  className="cursor-pointer transition-colors"
-                  style={{ position: 'absolute', right: '2px', color: '#065f46' }}
+                  className="cursor-pointer transition-colors shrink-0"
+                  style={{ color: '#065f46' }}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (handleDayColumnFilterToggle) {
@@ -979,8 +983,7 @@ const TableRow = React.memo(function TableRow({
                 <ListFilter
                   size={10}
                   strokeWidth={2}
-                  className="cursor-pointer transition-colors text-gray-400 hover:text-gray-600"
-                  style={{ position: 'absolute', right: '2px' }}
+                  className="cursor-pointer transition-colors text-gray-400 hover:text-gray-600 shrink-0"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (handleDayColumnFilterToggle) {
