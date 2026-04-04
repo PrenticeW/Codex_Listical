@@ -547,10 +547,12 @@ export default function useRowRenderers({
     };
 
     const updateTimeValue = (value) => {
-      if (!isCustomEstimate) return;
       commitRowUpdate(
         (currentRow) => {
           const updates = { timeValue: value };
+          if (currentRow.estimate !== 'Custom') {
+            updates.estimate = 'Custom';
+          }
           const syncedEntries = syncDayEntriesWithTimeValue(
             currentRow.dayEntries,
             value,
@@ -783,14 +785,11 @@ export default function useRowRenderers({
             onClick={(e) => e.stopPropagation()}
             onFocus={() => handleCellActivate(rowId, 'timeValue')}
             onChange={(event) => {
-              if (!isCustomEstimate) return;
               updateTimeValue(event.target.value);
             }}
             onPaste={(event) => {
-              if (!isCustomEstimate) return;
               handleOverwritePaste(event, (text) => updateTimeValue(text));
             }}
-            readOnly={!isCustomEstimate}
           />
         </td>
         {Array.from({ length: totalDays }).map((_, i) => (
@@ -813,11 +812,10 @@ export default function useRowRenderers({
             <input
               type="text"
               className={`${sharedInputStyle} text-right pr-2`}
-              defaultValue={dayEntries[i] ?? ''}
-              key={`${rowId}-day-${i}`}
+              value={dayEntries[i] ?? ''}
               onClick={(e) => e.stopPropagation()}
               onFocus={() => handleCellActivate(rowId, `day-${i}`)}
-              onBlur={(event) => updateDayEntry(i, event.target.value)}
+              onChange={(event) => updateDayEntry(i, event.target.value)}
               onPaste={(event) =>
                 handleOverwritePaste(event, (text) => updateDayEntry(i, text))
               }

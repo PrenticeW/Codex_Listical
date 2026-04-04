@@ -1,6 +1,24 @@
 import { useState, useCallback } from 'react';
 import type { UseEditStateReturn, CellReference, PlannerRow, Command } from '../../types/planner';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../../constants/planner/rowTypes';
+import { forEachDayColumn } from '../../utils/planner/dayColumnHelpers';
+
+/** Replace all day columns whose value matches prevTimeValue with nextTimeValue */
+function syncDayColumns(row: PlannerRow, nextTimeValue: string, prevTimeValue: string, totalDays: number): Record<string, string> | null {
+  const prev = (prevTimeValue ?? '').trim();
+  const next = (nextTimeValue ?? '').trim();
+  if (!prev || prev === next) return null;
+  const updates: Record<string, string> = {};
+  let changed = false;
+  forEachDayColumn(totalDays, (columnId) => {
+    const current = (row[columnId] ?? '').trim();
+    if (current === prev) {
+      updates[columnId] = next;
+      changed = true;
+    }
+  });
+  return changed ? updates : null;
+}
 
 /**
  * Hook to manage cell editing state and handlers
@@ -140,11 +158,10 @@ export default function useEditState({
         execute: () => {
           setData(prev => prev.map(row => {
             if (row.id === rowId) {
-              if (shouldSetToCustom) {
-                return { ...row, timeValue: newValue, estimate: 'Custom' };
-              } else {
-                return { ...row, timeValue: newValue };
-              }
+              const updates: Partial<PlannerRow> = { timeValue: newValue };
+              if (shouldSetToCustom) updates.estimate = 'Custom';
+              const dayUpdates = syncDayColumns(row, newValue, oldValue, totalDays);
+              return { ...row, ...updates, ...(dayUpdates ?? {}) };
             }
             return row;
           }));
@@ -152,11 +169,48 @@ export default function useEditState({
         undo: () => {
           setData(prev => prev.map(row => {
             if (row.id === rowId) {
-              if (shouldSetToCustom) {
-                return { ...row, timeValue: oldValue, estimate: oldEstimate };
-              } else {
-                return { ...row, timeValue: oldValue };
-              }
+              const updates: Partial<PlannerRow> = { timeValue: oldValue };
+              if (shouldSetToCustom) updates.estimate = oldEstimate;
+              const dayUpdates = syncDayColumns(row, oldValue, newValue, totalDays);
+              return { ...row, ...updates, ...(dayUpdates ?? {}) };
+            }
+            return row;
+          }));
+        },
+      };
+
+      executeCommand(command);
+      setEditingCell(null);
+      setEditValue('');
+      return;
+    }
+
+    // Special handling for estimate column — sync timeValue and day entries
+    if (columnId === 'estimate') {
+      const oldTimeValue = row?.timeValue || '0.00';
+      const newMinutes = parseEstimateLabelToMinutes(newValue);
+      // Custom estimate keeps timeValue as-is; preset estimates compute it
+      const newTimeValue = (newValue === 'Custom' || newMinutes === null)
+        ? oldTimeValue
+        : formatMinutesToHHmm(newMinutes);
+
+      const command: Command = {
+        execute: () => {
+          setData(prev => prev.map(row => {
+            if (row.id === rowId) {
+              const updates: Partial<PlannerRow> = { estimate: newValue, timeValue: newTimeValue };
+              const dayUpdates = syncDayColumns(row, newTimeValue, oldTimeValue, totalDays);
+              return { ...row, ...updates, ...(dayUpdates ?? {}) };
+            }
+            return row;
+          }));
+        },
+        undo: () => {
+          setData(prev => prev.map(row => {
+            if (row.id === rowId) {
+              const updates: Partial<PlannerRow> = { estimate: oldValue, timeValue: oldTimeValue };
+              const dayUpdates = syncDayColumns(row, oldTimeValue, newTimeValue, totalDays);
+              return { ...row, ...updates, ...(dayUpdates ?? {}) };
             }
             return row;
           }));

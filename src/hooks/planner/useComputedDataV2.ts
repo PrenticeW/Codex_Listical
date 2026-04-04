@@ -45,6 +45,9 @@ export default function useComputedDataV2({
       let timeValue: string;
       if (estimate === 'Multi') {
         timeValue = calculateMultiTimeValue(row, totalDays, originalEstimate);
+      } else if (estimate === 'Custom') {
+        // Custom: user controls timeValue directly — do not overwrite it
+        timeValue = row.timeValue ?? '0.00';
       } else {
         timeValue = calculateTimeValue(estimate);
       }
