@@ -58,11 +58,13 @@ export function calculateMultiTimeValue(
           totalMinutes += hours * 60 + minutes;
         }
       }
-      // Parse decimal hours (e.g., "2.5" = 2h 30m)
+      // Parse HH.mm format (e.g., "0.10" = 10m, "1.30" = 1h 30m)
       else {
-        const decimalHours = parseFloat(trimmedValue);
-        if (!isNaN(decimalHours)) {
-          totalMinutes += Math.round(decimalHours * 60);
+        const parsed = parseFloat(trimmedValue);
+        if (!isNaN(parsed)) {
+          const hours = Math.floor(parsed);
+          const mins = Math.round((parsed - hours) * 100);
+          totalMinutes += hours * 60 + mins;
         }
       }
     }

@@ -81,6 +81,15 @@ export function getEstimateWithHabitCheck(
     };
   }
 
+  // Auto-revert: if habit pattern is gone but estimate is still Multi,
+  // restore original if auto-set, otherwise fall back to the single-cell value via Custom
+  if (!hasHabitPattern && currentEstimate === 'Multi') {
+    return {
+      estimate: row._originalEstimate ?? 'Custom',
+      shouldStoreOriginal: false,
+    };
+  }
+
   return {
     estimate: currentEstimate,
     shouldStoreOriginal: false,

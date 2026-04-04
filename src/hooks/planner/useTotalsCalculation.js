@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { isSpecialRow } from '../../utils/planner/rowTypeChecks';
 import { createDayColumnUpdates, forEachDayColumn } from '../../utils/planner/dayColumnHelpers';
-import { coerceToNumber, formatNumber } from '../../utils/planner/valueNormalizers';
 import { formatMinutesToHHmm } from '../../constants/planner/rowTypes';
 
 /**
@@ -85,8 +84,8 @@ export const useProjectTotals = (computedData) => {
  */
 export const useDailyTotals = ({ computedData, totalDays }) => {
   return useMemo(() => {
-    // Initialize all day columns to 0
-    const totals = createDayColumnUpdates(totalDays, () => 0);
+    // Initialize all day columns to 0 minutes
+    const totalsMinutes = createDayColumnUpdates(totalDays, () => 0);
 
     // Sum up values from all regular task rows
     computedData.forEach((row) => {
@@ -95,20 +94,16 @@ export const useDailyTotals = ({ computedData, totalDays }) => {
         return;
       }
 
-      // For each day column, add the numeric value to the total
+      // For each day column, parse HH.mm → minutes and accumulate
       forEachDayColumn(totalDays, (dayColumnId) => {
-        const value = row[dayColumnId];
-        const numericValue = coerceToNumber(value);
-
-        if (numericValue !== null) {
-          totals[dayColumnId] += numericValue;
-        }
+        const minutes = parseHHmmToMinutes(row[dayColumnId]);
+        totalsMinutes[dayColumnId] += minutes;
       });
     });
 
-    // Format totals to 2 decimal places
+    // Format totals from minutes back to HH.mm
     return createDayColumnUpdates(totalDays, (i, columnId) =>
-      formatNumber(totals[columnId], 2)
+      formatMinutesToHHmm(totalsMinutes[columnId])
     );
   }, [computedData, totalDays]);
 };

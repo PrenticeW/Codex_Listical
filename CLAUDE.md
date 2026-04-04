@@ -129,3 +129,6 @@ When a user requests deletion, all their data must be removable. The `deletion_a
 ### Age and consent
 
 Users may be minors. Do not make assumptions about user age in any auth or data flow work. Do not collect data beyond what is necessary for the planning features.
+
+### Debugging
+Always ask for permission to start systematic debugging. 

@@ -189,18 +189,37 @@ export default function useEditState({
     if (columnId === 'estimate') {
       const oldTimeValue = row?.timeValue || '0.00';
       const newMinutes = parseEstimateLabelToMinutes(newValue);
-      // Custom estimate keeps timeValue as-is; preset estimates compute it
-      const newTimeValue = (newValue === 'Custom' || newMinutes === null)
+      // Custom estimate keeps timeValue as-is; '-'/'Multi' reset to '0.00'; preset estimates compute it
+      const newTimeValue = newValue === 'Custom'
         ? oldTimeValue
-        : formatMinutesToHHmm(newMinutes);
+        : newMinutes === null
+          ? '0.00'
+          : formatMinutesToHHmm(newMinutes);
+
+      // Capture old day column values for undo
+      const oldDayValues: Record<string, string> = {};
+      forEachDayColumn(totalDays, (colId) => {
+        oldDayValues[colId] = (row?.[colId] ?? '').toString();
+      });
 
       const command: Command = {
         execute: () => {
           setData(prev => prev.map(row => {
             if (row.id === rowId) {
               const updates: Partial<PlannerRow> = { estimate: newValue, timeValue: newTimeValue };
-              const dayUpdates = syncDayColumns(row, newTimeValue, oldTimeValue, totalDays);
-              return { ...row, ...updates, ...(dayUpdates ?? {}) };
+              // For preset estimates, replace all filled day cells with the new timeValue
+              // For Custom, leave day cells as-is (user controls them)
+              if (newValue !== 'Custom') {
+                const dayUpdates: Record<string, string> = {};
+                forEachDayColumn(totalDays, (colId) => {
+                  const current = (row[colId] ?? '').toString().trim();
+                  if (current !== '') {
+                    dayUpdates[colId] = newTimeValue;
+                  }
+                });
+                return { ...row, ...updates, ...dayUpdates };
+              }
+              return { ...row, ...updates };
             }
             return row;
           }));
@@ -209,8 +228,7 @@ export default function useEditState({
           setData(prev => prev.map(row => {
             if (row.id === rowId) {
               const updates: Partial<PlannerRow> = { estimate: oldValue, timeValue: oldTimeValue };
-              const dayUpdates = syncDayColumns(row, oldTimeValue, newTimeValue, totalDays);
-              return { ...row, ...updates, ...(dayUpdates ?? {}) };
+              return { ...row, ...updates, ...oldDayValues };
             }
             return row;
           }));
