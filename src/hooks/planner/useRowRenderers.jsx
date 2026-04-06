@@ -351,19 +351,22 @@ export default function useRowRenderers({
           data-display-only="true"
         >
           {config.labelInCheck && row.isGroupHeader && row.groupId ? (
-            <span
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                toggleGroupCollapse(row.groupId);
-              }}
-              style={{ cursor: 'pointer', userSelect: 'none', display: 'inline-block' }}
-            >
-              {expandIcon} {projectLabel}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <span
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  toggleGroupCollapse(row.groupId);
+                }}
+                style={{ cursor: 'pointer', userSelect: 'none' }}
+              >
+                {expandIcon}
+              </span>
+              {projectLabel}
             </span>
           ) : (
             config.labelInCheck ? projectLabel : ''
@@ -875,19 +878,22 @@ export default function useRowRenderers({
               // Add expand/collapse icon if this is a group header
               if (row.isGroupHeader && row.groupId) {
                 return (
-                  <span
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      toggleGroupCollapse(row.groupId);
-                    }}
-                    style={{ cursor: 'pointer', userSelect: 'none', display: 'inline-block' }}
-                  >
-                    {expandIcon} {row.archiveWeekLabel ?? ''}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        toggleGroupCollapse(row.groupId);
+                      }}
+                      style={{ cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      {expandIcon}
+                    </span>
+                    {row.archiveWeekLabel ?? ''}
                   </span>
                 );
               }

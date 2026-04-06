@@ -236,7 +236,7 @@ export default function ProjectRow({
                   }}
                 >
                   <div
-                    className={`h-full flex items-center gap-2 ${(isHeader || isSubprojectHeader) && groupId && !isEditing ? 'cursor-pointer' : ''} ${isSelected ? 'selected-cell' : ''}`}
+                    className={`h-full flex items-center gap-2 ${isSelected ? 'selected-cell' : ''}`}
                     style={{
                       position: 'relative',
                       fontSize: `${cellFontSize}px`,
@@ -250,26 +250,35 @@ export default function ProjectRow({
                       outline: isEditing ? '2px solid black' : 'none',
                       outlineOffset: '-2px',
                     }}
-                    onClick={(e) => {
-                      if ((isHeader || isSubprojectHeader) && groupId && !isEditing) {
-                        toggleGroupCollapse(groupId);
-                      }
-                    }}
                   >
                     {isHeader && groupId && (
-                      isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />
+                      <span
+                        style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isEditing) toggleGroupCollapse(groupId);
+                        }}
+                      >
+                        {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                      </span>
                     )}
                     {isSubprojectHeader && groupId && (
-                      <span style={{
-                        position: 'absolute',
-                        right: chevronRight + 4,
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        color: '#c9a8b8',
-                        display: 'flex',
-                        alignItems: 'center',
-                        pointerEvents: 'none',
-                      }}>
+                      <span
+                        style={{
+                          position: 'absolute',
+                          right: chevronRight + 4,
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          color: '#c9a8b8',
+                          display: 'flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isEditing) toggleGroupCollapse(groupId);
+                        }}
+                      >
                         {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                       </span>
                     )}

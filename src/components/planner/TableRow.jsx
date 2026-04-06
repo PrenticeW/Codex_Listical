@@ -515,7 +515,7 @@ const TableRow = React.memo(function TableRow({
                     className="p-0"
                   >
                     <div
-                      className="h-full flex items-center gap-2 cursor-pointer"
+                      className="h-full flex items-center gap-2"
                       style={{
                         minHeight: `${rowHeight}px`,
                         ...ARCHIVE_ROW_STYLE,
@@ -525,9 +525,13 @@ const TableRow = React.memo(function TableRow({
                         fontSize: `${cellFontSize}px`,
                         paddingLeft: '8px',
                       }}
-                      onClick={() => toggleGroupCollapse(row.original.groupId)}
                     >
-                      {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                      <span
+                        className="cursor-pointer"
+                        onClick={() => toggleGroupCollapse(row.original.groupId)}
+                      >
+                        {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                      </span>
                       <span>{weekLabel}</span>
                     </div>
                   </td>
