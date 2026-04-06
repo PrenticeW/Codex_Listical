@@ -112,7 +112,7 @@ export default function ProjectRow({
             left: 0,
             width: '100%',
             height: '2px',
-            backgroundColor: '#3b82f6',
+            backgroundColor: '#000000',
             zIndex: 1000,
             pointerEvents: 'none',
             display: 'block',
@@ -241,7 +241,7 @@ export default function ProjectRow({
                       position: 'relative',
                       fontSize: `${cellFontSize}px`,
                       minHeight: `${rowHeight}px`,
-                      backgroundColor: isRowSelected ? '#e8f0fe' : bgColor,
+                      backgroundColor: isRowSelected ? '#fff5fc' : bgColor,
                       borderBottom: '1px solid #d3d3d3',
                       borderRight: '1px solid #d3d3d3',
                       paddingLeft: '8px',
@@ -468,7 +468,7 @@ export default function ProjectRow({
                   style={{
                     fontSize: `${cellFontSize}px`,
                     minHeight: `${rowHeight}px`,
-                    backgroundColor: isRowSelected ? '#e8f0fe' : bgColor,
+                    backgroundColor: isRowSelected ? '#fff5fc' : bgColor,
                     borderBottom: '1px solid #d3d3d3',
                     borderRight: '1px solid #d3d3d3',
                     paddingLeft: '8px',
@@ -567,7 +567,7 @@ export default function ProjectRow({
                 style={{
                   fontSize: `${cellFontSize}px`,
                   minHeight: `${rowHeight}px`,
-                  backgroundColor: isDayColumn ? 'transparent' : (isRowSelected ? '#e8f0fe' : bgColor), // No background for day columns
+                  backgroundColor: isDayColumn ? 'transparent' : (isRowSelected ? '#fff5fc' : bgColor), // No background for day columns
                   borderBottom: '1px solid #d3d3d3',
                   borderRight: borderRightStyle,
                   paddingLeft: '3px',

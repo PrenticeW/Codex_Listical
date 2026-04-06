@@ -50,7 +50,7 @@ export default function ProjectEditModal({
             type="text"
             value={planModal.projectName}
             onChange={(e) => updatePlanModal({ projectName: e.target.value })}
-            className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+            className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
           />
         </div>
         <div className="space-y-1" style={{ paddingTop: '15px' }}>
@@ -66,7 +66,7 @@ export default function ProjectEditModal({
             value={planModal.projectTagline ?? ''}
             onChange={(e) => updatePlanModal({ projectTagline: e.target.value })}
             placeholder="e.g. a short phrase about this project"
-            className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+            className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
           />
         </div>
         <div className="space-y-1" style={{ paddingTop: '15px' }}>
@@ -84,7 +84,7 @@ export default function ProjectEditModal({
               const nextValue = (e.target.value || '').toUpperCase();
               updatePlanModal({ projectNickname: nextValue });
             }}
-            className={`w-full rounded border px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${!planModal.projectNickname.trim() ? 'border-red-400 bg-red-50' : 'border-[#ced3d0]'}`}
+            className={`w-full rounded border px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-black ${!planModal.projectNickname.trim() ? 'border-red-400 bg-red-50' : 'border-[#ced3d0]'}`}
           />
           {!planModal.projectNickname.trim() && (
             <p className="text-xs text-red-600 font-medium">A nickname is required to add to plan</p>
@@ -114,7 +114,7 @@ export default function ProjectEditModal({
               <button
                 type="button"
                 disabled={!planModal.projectNickname.trim()}
-                className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="rounded border border-[#e9c9e9] bg-[#fff5fc] px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-[#ffe8fa] disabled:opacity-40 disabled:cursor-not-allowed"
                 onClick={() => handleTogglePlanStatus(item.id, true)}
               >
                 Add To Plan

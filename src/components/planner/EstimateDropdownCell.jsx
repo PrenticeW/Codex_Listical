@@ -152,7 +152,7 @@ function EstimateDropdownCell({
               <div
                 key={option}
                 className={`py-1 cursor-pointer ${
-                  isSelected ? 'ring-2 ring-inset ring-blue-500' : ''
+                  isSelected ? 'ring-2 ring-inset ring-black' : ''
                 } ${option === '-' ? 'text-left' : ''}`}
                 style={{
                   fontSize: `${cellFontSize}px`,

@@ -427,7 +427,7 @@ export default function StagingPageV2() {
                   handleAdd();
                 }
               }}
-              className="w-full rounded border border-[#ced3d0] px-3 py-2 text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              className="w-full rounded border border-[#ced3d0] px-3 py-2 text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
               style={{ fontSize: `${Math.round(18 * textSizeScale)}px` }}
               placeholder="What would you like to get done?"
             />

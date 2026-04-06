@@ -97,7 +97,7 @@ const TaskRow = React.memo(function TaskRow({
             left: 0,
             width: '100%',
             height: '2px',
-            backgroundColor: '#3b82f6',
+            backgroundColor: '#000000',
             zIndex: 1000,
             pointerEvents: 'none',
             display: 'block',
@@ -243,9 +243,9 @@ const TaskRow = React.memo(function TaskRow({
               <div
                 className={`h-full flex items-center w-full ${
                   isCellDrop
-                    ? 'ring-2 ring-inset ring-blue-500 bg-blue-50'
+                    ? 'ring-2 ring-inset ring-black bg-[#fff5fc]'
                     : isSelected && !isEditing
-                    ? 'ring-2 ring-inset ring-blue-500 bg-blue-50'
+                    ? 'ring-2 ring-inset ring-black bg-[#fff5fc]'
                     : ''
                 }`}
                 style={{
@@ -330,12 +330,12 @@ const TaskRow = React.memo(function TaskRow({
                   columnId === 'checkbox' || columnId === 'recurring' ? (
                     <div
                       className={`w-full h-full flex items-center justify-center ${
-                        isSelected && !isEditing ? 'ring-2 ring-inset ring-blue-500' : ''
+                        isSelected && !isEditing ? 'ring-2 ring-inset ring-black' : ''
                       }`}
                       style={{
                         backgroundColor: (value === 'true' || value === true)
-                          ? (isSelected && !isEditing ? '#b8dff0' : '#d4ecbc')
-                          : (isSelected && !isEditing ? '#eff6ff' : 'transparent'),
+                          ? (isSelected && !isEditing ? '#f0d5ec' : '#d4ecbc')
+                          : (isSelected && !isEditing ? '#fff5fc' : 'transparent'),
                       }}
                     >
                       {/* Hidden input for copy/paste compatibility */}

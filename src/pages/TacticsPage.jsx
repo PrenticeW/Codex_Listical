@@ -2861,7 +2861,7 @@ export default function TacticsPage() {
                   zIndex: 10,
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#3b82f6';
+                  e.currentTarget.style.backgroundColor = '#000000';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.backgroundColor = 'transparent';
@@ -3303,7 +3303,7 @@ export default function TacticsPage() {
           <input
             ref={menuRenameInputRef}
             type="text"
-            className="w-full rounded border border-[#94a3b8] bg-white px-2 py-1 text-[11px] text-slate-800 outline-none focus:border-blue-400"
+            className="w-full rounded border border-[#94a3b8] bg-white px-2 py-1 text-[11px] text-slate-800 outline-none focus:border-black"
             value={menuRenamingLabel}
             onChange={(e) => setMenuRenamingLabel(e.target.value)}
             onKeyDown={(e) => {
@@ -3430,7 +3430,7 @@ export default function TacticsPage() {
                               if (e.key === 'Enter') { e.preventDefault(); handlePendingCustomConfirm(); }
                               if (e.key === 'Escape') { e.preventDefault(); handlePendingCustomConfirm(); }
                             }}
-                            className="flex-1 px-2 py-1 text-[11px] font-semibold rounded-sm border border-blue-400 bg-white text-slate-800 focus:outline-none uppercase"
+                            className="flex-1 px-2 py-1 text-[11px] font-semibold rounded-sm border border-black bg-white text-slate-800 focus:outline-none uppercase"
                             onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => e.stopPropagation()}
                           />
@@ -3520,7 +3520,7 @@ export default function TacticsPage() {
                             else if (e.key === 'Escape') { e.preventDefault(); setMenuRenamingProjectId(null); setMenuRenamingProjectLabel(''); }
                           }}
                           onBlur={handleMenuDefinitionRenameConfirm}
-                          className="w-full px-2 py-1 text-[11px] font-semibold rounded-sm border border-blue-400 bg-white text-slate-800 focus:outline-none uppercase"
+                          className="w-full px-2 py-1 text-[11px] font-semibold rounded-sm border border-black bg-white text-slate-800 focus:outline-none uppercase"
                           onMouseDown={(e) => e.stopPropagation()}
                           onClick={(e) => e.stopPropagation()}
                         />
@@ -3848,7 +3848,7 @@ export default function TacticsPage() {
                             zIndex: 10,
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#3b82f6';
+                            e.currentTarget.style.backgroundColor = '#000000';
                           }}
                           onMouseLeave={(e) => {
                             e.currentTarget.style.backgroundColor = 'transparent';
@@ -3881,7 +3881,7 @@ export default function TacticsPage() {
                             zIndex: 10,
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#3b82f6';
+                            e.currentTarget.style.backgroundColor = '#000000';
                           }}
                           onMouseLeave={(e) => {
                             e.currentTarget.style.backgroundColor = 'transparent';
@@ -3914,7 +3914,7 @@ export default function TacticsPage() {
                               zIndex: 10,
                             }}
                             onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = '#3b82f6';
+                              e.currentTarget.style.backgroundColor = '#000000';
                             }}
                             onMouseLeave={(e) => {
                               e.currentTarget.style.backgroundColor = 'transparent';
@@ -4752,7 +4752,7 @@ function ListicalMenu({
                 </label>
                 <select
                   id="bed-time-select"
-                  className="rounded border border-[#ced3d0] bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                  className="rounded border border-[#ced3d0] bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
                   value={startHour}
                   onChange={handleBedTimeChange}
                 >
@@ -4768,7 +4768,7 @@ function ListicalMenu({
                 </label>
                 <select
                   id="rise-time-select"
-                  className="rounded border border-[#ced3d0] bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                  className="rounded border border-[#ced3d0] bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
                   value={startMinute}
                   onChange={(e) => onStartMinuteChange(e.target.value)}
                   disabled={!startHour}
@@ -4792,7 +4792,7 @@ function ListicalMenu({
             </label>
             <select
               id="increment-select"
-              className="flex-1 rounded border border-[#ced3d0] bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              className="flex-1 rounded border border-[#ced3d0] bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
               value={pendingIncrement ?? incrementMinutes}
               onChange={handleIncrementChange}
             >

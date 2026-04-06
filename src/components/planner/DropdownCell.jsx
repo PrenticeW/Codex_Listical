@@ -179,14 +179,14 @@ function DropdownCell({
               <div
                 key={option}
                 className={`py-1 cursor-pointer ${
-                  index === selectedIndex ? 'ring-2 ring-inset ring-blue-500' : ''
+                  index === selectedIndex ? 'ring-2 ring-inset ring-black' : ''
                 } ${option === '-' ? 'text-left' : ''}`}
                 style={{
                   fontSize: `${cellFontSize}px`,
                   minHeight: `${rowHeight}px`,
                   display: 'flex',
                   alignItems: 'center',
-                  backgroundColor: isPillbox && optionColors ? optionColors.bg : (index === selectedIndex ? '#eff6ff' : '#ffffff'),
+                  backgroundColor: isPillbox && optionColors ? optionColors.bg : (index === selectedIndex ? '#fff5fc' : '#ffffff'),
                   color: isPillbox && optionColors ? optionColors.text : 'inherit',
                   borderRadius: isPillbox ? '9999px' : '0',
                   margin: isPillbox ? '2px 4px' : '0',

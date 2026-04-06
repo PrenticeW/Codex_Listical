@@ -23,7 +23,7 @@ export default function ColorSwatchGrid({
           <button
             key={color}
             type="button"
-            className="rounded transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="rounded transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
             style={{
               width: buttonSize,
               height: buttonSize,

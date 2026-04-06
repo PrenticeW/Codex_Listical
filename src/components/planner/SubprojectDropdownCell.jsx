@@ -150,14 +150,14 @@ function SubprojectDropdownCell({
             <div
               key={option}
               className={`py-1 px-2 cursor-pointer ${
-                index === selectedIndex ? 'ring-2 ring-inset ring-blue-500' : ''
+                index === selectedIndex ? 'ring-2 ring-inset ring-black' : ''
               } ${option === '-' ? 'text-left' : ''}`}
               style={{
                 fontSize: `${cellFontSize}px`,
                 minHeight: `${rowHeight}px`,
                 display: 'flex',
                 alignItems: 'center',
-                backgroundColor: index === selectedIndex ? '#eff6ff' : '#ffffff',
+                backgroundColor: index === selectedIndex ? '#fff5fc' : '#ffffff',
                 color: '#000000'
               }}
               onMouseDown={(e) => handleSelect(e, option)}

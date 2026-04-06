@@ -106,9 +106,10 @@ export default function TableRow({
           colSpan={showSectionTotal ? PLAN_TABLE_COLS - 1 : PLAN_TABLE_COLS}
           className="border border-[#e5e7eb] py-0.5"
           style={{
-            backgroundColor: isCellSelected(item.id, rowIdx, 0) ? '#dbeafe' : '#b7b7b7',
-            borderTop: isDropTarget ? '2px solid #3b82f6' : undefined,
+            backgroundColor: isCellSelected(item.id, rowIdx, 0) ? '#fff5fc' : '#b7b7b7',
+            borderTop: isDropTarget ? '2px solid #000000' : undefined,
             paddingLeft: '12px',
+            ...(isCellSelected(item.id, rowIdx, 0) ? { boxShadow: 'inset 0 0 0 2px rgba(0, 0, 0, 0.65)', position: 'relative', zIndex: 2 } : {}),
           }}
           onMouseDown={(e) => cellMouseDown(e, 0)}
           onMouseEnter={() => cellMouseEnter(0)}

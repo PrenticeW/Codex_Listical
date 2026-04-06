@@ -164,7 +164,7 @@ function ProjectDropdownCell({
               <div
                 key={option}
                 className={`py-1 cursor-pointer ${
-                  index === selectedIndex ? 'ring-2 ring-inset ring-blue-500' : ''
+                  index === selectedIndex ? 'ring-2 ring-inset ring-black' : ''
                 } ${option === '-' ? 'text-left' : ''}`}
                 style={{
                   fontSize: `${cellFontSize}px`,

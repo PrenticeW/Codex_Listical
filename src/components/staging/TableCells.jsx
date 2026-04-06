@@ -4,9 +4,12 @@ import { PLAN_ESTIMATE_OPTIONS } from '../../utils/staging/planTableHelpers';
 /**
  * Shared cell styling utilities
  */
+const getSelectionOutline = (isSelected) =>
+  isSelected ? { boxShadow: 'inset 0 0 0 2px rgba(0, 0, 0, 0.65)', position: 'relative', zIndex: 2 } : {};
+
 const getCellBackground = ({ isSelected, isDropTarget, rowType }) => {
-  if (isSelected) return '#dbeafe';
-  if (isDropTarget) return '#dbeafe';
+  if (isSelected) return '#fff5fc';
+  if (isDropTarget) return '#fff5fc';
 
   switch (rowType) {
     case 'header':
@@ -21,8 +24,8 @@ const getCellBackground = ({ isSelected, isDropTarget, rowType }) => {
 };
 
 const getHandleBackground = ({ isRowSelected, isDropTarget, rowType }) => {
-  if (isRowSelected) return '#3b82f6';
-  if (isDropTarget) return '#dbeafe';
+  if (isRowSelected) return '#000000';
+  if (isDropTarget) return '#fff5fc';
 
   switch (rowType) {
     case 'header':
@@ -52,7 +55,7 @@ export function DragHandleCell({
         width: '24px',
         minWidth: '24px',
         backgroundColor: getHandleBackground({ isRowSelected, isDropTarget, rowType }),
-        borderTop: isDropTarget ? '2px solid #3b82f6' : undefined,
+        borderTop: isDropTarget ? '2px solid #000000' : undefined,
         cursor: 'grab',
       }}
       onClick={onClick}
@@ -91,7 +94,8 @@ export function TextInputCell({
 }) {
   const style = {
     backgroundColor: getCellBackground({ isSelected, isDropTarget, rowType }),
-    borderTop: isDropTarget ? '2px solid #3b82f6' : undefined,
+    borderTop: isDropTarget ? '2px solid #000000' : undefined,
+    ...getSelectionOutline(isSelected),
   };
 
   if (width) style.width = width;
@@ -147,7 +151,8 @@ export function StaticTextCell({
 }) {
   const style = {
     backgroundColor: getCellBackground({ isSelected, isDropTarget, rowType }),
-    borderTop: isDropTarget ? '2px solid #3b82f6' : undefined,
+    borderTop: isDropTarget ? '2px solid #000000' : undefined,
+    ...getSelectionOutline(isSelected),
   };
 
   if (width) style.width = width;
@@ -190,7 +195,8 @@ export function EstimateSelectCell({
     width: '140px',
     minWidth: '140px',
     backgroundColor: getCellBackground({ isSelected, isDropTarget, rowType }),
-    borderTop: isDropTarget ? '2px solid #3b82f6' : undefined,
+    borderTop: isDropTarget ? '2px solid #000000' : undefined,
+    ...getSelectionOutline(isSelected),
   };
 
   return (
@@ -240,7 +246,8 @@ export function TimeValueCell({
     textAlign: 'right',
     paddingRight: '10px',
     backgroundColor: getCellBackground({ isSelected, isDropTarget, rowType }),
-    borderTop: isDropTarget ? '2px solid #3b82f6' : undefined,
+    borderTop: isDropTarget ? '2px solid #000000' : undefined,
+    ...getSelectionOutline(isSelected),
   };
 
   return (
@@ -315,7 +322,8 @@ export function EmptyCell({
 }) {
   const style = {
     backgroundColor: getCellBackground({ isSelected, isDropTarget, rowType }),
-    borderTop: isDropTarget ? '2px solid #3b82f6' : undefined,
+    borderTop: isDropTarget ? '2px solid #000000' : undefined,
+    ...getSelectionOutline(isSelected),
   };
 
   if (width) style.width = width;
@@ -347,7 +355,7 @@ export function HeaderCell({
     backgroundColor: '#b7b7b7',
     color: '#1f2937',
     fontSize: `${Math.round(14 * textSizeScale)}px`,
-    borderTop: isDropTarget ? '2px solid #3b82f6' : undefined,
+    borderTop: isDropTarget ? '2px solid #000000' : undefined,
   };
 
   if (paddingLeft) style.paddingLeft = paddingLeft;

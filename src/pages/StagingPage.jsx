@@ -35,7 +35,7 @@ const ColorSwatchGrid = ({
           <button
             key={color}
             type="button"
-            className="rounded transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="rounded transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
             style={{
               width: buttonSize,
               height: buttonSize,
@@ -922,7 +922,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                 handleAdd();
               }
             }}
-            className="w-full rounded border border-[#ced3d0] px-3 py-2 text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+            className="w-full rounded border border-[#ced3d0] px-3 py-2 text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
             style={{ fontSize: '18px', marginTop: '10px' }}
             placeholder="Add to project shortlist and press Enter"
           />
@@ -1860,7 +1860,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                       type="text"
                       value={planModal.projectName}
                       onChange={(e) => setPlanModal((prev) => ({ ...prev, projectName: e.target.value }))}
-                      className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                      className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1871,7 +1871,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                       value={planModal.projectTagline}
                       onChange={(e) => setPlanModal((prev) => ({ ...prev, projectTagline: e.target.value }))}
                       placeholder="e.g. a short phrase about this project"
-                      className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                      className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1881,7 +1881,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                       type="text"
                       value={planModal.projectNickname}
                       onChange={(e) => setPlanModal((prev) => ({ ...prev, projectNickname: (e.target.value || '').toUpperCase() }))}
-                      className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                      className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
                     />
                   </div>
                 </div>
@@ -1938,7 +1938,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                     type="text"
                     value={planModal.projectName}
                     onChange={(e) => setPlanModal((prev) => ({ ...prev, projectName: e.target.value }))}
-                    className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
                   />
                 </div>
                 <div className="space-y-1" style={{ paddingTop: '15px' }}>
@@ -1953,7 +1953,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                       setPlanModal((prev) => ({ ...prev, projectTagline: e.target.value }))
                     }
                     placeholder="e.g. a short phrase about this project"
-                    className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
                   />
                 </div>
                 <div className="space-y-1" style={{ paddingTop: '15px' }}>
@@ -1968,7 +1968,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                       const nextValue = (e.target.value || '').toUpperCase();
                       setPlanModal((prev) => ({ ...prev, projectNickname: nextValue }));
                     }}
-                    className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    className="w-full rounded border border-[#ced3d0] px-3 py-2 text-sm text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
                   />
                 </div>
               </div>

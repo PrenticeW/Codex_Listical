@@ -163,7 +163,7 @@ function PlannerTable({
                               document.body.style.userSelect = 'none';
                             }}
                             onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = '#3b82f6';
+                              e.currentTarget.style.backgroundColor = '#000000';
                             }}
                             onMouseLeave={(e) => {
                               e.currentTarget.style.backgroundColor = 'transparent';
