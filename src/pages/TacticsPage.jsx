@@ -33,6 +33,7 @@ import usePageSize from '../hooks/usePageSize';
 import ColourPicker from '../components/ColourPicker';
 import ScheduleItemPanel from '../components/ScheduleItemPanel';
 import { Pencil } from 'lucide-react';
+import { getContrastTextColor } from '../utils/colorUtils';
 
 const DAYS_OF_WEEK = [
   'Sunday',
@@ -2081,25 +2082,26 @@ export default function TacticsPage() {
     map.set('sleep', {
       label: 'Sleep',
       color: '#d9d9d9',
-      textColor: '#000000',
+      textColor: getContrastTextColor('#d9d9d9'),
     });
     map.set('rest', {
       label: 'REST',
       color: '#666666',
-      textColor: '#ffffff',
+      textColor: getContrastTextColor('#666666'),
       fontWeight: 700,
     });
     map.set('buffer', {
       label: 'BUFFER',
       color: '#fe8afe',
-      textColor: '#ffffff',
+      textColor: getContrastTextColor('#fe8afe'),
       fontWeight: 700,
     });
     dropdownProjects.forEach((project) => {
+      const color = project.color || '#0f172a';
       map.set(project.id, {
         label: project.label,
-        color: project.color || '#0f172a',
-        textColor: '#ffffff',
+        color,
+        textColor: getContrastTextColor(color),
       });
     });
     return map;
@@ -2835,7 +2837,7 @@ export default function TacticsPage() {
           const label = metadata?.label ?? column.project.label ?? 'Project';
           const backgroundColor =
             metadata?.color ?? column.project.color ?? '#d9d9d9';
-          const textColor = metadata?.textColor ?? '#000000';
+          const textColor = metadata?.textColor ?? getContrastTextColor(backgroundColor);
           return (
             <td
               key={`${rowKey}-${column.id}`}
@@ -3004,7 +3006,7 @@ export default function TacticsPage() {
         }
       }
       const backgroundColor = metadata?.color ?? '#d9d9d9';
-      const textColor = metadata?.textColor ?? '#000';
+      const textColor = metadata?.textColor ?? getContrastTextColor(backgroundColor);
       const fontWeight = metadata?.fontWeight ?? 600;
       const isActive = highlightedBlockId === block.id || selectedBlockIds.has(block.id);
       const blockHeight = getBlockHeight(block.startRowId, block.endRowId);
@@ -4596,7 +4598,8 @@ export default function TacticsPage() {
         <ScheduleItemPanel
           projects={highlightedProjects.map((p) => {
             const meta = projectMetadata.get(p.id);
-            return { ...p, color: meta?.color ?? p.color, textColor: meta?.textColor ?? '#000000' };
+            const color = meta?.color ?? p.color;
+            return { ...p, color, textColor: meta?.textColor ?? getContrastTextColor(color) };
           })}
           scheduleLayout={scheduleLayout}
           projectChips={projectChips}

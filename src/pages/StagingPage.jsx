@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
 import { loadStagingState, saveStagingState } from '../lib/stagingStorage';
+import { getContrastTextColor } from '../utils/colorUtils';
 
 const PLAN_TABLE_ROWS = 15;
 const PLAN_TABLE_COLS = 6;
@@ -1568,7 +1569,7 @@ export default function StagingPage({ currentPath = '/staging', onNavigate = () 
                 const isEditing = planModal.open && planModal.itemId === item.id;
                 const activeColor = isEditing ? planModal.color ?? item.color : item.color;
                 const headerBackground = activeColor || '#f3f4f6';
-                const headerTextColor = activeColor ? '#ffffff' : '#0f172a';
+                const headerTextColor = activeColor ? getContrastTextColor(activeColor) : '#0f172a';
                 return (
                   <div key={item.id}>
                     <div className="flex items-start gap-2">
