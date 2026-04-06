@@ -13,7 +13,7 @@ import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
 import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '../lib/stagingStorage';
 import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
-import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../utils/staging/planTableHelpers';
+import { parseEstimateLabelToMinutes, formatMinutesToHHmm, buildProjectPlanSummary } from '../utils/staging/planTableHelpers';
 import { pickCustomChipColour } from '../utils/staging/projectColour';
 import { saveTacticsMetrics } from '../lib/tacticsMetricsStorage';
 import { getYearInfo } from '../lib/yearMetadataStorage';
@@ -562,7 +562,7 @@ export default function TacticsPage() {
           id: project.id,
           label,
           color: project.color,
-          planSummary: project.planSummary,
+          planSummary: buildProjectPlanSummary(project),
           projectTagline: project.projectTagline ?? '',
         };
       });
@@ -758,7 +758,8 @@ export default function TacticsPage() {
 
       // Load staging projects on first mount
       const state = loadStagingState(currentYear);
-      setStagingProjects(Array.isArray(state?.shortlist) ? state.shortlist : []);
+      const projects = Array.isArray(state?.shortlist) ? state.shortlist : [];
+      setStagingProjects(projects);
       return;
     }
 

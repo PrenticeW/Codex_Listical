@@ -49,9 +49,8 @@ export default function ScheduleItemPanel({
     if (!projectChips) return result;
     projectChips.forEach((chip) => {
       if (!chip.id.startsWith('schedule-chip-')) return;
-      if (chip.columnIndex >= 8) return; // only day columns
       const extraIdx = chip.id.indexOf('-extra-chip-');
-      if (extraIdx === -1) return; // canonical chips are never in day columns
+      if (extraIdx === -1) return; // skip canonical (unplaced) chips
       const inner = chip.id.slice('schedule-chip-'.length, extraIdx);
       const lastDash = inner.lastIndexOf('-');
       if (lastDash === -1) return;

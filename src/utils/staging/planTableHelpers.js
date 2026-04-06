@@ -440,39 +440,36 @@ export const calculateSectionBoundaries = (item) => {
 };
 
 export const buildProjectPlanSummary = (item) => {
-  if (!item) return { subprojects: [], totalHours: '0.00' };
+  if (!item) return { subprojects: [], scheduleItems: [], totalHours: '0.00' };
 
   const entries = clonePlanTableEntries(item.planTableEntries);
-  const bounds = calculateSectionBoundaries(item);
 
-  // Extract subprojects from the Subprojects section (position-based, not __sectionType-based,
-  // because __sectionType on header rows may be stale from earlier section order changes)
+  const scheduleItems = [];
   const subprojects = [];
-  for (let rowIdx = bounds.subprojectStart; rowIdx <= bounds.subprojectEnd; rowIdx += 1) {
-    const row = entries[rowIdx];
-    if (!row) continue;
-    const name = (row[COL.CONTENT] ?? '').trim();
-    if (name) subprojects.push({ name, timeValue: '0.00' });
-  }
-
-  // Sum Schedule section rows for scheduled hours
   let scheduleTotalMinutes = 0;
-  for (let rowIdx = bounds.scheduleStart; rowIdx <= bounds.scheduleEnd; rowIdx += 1) {
-    const row = entries[rowIdx];
-    if (!row) continue;
-    scheduleTotalMinutes += parseTimeValueToMinutes(row[COL.ESTIMATE] ?? '0.00');
-  }
-
-  // Sum Actions section response rows for total hours
   let needsPlanTotalMinutes = 0;
-  let inActionsSection = false;
+  let currentSection = null;
+
   for (let rowIdx = 0; rowIdx < entries.length; rowIdx += 1) {
     const row = entries[rowIdx];
+    if (!row) continue;
+
     if (row.__rowType === 'header') {
-      inActionsSection = row.__sectionType === 'Actions';
+      currentSection = row.__sectionType ?? null;
       continue;
     }
-    if (inActionsSection && row.__rowType === 'response') {
+
+    if (currentSection === 'Schedule' && row.__rowType !== 'header' && row.__rowType !== 'data') {
+      const name = (row[COL.CONTENT] ?? '').trim();
+      const timeValue = row[COL.ESTIMATE] ?? '';
+      if (name || timeValue) {
+        scheduleItems.push({ name: name || 'Schedule Item', timeValue });
+        scheduleTotalMinutes += parseTimeValueToMinutes(timeValue);
+      }
+    } else if (currentSection === 'Subprojects' && row.__rowType !== 'prompt') {
+      const name = (row[COL.CONTENT] ?? '').trim();
+      if (name) subprojects.push({ name, timeValue: '0.00' });
+    } else if (currentSection === 'Actions' && row.__rowType === 'response') {
       needsPlanTotalMinutes += parseTimeValueToMinutes(row[COL.TIME_VALUE] ?? '');
     }
   }
@@ -481,6 +478,7 @@ export const buildProjectPlanSummary = (item) => {
 
   return {
     subprojects,
+    scheduleItems,
     needsPlanTotalMinutes,
     scheduleTotalMinutes,
     totalHours: formatMinutesToHHmm(projectTotalMinutes),

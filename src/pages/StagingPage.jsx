@@ -260,42 +260,34 @@ const clonePlanTableEntries = (entries, ensureRows = PLAN_TABLE_ROWS) => {
 
 const buildProjectPlanSummary = (item) => {
   if (!item) return { scheduleItems: [], totalHours: '0.00' };
-  const entries = clonePlanTableEntries(item.planTableEntries);
-  const reasonRowCount = item.planReasonRowCount ?? 1;
-  const outcomeRowCount = item.planOutcomeRowCount ?? 1;
-  const questionRowCount = item.planOutcomeQuestionRowCount ?? 1;
-  const needsQuestionRowCount = item.planNeedsQuestionRowCount ?? 1;
-  const needsPlanRowCount = item.planNeedsPlanRowCount ?? 1;
-  const scheduleRowCount = item.planSubprojectRowCount ?? 1;
-  const outcomeHeadingRow = 2 + reasonRowCount;
-  const outcomePromptStart = outcomeHeadingRow + 1;
-  const outcomePromptEnd = outcomePromptStart + Math.max(outcomeRowCount - 1, 0);
-  const questionPromptStart = outcomePromptEnd + 1;
-  const questionPromptEnd = questionPromptStart + Math.max(questionRowCount - 1, 0);
-  const needsHeadingRow = questionPromptEnd + 1;
-  const needsQuestionStart = needsHeadingRow + 1;
-  const needsQuestionEnd = needsQuestionStart + Math.max(needsQuestionRowCount - 1, 0);
-  const needsPlanStart = needsQuestionEnd + 1;
-  const scheduleHeadingRow = needsPlanStart + Math.max(needsPlanRowCount, 0);
-  const schedulePromptRow = scheduleHeadingRow + 1;
-  const scheduleStart = schedulePromptRow + 1;
+  const entries = Array.isArray(item.planTableEntries) ? item.planTableEntries : [];
+
   const scheduleItems = [];
-  for (let idx = 0; idx < Math.max(scheduleRowCount, 0); idx += 1) {
-    const rowIdx = scheduleStart + idx;
-    const rowValues = entries[rowIdx] ?? Array.from({ length: PLAN_TABLE_COLS }, () => '');
-    scheduleItems.push({
-      name: (rowValues[2] ?? '').trim(),
-      timeValue: rowValues[4] ?? '0.00',
-    });
+  let scheduleTotalMinutes = 0;
+  let needsPlanTotalMinutes = 0;
+  let currentSection = null;
+
+  for (let rowIdx = 0; rowIdx < entries.length; rowIdx += 1) {
+    const row = entries[rowIdx];
+    if (!row) continue;
+
+    if (row.__rowType === 'header') {
+      currentSection = row.__sectionType ?? null;
+      continue;
+    }
+
+    if (currentSection === 'Schedule' && row.__rowType !== 'header' && row.__rowType !== 'data') {
+      const name = (row[2] ?? '').trim();
+      const timeValue = row[3] ?? '';
+      if (name || timeValue) {
+        scheduleItems.push({ name: name || 'Schedule Item', timeValue });
+        scheduleTotalMinutes += parseTimeValueToMinutes(timeValue);
+      }
+    } else if (currentSection === 'Actions' && row.__rowType === 'response') {
+      needsPlanTotalMinutes += parseTimeValueToMinutes(row[4] ?? '');
+    }
   }
-  const calculateMinutes = (baseIdx, rowCount) =>
-    Array.from({ length: Math.max(rowCount, 0) }, (_, idx) => {
-      const rowIdx = baseIdx + idx;
-      const rowValues = entries[rowIdx] ?? [];
-      return parseTimeValueToMinutes(rowValues[4] ?? '');
-    }).reduce((sum, value) => sum + value, 0);
-  const needsPlanTotalMinutes = calculateMinutes(needsPlanStart, needsPlanRowCount);
-  const scheduleTotalMinutes = calculateMinutes(scheduleStart, scheduleRowCount);
+
   const projectTotalMinutes = needsPlanTotalMinutes + scheduleTotalMinutes;
   return {
     scheduleItems,
