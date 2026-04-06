@@ -1,6 +1,38 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { parseEstimateLabelToMinutes } from '../utils/staging/planTableHelpers';
+
+function FitText({ text, maxFontSize = 14, minFontSize = 7 }) {
+  const spanRef = useRef(null);
+  const [fontSize, setFontSize] = useState(maxFontSize);
+
+  useLayoutEffect(() => {
+    const el = spanRef.current;
+    if (!el) return;
+    let size = maxFontSize;
+    el.style.fontSize = `${size}px`;
+    while (el.scrollWidth > el.offsetWidth && size > minFontSize) {
+      size = Math.max(minFontSize, size - 0.5);
+      el.style.fontSize = `${size}px`;
+    }
+    setFontSize(size);
+  });
+
+  return (
+    <span
+      ref={spanRef}
+      style={{
+        display: 'block',
+        width: '100%',
+        overflow: 'hidden',
+        whiteSpace: 'nowrap',
+        fontSize: `${fontSize}px`,
+      }}
+    >
+      {text}
+    </span>
+  );
+}
 
 const DEFAULT_ROW_HEIGHT_PX = 16;
 
@@ -128,7 +160,7 @@ export default function ScheduleItemPanel({
                 {/* Items */}
                 {items.map((item, itemIdx) => {
                   const targetMinutes = parseEstimateLabelToMinutes(item.timeValue) ?? incrementMinutes;
-                  const heightPx = durationToPx(incrementMinutes);
+                  const heightPx = durationToPx(targetMinutes);
                   const instances = projectPlacedChips[itemIdx] ?? [];
                   const totalPlaced = instances.reduce((s, c) => s + c.minutes, 0);
                   const remainingMinutes = Math.max(0, targetMinutes - totalPlaced);
@@ -154,9 +186,7 @@ export default function ScheduleItemPanel({
                             }}
                             title={`Placed: ${formatTime(instance.minutes)} min`}
                           >
-                            <span className="truncate">
-                              {`${baseName}: ${formatTime(instance.minutes)}`.toUpperCase()}
-                            </span>
+                            <FitText text={`${baseName}: ${formatTime(instance.minutes)}`.toUpperCase()} />
                           </div>
                         </div>
                       ))}
@@ -172,9 +202,7 @@ export default function ScheduleItemPanel({
                             }}
                             onDragStart={(e) => onDragStart(project.id, itemIdx, e)}
                           >
-                            <span className="truncate">
-                              {`${baseName}: ${formatTime(remainingMinutes)}`.toUpperCase()}
-                            </span>
+                            <FitText text={`${baseName}: ${formatTime(remainingMinutes)}`.toUpperCase()} />
                           </div>
                         </div>
                       )}
