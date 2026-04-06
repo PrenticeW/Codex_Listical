@@ -2124,10 +2124,10 @@ export default function TacticsPage() {
         let currentMinutes;
         if (currentOverride != null) {
           currentMinutes = currentOverride;
-        } else if (scheduleItem) {
-          currentMinutes = parseEstimateLabelToMinutes(scheduleItem.timeValue) ?? block.durationMinutes ?? spanMinutes;
         } else if (block.durationMinutes) {
           currentMinutes = block.durationMinutes;
+        } else if (scheduleItem) {
+          currentMinutes = parseEstimateLabelToMinutes(scheduleItem.timeValue) ?? spanMinutes;
         } else {
           currentMinutes = spanMinutes;
         }
