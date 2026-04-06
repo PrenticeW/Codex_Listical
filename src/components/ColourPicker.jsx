@@ -34,6 +34,70 @@ function buildGroups() {
 const GROUPS = buildGroups();
 const ROWS = 4; // lightness steps per family
 
+// ── Neutrals (slide 3) ─────────────────────────────────────────────────────
+// Local only — not part of the shared PALETTE constant.
+const NEUTRALS = [
+  { name: 'white',      h: 0,   s: 0,  l: 100 },
+  { name: 'white warm', h: 35,  s: 20, l: 97  },
+  { name: 'silver',     h: 0,   s: 0,  l: 88  },
+  { name: 'lt grey',    h: 0,   s: 0,  l: 78  },
+  { name: 'grey',       h: 0,   s: 0,  l: 62  },
+  { name: 'mid grey',   h: 0,   s: 0,  l: 50  },
+  { name: 'dk grey',    h: 0,   s: 0,  l: 38  },
+  { name: 'charcoal',   h: 0,   s: 0,  l: 22  },
+  { name: 'near black', h: 0,   s: 0,  l: 12  },
+  { name: 'black',      h: 0,   s: 0,  l: 4   },
+  { name: 'cream',      h: 40,  s: 60, l: 95  },
+  { name: 'beige',      h: 35,  s: 30, l: 88  },
+  { name: 'sand',       h: 38,  s: 35, l: 78  },
+  { name: 'tan',        h: 35,  s: 30, l: 65  },
+  { name: 'camel',      h: 33,  s: 35, l: 52  },
+  { name: 'brown',      h: 25,  s: 40, l: 35  },
+  { name: 'dk brown',   h: 22,  s: 45, l: 22  },
+  { name: 'warm grey',  h: 35,  s: 8,  l: 72  },
+  { name: 'warm mid',   h: 35,  s: 8,  l: 50  },
+  { name: 'warm dark',  h: 35,  s: 8,  l: 30  },
+  { name: 'ice',        h: 210, s: 30, l: 97  },
+  { name: 'lt slate',   h: 215, s: 18, l: 82  },
+  { name: 'slate',      h: 215, s: 16, l: 68  },
+  { name: 'mid slate',  h: 215, s: 14, l: 55  },
+  { name: 'steel',      h: 215, s: 14, l: 42  },
+  { name: 'dk slate',   h: 218, s: 18, l: 30  },
+  { name: 'navy grey',  h: 220, s: 20, l: 20  },
+  { name: 'blue black', h: 222, s: 25, l: 12  },
+  { name: 'ink',        h: 225, s: 30, l: 6   },
+  { name: 'blush mist', h: 340, s: 18, l: 88  },
+  { name: 'dusty rose', h: 340, s: 18, l: 72  },
+  { name: 'mauve',      h: 300, s: 12, l: 62  },
+  { name: 'lavender',   h: 265, s: 18, l: 78  },
+  { name: 'periwinkle', h: 240, s: 18, l: 72  },
+  { name: 'sage mist',  h: 140, s: 14, l: 72  },
+  { name: 'mint mist',  h: 160, s: 16, l: 78  },
+  { name: 'duck egg',   h: 185, s: 18, l: 78  },
+  { name: 'straw',      h: 48,  s: 30, l: 82  },
+  { name: 'peach',      h: 20,  s: 35, l: 82  },
+  { name: 'warm stone', h: 30,  s: 12, l: 58  },
+];
+
+// Flat 40-cell array for the neutrals grid (10 cols × 4 rows).
+// A null at position 29 acts as the empty placeholder in row 2 col 9,
+// shifting the tinted near-neutrals (originally indices 29–39) to row 3.
+// Total: 9 cool-grey entries + 1 null + 10 tinted entries = 41 — one too many.
+// Solution: drop warm stone (last entry) so row 3 has exactly 10 entries,
+// giving 40 cells total across 4 rows of 10.
+//
+// Layout:
+//   row 0 (cols 0–9):  white … black
+//   row 1 (cols 0–9):  cream … warm dark
+//   row 2 (cols 0–8):  ice … ink  |  col 9: empty
+//   row 3 (cols 0–9):  blush mist … warm stone
+const NEUTRALS_FLAT = [
+  ...NEUTRALS.slice(0, 20),         // rows 0–1: 20 entries
+  ...NEUTRALS.slice(20, 29),        // row 2 cols 0–8: 9 entries
+  null,                              // row 2 col 9: empty placeholder
+  ...NEUTRALS.slice(29, 39),        // row 3: 10 entries (blush mist … warm stone)
+];
+
 function hslStr(entry) {
   return `hsl(${entry.h}, ${entry.s}%, ${entry.l}%)`;
 }
@@ -70,7 +134,7 @@ const EYEDROPPER_SUPPORTED =
  */
 export default function ColourPicker({ value, onChange, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
-  const [slide, setSlide] = useState(0); // 0 | 1 | 2
+  const [slide, setSlide] = useState(0); // 0 | 1 | 2 | 3
   const [customValue, setCustomValue] = useState(value || '#c9daf8');
   const customInputRef = useRef(null);
 
@@ -110,7 +174,7 @@ export default function ColourPicker({ value, onChange, defaultOpen = false }) {
   // ── Preview rectangle colour ──────────────────────────────────────────
   const previewBg = value || '#c9daf8';
 
-  const currentGroup = GROUPS[slide];
+  const currentGroup = slide < 3 ? GROUPS[slide] : null;
 
   return (
     <div className="space-y-1">
@@ -147,48 +211,94 @@ export default function ColourPicker({ value, onChange, defaultOpen = false }) {
               className="flex-1 grid"
               style={{ gridTemplateColumns: 'repeat(10, 1fr)', gap: '2px' }}
             >
-              {Array.from({ length: ROWS }, (_, rowIdx) =>
-                currentGroup.map((family, colIdx) => {
-                  const entry = family[rowIdx];
-                  const active = isActiveEntry(entry, value);
-                  const bg = hslStr(entry);
-                  return (
-                    <button
-                      key={`${slide}-${colIdx}-${rowIdx}`}
-                      type="button"
-                      title={`${entry.name} l:${entry.l}`}
-                      onClick={() => handleSwatch(entry)}
-                      className="relative rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                      style={{
-                        backgroundColor: bg,
-                        width: '100%',
-                        aspectRatio: '1',
-                      }}
-                    >
-                      {active && (
-                        <span className="absolute inset-0 flex items-center justify-center" aria-label="selected">
-                          <span
-                            className="block rounded-sm"
-                            style={{
-                              width: '55%',
-                              height: '55%',
-                              border: '2px solid rgba(255,255,255,0.9)',
-                              boxShadow: '0 0 0 1px rgba(0,0,0,0.25)',
-                            }}
-                          />
-                        </span>
-                      )}
-                    </button>
-                  );
-                })
-              )}
+              {slide < 3
+                ? Array.from({ length: ROWS }, (_, rowIdx) =>
+                    currentGroup.map((family, colIdx) => {
+                      const entry = family[rowIdx];
+                      const active = isActiveEntry(entry, value);
+                      const bg = hslStr(entry);
+                      return (
+                        <button
+                          key={`${slide}-${colIdx}-${rowIdx}`}
+                          type="button"
+                          title={`${entry.name} l:${entry.l}`}
+                          onClick={() => handleSwatch(entry)}
+                          className="relative rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                          style={{
+                            backgroundColor: bg,
+                            width: '100%',
+                            aspectRatio: '1',
+                          }}
+                        >
+                          {active && (
+                            <span className="absolute inset-0 flex items-center justify-center" aria-label="selected">
+                              <span
+                                className="block rounded-sm"
+                                style={{
+                                  width: '55%',
+                                  height: '55%',
+                                  border: '2px solid rgba(255,255,255,0.9)',
+                                  boxShadow: '0 0 0 1px rgba(0,0,0,0.25)',
+                                }}
+                              />
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )
+                : NEUTRALS_FLAT.map((entry, idx) => {
+                    if (entry === null) {
+                      return (
+                        <div
+                          key="neutral-empty"
+                          style={{ width: '100%', aspectRatio: '1' }}
+                        />
+                      );
+                    }
+                    const active = isActiveEntry(entry, value);
+                    const bg = hslStr(entry);
+                    const paleBorder = idx < 2
+                      ? { border: '0.5px solid #ccc' }
+                      : {};
+                    return (
+                      <button
+                        key={`neutral-${idx}`}
+                        type="button"
+                        title={`${entry.name} l:${entry.l}`}
+                        onClick={() => handleSwatch(entry)}
+                        className="relative rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                        style={{
+                          backgroundColor: bg,
+                          width: '100%',
+                          aspectRatio: '1',
+                          ...paleBorder,
+                        }}
+                      >
+                        {active && (
+                          <span className="absolute inset-0 flex items-center justify-center" aria-label="selected">
+                            <span
+                              className="block rounded-sm"
+                              style={{
+                                width: '55%',
+                                height: '55%',
+                                border: '2px solid rgba(255,255,255,0.9)',
+                                boxShadow: '0 0 0 1px rgba(0,0,0,0.25)',
+                              }}
+                            />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })
+              }
             </div>
 
             {/* Right arrow */}
             <button
               type="button"
-              onClick={() => setSlide((s) => Math.min(2, s + 1))}
-              disabled={slide === 2}
+              onClick={() => setSlide((s) => Math.min(3, s + 1))}
+              disabled={slide === 3}
               className="shrink-0 rounded border border-[#ced3d0] bg-white p-1 text-slate-600 shadow-sm hover:bg-slate-50 hover:text-slate-900 disabled:opacity-25 focus:outline-none"
               aria-label="Next colours"
             >
