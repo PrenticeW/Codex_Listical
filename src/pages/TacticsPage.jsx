@@ -3334,7 +3334,8 @@ export default function TacticsPage() {
         <div className="px-2 pt-2 pb-1">
           <button
             type="button"
-            className="flex w-full items-center justify-between px-2 py-1.5 rounded-sm text-[11px] font-semibold text-slate-600 hover:bg-slate-100"
+            className="flex w-full items-center justify-between px-2 py-1.5 rounded-sm text-[11px] font-semibold shadow-sm hover:opacity-80"
+            style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
             onClick={(e) => { e.stopPropagation(); setScheduleItemPanelOpen(true); }}
           >
             <span>Schedule Items</span>
