@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { GripVertical } from 'lucide-react';
 import EditableCell from '../EditableCell';
 import DropdownCell, { PILLBOX_COLORS } from '../DropdownCell';
@@ -37,6 +37,13 @@ const TaskRow = React.memo(function TaskRow({
   handleDragOver,
   handleDrop,
   handleDragEnd,
+  handleCellDragStart,
+  handleCellDragOver,
+  handleCellDragLeave,
+  handleCellDrop,
+  handleCellDragEnd,
+  isCellBeingDragged,
+  isCellDropTarget,
   rowHeight,
   cellFontSize,
   headerFontSize,
@@ -47,6 +54,11 @@ const TaskRow = React.memo(function TaskRow({
 }) {
   const rowId = row.original.id;
   const isDragging = Array.isArray(draggedRowId) && draggedRowId.includes(rowId);
+
+  // Tracks which cell the pointer is over and whether it's on the border (for drag-to-move gating)
+  const cellBorderStateRef = useRef({ columnId: null, onBorder: false });
+  // React-controlled: which columnId is currently in drag-ready (border-hover) state
+  const [draggableColumnId, setDraggableColumnId] = useState(null);
   const isDropTarget = dropTargetRowId === rowId;
 
   // Get the current project value for this row to filter subprojects
@@ -169,6 +181,13 @@ const TaskRow = React.memo(function TaskRow({
             borderRightStyle = '1px solid #d3d3d3';
           }
 
+          const isCellDragging = isCellBeingDragged?.(rowId, columnId);
+          const isCellDrop = isCellDropTarget?.(rowId, columnId);
+
+          // Border threshold in px — pointer within this distance of any edge = grab cursor + draggable
+          const BORDER_THRESHOLD = 5;
+          const isDraggableCell = draggableColumnId === columnId;
+
           return (
             <td
               key={cell.id}
@@ -182,20 +201,68 @@ const TaskRow = React.memo(function TaskRow({
                 MozUserSelect: 'none',
                 msUserSelect: 'none',
                 boxSizing: 'border-box',
+                position: 'relative',
               }}
               className="p-0"
+              onDragOver={(e) => handleCellDragOver?.(e, rowId, columnId)}
+              onDragLeave={(e) => handleCellDragLeave?.(e)}
+              onDrop={(e) => handleCellDrop?.(e, rowId, columnId)}
+              draggable={isDraggableCell}
+              onMouseMove={(e) => {
+                if (isEditing) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const onBorder =
+                  x <= BORDER_THRESHOLD ||
+                  y <= BORDER_THRESHOLD ||
+                  x >= rect.width - BORDER_THRESHOLD ||
+                  y >= rect.height - BORDER_THRESHOLD;
+                cellBorderStateRef.current = { columnId, onBorder };
+                e.currentTarget.style.cursor = onBorder ? 'grab' : 'cell';
+                setDraggableColumnId(onBorder ? columnId : null);
+              }}
+              onMouseLeave={(e) => {
+                cellBorderStateRef.current = { columnId: null, onBorder: false };
+                e.currentTarget.style.cursor = '';
+                setDraggableColumnId(null);
+              }}
+              onDragStart={(e) => {
+                if (!cellBorderStateRef.current.onBorder || cellBorderStateRef.current.columnId !== columnId) {
+                  e.preventDefault();
+                  return;
+                }
+                e.stopPropagation();
+                handleCellDragStart?.(e, rowId, columnId);
+              }}
+              onDragEnd={(e) => {
+                setDraggableColumnId(null);
+                handleCellDragEnd?.(e);
+              }}
             >
               <div
-                className={`h-full cursor-cell flex items-center ${
-                  isSelected && !isEditing ? 'ring-2 ring-inset ring-blue-500 bg-blue-50' : ''
+                className={`h-full flex items-center w-full ${
+                  isCellDrop
+                    ? 'ring-2 ring-inset ring-blue-500 bg-blue-50'
+                    : isSelected && !isEditing
+                    ? 'ring-2 ring-inset ring-blue-500 bg-blue-50'
+                    : ''
                 }`}
                 style={{
                   fontSize: `${cellFontSize}px`,
                   minHeight: `${rowHeight}px`,
                   borderBottom: '1px solid #d3d3d3',
-                  borderRight: borderRightStyle
+                  borderRight: borderRightStyle,
                 }}
-                onMouseDown={(e) => handleCellMouseDown(e, rowId, columnId)}
+                onMouseDown={(e) => {
+                  // If pointer is on the cell border, let the drag initiate — don't call
+                  // handleCellMouseDown which calls e.preventDefault() and kills the drag.
+                  if (cellBorderStateRef.current.onBorder && cellBorderStateRef.current.columnId === columnId) {
+                    e.stopPropagation();
+                    return;
+                  }
+                  handleCellMouseDown(e, rowId, columnId);
+                }}
                 onMouseEnter={() => handleCellMouseEnter({}, rowId, columnId)}
                 onDoubleClick={() => handleCellDoubleClick(rowId, columnId, value)}
                 onContextMenu={(e) => handleCellContextMenu?.(e, rowId, columnId)}

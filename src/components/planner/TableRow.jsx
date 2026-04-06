@@ -40,6 +40,13 @@ const TableRow = React.memo(function TableRow({
   handleDragOver,
   handleDrop,
   handleDragEnd,
+  handleCellDragStart,
+  handleCellDragOver,
+  handleCellDragLeave,
+  handleCellDrop,
+  handleCellDragEnd,
+  isCellBeingDragged,
+  isCellDropTarget,
   rowHeight,
   cellFontSize,
   headerFontSize,
@@ -210,6 +217,13 @@ const TableRow = React.memo(function TableRow({
         handleDragOver={handleDragOver}
         handleDrop={handleDrop}
         handleDragEnd={handleDragEnd}
+        handleCellDragStart={handleCellDragStart}
+        handleCellDragOver={handleCellDragOver}
+        handleCellDragLeave={handleCellDragLeave}
+        handleCellDrop={handleCellDrop}
+        handleCellDragEnd={handleCellDragEnd}
+        isCellBeingDragged={isCellBeingDragged}
+        isCellDropTarget={isCellDropTarget}
         rowHeight={rowHeight}
         cellFontSize={cellFontSize}
         headerFontSize={headerFontSize}

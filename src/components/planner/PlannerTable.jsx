@@ -31,6 +31,13 @@ function PlannerTable({
   handleDragOver,
   handleDrop,
   handleDragEnd,
+  handleCellDragStart,
+  handleCellDragOver,
+  handleCellDragLeave,
+  handleCellDrop,
+  handleCellDragEnd,
+  isCellBeingDragged,
+  isCellDropTarget,
   cellFontSize,
   gripIconSize,
   dates,
@@ -62,6 +69,7 @@ function PlannerTable({
         ref={tableBodyRef}
         className="flex-1 overflow-auto border border-slate-200/60 bg-white rounded-lg shadow-sm"
         style={{ position: 'relative' }}
+        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
       >
         <table className="border-collapse" style={{ display: 'grid', borderSpacing: 0 }}>
           <thead className="sticky top-0 bg-slate-50 z-10" style={{ display: 'grid', position: 'sticky', top: 0, zIndex: 1 }}>
@@ -230,6 +238,13 @@ function PlannerTable({
                   handleDragOver={handleDragOver}
                   handleDrop={handleDrop}
                   handleDragEnd={handleDragEnd}
+                  handleCellDragStart={handleCellDragStart}
+                  handleCellDragOver={handleCellDragOver}
+                  handleCellDragLeave={handleCellDragLeave}
+                  handleCellDrop={handleCellDrop}
+                  handleCellDragEnd={handleCellDragEnd}
+                  isCellBeingDragged={isCellBeingDragged}
+                  isCellDropTarget={isCellDropTarget}
                   rowHeight={rowHeight}
                   cellFontSize={cellFontSize}
                   headerFontSize={headerFontSize}
@@ -304,6 +319,13 @@ function PlannerTable({
                   handleDragOver={handleDragOver}
                   handleDrop={handleDrop}
                   handleDragEnd={handleDragEnd}
+                  handleCellDragStart={handleCellDragStart}
+                  handleCellDragOver={handleCellDragOver}
+                  handleCellDragLeave={handleCellDragLeave}
+                  handleCellDrop={handleCellDrop}
+                  handleCellDragEnd={handleCellDragEnd}
+                  isCellBeingDragged={isCellBeingDragged}
+                  isCellDropTarget={isCellDropTarget}
                   rowHeight={rowHeight}
                   cellFontSize={cellFontSize}
                   headerFontSize={headerFontSize}

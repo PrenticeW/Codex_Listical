@@ -23,6 +23,7 @@ import useSpreadsheetSelection from '../hooks/planner/useSpreadsheetSelection';
 import useKeyboardHandlers from '../hooks/planner/useKeyboardHandlers';
 import useEditState from '../hooks/planner/useEditState';
 import useDragAndDropRows from '../hooks/planner/useDragAndDropRows';
+import useDragAndDropCells from '../hooks/planner/useDragAndDropCells';
 import useComputedDataV2 from '../hooks/planner/useComputedDataV2';
 import useCollapsibleGroups from '../hooks/planner/useCollapsibleGroups';
 import useDayColumnFilters from '../hooks/planner/useDayColumnFilters';
@@ -1350,6 +1351,16 @@ export default function ProjectTimePlannerV2() {
 
   // Note: Old drag and drop handlers removed - now using useDragAndDropRows hook
 
+  const {
+    handleCellDragStart,
+    handleCellDragOver,
+    handleCellDragLeave,
+    handleCellDrop,
+    handleCellDragEnd,
+    isCellBeingDragged,
+    isCellDropTarget,
+  } = useDragAndDropCells({ data, setData, executeCommand, setSelectedCells, setAnchorCell });
+
   // Note: Old edit handlers removed - now using useEditState hook
 
   // Track the last copied columns (to detect if copying from timeValue)
@@ -2185,6 +2196,13 @@ export default function ProjectTimePlannerV2() {
         handleDragOver={handleDragOver}
         handleDrop={handleDrop}
         handleDragEnd={handleDragEnd}
+        handleCellDragStart={handleCellDragStart}
+        handleCellDragOver={handleCellDragOver}
+        handleCellDragLeave={handleCellDragLeave}
+        handleCellDrop={handleCellDrop}
+        handleCellDragEnd={handleCellDragEnd}
+        isCellBeingDragged={isCellBeingDragged}
+        isCellDropTarget={isCellDropTarget}
         cellFontSize={cellFontSize}
         gripIconSize={gripIconSize}
         dates={dates}
