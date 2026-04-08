@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
+import { getContrastTextColor } from '../utils/colorUtils';
 import { SquarePlus, Pencil, CalendarCheck } from 'lucide-react';
 import { useYear } from '../contexts/YearContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -444,7 +445,7 @@ export default function StagingPageV2() {
                 const isEditing = planModal.open && planModal.itemId === item.id;
                 const activeColor = isEditing ? planModal.color ?? item.color : item.color;
                 const headerBackground = activeColor || '#f3f4f6';
-                const headerTextColor = activeColor ? '#ffffff' : '#0f172a';
+                const headerTextColor = activeColor ? getContrastTextColor(activeColor) : '#0f172a';
 
                 return (
                   <div key={item.id}>
