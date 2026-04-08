@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   readYearMetadata,
+  initializeYearMetadata,
   getCurrentYear,
   getYearInfo,
   getAllYears,
@@ -8,6 +9,12 @@ import {
   getDraftYear,
   setCurrentYear as setCurrentYearStorage
 } from '../lib/yearMetadataStorage';
+
+function getOrInitMetadata() {
+  const existing = readYearMetadata();
+  if (existing) return existing;
+  return initializeYearMetadata(new Date().toISOString().split('T')[0]);
+}
 
 /**
  * YearContext provides year-level state management across the application
@@ -31,8 +38,8 @@ export function useYear() {
  * Manages the current year state and provides year-related operations
  */
 export function YearProvider({ children }) {
+  const [metadata, setMetadata] = useState(() => getOrInitMetadata());
   const [currentYear, setCurrentYearState] = useState(() => getCurrentYear());
-  const [metadata, setMetadata] = useState(() => readYearMetadata());
   const [isLoading, setIsLoading] = useState(false);
 
   // Sync with localStorage changes (cross-tab support)
@@ -50,11 +57,9 @@ export function YearProvider({ children }) {
 
   // Refresh metadata from storage
   const refreshMetadata = useCallback(() => {
-    const freshMetadata = readYearMetadata();
+    const freshMetadata = getOrInitMetadata();
     setMetadata(freshMetadata);
-    if (freshMetadata) {
-      setCurrentYearState(freshMetadata.currentYear);
-    }
+    setCurrentYearState(freshMetadata.currentYear);
   }, []);
 
   // Switch to a different year (for viewing history)

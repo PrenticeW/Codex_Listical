@@ -12,6 +12,9 @@ import { useLocation } from 'react-router-dom';
 import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
 import { undoDraftYear } from '../utils/planner/undoDraftYear';
+import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
+import { ArchiveYearModal } from '../components/ArchiveYearModal';
+import YearSelector from '../components/YearSelector';
 import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '../lib/stagingStorage';
 import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm, buildProjectPlanSummary } from '../utils/staging/planTableHelpers';
@@ -33,7 +36,7 @@ import { buildScheduleLayout } from '../ScheduleChips';
 import usePageSize from '../hooks/usePageSize';
 import ColourPicker from '../components/ColourPicker';
 import ScheduleItemPanel from '../components/ScheduleItemPanel';
-import { Pencil } from 'lucide-react';
+import { Pencil, CalendarPlus, Archive } from 'lucide-react';
 import { getContrastTextColor } from '../utils/colorUtils';
 
 const DAYS_OF_WEEK = [
@@ -307,7 +310,9 @@ function FitText({ text, maxFontSize, minFontSize = maxFontSize * 0.5, style, wr
 export default function TacticsPage() {
   const location = useLocation();
   const currentPath = location.pathname;
-  const { currentYear, draftYear, refreshMetadata } = useYear();
+  const { currentYear, draftYear, activeYear, isCurrentYearArchived, refreshMetadata } = useYear();
+
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
   const handleUndoDraft = useCallback(() => {
     const result = undoDraftYear();
@@ -315,6 +320,17 @@ export default function TacticsPage() {
       refreshMetadata();
     }
   }, [refreshMetadata]);
+
+  const handlePlanNextYear = useCallback(async () => {
+    if (!activeYear) return;
+    const result = await createDraftYearFromActive(activeYear.yearNumber);
+    if (result.success) {
+      refreshMetadata();
+    } else {
+      // eslint-disable-next-line no-alert
+      alert(`Could not create draft year: ${result.error}`);
+    }
+  }, [activeYear, refreshMetadata]);
   const initialTacticsSettings = useMemo(() => loadTacticsSettings(), []);
   const [startDay, setStartDay] = useState(initialTacticsSettings.startDay);
   const [incrementMinutes, setIncrementMinutes] = useState(
@@ -3796,6 +3812,11 @@ export default function TacticsPage() {
               redoStack={redoStack}
               undo={undo}
               redo={redo}
+              isCurrentYearArchived={isCurrentYearArchived}
+              draftYear={draftYear}
+              activeYear={activeYear}
+              onPlanNextYear={handlePlanNextYear}
+              onOpenArchiveModal={() => setIsArchiveModalOpen(true)}
             />
           }
           actionButton={
@@ -4616,6 +4637,11 @@ export default function TacticsPage() {
           onClose={() => setScheduleItemPanelOpen(false)}
         />
       )}
+      <ArchiveYearModal
+        isOpen={isArchiveModalOpen}
+        onClose={() => setIsArchiveModalOpen(false)}
+        yearNumber={activeYear?.yearNumber}
+      />
     </div>
   );
 }
@@ -4642,6 +4668,11 @@ function ListicalMenu({
   redoStack,
   undo,
   redo,
+  isCurrentYearArchived,
+  draftYear,
+  activeYear,
+  onPlanNextYear,
+  onOpenArchiveModal,
 }) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef(null);
@@ -4901,6 +4932,35 @@ function ListicalMenu({
             >
               Clear all chips
             </button>
+          </div>
+
+          {/* Manage Year */}
+          <div className="mt-3 pt-3 border-t border-[#e2e8f0] flex flex-col" style={{ gap: '8px' }}>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Manage Year</span>
+            {!isCurrentYearArchived && !draftYear && (
+              <button
+                type="button"
+                className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left flex items-center gap-2"
+                onClick={onPlanNextYear}
+              >
+                <CalendarPlus className="w-4 h-4" />
+                Plan Next Year
+              </button>
+            )}
+            {!isCurrentYearArchived && draftYear && activeYear && (
+              <button
+                type="button"
+                className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left flex items-center gap-2"
+                onClick={onOpenArchiveModal}
+              >
+                <Archive className="w-4 h-4" />
+                Archive Year {activeYear.yearNumber}?
+              </button>
+            )}
+            <div>
+              <label className="text-[11px] font-semibold text-slate-600 mb-2 block">Year Selector</label>
+              <YearSelector />
+            </div>
           </div>
         </div>,
         document.body

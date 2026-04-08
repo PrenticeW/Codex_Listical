@@ -1,10 +1,14 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getContrastTextColor } from '../utils/colorUtils';
-import { SquarePlus, Pencil, CalendarCheck } from 'lucide-react';
+import { SquarePlus, Pencil, CalendarCheck, CalendarPlus, Archive } from 'lucide-react';
 import { useYear } from '../contexts/YearContext';
 import { useAuth } from '../contexts/AuthContext';
 import NavigationBar from '../components/planner/NavigationBar';
 import { undoDraftYear } from '../utils/planner/undoDraftYear';
+import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
+import { ArchiveYearModal } from '../components/ArchiveYearModal';
+import YearSelector from '../components/YearSelector';
 import usePageSize from '../hooks/usePageSize';
 import {
   useShortlistState,
@@ -87,7 +91,9 @@ const calculateTimeTotals = (planEntries) => {
  * Manages project shortlist and planning tables with unified row rendering
  */
 export default function StagingPageV2() {
-  const { currentYear, draftYear, refreshMetadata, switchToYear, activeYear } = useYear();
+  const { currentYear, draftYear, activeYear, isCurrentYearArchived, refreshMetadata, switchToYear } = useYear();
+
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
   const handleUndoDraft = useCallback(() => {
     const result = undoDraftYear();
@@ -95,6 +101,17 @@ export default function StagingPageV2() {
       refreshMetadata();
     }
   }, [refreshMetadata]);
+
+  const handlePlanNextYear = useCallback(async () => {
+    if (!activeYear) return;
+    const result = await createDraftYearFromActive(activeYear.yearNumber);
+    if (result.success) {
+      refreshMetadata();
+    } else {
+      // eslint-disable-next-line no-alert
+      alert(`Could not create draft year: ${result.error}`);
+    }
+  }, [activeYear, refreshMetadata]);
   const { isLoading: isAuthLoading } = useAuth();
 
   const { sizeScale } = usePageSize('goal');
@@ -414,12 +431,13 @@ export default function StagingPageV2() {
         >
           <NavigationBar
             listicalButton={
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded border border-[#ced3d0] bg-white px-3 py-2 font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6] hover:shadow-md"
-              >
-                <span>Listical</span>
-              </button>
+              <GoalListicalMenu
+                isCurrentYearArchived={isCurrentYearArchived}
+                draftYear={draftYear}
+                activeYear={activeYear}
+                onPlanNextYear={handlePlanNextYear}
+                onOpenArchiveModal={() => setIsArchiveModalOpen(true)}
+              />
             }
             onUndoDraft={draftYear ? handleUndoDraft : null}
           />
@@ -560,6 +578,109 @@ export default function StagingPageV2() {
         onInsertRowType={handleInsertRowType}
         onToggleOutcomeTotals={handleToggleOutcomeTotals}
       />
+      <ArchiveYearModal
+        isOpen={isArchiveModalOpen}
+        onClose={() => setIsArchiveModalOpen(false)}
+        yearNumber={activeYear?.yearNumber}
+      />
     </>
+  );
+}
+
+function GoalListicalMenu({
+  isCurrentYearArchived,
+  draftYear,
+  activeYear,
+  onPlanNextYear,
+  onOpenArchiveModal,
+}) {
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef(null);
+  const menuRef = useRef(null);
+  const [menuStyle, setMenuStyle] = useState({});
+
+  useEffect(() => {
+    if (!open) {
+      setMenuStyle({});
+      return undefined;
+    }
+
+    const updatePosition = () => {
+      if (buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect();
+        setMenuStyle({
+          width: '280px',
+          top: rect.bottom + 8,
+          left: Math.max(16, rect.left),
+        });
+      }
+    };
+
+    updatePosition();
+    const timer = setTimeout(updatePosition, 10);
+
+    const handleClickOutside = (event) => {
+      if (menuRef.current?.contains(event.target)) return;
+      if (buttonRef.current?.contains(event.target)) return;
+      setOpen(false);
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('mousedown', handleClickOutside, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('mousedown', handleClickOutside, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div>
+      <button
+        type="button"
+        ref={buttonRef}
+        className="inline-flex items-center gap-2 rounded border border-[#ced3d0] bg-white px-3 py-2 font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6] hover:shadow-md"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+      >
+        <span>Listical</span>
+      </button>
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          className="fixed rounded-lg border border-[#94a3b8] p-4 shadow-2xl flex flex-col"
+          style={{ ...menuStyle, backgroundColor: 'rgba(255, 255, 255, 0.97)', zIndex: 999999, gap: '8px' }}
+        >
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Manage Year</span>
+          {!isCurrentYearArchived && !draftYear && (
+            <button
+              type="button"
+              className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left flex items-center gap-2"
+              onClick={() => { onPlanNextYear(); setOpen(false); }}
+            >
+              <CalendarPlus className="w-4 h-4" />
+              Plan Next Year
+            </button>
+          )}
+          {!isCurrentYearArchived && draftYear && activeYear && (
+            <button
+              type="button"
+              className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left flex items-center gap-2"
+              onClick={() => { onOpenArchiveModal(); setOpen(false); }}
+            >
+              <Archive className="w-4 h-4" />
+              Archive Year {activeYear.yearNumber}?
+            </button>
+          )}
+          <div>
+            <label className="text-[11px] font-semibold text-slate-600 mb-2 block">Year Selector</label>
+            <YearSelector />
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
   );
 }
