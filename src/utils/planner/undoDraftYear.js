@@ -14,29 +14,45 @@ import {
   deleteDraftYearRecord,
   setCurrentYear,
 } from '../../lib/yearMetadataStorage';
-
-const DEFAULT_PROJECT_ID = 'project-1';
+import { getProjectKey } from './storage';
+import {
+  COLUMN_SIZING_KEY_TEMPLATE,
+  SIZE_SCALE_KEY_TEMPLATE,
+  START_DATE_KEY_TEMPLATE,
+  SHOW_RECURRING_KEY_TEMPLATE,
+  SHOW_SUBPROJECTS_KEY_TEMPLATE,
+  SHOW_MAX_MIN_ROWS_KEY_TEMPLATE,
+  SORT_STATUSES_KEY_TEMPLATE,
+  SORT_PLANNER_STATUSES_KEY_TEMPLATE,
+  TASK_ROWS_KEY_TEMPLATE,
+  TOTAL_DAYS_KEY_TEMPLATE,
+  VISIBLE_DAY_COLUMNS_KEY_TEMPLATE,
+  COLLAPSED_GROUPS_KEY_TEMPLATE,
+  DEFAULT_PROJECT_ID,
+} from '../../constants/plannerStorageKeys';
 
 /**
- * All storage key patterns that a draft year may have written.
- * We delete them by reconstructing the keys for the given year number.
+ * All storage keys that a draft year may have written.
+ * Planner keys are derived via getProjectKey (same builder used to write them)
+ * so this list stays correct if key templates ever change.
  */
 function getDraftYearStorageKeys(yearNumber) {
   const pid = DEFAULT_PROJECT_ID;
+  const pk = (template) => getProjectKey(template, pid, yearNumber);
   return [
-    // Planner storage (storage.js key builder inserts year before last segment)
-    `planner-v2-${pid}-year-${yearNumber}-column-sizing`,
-    `planner-v2-${pid}-year-${yearNumber}-size-scale`,
-    `planner-v2-${pid}-year-${yearNumber}-start-date`,
-    `planner-v2-${pid}-year-${yearNumber}-show-recurring`,
-    `planner-v2-${pid}-year-${yearNumber}-show-subprojects`,
-    `planner-v2-${pid}-year-${yearNumber}-show-max-min-rows`,
-    `planner-v2-${pid}-year-${yearNumber}-sort-statuses`,
-    `planner-v2-${pid}-year-${yearNumber}-sort-planner-statuses`,
-    `planner-v2-${pid}-year-${yearNumber}-task-rows`,
-    `planner-v2-${pid}-year-${yearNumber}-total-days`,
-    `planner-v2-${pid}-year-${yearNumber}-visible-day-columns`,
-    `planner-v2-${pid}-year-${yearNumber}-collapsed-groups`,
+    // Planner storage — derived via the same key builder used to write them
+    pk(COLUMN_SIZING_KEY_TEMPLATE),
+    pk(SIZE_SCALE_KEY_TEMPLATE),
+    pk(START_DATE_KEY_TEMPLATE),
+    pk(SHOW_RECURRING_KEY_TEMPLATE),
+    pk(SHOW_SUBPROJECTS_KEY_TEMPLATE),
+    pk(SHOW_MAX_MIN_ROWS_KEY_TEMPLATE),
+    pk(SORT_STATUSES_KEY_TEMPLATE),
+    pk(SORT_PLANNER_STATUSES_KEY_TEMPLATE),
+    pk(TASK_ROWS_KEY_TEMPLATE),
+    pk(TOTAL_DAYS_KEY_TEMPLATE),
+    pk(VISIBLE_DAY_COLUMNS_KEY_TEMPLATE),
+    pk(COLLAPSED_GROUPS_KEY_TEMPLATE),
     // Staging (Goal page)
     `staging-year-${yearNumber}-shortlist`,
     // Tactics (Plan page)

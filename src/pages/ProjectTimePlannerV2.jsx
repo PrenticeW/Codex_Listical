@@ -139,17 +139,6 @@ export default function ProjectTimePlannerV2() {
     });
   }, []);
 
-  const handleImportTasks = useCallback(() => {
-    if (!activeYear) return;
-    const sourceRows = readTaskRows('project-1', activeYear.yearNumber);
-    const draftStaging = loadStagingState(currentYear);
-    const draftNicknames = (draftStaging.shortlist || [])
-      .map((item) => item.projectNickname)
-      .filter(Boolean);
-    const imported = importTasksFromYear(sourceRows, draftNicknames, importStatuses);
-    setData((prev) => [...prev, ...imported]);
-  }, [activeYear, currentYear, importStatuses, setData]);
-
   // Add tasks modal state
   const [isAddTasksModalOpen, setIsAddTasksModalOpen] = useState(false);
 
@@ -202,6 +191,17 @@ export default function ProjectTimePlannerV2() {
       return next;
     });
   }, []);
+
+  const handleImportTasks = useCallback(() => {
+    if (!activeYear) return;
+    const sourceRows = readTaskRows('project-1', activeYear.yearNumber);
+    const draftStaging = loadStagingState(currentYear);
+    const draftNicknames = (draftStaging.shortlist || [])
+      .map((item) => item.projectNickname)
+      .filter(Boolean);
+    const imported = importTasksFromYear(sourceRows, draftNicknames, importStatuses);
+    setData((prev) => [...prev, ...imported]);
+  }, [activeYear, currentYear, importStatuses, setData]);
 
   // Save data to storage when it changes (debounced).
   // On unmount, flush immediately so navigation away doesn't lose pending edits.

@@ -31,7 +31,7 @@ import {
  * @param {number|null} yearNumber - Year number (null for year-agnostic keys)
  * @returns {string} Namespaced storage key
  */
-const getProjectKey = (template, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const getProjectKey = (template, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
   let key = template.replace('{projectId}', projectId);
 
   // If yearNumber is provided, insert it before the final part of the key
