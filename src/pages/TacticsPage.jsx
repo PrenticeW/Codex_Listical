@@ -2082,18 +2082,15 @@ export default function TacticsPage() {
     map.set('sleep', {
       label: 'Sleep',
       color: '#d9d9d9',
-      textColor: getContrastTextColor('#d9d9d9'),
     });
     map.set('rest', {
       label: 'REST',
       color: '#666666',
-      textColor: getContrastTextColor('#666666'),
       fontWeight: 700,
     });
     map.set('buffer', {
       label: 'BUFFER',
       color: '#fe8afe',
-      textColor: getContrastTextColor('#fe8afe'),
       fontWeight: 700,
     });
     dropdownProjects.forEach((project) => {
@@ -2101,7 +2098,6 @@ export default function TacticsPage() {
       map.set(project.id, {
         label: project.label,
         color,
-        textColor: getContrastTextColor(color),
       });
     });
     return map;
