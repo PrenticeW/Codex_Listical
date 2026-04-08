@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Archive } from 'lucide-react';
+import { Archive, CalendarPlus } from 'lucide-react';
 import { useYear } from '../../contexts/YearContext';
 import YearSelector from '../YearSelector';
 
@@ -37,8 +37,9 @@ export default function ProjectListicalMenu({
   undo,
   redo,
   onOpenArchiveModal,
+  onPlanNextYear,
 }) {
-  const { currentYear, isCurrentYearArchived } = useYear();
+  const { currentYear, isCurrentYearArchived, draftYear, activeYear } = useYear();
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
   const [expandedSections, setExpandedSections] = useState({
@@ -300,14 +301,26 @@ export default function ProjectListicalMenu({
               </button>
               {expandedSections.manageYear && (
                 <div className="px-4 bg-white/20" style={{ paddingTop: '12px', paddingBottom: '12px', gap: '12px', display: 'flex', flexDirection: 'column' }}>
-                  {!isCurrentYearArchived && (
+                  {/* Plan Next Year — visible when active and no draft exists */}
+                  {!isCurrentYearArchived && !draftYear && (
+                    <button
+                      type="button"
+                      className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left flex items-center gap-2"
+                      onClick={onPlanNextYear}
+                    >
+                      <CalendarPlus className="w-4 h-4" />
+                      Plan Next Year
+                    </button>
+                  )}
+                  {/* Archive Year — visible only when a draft year exists */}
+                  {!isCurrentYearArchived && draftYear && activeYear && (
                     <button
                       type="button"
                       className="rounded border border-[#ced3d0] bg-white px-4 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left flex items-center gap-2"
                       onClick={onOpenArchiveModal}
                     >
                       <Archive className="w-4 h-4" />
-                      Archive Year {currentYear}
+                      Archive Year {activeYear.yearNumber}?
                     </button>
                   )}
                   <div>

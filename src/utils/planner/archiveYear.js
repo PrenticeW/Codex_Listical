@@ -9,6 +9,8 @@ import {
   createNewYear,
   setCurrentYear,
   getYearInfo,
+  getDraftYear,
+  promoteDraftToActive,
   calculateNextCycleStartDate,
 } from '../../lib/yearMetadataStorage';
 import {
@@ -214,49 +216,52 @@ export async function performYearArchive(yearNumber) {
     });
     console.log(`[Archive Year] Year ${yearNumber} metadata archived`);
 
-    // 6. Create next year
-    const nextYearNumber = yearNumber + 1;
-    const nextStartDate = calculateNextCycleStartDate(startDate);
+    // 6. Determine next year: promote draft if one exists, otherwise create fresh
+    const draftYear = getDraftYear();
+    let nextYearNumber;
+    let nextStartDate;
 
-    createNewYear(nextYearNumber, nextStartDate);
-    console.log(`[Archive Year] Year ${nextYearNumber} created with start date: ${nextStartDate}`);
+    if (draftYear) {
+      // Draft year already set up by "Plan Next Year" — just promote it
+      nextYearNumber = draftYear.yearNumber;
+      nextStartDate = draftYear.startDate;
+      promoteDraftToActive(nextYearNumber);
+      console.log(`[Archive Year] Promoted draft Year ${nextYearNumber} to active`);
+    } else {
+      // Legacy path: no draft year, create fresh next year
+      nextYearNumber = yearNumber + 1;
+      nextStartDate = calculateNextCycleStartDate(startDate);
 
-    // 7. Initialize Year 2 data
+      createNewYear(nextYearNumber, nextStartDate);
+      console.log(`[Archive Year] Year ${nextYearNumber} created with start date: ${nextStartDate}`);
 
-    // Copy some settings that should persist
-    saveColumnSizing(columnSizing, DEFAULT_PROJECT_ID, nextYearNumber);
-    saveSizeScale(sizeScale, DEFAULT_PROJECT_ID, nextYearNumber);
-    saveShowRecurring(showRecurring, DEFAULT_PROJECT_ID, nextYearNumber);
-    saveShowSubprojects(showSubprojects, DEFAULT_PROJECT_ID, nextYearNumber);
-    saveShowMaxMinRows(showMaxMinRows, DEFAULT_PROJECT_ID, nextYearNumber);
-    saveSortStatuses(sortStatuses, DEFAULT_PROJECT_ID, nextYearNumber);
-    saveTotalDays(totalDays, DEFAULT_PROJECT_ID, nextYearNumber);
+      // Copy settings
+      saveColumnSizing(columnSizing, DEFAULT_PROJECT_ID, nextYearNumber);
+      saveSizeScale(sizeScale, DEFAULT_PROJECT_ID, nextYearNumber);
+      saveShowRecurring(showRecurring, DEFAULT_PROJECT_ID, nextYearNumber);
+      saveShowSubprojects(showSubprojects, DEFAULT_PROJECT_ID, nextYearNumber);
+      saveShowMaxMinRows(showMaxMinRows, DEFAULT_PROJECT_ID, nextYearNumber);
+      saveSortStatuses(sortStatuses, DEFAULT_PROJECT_ID, nextYearNumber);
+      saveTotalDays(totalDays, DEFAULT_PROJECT_ID, nextYearNumber);
 
-    // Initialize visible day columns (all visible)
-    const freshVisibleDayColumns = {};
-    for (let i = 0; i < totalDays; i++) {
-      freshVisibleDayColumns[`day-${i}`] = true;
+      const freshVisibleDayColumns = {};
+      for (let i = 0; i < totalDays; i++) {
+        freshVisibleDayColumns[`day-${i}`] = true;
+      }
+      saveVisibleDayColumns(freshVisibleDayColumns, DEFAULT_PROJECT_ID, nextYearNumber);
+      saveStartDate(nextStartDate, DEFAULT_PROJECT_ID, nextYearNumber);
+
+      const initialTaskRows = createInitialDataForNewYear(nextStartDate, recurringTasks, totalDays);
+      saveTaskRows(initialTaskRows, DEFAULT_PROJECT_ID, nextYearNumber);
+
+      saveStagingState({ shortlist: [], archived: [] }, nextYearNumber);
+      const freshTacticsMetrics = getDefaultTacticsMetrics();
+      saveTacticsMetrics(freshTacticsMetrics, nextYearNumber);
+
+      console.log(`[Archive Year] Year ${nextYearNumber} initialized`);
     }
-    saveVisibleDayColumns(freshVisibleDayColumns, DEFAULT_PROJECT_ID, nextYearNumber);
 
-    saveStartDate(nextStartDate, DEFAULT_PROJECT_ID, nextYearNumber);
-
-    // Save recurring tasks (will be integrated with timeline when planner loads)
-    const initialTaskRows = createInitialDataForNewYear(nextStartDate, recurringTasks, totalDays);
-    saveTaskRows(initialTaskRows, DEFAULT_PROJECT_ID, nextYearNumber);
-
-    console.log(`[Archive Year] Year ${nextYearNumber} planner data initialized`);
-
-    // Fresh staging data (empty shortlist)
-    saveStagingState({ shortlist: [], archived: [] }, nextYearNumber);
-    console.log(`[Archive Year] Year ${nextYearNumber} staging data initialized`);
-
-    // Fresh tactics data (default metrics)
-    const freshTacticsMetrics = getDefaultTacticsMetrics();
-    saveTacticsMetrics(freshTacticsMetrics, nextYearNumber);
-    console.log(`[Archive Year] Year ${nextYearNumber} tactics data initialized`);
-
-    // 8. Switch to new year
+    // 7. Switch to new year
     setCurrentYear(nextYearNumber);
     console.log(`[Archive Year] Switched to Year ${nextYearNumber} as active year`);
 

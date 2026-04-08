@@ -4,6 +4,7 @@ import { SquarePlus, Pencil, CalendarCheck } from 'lucide-react';
 import { useYear } from '../contexts/YearContext';
 import { useAuth } from '../contexts/AuthContext';
 import NavigationBar from '../components/planner/NavigationBar';
+import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import usePageSize from '../hooks/usePageSize';
 import {
   useShortlistState,
@@ -86,7 +87,14 @@ const calculateTimeTotals = (planEntries) => {
  * Manages project shortlist and planning tables with unified row rendering
  */
 export default function StagingPageV2() {
-  const { currentYear } = useYear();
+  const { currentYear, draftYear, refreshMetadata, switchToYear, activeYear } = useYear();
+
+  const handleUndoDraft = useCallback(() => {
+    const result = undoDraftYear();
+    if (result.success) {
+      refreshMetadata();
+    }
+  }, [refreshMetadata]);
   const { isLoading: isAuthLoading } = useAuth();
 
   const { sizeScale } = usePageSize('goal');
@@ -413,6 +421,7 @@ export default function StagingPageV2() {
                 <span>Listical</span>
               </button>
             }
+            onUndoDraft={draftYear ? handleUndoDraft : null}
           />
           <div
             className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm mt-2"

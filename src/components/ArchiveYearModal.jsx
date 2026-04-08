@@ -12,7 +12,8 @@ import {
  * Modal dialog for archiving the current year and starting a new one.
  */
 export function ArchiveYearModal({ isOpen, onClose, yearNumber }) {
-  const { refreshMetadata } = useYear();
+  const { refreshMetadata, draftYear } = useYear();
+  const nextYearNumber = draftYear ? draftYear.yearNumber : yearNumber + 1;
   const [isArchiving, setIsArchiving] = useState(false);
   const [validation, setValidation] = useState(null);
   const [result, setResult] = useState(null);
@@ -150,9 +151,11 @@ export function ArchiveYearModal({ isOpen, onClose, yearNumber }) {
               <p className="font-medium text-gray-900">This will:</p>
               <ul className="list-disc list-inside space-y-1 ml-2">
                 <li>Archive all {validation.weeksCompleted || 0} completed weeks ({validation.totalHours || 0}h total)</li>
-                <li>Create Year {yearNumber + 1} with a fresh 12-week timeline</li>
-                <li>Carry forward recurring tasks (reset to "Not Scheduled")</li>
-                <li>Start with fresh Goals, Tactics, and System pages</li>
+                {draftYear
+                  ? <li>Activate Year {nextYearNumber} (your planned draft)</li>
+                  : <li>Create Year {nextYearNumber} with a fresh 12-week timeline</li>
+                }
+                {!draftYear && <li>Carry forward recurring tasks (reset to "Not Scheduled")</li>}
               </ul>
               <p className="mt-3 text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
                 <strong>Note:</strong> Year {yearNumber} will become read-only and accessible via History.
@@ -181,7 +184,7 @@ export function ArchiveYearModal({ isOpen, onClose, yearNumber }) {
             "
           >
             {isArchiving && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isArchiving ? 'Archiving...' : `Archive & Start Year ${yearNumber + 1}`}
+            {isArchiving ? 'Archiving...' : `Archive & Start Year ${nextYearNumber}`}
           </button>
         </div>
         </div>

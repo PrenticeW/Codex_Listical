@@ -12,9 +12,9 @@ const YEAR_METADATA_KEY = 'app-year-metadata';
 /**
  * @typedef {Object} YearInfo
  * @property {number} yearNumber - The year number (1, 2, 3, etc.)
- * @property {'active' | 'archived'} status - Current status of the year
+ * @property {'active' | 'archived' | 'draft'} status - Current status of the year
  * @property {string} startDate - ISO date string (YYYY-MM-DD)
- * @property {string|null} endDate - ISO date string when archived, null if active
+ * @property {string|null} endDate - ISO date string when archived, null if active/draft
  * @property {string|null} archivedAt - ISO timestamp when archived
  * @property {number} totalWeeksCompleted - Number of weeks completed (0-12)
  * @property {number} totalHoursCompleted - Total hours of work completed
@@ -215,6 +215,62 @@ export function archiveYear(yearNumber, stats) {
     totalWeeksCompleted: stats.totalWeeksCompleted,
     totalHoursCompleted: stats.totalHoursCompleted
   });
+}
+
+/**
+ * Create a draft year (next cycle in planning mode, not yet active)
+ * @param {number} yearNumber
+ * @param {string} startDate - Start date (YYYY-MM-DD)
+ * @returns {YearInfo}
+ */
+export function createDraftYear(yearNumber, startDate) {
+  const metadata = readYearMetadata();
+  if (!metadata) return null;
+
+  const draftYear = {
+    yearNumber,
+    status: 'draft',
+    startDate,
+    endDate: null,
+    archivedAt: null,
+    totalWeeksCompleted: 0,
+    totalHoursCompleted: 0
+  };
+
+  metadata.years.push(draftYear);
+  saveYearMetadata(metadata);
+
+  return draftYear;
+}
+
+/**
+ * Get the current draft year (if one exists)
+ * @returns {YearInfo|null}
+ */
+export function getDraftYear() {
+  const metadata = readYearMetadata();
+  if (!metadata) return null;
+  return metadata.years.find(y => y.status === 'draft') || null;
+}
+
+/**
+ * Promote a draft year to active status
+ * @param {number} yearNumber
+ */
+export function promoteDraftToActive(yearNumber) {
+  updateYearInfo(yearNumber, { status: 'active' });
+}
+
+/**
+ * Delete a draft year record from metadata (does not delete storage keys)
+ * @param {number} yearNumber
+ */
+export function deleteDraftYearRecord(yearNumber) {
+  const metadata = readYearMetadata();
+  if (!metadata) return;
+
+  metadata.years = metadata.years.filter(y => y.yearNumber !== yearNumber);
+  saveYearMetadata(metadata);
 }
 
 /**

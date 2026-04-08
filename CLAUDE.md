@@ -14,7 +14,7 @@ Listical is a 12-week cycle-planning tool for creative practitioners, structured
 | Language | JavaScript (primary), TypeScript (some hooks) |
 | Routing | React Router |
 | Table | TanStack Table (`@tanstack/react-table`) |
-| Virtualisation | `@tanstack/react-virtual` — imported in `ProjectTimePlannerV2.jsx` but **not yet implemented**. Do not call `useVirtualizer` until this work is explicitly scheduled. |
+| Virtualisation | `@tanstack/react-virtual` — imported and called via `useVirtualizer` in `ProjectTimePlannerV2.jsx`. |
 | Auth + profiles | Supabase (auth + `profiles` table only — no planning data in Supabase yet) |
 | Styling | Tailwind CSS |
 | Icons | Lucide React |
@@ -54,19 +54,40 @@ All storage keys are scoped by year number, e.g. `staging-year-1-shortlist`, `pl
 
 ---
 
+## Draft year / Plan Next Year flow
+
+A draft year (`status: 'draft'`) can exist alongside the active year. Only one draft year may exist at a time.
+
+### Year statuses
+
+- `active` — the current working year; fully writable
+- `draft` — the next year, in planning mode; all three pages are writable but it is not the "live" year
+- `archived` — a completed year; read-only
+
+### Plan Next Year flow
+
+1. User presses **Plan Next Year** in the gear menu → `createDraftYearFromActive` (`src/utils/planner/createDraftYear.js`) is called
+2. Year N+1 is created with `status: 'draft'`; Year N data is copied into Year N+1 (Goal page, Plan chips/metrics, UI settings). Year N's task rows are **not** copied — the user imports them separately.
+3. The UI switches to the draft year. A violet nav group appears to the right of the main nav for quick access to the draft year's pages.
+4. The user works through Goal → Plan → System on the draft year freely. Changes save immediately (same autosave as other years).
+5. On the draft year's System page, an **Import tasks from Year N** panel appears when task rows are empty. The user selects which statuses to import (default: all except Done/Abandoned) and presses Import — one time only.
+6. When ready, user presses **Archive Year N?** in the gear menu → `ArchiveYearModal` + `performYearArchive` archives Year N and promotes the draft to `active`.
+
+### Chip persistence
+
+Tactics chips are persisted per year to `tactics-year-{N}-chips-state` via `saveTacticsChipsState` / `loadTacticsChipsState` in `src/lib/tacticsStorage.js`. Chips are loaded on mount via `useState` initialiser — they are not deferred. The previously planned `scheduled_blocks` Supabase table is no longer needed.
+
+### Dev-only: Undo Draft
+
+An **Undo Draft** button in the nav bar (all three pages) calls `undoDraftYear` (`src/utils/planner/undoDraftYear.js`), which deletes all draft year storage keys, removes the draft year record from metadata, and switches back to the active year. Remove this button before launch.
+
+---
+
 ## Planned migration — work in progress
 
 ### Supabase migration (scheduled after Tactics second pass)
 
 The goal is to move all planning data — goals, tactics metrics, chips state, task rows — into Supabase tables, replacing localStorage. **The storage module API will stay the same; only the internals change.** Consumers of `stagingStorage`, `tacticsMetricsStorage`, and `plannerStorage` should not need to change.
-
-### `scheduled_blocks` table (planned)
-
-A `scheduled_blocks` table is planned to persist per-chip daily schedule data (`project`, `day`, `duration`, `label`). This data currently exists only in memory during Tactics sessions and is never exposed to System.
-
-### Virtualisation (System page — pending)
-
-`useVirtualizer` is already imported in `ProjectTimePlannerV2.jsx`. It just needs to be called. This work is explicitly deferred — do not attempt to wire it up unless asked.
 
 ---
 

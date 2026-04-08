@@ -5,6 +5,7 @@ import {
   getYearInfo,
   getAllYears,
   getActiveYear,
+  getDraftYear,
   setCurrentYear as setCurrentYearStorage
 } from '../lib/yearMetadataStorage';
 
@@ -85,23 +86,31 @@ export function YearProvider({ children }) {
   // Check if current year is archived
   const isCurrentYearArchived = currentYearInfo?.status === 'archived';
 
+  // Check if current year is a draft
+  const isCurrentYearDraft = currentYearInfo?.status === 'draft';
+
   // Get all years
   const allYears = getAllYears();
 
   // Get active year
   const activeYear = getActiveYear();
 
+  // Get draft year (if one exists)
+  const draftYear = getDraftYear();
+
   const value = {
     // Current state
     currentYear,
     currentYearInfo,
     isCurrentYearArchived,
+    isCurrentYearDraft,
     isLoading,
 
     // Metadata
     metadata,
     allYears,
     activeYear,
+    draftYear,
 
     // Operations
     switchToYear,

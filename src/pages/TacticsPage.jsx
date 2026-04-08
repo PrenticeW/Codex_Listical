@@ -11,6 +11,7 @@ import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
+import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '../lib/stagingStorage';
 import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm, buildProjectPlanSummary } from '../utils/staging/planTableHelpers';
@@ -306,7 +307,14 @@ function FitText({ text, maxFontSize, minFontSize = maxFontSize * 0.5, style, wr
 export default function TacticsPage() {
   const location = useLocation();
   const currentPath = location.pathname;
-  const { currentYear } = useYear();
+  const { currentYear, draftYear, refreshMetadata } = useYear();
+
+  const handleUndoDraft = useCallback(() => {
+    const result = undoDraftYear();
+    if (result.success) {
+      refreshMetadata();
+    }
+  }, [refreshMetadata]);
   const initialTacticsSettings = useMemo(() => loadTacticsSettings(), []);
   const [startDay, setStartDay] = useState(initialTacticsSettings.startDay);
   const [incrementMinutes, setIncrementMinutes] = useState(
@@ -3799,6 +3807,7 @@ export default function TacticsPage() {
               {sendToSystemDone ? 'Sent ✓' : 'Send to System →'}
             </button>
           }
+          onUndoDraft={draftYear ? handleUndoDraft : null}
         />
         </div>
         <div className="rounded border border-[#ced3d0] bg-white shadow-sm mx-4 mb-4">

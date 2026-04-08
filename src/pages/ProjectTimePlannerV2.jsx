@@ -16,6 +16,9 @@ import useProjectsData from '../hooks/planner/useProjectsData';
 import useTacticsMetrics from '../hooks/planner/useTacticsMetrics';
 import useTacticsChips from '../hooks/planner/useTacticsChips';
 import { TACTICS_SEND_TO_SYSTEM_EVENT, TACTICS_SEND_TO_SYSTEM_TS_KEY } from '../lib/tacticsStorage';
+import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
+import { undoDraftYear } from '../utils/planner/undoDraftYear';
+import { importTasksFromYear, IMPORTABLE_STATUSES, DEFAULT_IMPORT_STATUSES } from '../utils/planner/importTasksFromYear';
 import usePlannerFilters from '../hooks/planner/usePlannerFilters';
 import { useFilteredData, useFilterValues } from '../hooks/planner/useFilteredData';
 import { useProjectTotals, useDailyTotals } from '../hooks/planner/useTotalsCalculation';
@@ -60,7 +63,7 @@ import {
 } from '../utils/planner/clipboardOperations';
 import { createSortInboxCommand } from '../utils/planner/sortInbox';
 import { createSortPlannerCommand } from '../utils/planner/sortPlanner';
-import { saveTaskRows } from '../utils/planner/storage';
+import { saveTaskRows, readTaskRows } from '../utils/planner/storage';
 import { DEFAULT_PROJECT_ID } from '../constants/plannerStorageKeys';
 import {
   calculateWeekRange,
@@ -97,10 +100,55 @@ export default function ProjectTimePlannerV2() {
   const currentPath = location.pathname;
 
   // Year context for year-based storage
-  const { currentYear, isCurrentYearArchived, activeYear, switchToActiveYear } = useYear();
+  const { currentYear, isCurrentYearArchived, isCurrentYearDraft, activeYear, draftYear, switchToActiveYear, refreshMetadata } = useYear();
 
   // Archive modal state
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+
+  // Plan Next Year handler
+  const handlePlanNextYear = useCallback(async () => {
+    if (!activeYear) return;
+    const result = await createDraftYearFromActive(activeYear.yearNumber);
+    if (result.success) {
+      refreshMetadata();
+    } else {
+      // eslint-disable-next-line no-alert
+      alert(`Could not create draft year: ${result.error}`);
+    }
+  }, [activeYear, refreshMetadata]);
+
+  // Dev undo handler — remove before launch
+  const handleUndoDraft = useCallback(() => {
+    const result = undoDraftYear();
+    if (result.success) {
+      refreshMetadata();
+    }
+  }, [refreshMetadata]);
+
+  // Task import state (draft year, System page only)
+  const [importStatuses, setImportStatuses] = useState(() => new Set(DEFAULT_IMPORT_STATUSES));
+  const toggleImportStatus = useCallback((status) => {
+    setImportStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) {
+        next.delete(status);
+      } else {
+        next.add(status);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleImportTasks = useCallback(() => {
+    if (!activeYear) return;
+    const sourceRows = readTaskRows('project-1', activeYear.yearNumber);
+    const draftStaging = loadStagingState(currentYear);
+    const draftNicknames = (draftStaging.shortlist || [])
+      .map((item) => item.projectNickname)
+      .filter(Boolean);
+    const imported = importTasksFromYear(sourceRows, draftNicknames, importStatuses);
+    setData((prev) => [...prev, ...imported]);
+  }, [activeYear, currentYear, importStatuses, setData]);
 
   // Add tasks modal state
   const [isAddTasksModalOpen, setIsAddTasksModalOpen] = useState(false);
@@ -2115,17 +2163,6 @@ export default function ProjectTimePlannerV2() {
           </div>
         )}
         <NavigationBar
-        archiveButton={
-          !isCurrentYearArchived && currentPath === '/' && (
-            <button
-              onClick={() => setIsArchiveModalOpen(true)}
-              className="px-4 py-2.5 text-sm font-semibold text-amber-700 bg-amber-50 border border-amber-300 rounded-lg hover:bg-amber-100 hover:border-amber-400 transition-all duration-200 flex items-center gap-2 shadow-sm"
-            >
-              <Archive className="w-4 h-4" />
-              Archive Year {currentYear}
-            </button>
-          )
-        }
         listicalButton={
           <ProjectListicalMenu
             isOpen={isListicalMenuOpen}
@@ -2164,10 +2201,41 @@ export default function ProjectTimePlannerV2() {
             undo={undo}
             redo={redo}
             onOpenArchiveModal={() => setIsArchiveModalOpen(true)}
+            onPlanNextYear={handlePlanNextYear}
           />
         }
+        onUndoDraft={draftYear ? handleUndoDraft : null}
       />
       </div>
+
+      {/* Task import panel — draft year only, disappears once tasks exist */}
+      {isCurrentYearDraft && activeYear && !data.some((r) => r._rowType === 'projectTask') && (
+        <div className="mx-4 mb-2 shrink-0 rounded-lg border border-violet-200 bg-violet-50 px-5 py-4 flex items-center justify-between gap-6">
+          <div>
+            <p className="text-sm font-semibold text-violet-900 mb-1">Import tasks from Year {activeYear.yearNumber}</p>
+            <div className="flex items-center gap-3 flex-wrap">
+              {IMPORTABLE_STATUSES.map((status) => (
+                <label key={status} className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={importStatuses.has(status)}
+                    onChange={() => toggleImportStatus(status)}
+                    className="rounded accent-violet-600"
+                  />
+                  <span className="text-xs font-medium text-violet-800">{status}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleImportTasks}
+            className="shrink-0 px-4 py-2 text-sm font-semibold text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors"
+          >
+            Import
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-4 pb-4">
         <PlannerTable
@@ -2271,7 +2339,7 @@ export default function ProjectTimePlannerV2() {
       <ArchiveYearModal
         isOpen={isArchiveModalOpen}
         onClose={() => setIsArchiveModalOpen(false)}
-        yearNumber={currentYear}
+        yearNumber={activeYear?.yearNumber ?? currentYear}
       />
 
       {/* Add Tasks Modal */}
