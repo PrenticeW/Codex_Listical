@@ -1571,8 +1571,7 @@ export default function TacticsPage() {
       // Decide whether to open below or above the cell
       const spaceBelow = window.innerHeight - cellRect.bottom - VIEWPORT_PADDING;
       const spaceAbove = cellRect.top - stickyHeaderBottom - VIEWPORT_PADDING;
-      const openAbove = spaceBelow < 200 && spaceAbove > spaceBelow;
-      const maxHeight = Math.floor((openAbove ? spaceAbove : spaceBelow) - 4);
+      const openAbove = spaceAbove > spaceBelow;
       const top = openAbove
         ? cellRect.top - 4  // menu will use `bottom` anchor instead
         : Math.max(cellRect.bottom + 4, stickyHeaderBottom + VIEWPORT_PADDING);
@@ -1580,7 +1579,7 @@ export default function TacticsPage() {
       setCellMenu({
         columnIndex,
         rowId,
-        position: { top, left, width: cellRect.width, openAbove, maxHeight },
+        position: { top, left, width: cellRect.width, openAbove },
       });
     },
     [displayedWeekDays, totalColumnCount]
@@ -2048,9 +2047,14 @@ export default function TacticsPage() {
       if (menuNode && menuNode.contains(event.target)) return;
       closeCellMenu();
     };
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') closeCellMenu();
+    };
     window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [cellMenu, closeCellMenu]);
   useEffect(() => {
@@ -2064,6 +2068,37 @@ export default function TacticsPage() {
       closeCellMenu();
     }
   }, [cellMenu, closeCellMenu, displayedWeekDays, totalColumnCount]);
+  useLayoutEffect(() => {
+    if (!cellMenu) return;
+    if (cellMenu.position?.clamped) return;
+    const menuNode = cellMenuRef.current;
+    if (!menuNode) return;
+    const VIEWPORT_PADDING = 8;
+    const menuHeight = menuNode.offsetHeight;
+    if (!menuHeight) return;
+    const { position } = cellMenu;
+    if (!position) return;
+    if (position.openAbove) {
+      const menuTop = position.top - menuHeight;
+      const stickyHeaderBottom = navBarRef.current
+        ? navBarRef.current.getBoundingClientRect().bottom
+        : 0;
+      if (menuTop < stickyHeaderBottom + VIEWPORT_PADDING) {
+        const clampedTop = stickyHeaderBottom + VIEWPORT_PADDING + menuHeight;
+        setCellMenu((prev) => prev ? { ...prev, position: { ...prev.position, top: clampedTop, clamped: true } } : prev);
+      } else {
+        setCellMenu((prev) => prev ? { ...prev, position: { ...prev.position, clamped: true } } : prev);
+      }
+    } else {
+      const menuBottom = position.top + menuHeight;
+      if (menuBottom > window.innerHeight - VIEWPORT_PADDING) {
+        const clampedTop = window.innerHeight - VIEWPORT_PADDING - menuHeight;
+        setCellMenu((prev) => prev ? { ...prev, position: { ...prev.position, top: clampedTop, clamped: true } } : prev);
+      } else {
+        setCellMenu((prev) => prev ? { ...prev, position: { ...prev.position, clamped: true } } : prev);
+      }
+    }
+  }, [cellMenu]);
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.defaultPrevented) return;
@@ -3342,15 +3377,15 @@ export default function TacticsPage() {
     return (
       <div
         ref={cellMenuRef}
-        className="fixed z-50 rounded border border-[#94a3b8] shadow-2xl overflow-y-auto"
+        className="fixed rounded border border-[#94a3b8] shadow-2xl"
         style={{
           ...(position?.openAbove
             ? { bottom: window.innerHeight - (position?.top ?? 0), top: 'auto' }
             : { top: position?.top ?? 0 }),
           left: position?.left ?? 0,
           minWidth: Math.max(position?.width ?? 0, 260),
-          maxHeight: position?.maxHeight ?? '80vh',
           backgroundColor: '#f8fafc',
+          zIndex: 999999,
         }}
       >
         {/* ── Schedule Items button ─────────────────────────────── */}
@@ -4616,8 +4651,8 @@ export default function TacticsPage() {
             </tr>
           </tbody>
         </table>
-          {renderCellProjectMenu()}
           </div>
+        {cellMenu ? createPortal(renderCellProjectMenu(), document.body) : null}
         </div>
       </div>
       {scheduleItemPanelOpen && (
