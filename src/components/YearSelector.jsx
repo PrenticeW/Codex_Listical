@@ -66,7 +66,7 @@ export function YearSelector({ className = '' }) {
           />
 
           {/* Dropdown menu */}
-          <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-20 overflow-hidden">
+          <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-20 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
             {/* Active year section */}
             {activeYear && (
               <div className="border-b border-gray-200">

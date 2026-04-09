@@ -94,8 +94,8 @@ export default function ProjectListicalMenu({
       {isOpen && (
         <div
           ref={menuRef}
-          className="absolute top-full mt-2 z-30 rounded border border-[#ced3d0] bg-[#f2fdf6] shadow-lg"
-          style={{ width: '600px' }}
+          className="absolute top-full mt-2 z-30 rounded border border-[#ced3d0] bg-[#f2fdf6] shadow-lg overflow-y-auto"
+          style={{ width: '600px', maxHeight: 'calc(100vh - 120px)' }}
         >
           <div className="flex flex-col text-[12px] text-slate-800" style={{ padding: '16px', gap: '16px' }}>
             {/* Row Operations Section */}

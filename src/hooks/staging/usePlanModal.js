@@ -14,7 +14,8 @@ export default function usePlanModal() {
     color: pickProjectColour([]),
   });
 
-  const openPlanModal = (item) => {
+  const openPlanModal = (item, event) => {
+    const rect = event?.currentTarget?.getBoundingClientRect() ?? null;
     setPlanModal({
       open: true,
       itemId: item.id,
@@ -22,6 +23,7 @@ export default function usePlanModal() {
       projectNickname: item.projectNickname ?? '',
       projectTagline: item.projectTagline ?? '',
       color: item.color ?? pickProjectColour([]),
+      anchorRect: rect ? { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right } : null,
     });
   };
 

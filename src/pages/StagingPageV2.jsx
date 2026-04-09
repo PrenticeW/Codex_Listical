@@ -538,7 +538,7 @@ export default function StagingPageV2() {
                               type="button"
                               className="rounded-full p-1 text-slate-700 hover:text-slate-900 focus:outline-none"
                               style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: 'none' }}
-                              onClick={() => openPlanModal(item)}
+                              onClick={(e) => openPlanModal(item, e)}
                               aria-label="Edit project"
                             >
                               <Pencil size={14} />

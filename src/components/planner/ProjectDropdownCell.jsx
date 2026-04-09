@@ -35,17 +35,19 @@ function ProjectDropdownCell({
   const dropdownRef = useRef(null);
   const buttonRef = useRef(null);
 
-  // Calculate position when dropdown opens
+  // Calculate position when dropdown opens — flip above the cell if too close to viewport bottom
   useEffect(() => {
     if (isOpen && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
+      const estimatedHeight = Math.min(PROJECT_OPTIONS.length * rowHeight + 8, 300);
+      const fitsBelow = rect.bottom + estimatedHeight < window.innerHeight - 8;
       setDropdownPosition({
-        top: rect.bottom,
-        left: rect.left,
+        top: fitsBelow ? rect.bottom : rect.top - estimatedHeight,
+        left: Math.min(rect.left, window.innerWidth - rect.width - 8),
         width: rect.width
       });
     }
-  }, [isOpen]);
+  }, [isOpen, PROJECT_OPTIONS.length, rowHeight]);
 
   // Close dropdown when clicking outside
   useEffect(() => {

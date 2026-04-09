@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import ColourPicker from '../ColourPicker';
 
 /**
@@ -23,10 +24,36 @@ export default function ProjectEditModal({
   handleRemove,
   handleTogglePlanStatus,
 }) {
-  return (
+  const MENU_WIDTH = 320;
+  const MENU_HEIGHT = 480; // generous estimate
+  const MARGIN = 16;
+  const GAP = 8; // gap between button and menu
+
+  const rect = planModal.anchorRect;
+
+  // Prefer opening below the button; flip above if not enough room
+  let top;
+  if (rect) {
+    const fitsBelow = rect.bottom + GAP + MENU_HEIGHT + MARGIN <= window.innerHeight;
+    top = fitsBelow ? rect.bottom + GAP : rect.top - MENU_HEIGHT - GAP;
+  } else {
+    top = MARGIN;
+  }
+  top = Math.max(MARGIN, Math.min(top, window.innerHeight - MENU_HEIGHT - MARGIN));
+
+  // Align right edge of menu with right edge of button; shift left if it overflows
+  let left;
+  if (rect) {
+    left = rect.right - MENU_WIDTH;
+  } else {
+    left = MARGIN;
+  }
+  left = Math.max(MARGIN, Math.min(left, window.innerWidth - MENU_WIDTH - MARGIN));
+
+  return createPortal(
     <div
-      className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-[#ced3d0] bg-white p-4 shadow-xl z-10"
-      style={{ backgroundColor: '#ffffff', color: '#0f172a' }}
+      className="rounded-lg border border-[#ced3d0] bg-white p-4 shadow-xl"
+      style={{ position: 'fixed', top, left, width: MENU_WIDTH, zIndex: 9999, backgroundColor: '#ffffff', color: '#0f172a' }}
     >
       <div className="space-y-3">
         <div className="space-y-2" style={{ paddingTop: '15px' }}>
@@ -130,6 +157,7 @@ export default function ProjectEditModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

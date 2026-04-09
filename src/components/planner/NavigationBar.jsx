@@ -53,10 +53,15 @@ export default function NavigationBar({
     const updatePosition = () => {
       if (settingsButtonRef.current) {
         const rect = settingsButtonRef.current.getBoundingClientRect();
+        const MENU_WIDTH = 280;
+        const MENU_HEIGHT = 120; // approximate
+        const fitsBelow = rect.bottom + 8 + MENU_HEIGHT < window.innerHeight - 8;
+        // Ensure right edge stays on screen
+        const rightEdge = window.innerWidth - rect.right;
         setMenuStyle({
-          width: '280px',
-          top: rect.bottom + 8,
-          right: window.innerWidth - rect.right,
+          width: `${MENU_WIDTH}px`,
+          top: fitsBelow ? rect.bottom + 8 : rect.top - MENU_HEIGHT - 8,
+          right: Math.max(8, rightEdge),
         });
       }
     };

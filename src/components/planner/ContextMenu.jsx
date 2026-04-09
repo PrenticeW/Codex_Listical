@@ -32,11 +32,19 @@ export default function ContextMenu({
     rowId,
   } = contextMenu;
 
-  // Position the menu, ensuring it doesn't go off-screen
+  // Estimated menu dimensions for boundary checking
+  const MENU_WIDTH = 200;
+  const MENU_HEIGHT = 280;
+
+  // Clamp horizontally, flip vertically if needed so menu stays on screen
+  const clampedLeft = Math.min(x, window.innerWidth - MENU_WIDTH - 8);
+  const fitsBelow = y + MENU_HEIGHT < window.innerHeight - 8;
+  const clampedTop = fitsBelow ? y : Math.max(8, y - MENU_HEIGHT);
+
   const menuStyle = {
     position: 'fixed',
-    left: `${x}px`,
-    top: `${y}px`,
+    left: `${clampedLeft}px`,
+    top: `${clampedTop}px`,
     zIndex: 9999,
   };
 

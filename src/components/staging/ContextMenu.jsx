@@ -71,11 +71,17 @@ export default function ContextMenu({
 
   const sectionOptions = getSectionInsertOptions();
 
-  // Position the menu, ensuring it doesn't go off-screen
+  // Position the menu, ensuring it doesn't go off-screen and doesn't open below the cursor when near the bottom
+  const MENU_WIDTH = 220;
+  const MENU_HEIGHT = 300;
+  const clampedLeft = Math.min(x, window.innerWidth - MENU_WIDTH - 8);
+  const fitsBelow = y + MENU_HEIGHT < window.innerHeight - 8;
+  const clampedTop = fitsBelow ? y : Math.max(8, y - MENU_HEIGHT);
+
   const menuStyle = {
     position: 'fixed',
-    left: `${Math.min(x, window.innerWidth - 220)}px`,
-    top: `${Math.min(y, window.innerHeight - 300)}px`,
+    left: `${clampedLeft}px`,
+    top: `${clampedTop}px`,
     zIndex: 9999,
   };
 
