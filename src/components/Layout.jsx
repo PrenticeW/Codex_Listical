@@ -1,7 +1,12 @@
 import { Outlet } from 'react-router-dom';
-import { YearProvider } from '../contexts/YearContext';
+import { YearProvider, useYear } from '../contexts/YearContext';
 import { useUser } from '../contexts/UserContext';
 import { useEffect, useState } from 'react';
+
+function YearKeyedOutlet() {
+  const { currentYear } = useYear();
+  return <Outlet key={currentYear} />;
+}
 
 /**
  * Layout Component
@@ -55,7 +60,7 @@ export default function Layout() {
 
   return (
     <YearProvider>
-      <Outlet />
+      <YearKeyedOutlet />
     </YearProvider>
   );
 }
