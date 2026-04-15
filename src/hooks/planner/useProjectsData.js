@@ -6,7 +6,10 @@
 import { useCallback } from 'react';
 import { useYear } from '../../contexts/YearContext';
 import { loadStagingState, STAGING_STORAGE_EVENT } from '../../lib/stagingStorage';
+import { SECTION_CONFIG } from '../../utils/staging/sectionConfig';
 import useStorageSync from '../common/useStorageSync';
+
+const SUBPROJECT_PLACEHOLDER = SECTION_CONFIG.Subprojects.placeholder;
 
 /**
  * Hook to load projects and subprojects from Staging storage
@@ -95,14 +98,14 @@ function extractProjectsData(shortlist) {
           if (row?.__rowType === 'prompt') {
             // Prompt rows: name is at col 1 (Schedule uses col 2, Subprojects uses col 1)
             const name = (row[1] ?? '').trim();
-            if (name && name !== '-') {
+            if (name && name !== '-' && name !== SUBPROJECT_PLACEHOLDER) {
               allSubprojects.add(name);
               projectSubprojectsMap[projectKey].push(name);
             }
           } else if (row?.__rowType === 'data' || !row?.__rowType) {
             // Legacy data rows: name may be at col 0
             const name = (row[0] ?? '').trim();
-            if (name && name !== '-') {
+            if (name && name !== '-' && name !== SUBPROJECT_PLACEHOLDER) {
               allSubprojects.add(name);
               projectSubprojectsMap[projectKey].push(name);
             }

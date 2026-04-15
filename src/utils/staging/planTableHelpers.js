@@ -468,7 +468,7 @@ export const buildProjectPlanSummary = (item) => {
       }
     } else if (currentSection === 'Subprojects' && row.__rowType !== 'prompt') {
       const name = (row[COL.CONTENT] ?? '').trim();
-      if (name) subprojects.push({ name, timeValue: '0.00' });
+      if (name && name !== 'Subproject') subprojects.push({ name, timeValue: '0.00' });
     } else if (currentSection === 'Actions' && row.__rowType === 'response') {
       needsPlanTotalMinutes += parseTimeValueToMinutes(row[COL.TIME_VALUE] ?? '');
     }
