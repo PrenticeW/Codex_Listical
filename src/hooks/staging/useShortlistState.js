@@ -211,6 +211,24 @@ export default function useShortlistState({ currentYear, executeCommand }) {
     }));
   }, [executeStateMutation]);
 
+  // Move item from shortlist to archived with a completion status
+  // status: 'archived' | 'completed'
+  const handleArchiveWithStatus = useCallback((id, status) => {
+    executeStateMutation((prev) => {
+      const item = prev.shortlist.find((i) => i.id === id);
+      if (!item) return prev;
+      const archivedItem = {
+        ...item,
+        completionStatus: status,
+        completionArchivedAt: new Date().toISOString(),
+      };
+      return {
+        shortlist: prev.shortlist.filter((i) => i.id !== id),
+        archived: [...(prev.archived || []), archivedItem],
+      };
+    });
+  }, [executeStateMutation]);
+
   // Toggle plan table collapse state
   const togglePlanTable = useCallback((id) => {
     executeStateMutation((prev) => ({
@@ -230,6 +248,7 @@ export default function useShortlistState({ currentYear, executeCommand }) {
     setState,
     handleAdd,
     handleRemove,
+    handleArchiveWithStatus,
     togglePlanTable,
   };
 }

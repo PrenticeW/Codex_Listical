@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { getContrastTextColor } from '../utils/colorUtils';
-import { SquarePlus, Pencil, CalendarCheck, CalendarPlus, Archive } from 'lucide-react';
+import { SquarePlus, Pencil, CalendarCheck, CalendarPlus, Archive, CheckCircle2 } from 'lucide-react';
 import { useYear } from '../contexts/YearContext';
 import { useAuth } from '../contexts/AuthContext';
 import NavigationBar from '../components/planner/NavigationBar';
@@ -135,8 +135,11 @@ export default function StagingPageV2() {
     setState,
     handleAdd,
     handleRemove,
+    handleArchiveWithStatus,
     togglePlanTable,
   } = useShortlistState({ currentYear, executeCommand });
+
+  const isDraftYearView = Boolean(draftYear && currentYear === draftYear.yearNumber);
 
   // Plan modal state
   const { planModal, openPlanModal, closePlanModal, updatePlanModal } = usePlanModal();
@@ -576,7 +579,7 @@ export default function StagingPageV2() {
                             color: headerTextColor,
                             paddingLeft: '12px',
                             fontWeight: 600,
-                            gridTemplateColumns: '1fr auto 140px 24px 80px 32px',
+                            gridTemplateColumns: `1fr auto 140px 24px 80px ${isDraftYearView ? 'auto' : '32px'}`,
                             alignItems: 'center',
                             gap: '12px',
                           }}
@@ -602,10 +605,31 @@ export default function StagingPageV2() {
                           >
                             {projectTotal}
                           </div>
-                          <div
-                            style={{ width: '32px', minWidth: '32px' }}
-                            className="flex items-center justify-end"
-                          >
+                          <div className="flex items-center justify-end gap-1.5">
+                            {isDraftYearView && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="rounded-full p-1 text-slate-700 hover:text-slate-900 focus:outline-none"
+                                  style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: 'none' }}
+                                  onClick={() => handleArchiveWithStatus(item.id, 'completed')}
+                                  aria-label="Mark project completed"
+                                  title="Mark completed"
+                                >
+                                  <CheckCircle2 size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rounded-full p-1 text-slate-700 hover:text-slate-900 focus:outline-none"
+                                  style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: 'none' }}
+                                  onClick={() => handleArchiveWithStatus(item.id, 'archived')}
+                                  aria-label="Archive project"
+                                  title="Archive"
+                                >
+                                  <Archive size={14} />
+                                </button>
+                              </>
+                            )}
                             <button
                               type="button"
                               className="rounded-full p-1 text-slate-700 hover:text-slate-900 focus:outline-none"
