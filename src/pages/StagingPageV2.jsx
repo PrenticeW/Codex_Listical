@@ -40,6 +40,9 @@ import {
   handleCopyOperation,
   handlePasteOperation,
 } from '../utils/staging/clipboardOperations';
+import { loadTacticsChipsState, saveTacticsChipsState } from '../lib/tacticsStorage';
+import { readTaskRows, saveTaskRows } from '../utils/planner/storage';
+import { DEFAULT_PROJECT_ID } from '../constants/plannerStorageKeys';
 
 /**
  * Helper to get section type for any row by finding the nearest header above
@@ -302,6 +305,8 @@ export default function StagingPageV2() {
   const handleTogglePlanStatus = useCallback(
     (itemId, addToPlan) => {
       let capturedState = null;
+      let capturedChipState = null;
+      let capturedTaskRows = null;
       const modalMetadata = {
         projectName: planModal.projectName,
         projectNickname: planModal.projectNickname,
@@ -326,15 +331,79 @@ export default function StagingPageV2() {
               ),
             };
           });
+          if (!addToPlan) {
+            const removedItem = shortlist.find((item) => item.id === itemId);
+            const projectKey = ((removedItem?.projectNickname || '').trim()) || ((removedItem?.projectName || '').trim());
+            if (projectKey) {
+              const taskRows = readTaskRows(DEFAULT_PROJECT_ID, currentYear);
+              if (capturedTaskRows === null) {
+                capturedTaskRows = taskRows;
+              }
+              const projectGroupId = `project-${projectKey}`;
+              const groupIdsToRemove = new Set([projectGroupId]);
+              taskRows.forEach((row) => {
+                if (
+                  row?._rowType === 'subprojectHeader' &&
+                  row?.parentGroupId === projectGroupId &&
+                  row?.groupId
+                ) {
+                  groupIdsToRemove.add(row.groupId);
+                }
+              });
+              const isArchived = (row) => {
+                const rowType = row?._rowType || '';
+                return rowType.toLowerCase().startsWith('archive') || !!row?.archiveWeekLabel;
+              };
+              const filteredRows = taskRows.filter((row) => {
+                if (isArchived(row)) return true;
+                if (row?._rowType === 'projectHeader' && row.projectNickname === projectKey) return false;
+                if (row?.parentGroupId && groupIdsToRemove.has(row.parentGroupId)) return false;
+                if (row?.projectNickname === projectKey) return false;
+                return true;
+              });
+              if (filteredRows.length !== taskRows.length) {
+                saveTaskRows(filteredRows, DEFAULT_PROJECT_ID, currentYear);
+              }
+            }
+            const chipState = loadTacticsChipsState(currentYear);
+            if (capturedChipState === null) {
+              capturedChipState = chipState;
+            }
+            const projectChips = Array.isArray(chipState.projectChips) ? chipState.projectChips : [];
+            const filteredChips = projectChips.filter((chip) => chip.projectId !== itemId);
+            if (filteredChips.length !== projectChips.length) {
+              const remainingIds = new Set(filteredChips.map((chip) => chip.id));
+              const overrides = chipState.chipTimeOverrides && typeof chipState.chipTimeOverrides === 'object'
+                ? chipState.chipTimeOverrides
+                : null;
+              const filteredOverrides = overrides
+                ? Object.fromEntries(Object.entries(overrides).filter(([chipId]) => remainingIds.has(chipId)))
+                : overrides;
+              saveTacticsChipsState(
+                {
+                  projectChips: filteredChips,
+                  customProjects: chipState.customProjects,
+                  chipTimeOverrides: filteredOverrides,
+                },
+                currentYear
+              );
+            }
+          }
         },
         undo: () => {
           if (capturedState) setState(capturedState);
+          if (capturedChipState) {
+            saveTacticsChipsState(capturedChipState, currentYear);
+          }
+          if (capturedTaskRows) {
+            saveTaskRows(capturedTaskRows, DEFAULT_PROJECT_ID, currentYear);
+          }
         },
       };
       executeCommand(command);
       closePlanModal();
     },
-    [setState, closePlanModal, executeCommand, planModal]
+    [setState, closePlanModal, executeCommand, planModal, currentYear, shortlist]
   );
 
   // Handle click on drag handle to select row

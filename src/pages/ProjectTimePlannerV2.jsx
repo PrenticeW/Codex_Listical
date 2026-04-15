@@ -740,10 +740,29 @@ export default function ProjectTimePlannerV2() {
         const removedProjects = [...existingHeaderIds].filter(k => !activeProjectKeys.has(k));
         let filteredData = prevData;
         if (removedProjects.length > 0) {
+          const removedSet = new Set(removedProjects);
           const removedGroupIds = new Set(removedProjects.map(k => `project-${k}`));
+          // Also collect subproject/chip groupIds whose parent is a removed project group —
+          // task rows beneath them have parentGroupId pointing to those inner groups, not to project-{key}.
+          prevData.forEach(row => {
+            if (
+              row._rowType === 'subprojectHeader' &&
+              row.parentGroupId &&
+              removedGroupIds.has(row.parentGroupId) &&
+              row.groupId
+            ) {
+              removedGroupIds.add(row.groupId);
+            }
+          });
+          const isArchived = (row) => {
+            const t = row._rowType || '';
+            return t.toLowerCase().startsWith('archive') || !!row.archiveWeekLabel;
+          };
           filteredData = prevData.filter(row => {
+            if (isArchived(row)) return true;
             if (row._rowType === 'projectHeader' && removedProjects.includes(row.projectNickname)) return false;
             if (row.parentGroupId && removedGroupIds.has(row.parentGroupId)) return false;
+            if (row.projectNickname && removedSet.has(row.projectNickname)) return false;
             return true;
           });
         }
