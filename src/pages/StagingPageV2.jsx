@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { getContrastTextColor } from '../utils/colorUtils';
 import { SquarePlus, Pencil, CalendarCheck, CalendarPlus, Archive } from 'lucide-react';
 import { useYear } from '../contexts/YearContext';
@@ -94,6 +95,7 @@ const calculateTimeTotals = (planEntries) => {
  * Manages project shortlist and planning tables with unified row rendering
  */
 export default function StagingPageV2() {
+  const navigate = useNavigate();
   const { currentYear, draftYear, activeYear, isCurrentYearArchived, refreshMetadata, switchToYear } = useYear();
 
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
@@ -110,11 +112,12 @@ export default function StagingPageV2() {
     const result = await createDraftYearFromActive(activeYear.yearNumber);
     if (result.success) {
       refreshMetadata();
+      navigate('/staging');
     } else {
       // eslint-disable-next-line no-alert
       alert(`Could not create draft year: ${result.error}`);
     }
-  }, [activeYear, refreshMetadata]);
+  }, [activeYear, refreshMetadata, navigate]);
   const { isLoading: isAuthLoading } = useAuth();
 
   const { sizeScale } = usePageSize('goal');

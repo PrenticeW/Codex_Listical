@@ -8,7 +8,7 @@ import React, {
 } from 'react';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
 import { createPortal } from 'react-dom';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
 import { undoDraftYear } from '../utils/planner/undoDraftYear';
@@ -309,6 +309,7 @@ function FitText({ text, maxFontSize, minFontSize = maxFontSize * 0.5, style, wr
 
 export default function TacticsPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const currentPath = location.pathname;
   const { currentYear, draftYear, activeYear, isCurrentYearArchived, refreshMetadata } = useYear();
 
@@ -326,11 +327,12 @@ export default function TacticsPage() {
     const result = await createDraftYearFromActive(activeYear.yearNumber);
     if (result.success) {
       refreshMetadata();
+      navigate('/staging');
     } else {
       // eslint-disable-next-line no-alert
       alert(`Could not create draft year: ${result.error}`);
     }
-  }, [activeYear, refreshMetadata]);
+  }, [activeYear, refreshMetadata, navigate]);
   const initialTacticsSettings = useMemo(() => loadTacticsSettings(), []);
   const [startDay, setStartDay] = useState(initialTacticsSettings.startDay);
   const [incrementMinutes, setIncrementMinutes] = useState(

@@ -5,7 +5,7 @@ import {
   flexRender,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Archive } from 'lucide-react';
 import { useYear } from '../contexts/YearContext';
 import usePlannerStorage from '../hooks/planner/usePlannerStorage';
@@ -97,6 +97,7 @@ const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On 
 
 export default function ProjectTimePlannerV2() {
   const location = useLocation();
+  const navigate = useNavigate();
   const currentPath = location.pathname;
 
   // Year context for year-based storage
@@ -111,11 +112,12 @@ export default function ProjectTimePlannerV2() {
     const result = await createDraftYearFromActive(activeYear.yearNumber);
     if (result.success) {
       refreshMetadata();
+      navigate('/staging');
     } else {
       // eslint-disable-next-line no-alert
       alert(`Could not create draft year: ${result.error}`);
     }
-  }, [activeYear, refreshMetadata]);
+  }, [activeYear, refreshMetadata, navigate]);
 
   // Dev undo handler — remove before launch
   const handleUndoDraft = useCallback(() => {
