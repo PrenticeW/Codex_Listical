@@ -1031,7 +1031,7 @@ export default function ProjectTimePlannerV2() {
           );
           if (projectHeaderIndex === -1) return;
 
-          // Insert after the last existing subprojectHeader for this project,
+          // Insert after the last existing subprojectHeader (and its task row) for this project,
           // but before General/Unscheduled section rows.
           let insertAfterIndex = projectHeaderIndex;
           for (let i = projectHeaderIndex + 1; i < newData.length; i++) {
@@ -1041,7 +1041,13 @@ export default function ProjectTimePlannerV2() {
               row._rowType === 'subprojectHeader' &&
               (row.parentGroupId === projectGroupId || row.projectNickname === chip.projectNickname)
             ) {
+              // Advance past this header and any immediately following task row for the same chip group
               insertAfterIndex = i;
+              const nextRow = newData[i + 1];
+              if (nextRow && nextRow._rowType === 'projectTask' && nextRow.parentGroupId === row.groupId) {
+                insertAfterIndex = i + 1;
+                i++; // skip the task row in the outer loop too
+              }
             }
           }
 
