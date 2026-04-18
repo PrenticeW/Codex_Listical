@@ -42,4 +42,32 @@ const saveTacticsMetrics = (payload, yearNumber = null) => {
   }
 };
 
-export { loadTacticsMetrics, saveTacticsMetrics };
+// --- "Sent to System" snapshot ---
+
+const SENT_METRICS_KEY_TEMPLATE = 'tactics-year-{yearNumber}-sent-metrics';
+
+const getSentMetricsKey = (yearNumber = null) => {
+  if (yearNumber === null || yearNumber === undefined) {
+    return 'tactics-sent-metrics';
+  }
+  return SENT_METRICS_KEY_TEMPLATE.replace('{yearNumber}', yearNumber.toString());
+};
+
+const saveSentMetricsSnapshot = (payload, yearNumber = null) => {
+  try {
+    storage.setJSON(getSentMetricsKey(yearNumber), payload);
+  } catch (error) {
+    console.error('Failed to save sent metrics snapshot', error);
+  }
+};
+
+const loadSentMetricsSnapshot = (yearNumber = null) => {
+  try {
+    return storage.getJSON(getSentMetricsKey(yearNumber), null);
+  } catch (error) {
+    console.error('Failed to read sent metrics snapshot', error);
+    return null;
+  }
+};
+
+export { loadTacticsMetrics, saveTacticsMetrics, saveSentMetricsSnapshot, loadSentMetricsSnapshot };

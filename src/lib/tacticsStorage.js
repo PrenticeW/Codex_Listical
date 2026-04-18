@@ -119,6 +119,47 @@ export const loadTacticsColumnWidths = (yearNumber = null) => {
   }
 };
 
+// --- "Sent to System" snapshot ---
+// Written only when the user presses "Send to System". The System page reads
+// from these keys so it is isolated from live Plan page auto-saves.
+
+const SENT_CHIPS_KEY_TEMPLATE = 'tactics-year-{yearNumber}-sent-chips';
+
+const getSentChipsKey = (yearNumber) => {
+  if (yearNumber === null || yearNumber === undefined) {
+    return 'tactics-sent-chips';
+  }
+  return SENT_CHIPS_KEY_TEMPLATE.replace('{yearNumber}', yearNumber.toString());
+};
+
+export const saveSentChipsSnapshot = (payload, yearNumber = null) => {
+  try {
+    storage.setJSON(getSentChipsKey(yearNumber), payload);
+  } catch (error) {
+    console.error('Failed to save sent chips snapshot', error);
+  }
+};
+
+export const loadSentChipsSnapshot = (yearNumber = null) => {
+  try {
+    const parsed = storage.getJSON(getSentChipsKey(yearNumber), null);
+    if (!parsed) return { projectChips: null, customProjects: null, chipTimeOverrides: null };
+    return {
+      projectChips: Array.isArray(parsed?.projectChips) ? parsed.projectChips : null,
+      customProjects: Array.isArray(parsed?.customProjects) ? parsed.customProjects : null,
+      chipTimeOverrides:
+        parsed?.chipTimeOverrides &&
+        typeof parsed.chipTimeOverrides === 'object' &&
+        !Array.isArray(parsed.chipTimeOverrides)
+          ? parsed.chipTimeOverrides
+          : null,
+    };
+  } catch (error) {
+    console.error('Failed to read sent chips snapshot', error);
+    return { projectChips: null, customProjects: null, chipTimeOverrides: null };
+  }
+};
+
 export const saveTacticsColumnWidths = (widths, yearNumber = null) => {
   try {
     const key = getColumnWidthsStorageKey(yearNumber);

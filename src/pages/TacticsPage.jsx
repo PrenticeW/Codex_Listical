@@ -19,7 +19,7 @@ import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '..
 import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm, buildProjectPlanSummary } from '../utils/staging/planTableHelpers';
 import { pickCustomChipColour } from '../utils/staging/projectColour';
-import { saveTacticsMetrics } from '../lib/tacticsMetricsStorage';
+import { saveTacticsMetrics, saveSentMetricsSnapshot } from '../lib/tacticsMetricsStorage';
 import { getYearInfo } from '../lib/yearMetadataStorage';
 import { saveStartDate } from '../utils/planner/storage';
 import {
@@ -31,6 +31,7 @@ import {
   saveTacticsColumnWidths,
   TACTICS_SEND_TO_SYSTEM_EVENT,
   TACTICS_SEND_TO_SYSTEM_TS_KEY,
+  saveSentChipsSnapshot,
 } from '../lib/tacticsStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
 import usePageSize from '../hooks/usePageSize';
@@ -2547,7 +2548,7 @@ export default function TacticsPage() {
       saveStartDate(yearInfo.startDate, undefined, currentYear);
     }
 
-    // Re-dispatch tactics metrics so System page reflects current totals and quotas
+    // Build metrics payload
     const projectWeeklyQuotas = projectSummaries.map((summary) => ({
       id: summary.id,
       label: summary.label,
@@ -2558,17 +2559,22 @@ export default function TacticsPage() {
       dailyMaxHours: minutesToHourMinuteDecimal(availableColumnTotals[idx] ?? 0),
       dailyMinHours: minutesToHourMinuteDecimal(workingColumnTotals[idx] ?? 0),
     }));
-    saveTacticsMetrics({
+    const metricsPayload = {
       projectWeeklyQuotas,
       dailyBounds,
       weeklyTotals: {
         availableHours: minutesToHourMinuteDecimal(totalAvailableMinutes),
         workingHours: minutesToHourMinuteDecimal(totalWorkingMinutes),
       },
-    }, currentYear);
+    };
 
-    // Re-dispatch chips state so System page reflects current subproject rows
+    // Save live copies (for Plan page reactive use)
+    saveTacticsMetrics(metricsPayload, currentYear);
     saveTacticsChipsState({ projectChips, customProjects, chipTimeOverrides }, currentYear);
+
+    // Save "sent" snapshots — System page reads only from these
+    saveSentMetricsSnapshot(metricsPayload, currentYear);
+    saveSentChipsSnapshot({ projectChips, customProjects, chipTimeOverrides }, currentYear);
 
     // Write timestamp so System page resets subproject labels even if it mounts after this fires
     localStorage.setItem(TACTICS_SEND_TO_SYSTEM_TS_KEY, Date.now().toString());

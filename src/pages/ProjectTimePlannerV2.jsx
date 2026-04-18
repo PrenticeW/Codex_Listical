@@ -13,9 +13,9 @@ import usePageSize from '../hooks/usePageSize';
 import usePlannerColumns from '../hooks/planner/usePlannerColumns';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
-import useTacticsMetrics from '../hooks/planner/useTacticsMetrics';
-import useTacticsChips from '../hooks/planner/useTacticsChips';
-import { TACTICS_SEND_TO_SYSTEM_EVENT, TACTICS_SEND_TO_SYSTEM_TS_KEY } from '../lib/tacticsStorage';
+import { TACTICS_SEND_TO_SYSTEM_EVENT, TACTICS_SEND_TO_SYSTEM_TS_KEY, loadSentChipsSnapshot, loadTacticsSettings } from '../lib/tacticsStorage';
+import { loadSentMetricsSnapshot } from '../lib/tacticsMetricsStorage';
+import { loadStagingState } from '../lib/stagingStorage';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import { importTasksForDraftYear } from '../utils/planner/importTasksFromYear';
@@ -84,6 +84,109 @@ import { useArchiveTotals } from '../hooks/planner/useArchiveTotals';
 // Sortable status values for the "Sort Inbox" feature
 const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned'];
 
+// --- Tactics data helpers (loaded on mount + "Send to System" only) ---
+
+const SYSTEM_PROJECTS = new Set(['sleep', 'rest', 'buffer']);
+const DAY_COLUMN_COUNT = 7;
+
+function buildQuotasMap(quotasArray) {
+  const quotasMap = new Map();
+  if (quotasArray && Array.isArray(quotasArray)) {
+    quotasArray.forEach((quota) => {
+      if (quota?.label && quota?.weeklyHours) {
+        quotasMap.set(quota.label, quota.weeklyHours);
+      }
+    });
+  }
+  return quotasMap;
+}
+
+function buildProjectIdToNicknameMap(yearNumber) {
+  const { shortlist } = loadStagingState(yearNumber);
+  const map = new Map();
+  if (!Array.isArray(shortlist)) return map;
+  shortlist.forEach((item) => {
+    if (!item?.id) return;
+    const nickname = (item.projectNickname || '').trim();
+    const name = (item.projectName || '').trim();
+    map.set(item.id, nickname || name);
+  });
+  return map;
+}
+
+function estimateDurationFromRowIds(startRowId, endRowId, incrementMinutes) {
+  if (!startRowId || !incrementMinutes) return null;
+  const end = endRowId || startRowId;
+  const rowHour = (id) => {
+    if (!id) return null;
+    if (id === 'sleep-start') return -1;
+    if (id.startsWith('hour-')) {
+      const h = parseInt(id.slice(5), 10);
+      return Number.isFinite(h) ? h : null;
+    }
+    return null;
+  };
+  const isHourRow = (id) => id === 'sleep-start' || (id && id.startsWith('hour-'));
+  const isIncrRow = (id) => id === 'sleep-end' || (id && id.startsWith('trailing-'));
+  if (startRowId === end) return isHourRow(startRowId) ? 60 : incrementMinutes;
+  const startH = rowHour(startRowId);
+  const endH = rowHour(end);
+  if (startH !== null && endH !== null) {
+    const span = ((endH - startH + 24) % 24) + 1;
+    return span * 60;
+  }
+  if (startH !== null && isIncrRow(end)) return 60 + incrementMinutes;
+  if (isIncrRow(startRowId)) {
+    if (isIncrRow(end)) {
+      const si = parseInt(startRowId.startsWith('trailing-') ? startRowId.slice(9) : '0', 10);
+      const ei = parseInt(end.startsWith('trailing-') ? end.slice(9) : '0', 10);
+      const rows = Math.abs(ei - si) + 1;
+      return rows * incrementMinutes;
+    }
+    return incrementMinutes;
+  }
+  return incrementMinutes;
+}
+
+function formatChipDuration(minutes) {
+  if (!Number.isFinite(minutes) || minutes <= 0) return null;
+  const hours = Math.floor(minutes / 60);
+  const remaining = minutes % 60;
+  if (hours > 0 && remaining > 0) return `${hours} hour${hours !== 1 ? 's' : ''} ${remaining} minutes`;
+  if (hours > 0) return `${hours} hour${hours !== 1 ? 's' : ''}`;
+  return `${remaining} minutes`;
+}
+
+function loadEnrichedChips(yearNumber) {
+  const { projectChips, chipTimeOverrides } = loadSentChipsSnapshot(yearNumber);
+  const idToNicknameMap = buildProjectIdToNicknameMap(yearNumber);
+  const { incrementMinutes } = loadTacticsSettings();
+  if (!Array.isArray(projectChips)) return [];
+  return projectChips
+    .filter((chip) => {
+      if (!chip) return false;
+      if (SYSTEM_PROJECTS.has(chip.projectId)) return false;
+      if (chip.columnIndex >= DAY_COLUMN_COUNT) return false;
+      if (!chip.dayName) return false;
+      return true;
+    })
+    .map((chip) => {
+      const projectNickname = idToNicknameMap.get(chip.projectId) || null;
+      const storedMinutes = (chipTimeOverrides?.[chip.id] ?? chip.durationMinutes) ?? null;
+      const durationMinutes = storedMinutes ?? estimateDurationFromRowIds(chip.startRowId, chip.endRowId, incrementMinutes);
+      const formattedDuration = durationMinutes != null ? formatChipDuration(durationMinutes) : null;
+      return { ...chip, projectNickname, durationMinutes, formattedDuration };
+    });
+}
+
+function loadMetricsData(yearNumber) {
+  const metrics = loadSentMetricsSnapshot(yearNumber);
+  return {
+    dailyBounds: metrics?.dailyBounds || [],
+    projectWeeklyQuotas: buildQuotasMap(metrics?.projectWeeklyQuotas),
+  };
+}
+
 /**
  * Google Sheets-like Spreadsheet using TanStack Table v8
  *
@@ -103,6 +206,12 @@ export default function ProjectTimePlannerV2() {
 
   // Year context for year-based storage
   const { currentYear, isCurrentYearArchived, isCurrentYearDraft, activeYear, draftYear, switchToActiveYear, refreshMetadata } = useYear();
+
+  // True once "Send to System" has been triggered — lets draft year bypass
+  // the "no imported tasks" guard so chip rows and project headers appear.
+  const [sentToSystem, setSentToSystem] = useState(() => {
+    return !!localStorage.getItem(TACTICS_SEND_TO_SYSTEM_TS_KEY);
+  });
 
   // Archive modal state
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
@@ -267,11 +376,17 @@ export default function ProjectTimePlannerV2() {
     setData((prev) => placeImportedTasks(prev, imported));
   }, [activeYear, projects, projectSubprojectsMap, setData]);
 
-  // Load daily bounds and project weekly quotas from Tactics page
-  const { dailyBounds, projectWeeklyQuotas } = useTacticsMetrics();
-
-  // Load scheduled chips from Tactics page
-  const { chips: tacticsChips } = useTacticsChips();
+  // Load tactics data on mount and year change — live updates only via "Send to System"
+  const [{ dailyBounds, projectWeeklyQuotas }, setMetricsData] = useState(() => loadMetricsData(currentYear));
+  const [tacticsChips, setTacticsChips] = useState(() => loadEnrichedChips(currentYear));
+  const prevYearRef = useRef(currentYear);
+  useEffect(() => {
+    if (currentYear !== prevYearRef.current) {
+      prevYearRef.current = currentYear;
+      setMetricsData(loadMetricsData(currentYear));
+      setTacticsChips(loadEnrichedChips(currentYear));
+    }
+  }, [currentYear]);
 
   // Command pattern for undo/redo
   const { undoStack, redoStack, executeCommand, undo, redo } = useCommandPattern();
@@ -449,7 +564,7 @@ export default function ProjectTimePlannerV2() {
 
   // Map daily bounds to timeline dates
   // Draft year with no imported tasks: show 0.00 instead of Plan page values
-  const draftHasNoImportedTasks = isCurrentYearDraft && !data.some(r => r._rowType === 'projectTask' && !r._chipId);
+  const draftHasNoImportedTasks = isCurrentYearDraft && !sentToSystem && !data.some(r => r._rowType === 'projectTask' && !r._chipId);
   const { dailyMinValues, dailyMaxValues } = useMemo(() => {
     return mapDailyBoundsToTimeline(draftHasNoImportedTasks ? null : dailyBounds, dates);
   }, [dailyBounds, dates, draftHasNoImportedTasks]);
@@ -704,8 +819,8 @@ export default function ProjectTimePlannerV2() {
   useEffect(() => {
     // Early exit conditions - don't modify state if not needed
     if (!projects) return;
-    // Draft year starts blank — don't inject project headers until the user imports tasks
-    if (isCurrentYearDraft && !latestDataRef.current.some(r => r._rowType === 'projectTask' && !r._chipId)) return;
+    // Draft year starts blank — don't inject project headers until the user imports tasks or presses "Send to System"
+    if (isCurrentYearDraft && !sentToSystem && !latestDataRef.current.some(r => r._rowType === 'projectTask' && !r._chipId)) return;
 
     // Use a flag to prevent updating during mount
     let isMounted = true;
@@ -856,7 +971,7 @@ export default function ProjectTimePlannerV2() {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [projects, projectNamesMap, projectTaglinesMap, totalDays]);
+  }, [projects, projectNamesMap, projectTaglinesMap, totalDays, isCurrentYearDraft, sentToSystem]);
 
   // Repair rows whose parentGroupId points to a groupId that no longer exists in data.
   // This happens when a subprojectHeader is deleted — its child task rows keep a stale
@@ -883,8 +998,8 @@ export default function ProjectTimePlannerV2() {
   // Create subprojectHeader rows from Tactics chips
   useEffect(() => {
     if (!tacticsChips || tacticsChips.length === 0) return;
-    // Draft year starts blank — don't inject chip rows until the user imports tasks
-    if (isCurrentYearDraft && !latestDataRef.current.some(r => r._rowType === 'projectTask' && !r._chipId)) return;
+    // Draft year starts blank — don't inject chip rows until the user imports tasks or presses "Send to System"
+    if (isCurrentYearDraft && !sentToSystem && !latestDataRef.current.some(r => r._rowType === 'projectTask' && !r._chipId)) return;
 
     let isMounted = true;
     const timeoutId = setTimeout(() => {
@@ -917,9 +1032,11 @@ export default function ProjectTimePlannerV2() {
         let changed = false;
         const filteredData = prevData
           .filter(row => {
-            if (row._rowType === 'subprojectHeader' && row._chipId && !currentChipIds.has(row._chipId)) {
-              changed = true;
-              return false;
+            if (row._chipId && !currentChipIds.has(row._chipId)) {
+              if (row._rowType === 'subprojectHeader' || row._rowType === 'projectTask') {
+                changed = true;
+                return false;
+              }
             }
             return true;
           })
@@ -1112,7 +1229,7 @@ export default function ProjectTimePlannerV2() {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [tacticsChips, totalDays]);
+  }, [tacticsChips, totalDays, isCurrentYearDraft, sentToSystem]);
 
   // Track the last send-to-system timestamp we've already acted on
   const lastResetTsRef = useRef(null);
@@ -1204,26 +1321,33 @@ export default function ProjectTimePlannerV2() {
     });
   }, [totalDays]);
 
-  // On mount (or when chips load), check if "Send to System" was pressed since last reset
+  // On mount, check if "Send to System" was pressed since last reset
   useEffect(() => {
     if (!tacticsChips || tacticsChips.length === 0) return;
     const ts = localStorage.getItem(TACTICS_SEND_TO_SYSTEM_TS_KEY);
     if (ts && ts !== lastResetTsRef.current) {
       lastResetTsRef.current = ts;
+      setSentToSystem(true);
       resetSubprojectLabels(tacticsChips);
     }
-  }, [tacticsChips, resetSubprojectLabels]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Also handle the live event when System is already mounted and Tactics is open
+  // Handle the live "Send to System" event — reload all tactics data from storage
   useEffect(() => {
     const handler = () => {
       const ts = localStorage.getItem(TACTICS_SEND_TO_SYSTEM_TS_KEY);
       lastResetTsRef.current = ts;
-      resetSubprojectLabels(tacticsChips);
+      setSentToSystem(true);
+      // Reload tactics data from storage so System reflects what was just sent
+      const freshChips = loadEnrichedChips(currentYear);
+      setTacticsChips(freshChips);
+      setMetricsData(loadMetricsData(currentYear));
+      resetSubprojectLabels(freshChips);
     };
     window.addEventListener(TACTICS_SEND_TO_SYSTEM_EVENT, handler);
     return () => window.removeEventListener(TACTICS_SEND_TO_SYSTEM_EVENT, handler);
-  }, [tacticsChips, resetSubprojectLabels]);
+  }, [currentYear, resetSubprojectLabels]);
 
   // Calculate month spans for header
   const monthSpans = useMemo(() => {
