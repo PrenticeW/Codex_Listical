@@ -213,8 +213,10 @@ export default function ProjectRow({
                   className="p-0"
                   onMouseDown={(e) => {
                     if (isEditing) return;
-                    if ((isHeader || isSubprojectHeader) && handleRowNumberClick) {
-                      handleRowNumberClick(e, rowId);
+                    // Don't select the row when clicking the collapse/expand chevron
+                    if (e.target.closest('[data-group-toggle]')) return;
+                    if ((isHeader || isSubprojectHeader) && handleCellMouseDown) {
+                      handleCellMouseDown(e, rowId, editableColumnId);
                     }
                   }}
                   onMouseEnter={(e) => {
@@ -253,6 +255,7 @@ export default function ProjectRow({
                   >
                     {isHeader && groupId && (
                       <span
+                        data-group-toggle
                         style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -264,6 +267,7 @@ export default function ProjectRow({
                     )}
                     {isSubprojectHeader && groupId && (
                       <span
+                        data-group-toggle
                         style={{
                           position: 'absolute',
                           right: chevronRight + 4,
@@ -453,8 +457,14 @@ export default function ProjectRow({
                 className="p-0"
                 onMouseDown={(e) => {
                   if (isEditing) return;
-                  if (handleRowNumberClick) {
-                    handleRowNumberClick(e, rowId);
+                  if (handleCellMouseDown) {
+                    handleCellMouseDown(e, rowId, editableColumnId);
+                  }
+                }}
+                onMouseEnter={(e) => {
+                  if (isEditing) return;
+                  if (handleCellMouseEnter) {
+                    handleCellMouseEnter(e, rowId, editableColumnId);
                   }
                 }}
                 onDoubleClick={(e) => {
@@ -559,7 +569,10 @@ export default function ProjectRow({
               }}
               className="p-0"
               onMouseDown={(e) => {
-                if (handleRowNumberClick) handleRowNumberClick(e, rowId);
+                if (handleCellMouseDown) handleCellMouseDown(e, rowId, columnId);
+              }}
+              onMouseEnter={(e) => {
+                if (handleCellMouseEnter) handleCellMouseEnter(e, rowId, columnId);
               }}
             >
               <div
