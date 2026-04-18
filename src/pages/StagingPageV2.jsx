@@ -7,6 +7,7 @@ import { useYear } from '../contexts/YearContext';
 import { useAuth } from '../contexts/AuthContext';
 import NavigationBar from '../components/planner/NavigationBar';
 import { undoDraftYear } from '../utils/planner/undoDraftYear';
+import { revertArchive } from '../utils/planner/revertArchive';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { ArchiveYearModal } from '../components/ArchiveYearModal';
 import YearSelector from '../components/YearSelector';
@@ -97,12 +98,20 @@ const calculateTimeTotals = (planEntries) => {
  */
 export default function StagingPageV2() {
   const navigate = useNavigate();
-  const { currentYear, draftYear, activeYear, isCurrentYearArchived, refreshMetadata, switchToYear } = useYear();
+  const { currentYear, draftYear, activeYear, allYears, isCurrentYearArchived, refreshMetadata, switchToYear } = useYear();
 
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
   const handleUndoDraft = useCallback(() => {
     const result = undoDraftYear();
+    if (result.success) {
+      refreshMetadata();
+    }
+  }, [refreshMetadata]);
+
+  // Dev revert archive handler — remove before launch
+  const handleRevertArchive = useCallback(() => {
+    const result = revertArchive();
     if (result.success) {
       refreshMetadata();
     }
@@ -568,6 +577,7 @@ export default function StagingPageV2() {
               />
             }
             onUndoDraft={draftYear ? handleUndoDraft : null}
+            onRevertArchive={!draftYear && allYears.some(y => y.status === 'archived') ? handleRevertArchive : null}
           />
           <div
             className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm mt-2"

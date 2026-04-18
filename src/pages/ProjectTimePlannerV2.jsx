@@ -18,6 +18,7 @@ import { loadSentMetricsSnapshot } from '../lib/tacticsMetricsStorage';
 import { loadStagingState } from '../lib/stagingStorage';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { undoDraftYear } from '../utils/planner/undoDraftYear';
+import { revertArchive } from '../utils/planner/revertArchive';
 import { importTasksForDraftYear } from '../utils/planner/importTasksFromYear';
 import { placeImportedTasks } from '../utils/planner/placeImportedTasks';
 import usePlannerFilters from '../hooks/planner/usePlannerFilters';
@@ -205,7 +206,7 @@ export default function ProjectTimePlannerV2() {
   const currentPath = location.pathname;
 
   // Year context for year-based storage
-  const { currentYear, isCurrentYearArchived, isCurrentYearDraft, activeYear, draftYear, switchToActiveYear, refreshMetadata } = useYear();
+  const { currentYear, isCurrentYearArchived, isCurrentYearDraft, activeYear, draftYear, allYears, switchToActiveYear, refreshMetadata } = useYear();
 
   // True once "Send to System" has been triggered — lets draft year bypass
   // the "no imported tasks" guard so chip rows and project headers appear.
@@ -232,6 +233,14 @@ export default function ProjectTimePlannerV2() {
   // Dev undo handler — remove before launch
   const handleUndoDraft = useCallback(() => {
     const result = undoDraftYear();
+    if (result.success) {
+      refreshMetadata();
+    }
+  }, [refreshMetadata]);
+
+  // Dev revert archive handler — remove before launch
+  const handleRevertArchive = useCallback(() => {
+    const result = revertArchive();
     if (result.success) {
       refreshMetadata();
     }
@@ -2365,6 +2374,7 @@ export default function ProjectTimePlannerV2() {
           />
         }
         onUndoDraft={draftYear ? handleUndoDraft : null}
+        onRevertArchive={!draftYear && allYears.some(y => y.status === 'archived') ? handleRevertArchive : null}
       />
       </div>
 

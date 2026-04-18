@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Settings, RotateCcw } from 'lucide-react';
+import { LogOut, Settings, RotateCcw, Undo2 } from 'lucide-react';
 import YearSelector from '../YearSelector';
 import { useAuth } from '../../contexts/AuthContext';
 import { useYear } from '../../contexts/YearContext';
@@ -25,6 +25,7 @@ export default function NavigationBar({
   yearSelector = null,
   actionButton = null,
   onUndoDraft = null,
+  onRevertArchive = null,
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -182,6 +183,19 @@ export default function NavigationBar({
           >
             <RotateCcw className="w-3.5 h-3.5" />
             Undo Draft
+          </button>
+        )}
+
+        {/* Dev revert archive button — remove before launch */}
+        {onRevertArchive && (
+          <button
+            type="button"
+            onClick={onRevertArchive}
+            className="px-3 py-2 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-300 rounded-lg hover:bg-amber-100 transition-all duration-200 flex items-center gap-1.5"
+            title="Revert last archive — demote active back to draft, un-archive previous year (dev only)"
+          >
+            <Undo2 className="w-3.5 h-3.5" />
+            Revert Archive
           </button>
         )}
 

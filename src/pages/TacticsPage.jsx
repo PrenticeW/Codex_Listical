@@ -12,6 +12,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useYear } from '../contexts/YearContext';
 import NavigationBar from '../components/planner/NavigationBar';
 import { undoDraftYear } from '../utils/planner/undoDraftYear';
+import { revertArchive } from '../utils/planner/revertArchive';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { ArchiveYearModal } from '../components/ArchiveYearModal';
 import YearSelector from '../components/YearSelector';
@@ -312,12 +313,20 @@ export default function TacticsPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
-  const { currentYear, draftYear, activeYear, isCurrentYearArchived, refreshMetadata } = useYear();
+  const { currentYear, draftYear, activeYear, allYears, isCurrentYearArchived, refreshMetadata } = useYear();
 
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
   const handleUndoDraft = useCallback(() => {
     const result = undoDraftYear();
+    if (result.success) {
+      refreshMetadata();
+    }
+  }, [refreshMetadata]);
+
+  // Dev revert archive handler — remove before launch
+  const handleRevertArchive = useCallback(() => {
+    const result = revertArchive();
     if (result.success) {
       refreshMetadata();
     }
@@ -3891,6 +3900,7 @@ export default function TacticsPage() {
             </button>
           }
           onUndoDraft={draftYear ? handleUndoDraft : null}
+          onRevertArchive={!draftYear && allYears.some(y => y.status === 'archived') ? handleRevertArchive : null}
         />
         </div>
         <div className="rounded border border-[#ced3d0] bg-white shadow-sm mx-4 mb-4">
