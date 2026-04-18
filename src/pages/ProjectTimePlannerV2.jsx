@@ -448,9 +448,11 @@ export default function ProjectTimePlannerV2() {
   }, [dates, totalDays]);
 
   // Map daily bounds to timeline dates
+  // Draft year with no imported tasks: show 0.00 instead of Plan page values
+  const draftHasNoImportedTasks = isCurrentYearDraft && !data.some(r => r._rowType === 'projectTask' && !r._chipId);
   const { dailyMinValues, dailyMaxValues } = useMemo(() => {
-    return mapDailyBoundsToTimeline(dailyBounds, dates);
-  }, [dailyBounds, dates]);
+    return mapDailyBoundsToTimeline(draftHasNoImportedTasks ? null : dailyBounds, dates);
+  }, [dailyBounds, dates, draftHasNoImportedTasks]);
 
   // Calculate project totals (sum of Scheduled and Done task timeValues per project)
   const projectTotals = useProjectTotals(computedData);
@@ -702,6 +704,8 @@ export default function ProjectTimePlannerV2() {
   useEffect(() => {
     // Early exit conditions - don't modify state if not needed
     if (!projects) return;
+    // Draft year starts blank — don't inject project headers until the user imports tasks
+    if (isCurrentYearDraft && !latestDataRef.current.some(r => r._rowType === 'projectTask' && !r._chipId)) return;
 
     // Use a flag to prevent updating during mount
     let isMounted = true;
@@ -879,6 +883,8 @@ export default function ProjectTimePlannerV2() {
   // Create subprojectHeader rows from Tactics chips
   useEffect(() => {
     if (!tacticsChips || tacticsChips.length === 0) return;
+    // Draft year starts blank — don't inject chip rows until the user imports tasks
+    if (isCurrentYearDraft && !latestDataRef.current.some(r => r._rowType === 'projectTask' && !r._chipId)) return;
 
     let isMounted = true;
     const timeoutId = setTimeout(() => {
