@@ -58,6 +58,9 @@ function getDraftYearStorageKeys(yearNumber) {
     // Tactics (Plan page)
     `tactics-year-${yearNumber}-chips-state`,
     `tactics-column-widths-${yearNumber}`,
+    // Tactics "sent to system" snapshot (user-scoped via storageService)
+    `tactics-year-${yearNumber}-sent-chips`,
+    // Note: send-to-system-ts is written with raw localStorage, removed separately below
     // Tactics metrics
     `tactics-metrics-year-${yearNumber}`,
   ];
@@ -81,7 +84,7 @@ export function undoDraftYear() {
       return { success: false, error: 'No active year found — cannot switch back' };
     }
 
-    // Delete all draft year storage keys
+    // Delete all draft year storage keys (user-scoped via storageService)
     const keys = getDraftYearStorageKeys(draft.yearNumber);
     keys.forEach((key) => {
       try {
@@ -90,6 +93,14 @@ export function undoDraftYear() {
         // Best effort — continue deleting remaining keys
       }
     });
+
+    // The send-to-system timestamp is written with raw localStorage (no user
+    // scope), so storage.removeItem won't reach it — remove it directly.
+    try {
+      localStorage.removeItem(`tactics-year-${draft.yearNumber}-send-to-system-ts`);
+    } catch {
+      // Best effort
+    }
 
     // Remove draft year from metadata
     deleteDraftYearRecord(draft.yearNumber);

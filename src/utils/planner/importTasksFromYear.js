@@ -18,7 +18,10 @@ import { isSpecialRow, isProjectStructureRow } from './rowTypeChecks';
 export const EXCLUDED_STATUSES = new Set(['Done', 'Abandoned']);
 
 /**
- * Reset a task for the new year: clear day allocations and reset status.
+ * Reset a task for the new year: clear day allocations, reset status,
+ * strip chip metadata (chip IDs from the source year are meaningless in
+ * the draft year and would cause the chip-sync effect to delete the row),
+ * and assign a fresh id to avoid collisions.
  */
 export function resetTaskForNewYear(task) {
   const reset = { ...task, status: 'Not Scheduled' };
@@ -27,6 +30,19 @@ export function resetTaskForNewYear(task) {
       reset[key] = '';
     }
   });
+
+  // Strip chip-related metadata — the source year's chip IDs don't exist in
+  // the draft year, so keeping them causes the chip-sync effect to remove
+  // the imported row on the next mount.
+  delete reset._chipId;
+  delete reset._chipLabel;
+  if (reset._rowType === 'projectTask') {
+    delete reset._rowType;
+  }
+
+  // Fresh id so the imported row doesn't collide with an existing row
+  reset.id = `imported-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
   return reset;
 }
 
