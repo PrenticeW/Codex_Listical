@@ -141,6 +141,33 @@ export default function StagingPageV2() {
 
   const isDraftYearView = Boolean(draftYear && currentYear === draftYear.yearNumber);
 
+  // Archive project and clean up associated chips + task rows
+  const handleArchiveAndCleanup = useCallback((id, status) => {
+    handleArchiveWithStatus(id, status);
+
+    // Remove chips for the archived project
+    const chipState = loadTacticsChipsState(currentYear);
+    const projectChips = Array.isArray(chipState.projectChips) ? chipState.projectChips : [];
+    const filteredChips = projectChips.filter((chip) => chip.projectId !== id);
+    if (filteredChips.length !== projectChips.length) {
+      const remainingIds = new Set(filteredChips.map((chip) => chip.id));
+      const overrides = chipState.chipTimeOverrides && typeof chipState.chipTimeOverrides === 'object'
+        ? chipState.chipTimeOverrides
+        : null;
+      const filteredOverrides = overrides
+        ? Object.fromEntries(Object.entries(overrides).filter(([chipId]) => remainingIds.has(chipId)))
+        : overrides;
+      saveTacticsChipsState(
+        {
+          projectChips: filteredChips,
+          customProjects: chipState.customProjects,
+          chipTimeOverrides: filteredOverrides,
+        },
+        currentYear
+      );
+    }
+  }, [handleArchiveWithStatus, currentYear]);
+
   // Plan modal state
   const { planModal, openPlanModal, closePlanModal, updatePlanModal } = usePlanModal();
 
@@ -612,7 +639,7 @@ export default function StagingPageV2() {
                                   type="button"
                                   className="rounded-full p-1 text-slate-700 hover:text-slate-900 focus:outline-none"
                                   style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: 'none' }}
-                                  onClick={() => handleArchiveWithStatus(item.id, 'completed')}
+                                  onClick={() => handleArchiveAndCleanup(item.id, 'completed')}
                                   aria-label="Mark project completed"
                                   title="Mark completed"
                                 >
@@ -622,7 +649,7 @@ export default function StagingPageV2() {
                                   type="button"
                                   className="rounded-full p-1 text-slate-700 hover:text-slate-900 focus:outline-none"
                                   style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: 'none' }}
-                                  onClick={() => handleArchiveWithStatus(item.id, 'archived')}
+                                  onClick={() => handleArchiveAndCleanup(item.id, 'archived')}
                                   aria-label="Archive project"
                                   title="Archive"
                                 >
