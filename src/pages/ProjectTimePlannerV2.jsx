@@ -1443,6 +1443,13 @@ export default function ProjectTimePlannerV2() {
 
   // Copy/Paste functionality
   const handleCopy = useCallback((e) => {
+    // Don't intercept copy while editing a cell — let the native input handle it
+    if (editingCell) return;
+
+    // Don't intercept copy if focus is inside an input/textarea (e.g. a modal)
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
     e.preventDefault();
 
     const tsvData = handleCopyOperation({
@@ -1460,7 +1467,15 @@ export default function ProjectTimePlannerV2() {
   }, [selectedCells, selectedRows, data, editingCell, allColumnIds]);
 
   const handlePaste = useCallback((e) => {
-    e.preventDefault();
+    // Don't intercept paste while editing a cell — let the native input handle it
+    if (editingCell) return;
+
+    // Don't intercept paste if focus is inside an input/textarea (e.g. a modal)
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    // Nothing selected — let the browser handle it normally
+    if (selectedCells.size === 0 && selectedRows.size === 0) return;
 
     // Get clipboard data
     const pastedText = e.clipboardData.getData('text');
@@ -1477,6 +1492,7 @@ export default function ProjectTimePlannerV2() {
     });
 
     if (command) {
+      e.preventDefault();
       executeCommand(command);
     }
   }, [selectedCells, selectedRows, data, editingCell, executeCommand, allColumnIds]);
