@@ -76,6 +76,7 @@ const TaskRow = React.memo(function TaskRow({
   // Higher z-index for pinned row number cells
   const rowNumZIndex = isPinnedRow ? 15 : 10;
 
+  const isRowEditing = editingCell?.rowId === rowId;
   const style = {
     display: 'flex',
     position: 'absolute',
@@ -85,6 +86,7 @@ const TaskRow = React.memo(function TaskRow({
     width: '100%',
     opacity: isDragging ? 0.5 : 1,
     gap: 0,
+    zIndex: isRowEditing ? 10 : undefined,
   };
 
   return (
@@ -202,7 +204,7 @@ const TaskRow = React.memo(function TaskRow({
                 msUserSelect: 'none',
                 boxSizing: 'border-box',
                 position: 'relative',
-                overflow: 'hidden',
+                overflow: isEditing ? 'visible' : 'hidden',
               }}
               className="p-0"
               onDragOver={(e) => handleCellDragOver?.(e, rowId, columnId)}

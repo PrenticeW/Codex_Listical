@@ -50,8 +50,9 @@ function EditableCell({
     if (e.key === 'Escape') {
       // Don't save on blur when escape is pressed
       shouldSaveRef.current = false;
-    } else if (e.key === 'Enter') {
-      // Mark that we should save (in case blur happens after Enter)
+    } else if (e.key === 'Enter' && !e.shiftKey) {
+      // Enter saves; prevent newline insertion in textarea
+      e.preventDefault();
       shouldSaveRef.current = true;
     }
 
@@ -59,16 +60,38 @@ function EditableCell({
     onKeyDown(e, localValue);
   };
 
+  const adjustHeight = (el) => {
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = `${Math.max(el.parentElement?.offsetHeight || 0, el.scrollHeight)}px`;
+    }
+  };
+
+  // Adjust height when value changes
+  useEffect(() => {
+    adjustHeight(inputRef.current);
+  }, [localValue]);
+
   return (
-    <input
-      ref={inputRef}
-      type="text"
+    <textarea
+      ref={(el) => {
+        inputRef.current = el;
+        adjustHeight(el);
+      }}
       value={localValue}
       onChange={(e) => setLocalValue(e.target.value)}
       onBlur={handleBlur}
       onKeyDown={handleKeyDown}
-      className="w-full h-full px-1 border-2 border-blue-500 focus:outline-none"
-      style={{ fontSize: `${cellFontSize}px` }}
+      className="w-full px-1 border-2 border-blue-500 focus:outline-none resize-none bg-white overflow-hidden"
+      style={{
+        fontSize: `${cellFontSize}px`,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        zIndex: 10,
+        minHeight: '100%',
+        boxSizing: 'border-box',
+      }}
     />
   );
 }
