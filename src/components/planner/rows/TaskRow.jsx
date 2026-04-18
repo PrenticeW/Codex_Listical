@@ -202,6 +202,7 @@ const TaskRow = React.memo(function TaskRow({
                 msUserSelect: 'none',
                 boxSizing: 'border-box',
                 position: 'relative',
+                overflow: 'hidden',
               }}
               className="p-0"
               onDragOver={(e) => handleCellDragOver?.(e, rowId, columnId)}
@@ -548,7 +549,7 @@ const TaskRow = React.memo(function TaskRow({
                       {value || '\u00A0'}
                     </div>
                   ) : (
-                    <div className="w-full" style={{ paddingLeft: '8px', paddingRight: '3px' }}>
+                    <div className="w-full" style={{ paddingLeft: '8px', paddingRight: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {value || '\u00A0'}
                     </div>
                   )

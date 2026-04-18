@@ -443,6 +443,15 @@ export const handlePasteOperation = (params: {
 
   if (anchorColumnId === 'rowNum') return null; // Don't paste into row number column
 
+  // SINGLE CELL SELECTED: Always paste as a single value, collapsing newlines to spaces
+  if (selectedCells.size === 1) {
+    const flattenedText = pastedText.replace(/[\r\n]+/g, ' ').trim();
+    const copiedFromTimeValue = lastCopiedColumns.length === 1 &&
+                                 lastCopiedColumns[0] === 'timeValue';
+
+    return createCellFillCommand({ pastedText: flattenedText, selectedCells, data, copiedFromTimeValue, setData });
+  }
+
   // FILL MODE: Copy one value to all selected cells
   if (isSingleCell && selectedCells.size > 1) {
     // Check if the copied data came from timeValue column
