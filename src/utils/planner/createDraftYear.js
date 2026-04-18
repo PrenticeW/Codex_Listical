@@ -50,6 +50,7 @@ import {
   loadTacticsColumnWidths,
   saveTacticsColumnWidths,
 } from '../../lib/tacticsStorage';
+import { isAnyArchiveRow, isArchivedProjectStructure, isProjectTask } from './rowTypeChecks';
 
 const DEFAULT_PROJECT_ID = 'project-1';
 
@@ -117,8 +118,19 @@ export async function createDraftYearFromActive(activeYearNumber) {
     }
     saveVisibleDayColumns(freshVisibleDayColumns, DEFAULT_PROJECT_ID, draftYearNumber);
 
-    // Empty task rows (tasks are imported separately by the user)
-    saveTaskRows([], DEFAULT_PROJECT_ID, draftYearNumber);
+    // Copy all rows from active year, excluding archive section, with day allocations cleared on tasks
+    const sourceRows = readTaskRows(DEFAULT_PROJECT_ID, activeYearNumber);
+    const draftRows = sourceRows
+      .filter((row) => !row._isArchiveRow && !isAnyArchiveRow(row) && !isArchivedProjectStructure(row) && !row._isArchivedTask)
+      .map((row) => {
+        if (!isProjectTask(row)) return row;
+        const reset = { ...row, status: 'Not Scheduled' };
+        Object.keys(reset).forEach((key) => {
+          if (key.startsWith('day-')) reset[key] = '';
+        });
+        return reset;
+      });
+    saveTaskRows(draftRows, DEFAULT_PROJECT_ID, draftYearNumber);
 
     // --- Copy Goal page (projects carry forward with full identity) ---
     saveStagingState(stagingState, draftYearNumber);
