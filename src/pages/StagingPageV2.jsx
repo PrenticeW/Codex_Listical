@@ -27,6 +27,7 @@ import {
 import ContextMenu from '../components/staging/ContextMenu';
 import TableRow from '../components/staging/TableRow';
 import ProjectEditModal from '../components/staging/ProjectEditModal';
+import InlineEditableText from '../components/staging/InlineEditableText';
 import {
   clonePlanTableEntries,
   cloneStagingState,
@@ -456,6 +457,31 @@ export default function StagingPageV2() {
     }
   }, [selectedRows, clearSelection]);
 
+  // Inline-edit a single project metadata field (name or tagline)
+  const handleInlineProjectUpdate = useCallback(
+    (itemId, field, newValue) => {
+      let capturedState = null;
+      const command = {
+        execute: () => {
+          setState((prev) => {
+            if (capturedState === null) capturedState = cloneStagingState(prev);
+            return {
+              ...prev,
+              shortlist: prev.shortlist.map((item) =>
+                item.id === itemId ? { ...item, [field]: newValue } : item
+              ),
+            };
+          });
+        },
+        undo: () => {
+          if (capturedState) setState(capturedState);
+        },
+      };
+      executeCommand(command);
+    },
+    [setState, executeCommand]
+  );
+
   // Wait for auth to complete before rendering content that depends on user-scoped data
   if (isAuthLoading) {
     return (
@@ -612,7 +638,22 @@ export default function StagingPageV2() {
                           }}
                         >
                           <div className="w-full flex items-center gap-2 font-semibold min-w-0 overflow-hidden" style={{ maskImage: 'linear-gradient(to right, black 97%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to right, black 97%, transparent 100%)' }}>
-                            <span className="block truncate">{item.projectName || item.text}{item.projectTagline ? <><span className="font-semibold">:</span><span className="font-normal opacity-80"> {item.projectTagline}</span></> : null}</span>
+                            <span className="flex items-baseline gap-0 min-w-0">
+                              <InlineEditableText
+                                value={item.projectName || item.text}
+                                onSave={(v) => handleInlineProjectUpdate(item.id, 'projectName', v)}
+                                placeholder="Project name"
+                                style={{ fontWeight: 600, flexShrink: 0 }}
+                              />
+                              <span className="mx-1.5 opacity-50 shrink-0 select-none" style={{ fontWeight: 400 }}>·</span>
+                              <InlineEditableText
+                                value={item.projectTagline ?? ''}
+                                onSave={(v) => handleInlineProjectUpdate(item.id, 'projectTagline', v)}
+                                placeholder="Add tagline"
+                                className="truncate"
+                                style={{ fontWeight: 400, opacity: item.projectTagline ? 0.85 : 0.5, minWidth: 0 }}
+                              />
+                            </span>
                           </div>
                           <div></div>
                           <div style={{ width: '140px', minWidth: '140px' }}></div>
