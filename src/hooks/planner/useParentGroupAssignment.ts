@@ -65,8 +65,8 @@ export function assignParentGroupIds(data: PlannerRow[]): PlannerRow[] {
       return row;
     }
 
-    // Tasks with an archiveWeekLabel are archived tasks — leave their parentGroupId intact
-    if (row.archiveWeekLabel) {
+    // Archived tasks — leave their parentGroupId intact
+    if (row.archiveWeekLabel || row._isArchivedTask) {
       return row;
     }
 

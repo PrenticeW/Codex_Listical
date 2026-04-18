@@ -53,6 +53,7 @@ export interface PlannerRow {
   // Archive metadata
   archiveWeekLabel?: string;
   archiveTotalHours?: number;
+  _isArchivedTask?: boolean;
 
   // Month/week span metadata
   _monthSpans?: Array<{ startDay: number; span: number; label: string }>;

@@ -318,6 +318,41 @@ export const insertArchivedProjects = (data, archivedProjects, archiveWeekId) =>
 export const moveTasksToArchive = (data, tasksToArchive, archiveWeekId) => {
   let newData = [...data];
 
+  // Build a lookup from groupId → projectNickname using project headers in data
+  // This lets us resolve a task's project even when task.project is empty,
+  // by walking from the task's parentGroupId up to its owning project header.
+  const groupIdToProjectNickname = {};
+  const groupIdToParentGroupId = {};
+  newData.forEach(row => {
+    if (row._rowType === 'projectHeader' && row.groupId && row.projectNickname) {
+      groupIdToProjectNickname[row.groupId] = row.projectNickname;
+    }
+    // Track subproject/section parentGroupId so we can walk up to the project
+    if (row.groupId && row.parentGroupId) {
+      groupIdToParentGroupId[row.groupId] = row.parentGroupId;
+    }
+  });
+
+  // Resolve a task's project nickname from its parentGroupId chain
+  const resolveProjectKey = (task) => {
+    // Prefer explicit fields first
+    if (task.projectNickname) return task.projectNickname;
+    if (task.project) return task.project;
+
+    // Walk up the parentGroupId chain to find the owning project header
+    let groupId = task.parentGroupId;
+    const visited = new Set();
+    while (groupId && !visited.has(groupId)) {
+      visited.add(groupId);
+      if (groupIdToProjectNickname[groupId]) {
+        return groupIdToProjectNickname[groupId];
+      }
+      groupId = groupIdToParentGroupId[groupId];
+    }
+
+    return '-';
+  };
+
   // Remove tasks from their current positions
   tasksToArchive.forEach(task => {
     const index = newData.findIndex(row => row.id === task.id);
@@ -330,7 +365,7 @@ export const moveTasksToArchive = (data, tasksToArchive, archiveWeekId) => {
   const tasksByProject = {};
 
   tasksToArchive.forEach(task => {
-    const projectKey = task.project || '-';
+    const projectKey = resolveProjectKey(task);
     const targetSection = task.status === 'Done' ? 'general' : 'unscheduled';
 
     if (!tasksByProject[projectKey]) {
@@ -375,6 +410,7 @@ export const moveTasksToArchive = (data, tasksToArchive, archiveWeekId) => {
       const tasksWithCorrectParent = sections.general.map(task => ({
         ...task,
         parentGroupId: archivedProjectGroupId, // Point to archived project, not archive week
+        _isArchivedTask: true,
       }));
       newData.splice(generalSectionIndex + 1, 0, ...tasksWithCorrectParent);
     }
@@ -390,6 +426,7 @@ export const moveTasksToArchive = (data, tasksToArchive, archiveWeekId) => {
         const tasksWithCorrectParent = sections.unscheduled.map(task => ({
           ...task,
           parentGroupId: archivedProjectGroupId, // Point to archived project, not archive week
+          _isArchivedTask: true,
         }));
         newData.splice(newUnscheduledIndex + 1, 0, ...tasksWithCorrectParent);
       }
