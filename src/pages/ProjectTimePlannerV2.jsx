@@ -13,7 +13,7 @@ import usePageSize from '../hooks/usePageSize';
 import usePlannerColumns from '../hooks/planner/usePlannerColumns';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
-import { TACTICS_SEND_TO_SYSTEM_EVENT, TACTICS_SEND_TO_SYSTEM_TS_KEY, loadSentChipsSnapshot, loadTacticsSettings } from '../lib/tacticsStorage';
+import { TACTICS_SEND_TO_SYSTEM_EVENT, getSendToSystemTsKey, loadSentChipsSnapshot, loadTacticsSettings } from '../lib/tacticsStorage';
 import { loadSentMetricsSnapshot } from '../lib/tacticsMetricsStorage';
 import { loadStagingState } from '../lib/stagingStorage';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
@@ -210,7 +210,7 @@ export default function ProjectTimePlannerV2() {
   // True once "Send to System" has been triggered — lets draft year bypass
   // the "no imported tasks" guard so chip rows and project headers appear.
   const [sentToSystem, setSentToSystem] = useState(() => {
-    return !!localStorage.getItem(TACTICS_SEND_TO_SYSTEM_TS_KEY);
+    return !!localStorage.getItem(getSendToSystemTsKey(currentYear));
   });
 
   // Archive modal state
@@ -385,6 +385,7 @@ export default function ProjectTimePlannerV2() {
       prevYearRef.current = currentYear;
       setMetricsData(loadMetricsData(currentYear));
       setTacticsChips(loadEnrichedChips(currentYear));
+      setSentToSystem(!!localStorage.getItem(getSendToSystemTsKey(currentYear)));
     }
   }, [currentYear]);
 
@@ -1324,7 +1325,7 @@ export default function ProjectTimePlannerV2() {
   // On mount, check if "Send to System" was pressed since last reset
   useEffect(() => {
     if (!tacticsChips || tacticsChips.length === 0) return;
-    const ts = localStorage.getItem(TACTICS_SEND_TO_SYSTEM_TS_KEY);
+    const ts = localStorage.getItem(getSendToSystemTsKey(currentYear));
     if (ts && ts !== lastResetTsRef.current) {
       lastResetTsRef.current = ts;
       setSentToSystem(true);
@@ -1336,7 +1337,7 @@ export default function ProjectTimePlannerV2() {
   // Handle the live "Send to System" event — reload all tactics data from storage
   useEffect(() => {
     const handler = () => {
-      const ts = localStorage.getItem(TACTICS_SEND_TO_SYSTEM_TS_KEY);
+      const ts = localStorage.getItem(getSendToSystemTsKey(currentYear));
       lastResetTsRef.current = ts;
       setSentToSystem(true);
       // Reload tactics data from storage so System reflects what was just sent

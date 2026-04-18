@@ -30,7 +30,7 @@ import {
   loadTacticsColumnWidths,
   saveTacticsColumnWidths,
   TACTICS_SEND_TO_SYSTEM_EVENT,
-  TACTICS_SEND_TO_SYSTEM_TS_KEY,
+  getSendToSystemTsKey,
   saveSentChipsSnapshot,
 } from '../lib/tacticsStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
@@ -638,6 +638,7 @@ export default function TacticsPage() {
   const headerContainerRef = useRef(null);
   const cellMenuRef = useRef(null);
   const hasLoadedInitialState = useRef(false);
+  const chipsLoadedForYear = useRef(currentYear);
   const [tableRect, setTableRect] = useState(null);
   useEffect(() => {
     // Ensure we always have a transparent drag image to avoid browser-specific cancellations
@@ -795,6 +796,14 @@ export default function TacticsPage() {
       const state = loadStagingState(currentYear);
       setStagingProjects(Array.isArray(state?.shortlist) ? state.shortlist : []);
     };
+
+    // Prevent the save effect from writing stale chips to the new year's storage.
+    // When currentYear changes, both this effect and the save effect fire in the
+    // same commit. The setProjectChips call below is batched — projectChips still
+    // holds the previous year's data when the save effect runs. Setting the ref
+    // to null here blocks the save until the re-render applies the new state and
+    // the save effect fires again with the correct chips.
+    chipsLoadedForYear.current = null;
 
     // Load tactics chips for current year when year changes
     const chipState = loadTacticsChipsState(currentYear);
@@ -1827,6 +1836,16 @@ export default function TacticsPage() {
     closeCellMenu,
   ]);
   useEffect(() => {
+    // Skip saving if chips haven't been loaded for this year yet — prevents
+    // the previous year's chips from being written to the new year's storage
+    // key during a year switch (the state updates from the load effect haven't
+    // applied yet when this effect fires in the same render cycle).
+    if (chipsLoadedForYear.current == null) {
+      // The load effect set this to null — the next render (with correct chips
+      // in state) will re-fire this effect and land here with the guard passing.
+      chipsLoadedForYear.current = currentYear;
+      return;
+    }
     saveTacticsChipsState({ projectChips, customProjects, chipTimeOverrides }, currentYear);
   }, [projectChips, customProjects, chipTimeOverrides, currentYear]);
   const restoreCanonicalScheduleChip = useCallback((chip, filtered) => {
@@ -2577,7 +2596,7 @@ export default function TacticsPage() {
     saveSentChipsSnapshot({ projectChips, customProjects, chipTimeOverrides }, currentYear);
 
     // Write timestamp so System page resets subproject labels even if it mounts after this fires
-    localStorage.setItem(TACTICS_SEND_TO_SYSTEM_TS_KEY, Date.now().toString());
+    localStorage.setItem(getSendToSystemTsKey(currentYear), Date.now().toString());
     // Also signal if System is already mounted
     window.dispatchEvent(new CustomEvent(TACTICS_SEND_TO_SYSTEM_EVENT));
 

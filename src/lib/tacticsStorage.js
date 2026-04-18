@@ -6,6 +6,10 @@ const TACTICS_COLUMN_WIDTHS_KEY_TEMPLATE = 'tactics-column-widths-{yearNumber}';
 export const TACTICS_CHIPS_STORAGE_EVENT = 'tactics-chips-state-update';
 export const TACTICS_SEND_TO_SYSTEM_EVENT = 'tactics-send-to-system';
 export const TACTICS_SEND_TO_SYSTEM_TS_KEY = 'tactics-send-to-system-ts';
+export const getSendToSystemTsKey = (yearNumber) =>
+  yearNumber != null
+    ? `tactics-year-${yearNumber}-send-to-system-ts`
+    : TACTICS_SEND_TO_SYSTEM_TS_KEY;
 
 const DEFAULT_SETTINGS = {
   startHour: '',

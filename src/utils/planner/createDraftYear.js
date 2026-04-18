@@ -252,12 +252,19 @@ export async function createDraftYearFromActive(activeYearNumber) {
 
     // --- Copy Plan page (metrics + settings carry forward) ---
     saveTacticsMetrics(tacticsMetrics, draftYearNumber);
-    // Strip schedule item chips (their source data was cleared) but keep
-    // sleep, rest, buffer, and custom chips from the previous year.
+    // Strip project and schedule chips — only keep sleep, rest, buffer, and
+    // custom chips. Project chips reference staging projects whose addedToPlan
+    // has been reset to false, so carrying them forward would show stale chips
+    // on the draft Plan page.
+    const KEEP_PROJECT_IDS = new Set(['sleep', 'rest', 'buffer']);
     const draftChipsState = { ...chipsState };
     if (Array.isArray(draftChipsState.projectChips)) {
       draftChipsState.projectChips = draftChipsState.projectChips.filter(
-        (chip) => !chip.id?.startsWith('schedule-chip-')
+        (chip) => {
+          const pid = chip.projectId;
+          return KEEP_PROJECT_IDS.has(pid) ||
+            (typeof pid === 'string' && pid.startsWith('custom-'));
+        }
       );
     }
     saveTacticsChipsState(draftChipsState, draftYearNumber);
