@@ -90,12 +90,14 @@ export default function usePlanTableSelection() {
       const descriptor = { itemId, rowIdx, colIdx };
 
       if (e.shiftKey && anchorRef.current) {
-        // Range selection with shift
+        // Range selection with shift — prevent native text selection
+        e.preventDefault();
         const rangeKeys = getRangeSelectionKeys(anchorRef.current, descriptor, totalCols);
         setSelectedCells(rangeKeys);
         focusRef.current = descriptor;
       } else if (e.metaKey || e.ctrlKey) {
-        // Toggle selection with cmd/ctrl
+        // Toggle selection with cmd/ctrl — prevent native text selection
+        e.preventDefault();
         const key = getCellKey(itemId, rowIdx, colIdx);
         setSelectedCells((prev) => {
           const next = new Set(prev);
@@ -128,6 +130,10 @@ export default function usePlanTableSelection() {
   const handleCellMouseEnter = useCallback(
     (itemId, rowIdx, colIdx, totalCols = 6) => {
       if (!isDraggingRef.current || !anchorRef.current) return;
+
+      // Clear native text selection during drag across cells
+      const sel = window.getSelection();
+      if (sel) sel.removeAllRanges();
 
       const descriptor = { itemId, rowIdx, colIdx };
       focusRef.current = descriptor;
