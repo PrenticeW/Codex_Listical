@@ -5,8 +5,8 @@
  * so that assignParentGroupIds (in the render pipeline) can assign them the
  * right parentGroupId based on positional context.
  *
- * - Tasks with a valid projectNickname → inserted before the projectUnscheduled
- *   row for that project (landing in the General section).
+ * - Tasks with a valid projectNickname → inserted after the projectUnscheduled
+ *   row for that project (landing in the Unscheduled section).
  * - Tasks with no projectNickname (inbox-bound) → inserted after the inbox divider.
  */
 
@@ -37,8 +37,8 @@ export function placeImportedTasks(existingData, importedTasks) {
     const row = existingData[i];
     result.push(row);
 
-    // Insert project tasks before the projectUnscheduled row for that project
-    if (row._rowType === 'projectGeneral') {
+    // Insert project tasks after the projectUnscheduled row for that project
+    if (row._rowType === 'projectUnscheduled') {
       const nickname = row.projectNickname || extractNicknameFromId(row.id);
       if (nickname && byProject[nickname]) {
         result.push(...byProject[nickname]);
@@ -65,10 +65,10 @@ export function placeImportedTasks(existingData, importedTasks) {
 }
 
 /**
- * Extract project nickname from structural row IDs like "myProject-general"
+ * Extract project nickname from structural row IDs like "myProject-unscheduled"
  */
 function extractNicknameFromId(id) {
   if (!id) return null;
-  const match = id.match(/^(.+)-general$/);
+  const match = id.match(/^(.+)-unscheduled$/);
   return match ? match[1] : null;
 }
