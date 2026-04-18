@@ -1359,6 +1359,7 @@ export default function ProjectTimePlannerV2() {
     setIsDragging,
     dragStartCell,
     setDragStartCell,
+    editingCell,
     setEditingCell,
     setEditValue,
   });

@@ -22,6 +22,7 @@ export const useSpreadsheetSelection = ({
   setIsDragging,
   dragStartCell,
   setDragStartCell,
+  editingCell,
   setEditingCell,
   setEditValue,
 }) => {
@@ -125,6 +126,12 @@ export const useSpreadsheetSelection = ({
   const handleCellMouseDown = useCallback((e, rowId, columnId) => {
     if (columnId === 'rowNum') return; // Don't select row number column
 
+    // If this cell is currently being edited, let the event through
+    // so the user can select/highlight text inside the input
+    if (editingCell && editingCell.rowId === rowId && editingCell.columnId === columnId) {
+      return;
+    }
+
     // Prevent default to avoid text selection
     e.preventDefault();
 
@@ -159,7 +166,7 @@ export const useSpreadsheetSelection = ({
       setIsDragging(true);
       setEditingCell(null);
     }
-  }, [anchorCell, getCellRange, getCellKey, setSelectedRows, setSelectedCells, setAnchorCell, setDragStartCell, setIsDragging, setEditingCell]);
+  }, [anchorCell, editingCell, getCellRange, getCellKey, setSelectedRows, setSelectedCells, setAnchorCell, setDragStartCell, setIsDragging, setEditingCell]);
 
   const handleCellMouseEnter = useCallback((e, rowId, columnId) => {
     if (!isDragging || !dragStartCell || columnId === 'rowNum') return;
