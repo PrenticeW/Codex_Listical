@@ -246,7 +246,12 @@ export default function useEditState({
       execute: () => {
         setData(prev => prev.map(row => {
           if (row.id === rowId) {
-            return { ...row, [actualColumnId]: newValue };
+            const updates: any = { [actualColumnId]: newValue };
+            // Clear import review flag when subproject or project is updated
+            if ((columnId === 'subproject' || columnId === 'project') && row._importNeedsSubprojectReview) {
+              updates._importNeedsSubprojectReview = undefined;
+            }
+            return { ...row, ...updates };
           }
           return row;
         }));

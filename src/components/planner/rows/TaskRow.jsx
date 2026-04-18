@@ -77,6 +77,7 @@ const TaskRow = React.memo(function TaskRow({
   const rowNumZIndex = isPinnedRow ? 15 : 10;
 
   const isRowEditing = editingCell?.rowId === rowId;
+  const needsSubprojectReview = row.original._importNeedsSubprojectReview;
   const style = {
     display: 'flex',
     position: 'absolute',
@@ -87,6 +88,7 @@ const TaskRow = React.memo(function TaskRow({
     opacity: isDragging ? 0.5 : 1,
     gap: 0,
     zIndex: isRowEditing ? 10 : undefined,
+    ...(needsSubprojectReview && { borderLeft: '3px solid #f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.05)' }),
   };
 
   return (

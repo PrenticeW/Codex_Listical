@@ -48,7 +48,7 @@ export default function useProjectsData() {
  * @param {Array} shortlist - Staging shortlist array
  * @returns {Object} Extracted projects and subprojects
  */
-function extractProjectsData(shortlist) {
+export function extractProjectsData(shortlist) {
   if (!Array.isArray(shortlist) || shortlist.length === 0) {
     return {
       projects: ['-'],

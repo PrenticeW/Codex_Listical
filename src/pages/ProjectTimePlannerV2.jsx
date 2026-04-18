@@ -18,7 +18,8 @@ import useTacticsChips from '../hooks/planner/useTacticsChips';
 import { TACTICS_SEND_TO_SYSTEM_EVENT, TACTICS_SEND_TO_SYSTEM_TS_KEY } from '../lib/tacticsStorage';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { undoDraftYear } from '../utils/planner/undoDraftYear';
-import { importTasksFromYear, IMPORTABLE_STATUSES, DEFAULT_IMPORT_STATUSES } from '../utils/planner/importTasksFromYear';
+import { importTasksForDraftYear } from '../utils/planner/importTasksFromYear';
+import { placeImportedTasks } from '../utils/planner/placeImportedTasks';
 import usePlannerFilters from '../hooks/planner/usePlannerFilters';
 import { useFilteredData, useFilterValues } from '../hooks/planner/useFilteredData';
 import { useProjectTotals, useDailyTotals } from '../hooks/planner/useTotalsCalculation';
@@ -127,20 +128,6 @@ export default function ProjectTimePlannerV2() {
     }
   }, [refreshMetadata]);
 
-  // Task import state (draft year, System page only)
-  const [importStatuses, setImportStatuses] = useState(() => new Set(DEFAULT_IMPORT_STATUSES));
-  const toggleImportStatus = useCallback((status) => {
-    setImportStatuses((prev) => {
-      const next = new Set(prev);
-      if (next.has(status)) {
-        next.delete(status);
-      } else {
-        next.add(status);
-      }
-      return next;
-    });
-  }, []);
-
   // Add tasks modal state
   const [isAddTasksModalOpen, setIsAddTasksModalOpen] = useState(false);
 
@@ -193,17 +180,6 @@ export default function ProjectTimePlannerV2() {
       return next;
     });
   }, []);
-
-  const handleImportTasks = useCallback(() => {
-    if (!activeYear) return;
-    const sourceRows = readTaskRows('project-1', activeYear.yearNumber);
-    const draftStaging = loadStagingState(currentYear);
-    const draftNicknames = (draftStaging.shortlist || [])
-      .map((item) => item.projectNickname)
-      .filter(Boolean);
-    const imported = importTasksFromYear(sourceRows, draftNicknames, importStatuses);
-    setData((prev) => [...prev, ...imported]);
-  }, [activeYear, currentYear, importStatuses, setData]);
 
   // Save data to storage when it changes (debounced).
   // On unmount, flush immediately so navigation away doesn't lose pending edits.
@@ -281,6 +257,15 @@ export default function ProjectTimePlannerV2() {
 
   // Load projects and subprojects from Staging
   const { projects, subprojects, projectSubprojectsMap, projectNamesMap, projectTaglinesMap } = useProjectsData();
+
+  // Import tasks from active year into draft (single action, no wizard)
+  const handleImportTasks = useCallback(() => {
+    if (!activeYear) return;
+    const sourceRows = readTaskRows('project-1', activeYear.yearNumber);
+    const draftNicknames = projects.filter((p) => p !== '-');
+    const imported = importTasksForDraftYear(sourceRows, draftNicknames, projectSubprojectsMap);
+    setData((prev) => placeImportedTasks(prev, imported));
+  }, [activeYear, projects, projectSubprojectsMap, setData]);
 
   // Load daily bounds and project weekly quotas from Tactics page
   const { dailyBounds, projectWeeklyQuotas } = useTacticsMetrics();
@@ -2252,24 +2237,12 @@ export default function ProjectTimePlannerV2() {
       />
       </div>
 
-      {/* Task import panel — draft year only, disappears once tasks exist */}
-      {isCurrentYearDraft && activeYear && !data.some((r) => r._rowType === 'projectTask') && (
+      {/* Task import panel — draft year only, disappears once non-chip tasks exist */}
+      {isCurrentYearDraft && activeYear && !data.some((r) => r._rowType === 'projectTask' && !r._chipId) && (
         <div className="mx-4 mb-2 shrink-0 rounded-lg border border-violet-200 bg-violet-50 px-5 py-4 flex items-center justify-between gap-6">
           <div>
-            <p className="text-sm font-semibold text-violet-900 mb-1">Import tasks from Year {activeYear.yearNumber}</p>
-            <div className="flex items-center gap-3 flex-wrap">
-              {IMPORTABLE_STATUSES.map((status) => (
-                <label key={status} className="flex items-center gap-1.5 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={importStatuses.has(status)}
-                    onChange={() => toggleImportStatus(status)}
-                    className="rounded accent-violet-600"
-                  />
-                  <span className="text-xs font-medium text-violet-800">{status}</span>
-                </label>
-              ))}
-            </div>
+            <p className="text-sm font-semibold text-violet-900">Import tasks from Year {activeYear.yearNumber}</p>
+            <p className="text-xs text-violet-700">Tasks with matching projects are placed under their project. Unmatched tasks go to the inbox.</p>
           </div>
           <button
             type="button"
