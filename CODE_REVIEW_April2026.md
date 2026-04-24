@@ -2,6 +2,29 @@
 
 **Scope:** Orientation and risk-ranked bug audit of the Codex Listical codebase ahead of July 2026 launch. Reviewer: Claude (session with Prentice). Purpose: inform the test plan, surface bugs before they ship, flag pre-launch hygiene.
 
+---
+
+## Progress log (as of 2026-04-24)
+
+Running tally of what's been addressed since this review was authored. Findings are annotated inline below; this log is the single place to see state at a glance.
+
+| ID | Title | Status | Notes |
+|---|---|---|---|
+| B1 | localStorage not cleared on account deletion | ✅ Done | `clearUserKeys(userId)` added to `storageService.js`; called from `AuthContext` on auth-state drop. |
+| B2 | Raw `localStorage` calls bypass user-prefix | ✅ Done | All ten bypass sites routed through `storageService`. |
+| B3 | Age verification is client-side only | 🟡 Mostly done | Server-side enforcement at 16 (GDPR-K) shipped in `supabase/migrations/20260425000001_bump_age_requirement_to_16.sql`. Client messaging and date picker cap updated. Signup flow now branches on email-confirmation session. Final smoke test of the "Check your inbox" card pending (blocked on Supabase built-in SMTP rate limit at time of writing). |
+| B4 | Dev-only Undo Draft / Revert Archive ship in prod | ⏸ Deferred | Intentionally left in for testing the Plan Next Year flow. Revisit in the final polish pass. |
+| H1 | `projectNickname` rename orphans quota data | ✅ Done | `projectWeeklyQuotas` Map now keyed by `id`, lookups switched to `id`. |
+| H2 | Stale closure on Send to System listener | 🔵 Downgraded | No actual bug in practice (see V2 addendum). Leave as note. |
+| H3 | Cross-year event collisions | 🟠 Next candidate | Not started. Top of queue after B3 verification. |
+| H4 | System cold-load race | 🔵 Downgraded | UX edge case, not a race. |
+| H5 | Send to System stomps user edits on chip task rows | ✅ Done | `_original*` fields now stamped and compared before overwrite. |
+| M1–M5, P1–P5 | Medium and polish items | ⬜ Not started | Batch after high-severity work. |
+| NEW | Custom SMTP required before public launch | 🟠 Launch prerequisite | Supabase built-in mailer is dev-only (~2 auth emails/hour/project). Configure Resend, Postmark, SendGrid, or similar under Auth → Emails → SMTP Settings before any public rollout. Currently unaddressed. |
+
+Legend: ✅ done, 🟡 mostly done, 🟠 open / queued, ⏸ deferred, 🔵 downgraded, ⬜ not started.
+
+
 **Coverage:** Full structural read of routing, contexts, storage modules, auth flow, deletion flow, draft year flow. Targeted reads of auth pages and components. Parallel explorer audits on storage isolation, cross-page event wiring, draft year flow, and pre-launch hygiene. Deeper line-by-line review of `TacticsPage.jsx` (5,042 lines) and `ProjectTimePlannerV2.jsx` (2,523 lines) deferred — flagged below as needing targeted follow-up.
 
 ---
@@ -25,7 +48,7 @@ Suggested order of operations: fix the four launch blockers, then tackle the hig
 
 ### 🔴 LAUNCH BLOCKERS
 
-#### B1 — Account deletion leaves all localStorage data on the device
+#### B1 — Account deletion leaves all localStorage data on the device ✅ DONE (2026-04)
 
 **Files:** `src/components/DeleteAccountModal.jsx`, `src/lib/api/accountDeletion.ts`, `supabase/functions/account-delete/index.ts`, `src/contexts/AuthContext.jsx`.
 
@@ -39,7 +62,7 @@ Suggested order of operations: fix the four launch blockers, then tackle the hig
 
 ---
 
-#### B2 — Raw `localStorage` calls bypass user-prefix scoping (leaks across users)
+#### B2 — Raw `localStorage` calls bypass user-prefix scoping (leaks across users) ✅ DONE (2026-04)
 
 **Files & lines:**
 - `src/pages/TacticsPage.jsx:2608` — `localStorage.setItem(getSendToSystemTsKey(currentYear), ...)`
@@ -53,7 +76,7 @@ Suggested order of operations: fix the four launch blockers, then tackle the hig
 
 ---
 
-#### B3 — Age verification is client-side only
+#### B3 — Age verification is client-side only 🟡 MOSTLY DONE (2026-04)
 
 **File:** `src/pages/SignupPage.jsx:104–133`.
 
@@ -65,9 +88,17 @@ Suggested order of operations: fix the four launch blockers, then tackle the hig
 
 **Also flag:** `navigate('/')` fires immediately after signup (line 162). If Supabase email confirmation is enabled (and it should be), this navigation will fail silently and the user will just sit on an unauthenticated `/` route. If email confirmation is disabled, users can sign up with other people's emails without access to that mailbox — an abuse vector. Confirm which setting is in Supabase dashboard, and make the post-signup UX match.
 
+**Update 2026-04-24:** Decision taken to treat UK/Europe as first-client market and align with GDPR-K default of **16**, not 13. Work completed:
+
+- New migration `supabase/migrations/20260425000001_bump_age_requirement_to_16.sql` makes `profiles.date_of_birth` `NOT NULL`, swaps the CHECK constraint to `>= 16`, and replaces `validate_age_requirement()` to reject NULL and under-16 rows. Applied to the live DB after backfilling one test account and deleting another stale NULL row.
+- `SignupPage.jsx` year dropdown capped at `currentYear - 16`; age check raised to 16; user-facing copy updated in three places; added `confirmationPendingEmail` state and a "Check your inbox" card rendered when Supabase returns a null session post-signup.
+- `AuthContext.signupCore` now returns `{ user, session, error }`. `signup` is deliberately **not** wrapped with `useAsyncHandler` because flipping AuthContext's global `isLoading` caused `PublicRoute` to render its loading spinner, unmounting `SignupPage` mid-flow and wiping the confirmation state. Same reasoning as existing `sendOtp` / `verifyOtp`.
+
+**Remaining:** End-to-end smoke test of signup → "Check your inbox" card → email confirmation link → authenticated redirect. Blocked at time of writing on Supabase built-in mailer's rate limit (429). Unblocks once Supabase rate-limit window clears or custom SMTP is configured (see new finding below).
+
 ---
 
-#### B4 — Dev-only "Undo Draft" and "Revert Archive" buttons ship in production
+#### B4 — Dev-only "Undo Draft" and "Revert Archive" buttons ship in production ⏸ DEFERRED (retained for testing)
 
 **File:** `src/components/planner/NavigationBar.jsx` (around lines 177–200, per explorer agent).
 
@@ -81,7 +112,7 @@ Suggested order of operations: fix the four launch blockers, then tackle the hig
 
 ### 🟠 HIGH SEVERITY
 
-#### H1 — `projectNickname` rename orphans quota data, silently returns 0
+#### H1 — `projectNickname` rename orphans quota data, silently returns 0 ✅ DONE (2026-04)
 
 **File:** `src/components/planner/rows/ProjectRow.jsx:86` and related.
 
@@ -383,7 +414,7 @@ The System page specifically benefits from these targeted tests:
 4. **Press Send to System while System is open on another tab (if supported) or just while mounted.** Verify the listener re-runs and subproject labels refresh without needing to navigate away.
 5. **Direct-URL cold load on `/`.** Verify correct behavior even if the user has never visited Plan that session.
 
-### H5 (new) — Send to System stomps user edits on chip task rows
+### H5 (new) — Send to System stomps user edits on chip task rows ✅ DONE (2026-04)
 
 **File:** `src/pages/ProjectTimePlannerV2.jsx:1281–1295` (inside `resetSubprojectLabels`).
 

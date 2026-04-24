@@ -2,7 +2,7 @@
 
 ## Project overview
 
-Listical is a 12-week cycle-planning tool for creative practitioners, structured around a three-page flow: **Goal** (define and plan projects), **Plan** (schedule weekly time blocks per project), and **System** (track individual tasks across an 84-day timeline). A "year" is a 12-week cycle. The three pages are exposed under the nav labels Goal / Plan / System but their URL paths are `/staging`, `/tactics`, and `/` respectively — keep this mismatch in mind. The app is currently in a second-pass refinement phase: the Goal page is complete and the Plan (Tactics) page is approximately halfway through its second pass. System is pending until Tactics is done.
+Listical is a 12-week cycle-planning tool for creative practitioners, structured around a three-page flow: **Goal** (define and plan projects), **Plan** (schedule weekly time blocks per project), and **System** (track individual tasks across an 84-day timeline). A "year" is a 12-week cycle. The three pages are exposed under the nav labels Goal / Plan / System but their URL paths are `/staging`, `/tactics`, and `/` respectively — keep this mismatch in mind. All three pages are now through their second pass of refinement. The project is in pre-launch mode, working through the risk-ranked bug list in `CODE_REVIEW_April2026.md` before a public launch targeted at UK and European conservatoire students.
 
 ---
 
@@ -79,7 +79,7 @@ Tactics chips are persisted per year to `tactics-year-{N}-chips-state` via `save
 
 ### Dev-only: Undo Draft
 
-An **Undo Draft** button in the nav bar (all three pages) calls `undoDraftYear` (`src/utils/planner/undoDraftYear.js`), which deletes all draft year storage keys, removes the draft year record from metadata, and switches back to the active year. Remove this button before launch.
+An **Undo Draft** button in the nav bar (all three pages) calls `undoDraftYear` (`src/utils/planner/undoDraftYear.js`), which deletes all draft year storage keys, removes the draft year record from metadata, and switches back to the active year. Remove this button before launch. Tracked as B4 in the code review; intentionally deferred until the final pre-launch polish pass because Prentice still needs it for manual testing of the Plan Next Year flow.
 
 ---
 
@@ -159,7 +159,17 @@ When a user requests deletion, all their data must be removable. The `deletion_a
 
 ### Age and consent
 
-Users may be minors. Do not make assumptions about user age in any auth or data flow work. Do not collect data beyond what is necessary for the planning features.
+First clients are UK and European. The operative framework is GDPR-K, whose default age of digital consent is 16. Listical enforces a minimum age of 16 across the stack:
+
+- **Database (source of truth).** `public.profiles.date_of_birth` is `NOT NULL` and a `CHECK` constraint plus a `BEFORE INSERT OR UPDATE` trigger (`validate_age_requirement`) reject any row where the DOB is NULL or indicates under 16. Applied in `supabase/migrations/20260425000001_bump_age_requirement_to_16.sql`.
+- **Client (UX).** `src/pages/SignupPage.jsx` caps the year dropdown at `currentYear - 16`, computes age from the picker, and shows a "must be 16 or older" message. This layer is convenience only; the DB is the real gate.
+- **Signup flow.** Supabase email confirmation is enabled, so `signUp` does not return a session. `AuthContext.signupCore` surfaces `{ user, session, error }` and `SignupPage` renders a "Check your inbox" card when `session` is null. `signup` is intentionally **not** wrapped with `useAsyncHandler` (same reason as `sendOtp` / `verifyOtp`): flipping AuthContext's global `isLoading` causes `PublicRoute` to render its spinner, which unmounts SignupPage mid-flow and wipes local state. Do not re-wrap it.
+
+Do not make further assumptions about user age elsewhere in the app. Do not collect data beyond what is necessary for the planning features.
+
+### Email and auth infrastructure (launch prerequisite)
+
+Supabase's built-in SMTP is development-only and rate-limited to roughly 2 auth emails per hour per project. It will block real users during any normal signup rush. Before public launch, configure a custom SMTP provider (Resend, Postmark, SendGrid, or similar) under Authentication → Emails → SMTP Settings in the Supabase dashboard. Until then, expect intermittent 429 "email rate limit exceeded" errors during multi-account testing.
 
 ### Debugging
-Always ask for permission to start systematic debugging. 
+Always ask for permission to start systematic debugging.

@@ -204,11 +204,15 @@ export function AuthProvider({ children }) {
 
   // Wrap async functions with loading state management (eliminates repetitive try-catch-finally)
   const login = useAsyncHandler(loginCore, setIsLoading);
-  const signup = useAsyncHandler(signupCore, setIsLoading);
   const logout = useAsyncHandler(logoutCore, setIsLoading);
-  // Note: sendOtp and verifyOtp are NOT wrapped with useAsyncHandler
-  // because setting isLoading causes PublicRoute to show loading screen
-  // and unmount LoginPage, resetting the OTP flow state
+  // Note: signup, sendOtp, and verifyOtp are NOT wrapped with useAsyncHandler
+  // because setting AuthContext's isLoading causes PublicRoute to render its
+  // loading spinner, which unmounts the page (LoginPage or SignupPage) and
+  // throws away local component state mid-flow. SignupPage needs to keep
+  // `confirmationPendingEmail` across the await so it can render the
+  // "Check your inbox" card after a successful signup. SignupPage tracks
+  // its own local isLoading for the button spinner.
+  const signup = signupCore;
   const sendOtp = sendOtpCore;
   const verifyOtp = verifyOtpCore;
 
