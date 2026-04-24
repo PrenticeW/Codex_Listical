@@ -45,11 +45,12 @@ function calculateAge(year, month, day) {
   return age;
 }
 
-// Generate year options (current year - 100 to current year - 5)
+// Generate year options (current year - 100 to current year - 16)
+// Minimum age is 16 (GDPR-K). No point offering younger years; server rejects them.
 function getYearOptions() {
   const currentYear = new Date().getFullYear();
   const years = [];
-  for (let year = currentYear - 5; year >= currentYear - 100; year--) {
+  for (let year = currentYear - 16; year >= currentYear - 100; year--) {
     years.push(year);
   }
   return years;
@@ -95,12 +96,16 @@ export default function SignupPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
+  // When Supabase email confirmation is enabled, signup succeeds but no
+  // session is returned. We show a "check your inbox" state instead of
+  // navigating the user to an unauthenticated route.
+  const [confirmationPendingEmail, setConfirmationPendingEmail] = useState('');
 
   // Check for age block on mount
   useEffect(() => {
     if (isAgeBlocked()) {
       setIsBlocked(true);
-      setError('Sorry, you must be 13 or older to use Listical. Please try again later.');
+      setError('Sorry, you must be 16 or older to use Listical. Please try again later.');
     }
   }, []);
 
@@ -111,7 +116,7 @@ export default function SignupPage() {
     // Check if user is blocked from signup attempts
     if (isBlocked || isAgeBlocked()) {
       setIsBlocked(true);
-      setError('Sorry, you must be 13 or older to use Listical. Please try again later.');
+      setError('Sorry, you must be 16 or older to use Listical. Please try again later.');
       return;
     }
 
@@ -128,10 +133,10 @@ export default function SignupPage() {
       parseInt(birthDay, 10)
     );
 
-    if (age < 13) {
+    if (age < 16) {
       setAgeBlock();
       setIsBlocked(true);
-      setError('Sorry, you must be 13 or older to use Listical');
+      setError('Sorry, you must be 16 or older to use Listical');
       return;
     }
 
@@ -153,7 +158,11 @@ export default function SignupPage() {
     const dateOfBirth = `${birthYear}-${String(birthMonth).padStart(2, '0')}-${String(birthDay).padStart(2, '0')}`;
 
     try {
-      const { error: signupError } = await signup(email, password, dateOfBirth);
+      const { session, error: signupError } = await signup(
+        email,
+        password,
+        dateOfBirth
+      );
 
       if (signupError) {
         setError(signupError.message || 'Failed to create account');
@@ -161,13 +170,59 @@ export default function SignupPage() {
         return;
       }
 
-      // Success - navigation will happen automatically via auth state change
-      navigate('/');
+      if (session) {
+        // Confirmation disabled in Supabase: we have a real session, the
+        // AuthContext listener will pick it up and the user is signed in.
+        navigate('/');
+      } else {
+        // Confirmation enabled: no session yet. Show a confirmation pending
+        // state on this page instead of navigating to an unauthenticated
+        // route and leaving the user stranded.
+        setConfirmationPendingEmail(email);
+        setIsLoading(false);
+      }
     } catch (err) {
       setError(err.message || 'An unexpected error occurred');
       setIsLoading(false);
     }
   };
+
+  // Post-signup confirmation pending state.
+  // Supabase email confirmation is enabled: the account was created but
+  // the user still needs to click the link in their inbox before they can
+  // sign in. Render an alternate view instead of stranding them on /.
+  if (confirmationPendingEmail) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-[#f2e5eb] px-4 py-12">
+        <div className="max-w-md w-full">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-[#d5a6bd] rounded-2xl mb-4 shadow-lg">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              Check your inbox
+            </h2>
+            <p className="text-gray-600">
+              We sent a confirmation link to <span className="font-semibold">{confirmationPendingEmail}</span>. Click the link in that email to finish creating your account.
+            </p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 text-sm text-gray-600 space-y-4">
+            <p>
+              The email should arrive within a minute or two. If you don&apos;t see it, check your spam folder.
+            </p>
+            <p>
+              Once confirmed, you can{' '}
+              <Link to="/login" className="font-semibold text-blue-600 hover:text-blue-700 transition-colors">
+                sign in here
+              </Link>.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-[#f2e5eb] px-4 py-12">
@@ -334,7 +389,7 @@ export default function SignupPage() {
                     ))}
                   </select>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">You must be 13 or older to use Listical</p>
+                <p className="mt-1 text-xs text-gray-500">You must be 16 or older to use Listical</p>
               </div>
             </div>
 

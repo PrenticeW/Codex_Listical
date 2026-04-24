@@ -144,12 +144,14 @@ export function AuthProvider({ children }) {
 
     if (error) {
       console.error('Signup error:', error);
-      return { user: null, error };
+      return { user: null, session: null, error };
     }
 
-    // Auth state will be updated by onAuthStateChange listener
-    // Note: User may need to confirm email before being fully authenticated
-    return { user: data.user, error: null };
+    // Auth state will be updated by onAuthStateChange listener when a session
+    // exists. If Supabase has email confirmation enabled, `data.session` is
+    // null here and the caller should surface a "check your email" state
+    // instead of navigating to an authenticated route.
+    return { user: data.user, session: data.session, error: null };
   }, []);
 
   // Core logout logic (extracted from try-catch-finally wrapper)
