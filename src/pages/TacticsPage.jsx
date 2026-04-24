@@ -851,6 +851,10 @@ export default function TacticsPage() {
     const handleStorage = (event) => {
       // Check for year-specific staging keys (staging-year-{yearNumber}-shortlist) or legacy key
       if (event?.key && !event.key.startsWith('staging-year-') && event.key !== STAGING_STORAGE_KEY) return;
+      // H3: if the custom event is tagged with a year, only act when it
+      // matches the Plan page's current year. Untagged events pass through.
+      const eventYear = event?.detail?.__eventYear;
+      if (eventYear != null && eventYear !== currentYear) return;
       readProjects();
     };
 
@@ -2606,8 +2610,11 @@ export default function TacticsPage() {
 
     // Write timestamp so System page resets subproject labels even if it mounts after this fires
     setSendToSystemTimestamp(currentYear);
-    // Also signal if System is already mounted
-    window.dispatchEvent(new CustomEvent(TACTICS_SEND_TO_SYSTEM_EVENT));
+    // Also signal if System is already mounted. Tag the event with the year
+    // so a System view on a different year does not act on a stale press (H3).
+    window.dispatchEvent(new CustomEvent(TACTICS_SEND_TO_SYSTEM_EVENT, {
+      detail: { __eventYear: currentYear },
+    }));
 
     setSendToSystemDone(true);
     setTimeout(() => setSendToSystemDone(false), 2000);

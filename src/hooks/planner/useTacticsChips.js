@@ -177,6 +177,7 @@ export default function useTacticsChips() {
     ],
     extractData: extractChips,
     dependency: currentYear,
+    currentYearNumber: currentYear, // H3: ignore chip events from other years
   });
 
   return { chips: chips ?? [] };

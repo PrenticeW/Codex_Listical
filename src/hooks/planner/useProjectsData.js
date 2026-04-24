@@ -38,6 +38,7 @@ export default function useProjectsData() {
     storageKeys: [`staging-year-${currentYear}-state`, 'staging-state'],
     extractData,
     dependency: currentYear,
+    currentYearNumber: currentYear, // H3: ignore staging events from other years
   });
 
   return projectsData;

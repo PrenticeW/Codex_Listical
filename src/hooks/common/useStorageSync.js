@@ -17,6 +17,10 @@ import { useState, useEffect, useCallback } from 'react';
  * @param {string|string[]} options.storageKeys - Storage key(s) to watch for cross-tab sync
  * @param {Function} options.extractData - Function to extract data from event payload
  * @param {*} options.dependency - Dependency to trigger reload (e.g., currentYear)
+ * @param {number|null} [options.currentYearNumber] - If provided, custom events
+ *   whose detail.__eventYear does not match this value are ignored. Guards
+ *   against cross-year event collisions (H3). Events without __eventYear fall
+ *   through unchanged for backwards compatibility.
  *
  * @returns {Array} [data, setData] tuple
  *
@@ -27,6 +31,7 @@ import { useState, useEffect, useCallback } from 'react';
  *   storageKeys: [`tactics-year-${currentYear}-metrics-state`, 'tactics-metrics-state'],
  *   extractData: (payload) => payload?.dailyBounds || [],
  *   dependency: currentYear,
+ *   currentYearNumber: currentYear,
  * });
  */
 export default function useStorageSync({
@@ -35,6 +40,7 @@ export default function useStorageSync({
   storageKeys,
   extractData,
   dependency,
+  currentYearNumber,
 }) {
   const [data, setData] = useState(loadData);
 
@@ -49,6 +55,17 @@ export default function useStorageSync({
   // Listen for storage events (both custom and native)
   useEffect(() => {
     const handleCustomEvent = (event) => {
+      // H3 guard: if the event is tagged with a year and this listener is
+      // scoped to a different year, ignore the event. Untagged events (legacy
+      // or non-year-scoped callers) pass through.
+      const eventYear = event?.detail?.__eventYear;
+      if (
+        currentYearNumber != null
+        && eventYear != null
+        && eventYear !== currentYearNumber
+      ) {
+        return;
+      }
       const payload = event.detail || loadData();
       setData(extractDataCallback(payload));
     };
@@ -73,7 +90,7 @@ export default function useStorageSync({
         window.removeEventListener('storage', handleNativeStorageEvent);
       };
     }
-  }, [customEventName, storageKeys, loadData, extractDataCallback]);
+  }, [customEventName, storageKeys, loadData, extractDataCallback, currentYearNumber]);
 
   return [data, setData];
 }

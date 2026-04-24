@@ -8,10 +8,10 @@ import ResetPasswordPage from '../pages/ResetPasswordPage';
 import AccountDeletedPage from '../pages/AccountDeletedPage';
 import Layout from '../components/Layout';
 import ProjectTimePlannerV2 from '../pages/ProjectTimePlannerV2';
-import ProjectTimePlannerWireframe from '../pages/ProjectTimePlannerWireframe';
 import StagingPageV2 from '../pages/StagingPageV2';
 import TacticsPage from '../pages/TacticsPage';
 import AccountSettingsPage from '../pages/AccountSettingsPage';
+import NotFoundPage from '../pages/NotFoundPage';
 
 /**
  * Application Routes Configuration
@@ -75,18 +75,18 @@ export const router = createBrowserRouter([
         element: <TacticsPage />,
       },
       {
-        path: 'v1',
-        element: (
-          <div className="p-4">
-            <ProjectTimePlannerWireframe />
-          </div>
-        ),
-      },
-      {
         path: 'settings',
         element: <AccountSettingsPage />,
       },
     ],
+  },
+
+  // Catch-all 404. Keep at the end so it only matches when nothing above
+  // does. Rendered outside the ProtectedRoute tree so an unauthenticated
+  // visitor to /non-existent does not bounce through /login first.
+  {
+    path: '*',
+    element: <NotFoundPage />,
   },
 ]);
 

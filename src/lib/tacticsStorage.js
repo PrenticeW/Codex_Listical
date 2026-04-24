@@ -137,10 +137,14 @@ export const saveTacticsChipsState = (payload, yearNumber = null) => {
     const key = getChipsStorageKey(yearNumber);
     storage.setJSON(key, payload);
 
-    // Dispatch custom event for reactive updates
+    // Dispatch custom event for reactive updates. Include the year number in
+    // the detail so listeners on a different year can ignore stale events
+    // (H3). The reserved __eventYear key does not collide with payload fields
+    // (projectChips / customProjects / chipTimeOverrides).
     if (typeof window !== 'undefined') {
+      const eventDetail = { ...(payload || {}), __eventYear: yearNumber };
       const event = typeof CustomEvent === 'function'
-        ? new CustomEvent(TACTICS_CHIPS_STORAGE_EVENT, { detail: payload })
+        ? new CustomEvent(TACTICS_CHIPS_STORAGE_EVENT, { detail: eventDetail })
         : new Event(TACTICS_CHIPS_STORAGE_EVENT);
       window.dispatchEvent(event);
     }

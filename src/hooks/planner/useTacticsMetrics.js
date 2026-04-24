@@ -53,6 +53,7 @@ export default function useTacticsMetrics() {
     storageKeys: [`tactics-year-${currentYear}-metrics-state`, 'tactics-metrics-state'],
     extractData: extractDailyBounds,
     dependency: currentYear,
+    currentYearNumber: currentYear, // H3: ignore metrics events from other years
   });
 
   // Load project weekly quotas
@@ -71,6 +72,7 @@ export default function useTacticsMetrics() {
     storageKeys: [`tactics-year-${currentYear}-metrics-state`, 'tactics-metrics-state'],
     extractData: extractQuotas,
     dependency: currentYear,
+    currentYearNumber: currentYear, // H3: ignore metrics events from other years
   });
 
   return { dailyBounds, projectWeeklyQuotas };

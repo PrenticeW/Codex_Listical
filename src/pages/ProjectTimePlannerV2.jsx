@@ -1416,7 +1416,12 @@ export default function ProjectTimePlannerV2() {
 
   // Handle the live "Send to System" event — reload all tactics data from storage
   useEffect(() => {
-    const handler = () => {
+    const handler = (event) => {
+      // H3: if the event is tagged with a year, only react when it matches
+      // the System page's current year. Untagged events pass through for
+      // backwards compatibility.
+      const eventYear = event?.detail?.__eventYear;
+      if (eventYear != null && eventYear !== currentYear) return;
       const ts = getSendToSystemTimestamp(currentYear);
       lastResetTsRef.current = ts;
       setSentToSystem(true);

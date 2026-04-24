@@ -1,12 +1,14 @@
 import { RouterProvider } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { UserProvider } from './contexts/UserContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import router from './routes';
 
 /**
  * App Component
  *
  * Root application component that sets up:
+ * - Error boundary (catches render-time crashes below the providers)
  * - Authentication context (AuthProvider)
  * - User data context (UserProvider)
  * - Routing (RouterProvider)
@@ -16,10 +18,12 @@ import router from './routes';
  */
 export default function App() {
   return (
-    <AuthProvider>
-      <UserProvider>
-        <RouterProvider router={router} />
-      </UserProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <UserProvider>
+          <RouterProvider router={router} />
+        </UserProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

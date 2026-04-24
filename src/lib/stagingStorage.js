@@ -117,10 +117,14 @@ export const saveStagingState = (payload, yearNumber = null) => {
     };
     storage.setJSON(key, serializedPayload);
 
-    // Dispatch custom event for cross-tab sync
+    // Dispatch custom event for cross-tab sync. Include the year number in
+    // the detail so listeners on a different year can ignore stale events
+    // (H3: cross-year event collisions). The reserved __eventYear key does
+    // not collide with any known payload field (shortlist/archived).
     if (typeof window !== 'undefined') {
+      const eventDetail = { ...(payload || {}), __eventYear: yearNumber };
       const event = typeof CustomEvent === 'function'
-        ? new CustomEvent(STAGING_STORAGE_EVENT, { detail: payload })
+        ? new CustomEvent(STAGING_STORAGE_EVENT, { detail: eventDetail })
         : new Event(STAGING_STORAGE_EVENT);
       window.dispatchEvent(event);
     }

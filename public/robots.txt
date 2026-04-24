@@ -1,0 +1,7 @@
+# Listical is an authenticated web app. There is no public marketing surface
+# yet, so crawlers should not index any path. Revisit once a public landing
+# page exists: at that point, Allow: /$ and Disallow: every authenticated
+# route explicitly.
+
+User-agent: *
+Disallow: /
