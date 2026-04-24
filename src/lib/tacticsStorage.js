@@ -6,10 +6,47 @@ const TACTICS_COLUMN_WIDTHS_KEY_TEMPLATE = 'tactics-column-widths-{yearNumber}';
 export const TACTICS_CHIPS_STORAGE_EVENT = 'tactics-chips-state-update';
 export const TACTICS_SEND_TO_SYSTEM_EVENT = 'tactics-send-to-system';
 export const TACTICS_SEND_TO_SYSTEM_TS_KEY = 'tactics-send-to-system-ts';
-export const getSendToSystemTsKey = (yearNumber) =>
+// Internal: key builder for the year-scoped send-to-system timestamp.
+// Consumers should use the get/set/clear helpers below rather than reading
+// or writing this key directly.
+const getSendToSystemTsKey = (yearNumber) =>
   yearNumber != null
     ? `tactics-year-${yearNumber}-send-to-system-ts`
     : TACTICS_SEND_TO_SYSTEM_TS_KEY;
+
+/**
+ * Read the "Send to System" timestamp for a given year.
+ * Returns the stored timestamp string or null if the marker is absent.
+ *
+ * Routing through storageService means the key is user-scoped on the
+ * authenticated planner, so two users on the same device do not see each
+ * other's send-to-system state.
+ *
+ * @param {number|null} yearNumber
+ * @returns {string|null}
+ */
+export function getSendToSystemTimestamp(yearNumber) {
+  return storage.getItem(getSendToSystemTsKey(yearNumber));
+}
+
+/**
+ * Stamp the "Send to System" marker for a given year with the current time.
+ *
+ * @param {number|null} yearNumber
+ */
+export function setSendToSystemTimestamp(yearNumber) {
+  storage.setItem(getSendToSystemTsKey(yearNumber), Date.now().toString());
+}
+
+/**
+ * Remove the "Send to System" marker for a given year.
+ * Used when (re)creating or undoing a draft year.
+ *
+ * @param {number|null} yearNumber
+ */
+export function clearSendToSystemTimestamp(yearNumber) {
+  storage.removeItem(getSendToSystemTsKey(yearNumber));
+}
 
 const DEFAULT_SETTINGS = {
   startHour: '',

@@ -31,7 +31,7 @@ import {
   loadTacticsColumnWidths,
   saveTacticsColumnWidths,
   TACTICS_SEND_TO_SYSTEM_EVENT,
-  getSendToSystemTsKey,
+  setSendToSystemTimestamp,
   saveSentChipsSnapshot,
 } from '../lib/tacticsStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
@@ -2605,7 +2605,7 @@ export default function TacticsPage() {
     saveSentChipsSnapshot({ projectChips, customProjects, chipTimeOverrides }, currentYear);
 
     // Write timestamp so System page resets subproject labels even if it mounts after this fires
-    localStorage.setItem(getSendToSystemTsKey(currentYear), Date.now().toString());
+    setSendToSystemTimestamp(currentYear);
     // Also signal if System is already mounted
     window.dispatchEvent(new CustomEvent(TACTICS_SEND_TO_SYSTEM_EVENT));
 

@@ -54,6 +54,7 @@ import {
   loadTacticsColumnWidths,
   saveTacticsColumnWidths,
   saveSentChipsSnapshot,
+  clearSendToSystemTimestamp,
 } from '../../lib/tacticsStorage';
 // Note: task rows are no longer copied during draft creation.
 // The System page starts blank; the user imports tasks via the Import Wizard
@@ -279,7 +280,7 @@ export async function createDraftYearFromActive(activeYearNumber) {
     // previous draft with the same number was undone without full cleanup.
     saveSentChipsSnapshot({ projectChips: null, customProjects: null, chipTimeOverrides: null }, draftYearNumber);
     try {
-      localStorage.removeItem(`tactics-year-${draftYearNumber}-send-to-system-ts`);
+      clearSendToSystemTimestamp(draftYearNumber);
     } catch {
       // Best effort
     }

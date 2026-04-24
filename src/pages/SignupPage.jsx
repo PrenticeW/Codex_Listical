@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  getAgeBlockTimestamp,
+  saveAgeBlockTimestamp,
+  clearAgeBlockTimestamp,
+} from '../lib/ageBlockStorage';
 
-// LocalStorage key for age verification block
-const AGE_BLOCK_KEY = 'listical_age_block';
 const AGE_BLOCK_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // Helper to check if user is blocked from signup attempts
 function isAgeBlocked() {
-  const blockData = localStorage.getItem(AGE_BLOCK_KEY);
+  const blockData = getAgeBlockTimestamp();
   if (!blockData) return false;
 
   const blockTime = parseInt(blockData, 10);
@@ -19,13 +22,13 @@ function isAgeBlocked() {
   }
 
   // Block expired, remove it
-  localStorage.removeItem(AGE_BLOCK_KEY);
+  clearAgeBlockTimestamp();
   return false;
 }
 
 // Helper to set the age block
 function setAgeBlock() {
-  localStorage.setItem(AGE_BLOCK_KEY, Date.now().toString());
+  saveAgeBlockTimestamp();
 }
 
 // Calculate age from date of birth

@@ -14,6 +14,7 @@ import {
   deleteDraftYearRecord,
   setCurrentYear,
 } from '../../lib/yearMetadataStorage';
+import { clearSendToSystemTimestamp } from '../../lib/tacticsStorage';
 import { getProjectKey } from './storage';
 import {
   COLUMN_SIZING_KEY_TEMPLATE,
@@ -94,10 +95,11 @@ export function undoDraftYear() {
       }
     });
 
-    // The send-to-system timestamp is written with raw localStorage (no user
-    // scope), so storage.removeItem won't reach it — remove it directly.
+    // Clear the send-to-system timestamp for this draft year. Routed through
+    // tacticsStorage (and therefore storageService), so the correctly
+    // user-scoped key is removed.
     try {
-      localStorage.removeItem(`tactics-year-${draft.yearNumber}-send-to-system-ts`);
+      clearSendToSystemTimestamp(draft.yearNumber);
     } catch {
       // Best effort
     }
