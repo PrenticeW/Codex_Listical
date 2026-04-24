@@ -1142,6 +1142,7 @@ export default function ProjectTimePlannerV2() {
         const buildChipTaskRow = (chip, chipGroupId, taskLabel) => {
           const estimateLabel = minutesToEstimateLabel(chip.durationMinutes);
           const timeVal = chip.durationMinutes ? formatMinutesToHHmm(chip.durationMinutes) : '';
+          const recurringInitial = 'Recurring';
           return {
             id: `chip-task-${chip.id}`,
             _rowType: 'projectTask',
@@ -1153,9 +1154,16 @@ export default function ProjectTimePlannerV2() {
             subproject: '',
             status: '-',
             task: taskLabel,
-            recurring: 'Recurring',
+            recurring: recurringInitial,
             estimate: estimateLabel,
             timeValue: timeVal,
+            // Stamps of the last canonical values written from Plan.
+            // resetSubprojectLabels uses these to detect user edits and preserve them
+            // (mirrors the _chipLabel pattern on the subproject header row).
+            _originalTask: taskLabel,
+            _originalEstimate: estimateLabel,
+            _originalTimeValue: timeVal,
+            _originalRecurring: recurringInitial,
             ...createEmptyDayColumns(totalDays),
           };
         };
@@ -1286,9 +1294,57 @@ export default function ProjectTimePlannerV2() {
             if (chip && shortLabel !== undefined) {
               const estimateLabel = minutesToEstimateLabel(chip.durationMinutes);
               const timeVal = chip.durationMinutes ? formatMinutesToHHmm(chip.durationMinutes) : '';
-              if (row.task !== shortLabel || row.estimate !== estimateLabel || row.timeValue !== timeVal || row.recurring !== 'true') {
+              const canonicalRecurring = 'true';
+
+              // Per-field user-edit detection.
+              // A field is considered user-edited when its _original* stamp exists and
+              // the current row value has diverged from that stamp. Mirrors the
+              // _chipLabel pattern used on the subproject header row above.
+              // Rows created before this stamping was added have undefined stamps,
+              // which means their first sync behaves like the old unconditional overwrite
+              // (one-time migration cost — same behavior as the header row pattern).
+              const taskEdited = row._originalTask !== undefined && row.task !== row._originalTask;
+              const estimateEdited = row._originalEstimate !== undefined && row.estimate !== row._originalEstimate;
+              const timeValueEdited = row._originalTimeValue !== undefined && row.timeValue !== row._originalTimeValue;
+              const recurringEdited = row._originalRecurring !== undefined && row.recurring !== row._originalRecurring;
+
+              const nextTask = taskEdited ? row.task : shortLabel;
+              const nextEstimate = estimateEdited ? row.estimate : estimateLabel;
+              const nextTimeValue = timeValueEdited ? row.timeValue : timeVal;
+              const nextRecurring = recurringEdited ? row.recurring : canonicalRecurring;
+
+              // Only restamp _original* for fields the user has NOT edited.
+              // Edited fields keep their old stamp so they stay protected on future syncs.
+              const nextOriginalTask = taskEdited ? row._originalTask : shortLabel;
+              const nextOriginalEstimate = estimateEdited ? row._originalEstimate : estimateLabel;
+              const nextOriginalTimeValue = timeValueEdited ? row._originalTimeValue : timeVal;
+              const nextOriginalRecurring = recurringEdited ? row._originalRecurring : canonicalRecurring;
+
+              const needsUpdate =
+                row._chipId !== chipId ||
+                row.task !== nextTask ||
+                row.estimate !== nextEstimate ||
+                row.timeValue !== nextTimeValue ||
+                row.recurring !== nextRecurring ||
+                row._originalTask !== nextOriginalTask ||
+                row._originalEstimate !== nextOriginalEstimate ||
+                row._originalTimeValue !== nextOriginalTimeValue ||
+                row._originalRecurring !== nextOriginalRecurring;
+
+              if (needsUpdate) {
                 changed = true;
-                return { ...row, _chipId: chipId, task: shortLabel, estimate: estimateLabel, timeValue: timeVal, recurring: 'true' };
+                return {
+                  ...row,
+                  _chipId: chipId,
+                  task: nextTask,
+                  estimate: nextEstimate,
+                  timeValue: nextTimeValue,
+                  recurring: nextRecurring,
+                  _originalTask: nextOriginalTask,
+                  _originalEstimate: nextOriginalEstimate,
+                  _originalTimeValue: nextOriginalTimeValue,
+                  _originalRecurring: nextOriginalRecurring,
+                };
               }
             }
           }
@@ -1306,8 +1362,10 @@ export default function ProjectTimePlannerV2() {
         const headerIndex = newData.findIndex(r => r._rowType === 'subprojectHeader' && r._chipId === chip.id);
         if (headerIndex === -1) return;
         const chipGroupId = `chip-${chip.id}`;
+        const shortLabel = chipShortLabelMap.get(chip.id);
         const estimateLabel = minutesToEstimateLabel(chip.durationMinutes);
         const timeVal = chip.durationMinutes ? formatMinutesToHHmm(chip.durationMinutes) : '';
+        const recurringInitial = 'true';
         const taskRow = {
           id: `chip-task-${chip.id}`,
           _rowType: 'projectTask',
@@ -1318,10 +1376,16 @@ export default function ProjectTimePlannerV2() {
           project: chip.projectNickname,
           subproject: '',
           status: '-',
-          task: chipShortLabelMap.get(chip.id),
-          recurring: 'true',
+          task: shortLabel,
+          recurring: recurringInitial,
           estimate: estimateLabel,
           timeValue: timeVal,
+          // Stamps of the last canonical values written from Plan.
+          // Mirrors the _chipLabel pattern on the subproject header row.
+          _originalTask: shortLabel,
+          _originalEstimate: estimateLabel,
+          _originalTimeValue: timeVal,
+          _originalRecurring: recurringInitial,
           ...createEmptyDayColumns(totalDays),
         };
         newData.splice(headerIndex + 1, 0, taskRow);
