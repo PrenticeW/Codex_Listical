@@ -15,7 +15,7 @@ Listical is a 12-week cycle-planning tool for creative practitioners, structured
 | Routing | React Router |
 | Table | TanStack Table (`@tanstack/react-table`) |
 | Virtualisation | `@tanstack/react-virtual` — imported and called via `useVirtualizer` in `ProjectTimePlannerV2.jsx`. |
-| Auth + profiles | Supabase (auth + `profiles` table only — no planning data in Supabase yet) |
+| Auth + profiles | Supabase (auth + `profiles` table in use; planning schema exists in `supabase/migrations/` but is unused by the client and stale against current page shapes — see CODE_REVIEW_April2026.md "Addendum 4 — Supabase schema vs current storage shape audit" before any migration work) |
 | Styling | Tailwind CSS |
 | Icons | Lucide React |
 | Deployment | Vercel |
@@ -88,6 +88,16 @@ An **Undo Draft** button in the nav bar (all three pages) calls `undoDraftYear` 
 ### Supabase migration (scheduled after Tactics second pass)
 
 The goal is to move all planning data — goals, tactics metrics, chips state, task rows — into Supabase tables, replacing localStorage. **The storage module API will stay the same; only the internals change.** Consumers of `stagingStorage`, `tacticsMetricsStorage`, and `plannerStorage` should not need to change.
+
+**Current state:** A planning schema was authored in `supabase/migrations/20260102000001_initial_schema.sql` (tables: `years`, `projects`, `subprojects`, `planner_rows`, `day_entries`, `tactics_daily_bounds`, `project_weekly_quotas`, `tactics_chips`, `user_preferences`). The client has **zero references** to any of these tables today. All three pages have been rewritten since that migration was written, so the schema is drifted. Known blockers that must be fixed by a new migration *before* client porting begins:
+
+1. `years.status` CHECK allows only `'active'` and `'archived'` — missing `'draft'`, which the current app uses as a first-class status.
+2. `tactics_chips` is missing columns (`day_name`, `duration_minutes`, `start_minutes`, `user_modified`, `chip_time_overrides`) and its `column_index CHECK (0–6)` excludes project-column chips.
+3. No sent-snapshot layer — the two-layer live/committed model needs either a boolean flag + partial unique index, or parallel `*_sent` tables.
+4. `project_weekly_quotas.project_label` should be `project_id UUID FK` to fix H1 at the schema level.
+5. `ON DELETE CASCADE` coverage from `auth.users(id)` through the full planning table tree must be audited before launch (GDPR).
+
+Full delta lists per storage module live in the audit addendum of the code review doc.
 
 ---
 

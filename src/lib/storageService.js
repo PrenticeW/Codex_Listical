@@ -281,6 +281,47 @@ export function getAllKeys() {
 }
 
 /**
+ * Remove all user-scoped keys for a given userId.
+ *
+ * Used on sign-out and account deletion to prevent per-user localStorage
+ * orphans from accumulating on shared devices. Addresses B1 in
+ * CODE_REVIEW_April2026.md and supports GDPR Right to Erasure.
+ *
+ * Only removes keys with the exact `user:{userId}:` prefix. Global keys,
+ * other users' keys, and legacy unscoped keys are left untouched.
+ *
+ * @param {string} userId - User ID whose scoped keys should be removed
+ * @returns {number} Number of keys removed
+ */
+export function clearUserKeys(userId) {
+  if (!isBrowserEnvironment() || !userId) {
+    return 0;
+  }
+
+  const prefix = `user:${userId}:`;
+  let removed = 0;
+
+  try {
+    // Snapshot keys before mutating — localStorage indexes shift as we remove.
+    const allKeys = getAllKeys();
+    for (const key of allKeys) {
+      if (key.startsWith(prefix)) {
+        try {
+          window.localStorage.removeItem(key);
+          removed += 1;
+        } catch (error) {
+          console.error(`[StorageService] Failed to remove user key "${key}":`, error);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[StorageService] Failed to clear user keys:', error);
+  }
+
+  return removed;
+}
+
+/**
  * Get the total size of storage in bytes (approximate)
  * @returns {number} Approximate size in bytes
  */
@@ -326,6 +367,7 @@ export default {
   setJSON,
   hasKey,
   getAllKeys,
+  clearUserKeys,
   getStorageSize,
   isAvailable,
 

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { setCurrentUserId } from '../lib/storageService';
+import { setCurrentUserId, getCurrentUserId, clearUserKeys } from '../lib/storageService';
 import useAsyncHandler from '../hooks/common/useAsyncHandler';
 import { supabase } from '../lib/supabase';
 
@@ -79,6 +79,14 @@ export function AuthProvider({ children }) {
           setIsAuthenticated(true);
           setCurrentUserId(currentSession.user.id);
         } else {
+          // Clean up user-scoped localStorage before dropping the user id,
+          // so per-user data does not accumulate as orphans on shared devices.
+          // Addresses B1 in CODE_REVIEW_April2026.md (GDPR Right to Erasure).
+          const previousUserId = getCurrentUserId();
+          if (previousUserId) {
+            clearUserKeys(previousUserId);
+          }
+
           setUser(null);
           setSession(null);
           setIsAuthenticated(false);
