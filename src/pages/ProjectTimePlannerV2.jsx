@@ -90,12 +90,19 @@ const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On 
 const SYSTEM_PROJECTS = new Set(['sleep', 'rest', 'buffer']);
 const DAY_COLUMN_COUNT = 7;
 
+// Quotas are keyed by project id (not label/nickname) so that renaming a
+// project on Goal does not silently zero out the weekly hours shown on System.
+// The id is carried on every quota entry by TacticsPage when it writes the
+// sent snapshot. ProjectRow translates its nickname to an id via the
+// projectIdByNickname map sourced from current staging.
 function buildQuotasMap(quotasArray) {
   const quotasMap = new Map();
   if (quotasArray && Array.isArray(quotasArray)) {
     quotasArray.forEach((quota) => {
-      if (quota?.label && quota?.weeklyHours) {
-        quotasMap.set(quota.label, quota.weeklyHours);
+      // Use id as the stable key. Preserve zero-hour quotas by checking for
+      // null/undefined rather than falsiness.
+      if (quota?.id && quota.weeklyHours != null) {
+        quotasMap.set(quota.id, quota.weeklyHours);
       }
     });
   }
@@ -374,7 +381,7 @@ export default function ProjectTimePlannerV2() {
   const [addTasksCount, setAddTasksCount] = useState('');
 
   // Load projects and subprojects from Staging
-  const { projects, subprojects, projectSubprojectsMap, projectNamesMap, projectTaglinesMap } = useProjectsData();
+  const { projects, subprojects, projectSubprojectsMap, projectNamesMap, projectTaglinesMap, projectIdByNickname } = useProjectsData();
 
   // Import tasks from active year into draft (single action, no wizard)
   const handleImportTasks = useCallback(() => {
@@ -2505,6 +2512,7 @@ export default function ProjectTimePlannerV2() {
         projectSubprojectsMap={projectSubprojectsMap}
         totalDays={totalDays}
         projectWeeklyQuotas={projectWeeklyQuotas}
+        projectIdByNickname={projectIdByNickname}
         projectTotals={projectTotals}
         dayColumnFilters={dayColumnFilters}
         handleDayColumnFilterToggle={handleDayColumnFilterToggle}

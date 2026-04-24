@@ -27,6 +27,7 @@ export default function ProjectRow({
   gripIconSize,
   totalDays,
   projectWeeklyQuotas = new Map(),
+  projectIdByNickname = new Map(),
   projectTotals = {},
   isArchived = false,
   collapsedGroups = new Set(),
@@ -81,9 +82,14 @@ export default function ProjectRow({
   // Prefer nickname over full project name
   const displayLabel = isSubprojectHeader ? subprojectName : (projectNickname || projectName);
 
-  // Get weekly quota for this project (only for header rows)
-  // Use nickname as key for quota lookup since that's how quotas are stored
-  const rawQuota = isHeader ? (projectWeeklyQuotas.get(projectNickname) ?? 0) : null;
+  // Get weekly quota for this project (only for header rows).
+  // Quotas are keyed by the project's stable id, not by nickname, so that a
+  // Goal-side rename does not silently zero out the hours shown here. We
+  // translate the row's nickname into an id via projectIdByNickname (built
+  // from current staging). If the row predates the id-based join (or the
+  // project has been deleted), the lookup returns 0.
+  const projectIdForQuota = isHeader ? projectIdByNickname.get(projectNickname) : null;
+  const rawQuota = isHeader ? (projectWeeklyQuotas.get(projectIdForQuota) ?? 0) : null;
   const formattedQuota = rawQuota !== null
     ? (typeof rawQuota === 'number' ? rawQuota.toFixed(2) : parseFloat(rawQuota).toFixed(2))
     : '0.00';

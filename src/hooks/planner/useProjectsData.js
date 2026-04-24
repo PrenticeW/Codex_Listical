@@ -56,6 +56,7 @@ export function extractProjectsData(shortlist) {
       projectSubprojectsMap: {},
       projectNamesMap: {},
       projectTaglinesMap: {},
+      projectIdByNickname: new Map(),
     };
   }
 
@@ -64,6 +65,7 @@ export function extractProjectsData(shortlist) {
   const projectSubprojectsMap = {};
   const projectNamesMap = {}; // Map from nickname/key to full project name
   const projectTaglinesMap = {}; // Map from nickname/key to tagline
+  const projectIdByNickname = new Map(); // Nickname/key -> stable project id (join key for quotas)
 
   shortlist.forEach(item => {
     const fullProjectName = (item.projectName || '').trim();
@@ -81,6 +83,13 @@ export function extractProjectsData(shortlist) {
 
       // Store tagline
       projectTaglinesMap[projectKey] = (item.projectTagline || '').trim();
+
+      // Store nickname -> id mapping so downstream consumers (e.g. quota lookup
+      // in System) can translate a display nickname into the stable id that
+      // survives project renames.
+      if (item.id) {
+        projectIdByNickname.set(projectKey, item.id);
+      }
 
       // Extract subprojects by scanning for rows in the Subprojects section.
       // StagingPageV2 inserts subproject rows as 'prompt' type (name at col 1)
@@ -121,5 +130,6 @@ export function extractProjectsData(shortlist) {
     projectSubprojectsMap,
     projectNamesMap,
     projectTaglinesMap,
+    projectIdByNickname,
   };
 }

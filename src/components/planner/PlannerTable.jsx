@@ -50,6 +50,7 @@ function PlannerTable({
   projectSubprojectsMap,
   totalDays,
   projectWeeklyQuotas,
+  projectIdByNickname,
   projectTotals,
   dayColumnFilters,
   handleDayColumnFilterToggle,
@@ -257,6 +258,7 @@ function PlannerTable({
                   rowData={row.original}
                   totalDays={totalDays}
                   projectWeeklyQuotas={projectWeeklyQuotas}
+                  projectIdByNickname={projectIdByNickname}
                   projectTotals={projectTotals}
                   dayColumnFilters={dayColumnFilters}
                   handleDayColumnFilterToggle={handleDayColumnFilterToggle}
@@ -338,6 +340,7 @@ function PlannerTable({
                   rowData={row.original}
                   totalDays={totalDays}
                   projectWeeklyQuotas={projectWeeklyQuotas}
+                  projectIdByNickname={projectIdByNickname}
                   projectTotals={projectTotals}
                   dayColumnFilters={dayColumnFilters}
                   handleDayColumnFilterToggle={handleDayColumnFilterToggle}

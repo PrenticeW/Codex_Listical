@@ -58,6 +58,7 @@ const TableRow = React.memo(function TableRow({
   rowData,
   totalDays,
   projectWeeklyQuotas,
+  projectIdByNickname,
   projectTotals,
   dayColumnFilters,
   handleDayColumnFilterToggle,
@@ -136,6 +137,7 @@ const TableRow = React.memo(function TableRow({
         gripIconSize={gripIconSize}
         totalDays={totalDays}
         projectWeeklyQuotas={projectWeeklyQuotas}
+        projectIdByNickname={projectIdByNickname}
         projectTotals={projectTotals}
         collapsedGroups={collapsedGroups}
         toggleGroupCollapse={toggleGroupCollapse}
@@ -174,6 +176,7 @@ const TableRow = React.memo(function TableRow({
         gripIconSize={gripIconSize}
         totalDays={totalDays}
         projectWeeklyQuotas={projectWeeklyQuotas}
+        projectIdByNickname={projectIdByNickname}
         projectTotals={archiveTotals.projectTotals || {}}
         isArchived={true}
         collapsedGroups={collapsedGroups}
