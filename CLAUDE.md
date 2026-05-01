@@ -40,9 +40,13 @@ Pages communicate via custom browser events:
 
 - `staging-state-update` — fired by `stagingStorage.saveStagingState`; listened to by TacticsPage and `useProjectsData` (System)
 - `tactics-metrics-state-update` — fired by `tacticsMetricsStorage.saveTacticsMetrics`; listened to by `useTacticsMetrics` (System)
+- `tactics-chips-state-update` — fired by `tacticsStorage.saveTacticsChipsState`; listened to by `useTacticsChips` (System)
+- `tactics-send-to-system` — fired by TacticsPage `handleSendToSystem`; listened to by `ProjectTimePlannerV2`
 - `yearMetadataStorage` — fired by `yearMetadataStorage.saveYearMetadata`; listened to by `YearContext`
 
 **Do not add direct imports between page components** (Goal, Plan, System) to share data. The event system is the contract.
+
+**Year-scoping on events (H3 fix, 2026-04-24):** Every event in the first four rows above carries a reserved `__eventYear` field on its `CustomEvent.detail` so listeners can ignore cross-year cross-talk. Dispatchers spread `__eventYear: yearNumber` alongside the payload; listeners short-circuit if `event.detail.__eventYear` is set and does not match their own `currentYear`. `useStorageSync` takes an optional `currentYearNumber` prop for this. `yearMetadataStorage` is intentionally not tagged — it's inherently global. **When adding any new cross-page custom event, include `__eventYear` in the detail if it carries year-scoped data.**
 
 ### Storage key scoping
 

@@ -147,8 +147,8 @@ export default function SignupPage() {
     }
 
     // Validate password length
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (password.length < 10) {
+      setError('Password must be at least 10 characters');
       return;
     }
 
@@ -303,7 +303,7 @@ export default function SignupPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    placeholder="Minimum 6 characters"
+                    placeholder="Minimum 10 characters"
                     disabled={isBlocked}
                   />
                 </div>

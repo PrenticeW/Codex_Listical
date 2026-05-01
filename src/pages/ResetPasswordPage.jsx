@@ -26,8 +26,8 @@ export default function ResetPasswordPage() {
     }
 
     // Validate password length
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (password.length < 10) {
+      setError('Password must be at least 10 characters');
       return;
     }
 
@@ -106,7 +106,7 @@ export default function ResetPasswordPage() {
                     placeholder="Enter new password"
                   />
                 </div>
-                <p className="mt-2 text-xs text-gray-500">Must be at least 6 characters</p>
+                <p className="mt-2 text-xs text-gray-500">Must be at least 10 characters</p>
               </div>
 
               {/* Confirm Password Field */}

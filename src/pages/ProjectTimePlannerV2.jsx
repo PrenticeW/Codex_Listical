@@ -392,18 +392,12 @@ export default function ProjectTimePlannerV2() {
     setData((prev) => placeImportedTasks(prev, imported));
   }, [activeYear, projects, projectSubprojectsMap, setData]);
 
-  // Load tactics data on mount and year change — live updates only via "Send to System"
+  // Load tactics data on mount — Layout's <Outlet key={currentYear}> remounts
+  // this page on every year change, so the useState initialisers above (and the
+  // sentToSystem initialiser earlier in this component) re-run synchronously
+  // with the new year. No year-change effect needed.
   const [{ dailyBounds, projectWeeklyQuotas }, setMetricsData] = useState(() => loadMetricsData(currentYear));
   const [tacticsChips, setTacticsChips] = useState(() => loadEnrichedChips(currentYear));
-  const prevYearRef = useRef(currentYear);
-  useEffect(() => {
-    if (currentYear !== prevYearRef.current) {
-      prevYearRef.current = currentYear;
-      setMetricsData(loadMetricsData(currentYear));
-      setTacticsChips(loadEnrichedChips(currentYear));
-      setSentToSystem(!!getSendToSystemTimestamp(currentYear));
-    }
-  }, [currentYear]);
 
   // Command pattern for undo/redo
   const { undoStack, redoStack, executeCommand, undo, redo } = useCommandPattern();

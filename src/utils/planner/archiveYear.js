@@ -179,6 +179,21 @@ export async function performYearArchive(yearNumber) {
       throw new Error(`Year ${yearNumber} is not active (status: ${yearInfo.status})`);
     }
 
+    // 1b. If a draft year exists, archiving promotes it to active. Reject the
+    //     operation when the draft has no projects shortlisted, so the user
+    //     does not land on a fresh active year with an empty Goal page (M3).
+    //     This mirrors the guard in validateYearReadyForArchive so a
+    //     programmatic call cannot bypass the modal's disabled state.
+    const draftYearForGuard = getDraftYear();
+    if (draftYearForGuard) {
+      const { shortlist: draftShortlist } = loadStagingState(draftYearForGuard.yearNumber);
+      if (!Array.isArray(draftShortlist) || draftShortlist.length === 0) {
+        throw new Error(
+          `Year ${draftYearForGuard.yearNumber} has no projects on the Goal page yet. Add at least one project before archiving Year ${yearNumber}.`
+        );
+      }
+    }
+
     // 2. Read all data from current year
     const taskRows = readTaskRows(DEFAULT_PROJECT_ID, yearNumber);
     const startDate = readStartDate(DEFAULT_PROJECT_ID, yearNumber);
@@ -309,6 +324,20 @@ export function validateYearReadyForArchive(yearNumber) {
       ready: false,
       reason: `Year ${yearNumber} is not active (already archived)`,
     };
+  }
+
+  // If a draft year exists, archiving will promote it to active. Reject when
+  // the draft's Goal page has no projects shortlisted, otherwise the user
+  // lands on a fresh active year with nothing planned (M3).
+  const draftYear = getDraftYear();
+  if (draftYear) {
+    const { shortlist } = loadStagingState(draftYear.yearNumber);
+    if (!Array.isArray(shortlist) || shortlist.length === 0) {
+      return {
+        ready: false,
+        reason: `Year ${draftYear.yearNumber} has no projects on the Goal page yet. Add at least one project before archiving Year ${yearNumber}.`,
+      };
+    }
   }
 
   const taskRows = readTaskRows(DEFAULT_PROJECT_ID, yearNumber);

@@ -16,13 +16,29 @@ Running tally of what's been addressed since this review was authored. Findings 
 | B4 | Dev-only Undo Draft / Revert Archive ship in prod | ⏸ Deferred | Intentionally left in for testing the Plan Next Year flow. Revisit in the final polish pass. |
 | H1 | `projectNickname` rename orphans quota data | ✅ Done | `projectWeeklyQuotas` Map now keyed by `id`, lookups switched to `id`. |
 | H2 | Stale closure on Send to System listener | 🔵 Downgraded | No actual bug in practice (see V2 addendum). Leave as note. |
-| H3 | Cross-year event collisions | 🟠 Next candidate | Not started. Top of queue after B3 verification. |
+| H3 | Cross-year event collisions | ✅ Done | All four custom events (`staging-state-update`, `tactics-metrics-state-update`, `tactics-chips-state-update`, `tactics-send-to-system`) now carry `__eventYear` in detail. Listeners in `useStorageSync`, `ProjectTimePlannerV2`, and `TacticsPage` compare against their own `currentYear` and short-circuit on mismatch. `yearMetadataStorage` intentionally excluded as it's inherently global. |
 | H4 | System cold-load race | 🔵 Downgraded | UX edge case, not a race. |
 | H5 | Send to System stomps user edits on chip task rows | ✅ Done | `_original*` fields now stamped and compared before overwrite. |
-| M1–M5, P1–P5 | Medium and polish items | ⬜ Not started | Batch after high-severity work. |
+| M1 | Orphaned storage cleanup in undoDraftYear | ⬜ Not started | Queued after M3/M4. |
+| M2 | Archive flow has no transaction semantics | ⬜ Not started | Queued after M3/M4. |
+| M3 | No validation before archiving (empty-goal trap) | ⬜ Not started | Next candidate. Reject archive if draft shortlist is empty. |
+| M4 | Weak password policy (6-character minimum) | ⬜ Not started | Next candidate. Bump to 10 in `SignupPage.jsx:142–144`. |
+| M5 | Missing ErrorBoundary and 404 route | ✅ Done | `src/components/ErrorBoundary.jsx` wraps the provider tree in `App.jsx`. `src/pages/NotFoundPage.jsx` registered as catch-all at the end of the routes array, rendered outside the ProtectedRoute tree so unauthenticated visitors to bad URLs do not bounce through `/login`. |
+| P1 | `index.html` is default Vite template | ✅ Done | Proper `<title>Listical</title>`, description, OG + Twitter tags (no image yet — TODO when brand asset ships), theme-color `#d5a6bd`, `noindex, nofollow`. `public/favicon.svg` added (rounded pink square with white "L"). `public/vite.svg` deleted. |
+| P2 | Legacy `/v1` route still in router | ✅ Done | Route removed from `src/routes/index.jsx`; `src/pages/ProjectTimePlannerWireframe.jsx` deleted. |
+| P3 | `console.log` calls in `ProjectTimePlannerWireframe.jsx` | ✅ Done | Moot — file deleted under P2. |
+| P4 | `public/robots.txt` missing | ✅ Done | `public/robots.txt` added. Disallows all crawlers while the app is still invite-only. |
+| P5 | No security headers in `vercel.json` | ✅ Done | CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, HSTS all added. CSP `connect-src` uses `https://*.supabase.co` + `wss://*.supabase.co` wildcards so it works across Supabase project URLs. |
 | NEW | Custom SMTP required before public launch | 🟠 Launch prerequisite | Supabase built-in mailer is dev-only (~2 auth emails/hour/project). Configure Resend, Postmark, SendGrid, or similar under Auth → Emails → SMTP Settings before any public rollout. Currently unaddressed. |
 
 Legend: ✅ done, 🟡 mostly done, 🟠 open / queued, ⏸ deferred, 🔵 downgraded, ⬜ not started.
+
+### Remaining pre-launch work
+
+- **Bugs:** M1, M2, M3, M4.
+- **Addendum cleanup (from deep-read addenda):** delete dead `src/hooks/planner/useTacticsMetrics.js`; delete dead `useArchiveOperations.js`; remove the dead `prevYearRef` effect at `ProjectTimePlannerV2.jsx:391–399`; change `buildQuotasMap` truthiness guards at `ProjectTimePlannerV2.jsx:97` and `useTacticsMetrics.js:23` from `&& quota?.weeklyHours` to `!= null` so projects with zero-minute quotas aren't silently dropped.
+- **Auth infrastructure:** custom SMTP provider (Resend / Postmark / SendGrid) in Supabase dashboard; then final B3 "Check your inbox" smoke test.
+- **Final polish pass:** B4 (gate or remove Undo Draft / Revert Archive). Keep until then — Prentice still needs it for manual Plan Next Year testing.
 
 
 **Coverage:** Full structural read of routing, contexts, storage modules, auth flow, deletion flow, draft year flow. Targeted reads of auth pages and components. Parallel explorer audits on storage isolation, cross-page event wiring, draft year flow, and pre-launch hygiene. Deeper line-by-line review of `TacticsPage.jsx` (5,042 lines) and `ProjectTimePlannerV2.jsx` (2,523 lines) deferred — flagged below as needing targeted follow-up.
@@ -134,7 +150,7 @@ Suggested order of operations: fix the four launch blockers, then tackle the hig
 
 ---
 
-#### H3 — Cross-year event collisions
+#### H3 — Cross-year event collisions ✅ DONE (2026-04-24)
 
 **Files:** `src/lib/stagingStorage.js:125`, `src/lib/tacticsMetricsStorage.js:38`.
 
@@ -143,6 +159,17 @@ Suggested order of operations: fix the four launch blockers, then tackle the hig
 **Reproduction:** Open Goal on Year 1, open Plan in a second tab on Year 2. Edit on Goal Year 1. Plan tab receives `staging-state-update` and re-reads, potentially with stale year context.
 
 **Fix direction:** Include yearNumber in event `detail`, and have listeners compare to their own `currentYear` before acting. Small change, removes a class of bugs.
+
+**What shipped:** All four cross-page custom events now carry an `__eventYear` tag on their `CustomEvent` detail payloads:
+
+| Event | Dispatcher | Listener(s) |
+|---|---|---|
+| `staging-state-update` | `src/lib/stagingStorage.js` (saveStagingState) | `TacticsPage.jsx` inline listener + `useStorageSync` (from `useProjectsData`) |
+| `tactics-metrics-state-update` | `src/lib/tacticsMetricsStorage.js` (saveTacticsMetrics) | `useStorageSync` (from `useTacticsMetrics`, two call sites) |
+| `tactics-chips-state-update` | `src/lib/tacticsStorage.js` (saveTacticsChipsState) | `useStorageSync` (from `useTacticsChips`) |
+| `tactics-send-to-system` | `TacticsPage.jsx` (handleSendToSystem) | `ProjectTimePlannerV2.jsx` send-to-system listener |
+
+Implementation uses a reserved `__eventYear` key spread alongside payload fields rather than changing detail shape — backwards-compatible because existing consumers read named fields (e.g. `payload?.shortlist`). `useStorageSync` accepts a new optional `currentYearNumber` prop; when present, the handler short-circuits if `event.detail.__eventYear` is set and does not match. Untagged events fall through to existing behaviour. `yearMetadataStorage` intentionally excluded — it's inherently global (metadata blob including year list and currentYear), not year-scoped.
 
 ---
 
@@ -174,28 +201,40 @@ A user can press "Archive Year N?" with an empty Goal page on the draft. The dra
 
 `SignupPage.jsx:142–144`. Industry baseline is 8+ with complexity or 12+ without. For an app that will have hundreds of users on potentially shared devices, 6 characters is not enough.
 
-#### M5 — Missing ErrorBoundary and 404 route
+#### M5 — Missing ErrorBoundary and 404 route ✅ DONE (2026-04-24)
 
 If any component throws, the user sees a white screen with no recovery. Any unrecognized URL behaves unpredictably in React Router. Low-effort fix, meaningful UX win.
+
+**What shipped:** `src/components/ErrorBoundary.jsx` (class component with `getDerivedStateFromError` + `componentDidCatch`, reload + return-home buttons, styled to match LoginPage gradient) wraps the provider tree in `App.jsx`. `src/pages/NotFoundPage.jsx` registered as `{ path: '*', element: <NotFoundPage /> }` at the end of the routes array, rendered outside the ProtectedRoute tree so unauthenticated visitors to bad URLs do not bounce through `/login`. `logError` contains a plain `console.error` for now; noted in comments to swap in Sentry/LogRocket when observability lands.
 
 ---
 
 ### 🟢 LOW SEVERITY / Pre-Launch Polish
 
-#### P1 — `index.html` is default Vite template
+#### P1 — `index.html` is default Vite template ✅ DONE (2026-04-24)
 Title is `codex-listical` (lowercase). Favicon is `/vite.svg`. No `<meta name="description">`, no OG tags, no theme-color, no manifest. Would look unpolished at launch.
 
-#### P2 — Legacy `/v1` route still in router
+**What shipped:** `index.html` rewritten with `<title>Listical</title>`, meta description, OG + Twitter tags (no image — TODO comment notes to add `/og-card.png` when the brand asset ships), `theme-color="#d5a6bd"`, `<meta name="robots" content="noindex, nofollow">` since invite-only, favicon pointing at `/favicon.svg`. `public/favicon.svg` added (rounded pink #d5a6bd square with white "L"). `public/vite.svg` deleted.
+
+#### P2 — Legacy `/v1` route still in router ✅ DONE (2026-04-24)
 `src/routes/index.jsx:78–84` still mounts `ProjectTimePlannerWireframe`. CLAUDE.md calls this legacy. Remove before launch; the route is accessible to any authenticated user who types the URL.
 
-#### P3 — `console.log` calls in `ProjectTimePlannerWireframe.jsx`
+**What shipped:** `/v1` route removed from `src/routes/index.jsx`; `src/pages/ProjectTimePlannerWireframe.jsx` deleted. Grep confirms no remaining references under `src/`.
+
+#### P3 — `console.log` calls in `ProjectTimePlannerWireframe.jsx` ✅ DONE (2026-04-24)
 Lines 1498, 1501, 1513, 1526, 1534, 1542, 1547, 1554, 1558, 1559. Becomes moot when you delete the `/v1` route.
 
-#### P4 — `public/robots.txt` missing
+**What shipped:** Moot — file deleted under P2.
+
+#### P4 — `public/robots.txt` missing ✅ DONE (2026-04-24)
 Vercel will index the site on launch. Decide what you want crawled; at minimum add a `robots.txt` that disallows authenticated areas.
 
-#### P5 — No security headers in `vercel.json`
+**What shipped:** `public/robots.txt` disallows all crawlers (`User-agent: *` / `Disallow: /`) while the app is still invite-only with no public marketing surface. Revisit when a marketing site exists or when the app has any publicly indexable content.
+
+#### P5 — No security headers in `vercel.json` ✅ DONE (2026-04-24)
 Consider adding CSP, X-Frame-Options, Referrer-Policy. Not blocking but good hygiene.
+
+**What shipped:** `vercel.json` `headers` block now sets Content-Security-Policy (default-src self, script-src self, style-src self + unsafe-inline for Tailwind runtime styles, img-src self/data/blob, connect-src self + `https://*.supabase.co` + `wss://*.supabase.co`, frame-ancestors none, form-action self, object-src none, base-uri self), X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy strict-origin-when-cross-origin, Permissions-Policy (camera / mic / geo / interest-cohort all off), Strict-Transport-Security (2-year max-age, includeSubDomains, preload). Wildcard on Supabase hosts is deliberate: project URL is env-dependent. Revisit CSP if fonts / analytics / Sentry are added later.
 
 ---
 
