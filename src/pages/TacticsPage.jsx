@@ -24,8 +24,8 @@ import { saveTacticsMetrics, saveSentMetricsSnapshot } from '../lib/tacticsMetri
 import { getYearInfo } from '../lib/yearMetadataStorage';
 import { saveStartDate } from '../utils/planner/storage';
 import {
-  loadTacticsSettings,
-  saveTacticsSettings,
+  loadTacticsYearSettings,
+  saveTacticsYearSettings,
   loadTacticsChipsState,
   saveTacticsChipsState,
   loadTacticsColumnWidths,
@@ -343,7 +343,15 @@ export default function TacticsPage() {
       alert(`Could not create draft year: ${result.error}`);
     }
   }, [activeYear, refreshMetadata, navigate]);
-  const initialTacticsSettings = useMemo(() => loadTacticsSettings(), []);
+  // Year-scoped: each year holds its own copy of the eight tactics page
+  // settings, so changes on a draft year do not leak into the active year.
+  // The page is force-remounted on year change via <Outlet key={currentYear}>
+  // in Layout.jsx, so this useMemo runs once per page instance — but the
+  // [currentYear] dep keeps it correct in any future setup that doesn't remount.
+  const initialTacticsSettings = useMemo(
+    () => loadTacticsYearSettings(currentYear),
+    [currentYear]
+  );
   const [startDay, setStartDay] = useState(initialTacticsSettings.startDay);
   const [incrementMinutes, setIncrementMinutes] = useState(
     initialTacticsSettings.incrementMinutes
@@ -389,8 +397,11 @@ export default function TacticsPage() {
   }, []);
 
   useEffect(() => {
-    saveTacticsSettings({ startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay, chipDisplayModes, summaryRowOrder });
-  }, [startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay, chipDisplayModes, summaryRowOrder]);
+    saveTacticsYearSettings(
+      { startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay, chipDisplayModes, summaryRowOrder },
+      currentYear
+    );
+  }, [startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay, chipDisplayModes, summaryRowOrder, currentYear]);
   const hourRows = useMemo(() => {
     if (!startHour || !startMinute) return [];
     const startMinutes = parseHour12ToMinutes(startHour);

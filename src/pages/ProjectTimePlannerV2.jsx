@@ -13,7 +13,7 @@ import usePageSize from '../hooks/usePageSize';
 import usePlannerColumns from '../hooks/planner/usePlannerColumns';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
-import { TACTICS_SEND_TO_SYSTEM_EVENT, getSendToSystemTimestamp, loadSentChipsSnapshot, loadTacticsSettings } from '../lib/tacticsStorage';
+import { TACTICS_SEND_TO_SYSTEM_EVENT, getSendToSystemTimestamp, loadSentChipsSnapshot, loadTacticsYearSettings } from '../lib/tacticsStorage';
 import { loadSentMetricsSnapshot } from '../lib/tacticsMetricsStorage';
 import { loadStagingState } from '../lib/stagingStorage';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
@@ -168,7 +168,7 @@ function formatChipDuration(minutes) {
 function loadEnrichedChips(yearNumber) {
   const { projectChips, chipTimeOverrides } = loadSentChipsSnapshot(yearNumber);
   const idToNicknameMap = buildProjectIdToNicknameMap(yearNumber);
-  const { incrementMinutes } = loadTacticsSettings();
+  const { incrementMinutes } = loadTacticsYearSettings(yearNumber);
   if (!Array.isArray(projectChips)) return [];
   return projectChips
     .filter((chip) => {

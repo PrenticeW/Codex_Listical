@@ -8,7 +8,7 @@ import { useCallback } from 'react';
 import { useYear } from '../../contexts/YearContext';
 import {
   loadTacticsChipsState,
-  loadTacticsSettings,
+  loadTacticsYearSettings,
   TACTICS_CHIPS_STORAGE_EVENT,
 } from '../../lib/tacticsStorage';
 import { loadStagingState, STAGING_STORAGE_EVENT } from '../../lib/stagingStorage';
@@ -153,7 +153,7 @@ export default function useTacticsChips() {
   const loadChips = useCallback(() => {
     const { projectChips, chipTimeOverrides } = loadTacticsChipsState(currentYear);
     const idToNicknameMap = buildProjectIdToNicknameMap(currentYear);
-    const { incrementMinutes } = loadTacticsSettings();
+    const { incrementMinutes } = loadTacticsYearSettings(currentYear);
     return enrichChips(projectChips, idToNicknameMap, chipTimeOverrides, incrementMinutes);
   }, [currentYear]);
 
@@ -162,7 +162,7 @@ export default function useTacticsChips() {
       const projectChips = payload?.projectChips ?? null;
       const chipTimeOverrides = payload?.chipTimeOverrides ?? null;
       const idToNicknameMap = buildProjectIdToNicknameMap(currentYear);
-      const { incrementMinutes } = loadTacticsSettings();
+      const { incrementMinutes } = loadTacticsYearSettings(currentYear);
       return enrichChips(projectChips, idToNicknameMap, chipTimeOverrides, incrementMinutes);
     },
     [currentYear]

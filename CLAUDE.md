@@ -41,16 +41,19 @@ Pages communicate via custom browser events:
 - `staging-state-update` — fired by `stagingStorage.saveStagingState`; listened to by TacticsPage and `useProjectsData` (System)
 - `tactics-metrics-state-update` — fired by `tacticsMetricsStorage.saveTacticsMetrics`; **no current consumers** (the previous `useTacticsMetrics` hook was deleted as orphaned dead code in 2026-05; System reads only the sent-metrics snapshot, not the live one). The event still fires so the storage module's API stays uniform with the others.
 - `tactics-chips-state-update` — fired by `tacticsStorage.saveTacticsChipsState`; listened to by `useTacticsChips` (System)
+- `tactics-settings-state-update` — fired by `tacticsStorage.saveTacticsYearSettings`; **no current consumers**. Settings are read by Plan, System (`incrementMinutes` only), and Plan-internal hooks, all of which read on mount or on chip events rather than subscribing. The event is fired for parity with the other year-scoped storage modules and to make a future cross-page consumer cheap to wire in.
 - `tactics-send-to-system` — fired by TacticsPage `handleSendToSystem`; listened to by `ProjectTimePlannerV2`
 - `yearMetadataStorage` — fired by `yearMetadataStorage.saveYearMetadata`; listened to by `YearContext`
 
 **Do not add direct imports between page components** (Goal, Plan, System) to share data. The event system is the contract.
 
-**Year-scoping on events (H3 fix, 2026-04-24):** Every event in the first four rows above carries a reserved `__eventYear` field on its `CustomEvent.detail` so listeners can ignore cross-year cross-talk. Dispatchers spread `__eventYear: yearNumber` alongside the payload; listeners short-circuit if `event.detail.__eventYear` is set and does not match their own `currentYear`. `useStorageSync` takes an optional `currentYearNumber` prop for this. `yearMetadataStorage` is intentionally not tagged — it's inherently global. **When adding any new cross-page custom event, include `__eventYear` in the detail if it carries year-scoped data.**
+**Year-scoping on events (H3 fix, 2026-04-24):** Every year-scoped event above (`staging-state-update`, `tactics-metrics-state-update`, `tactics-chips-state-update`, `tactics-settings-state-update`, `tactics-send-to-system`) carries a reserved `__eventYear` field on its `CustomEvent.detail` so listeners can ignore cross-year cross-talk. Dispatchers spread `__eventYear: yearNumber` alongside the payload; listeners short-circuit if `event.detail.__eventYear` is set and does not match their own `currentYear`. `useStorageSync` takes an optional `currentYearNumber` prop for this. `yearMetadataStorage` is intentionally not tagged — it's inherently global. **When adding any new cross-page custom event, include `__eventYear` in the detail if it carries year-scoped data.**
 
 ### Storage key scoping
 
 All storage keys are scoped by year number, e.g. `staging-year-1-shortlist`, `planner-year-1-project-1-task-rows`. When a user is authenticated, the storageService further prefixes all keys with `user:{userId}:`. Follow the pattern `{domain}-year-{N}-{descriptor}` for any new keys.
+
+**All eight tactics page settings are year-scoped (May 2026 split).** `startHour`, `startMinute`, `incrementMinutes`, `showAmPm`, `use24Hour`, `startDay`, `chipDisplayModes`, and `summaryRowOrder` live under `tactics-year-{N}-settings` via `loadTacticsYearSettings(yearNumber)` / `saveTacticsYearSettings(payload, yearNumber)`. Both throw if `yearNumber` is missing. The legacy global `tactics-page-settings` key is no longer read or written; a one-shot module-load cleanup in `tacticsStorage.js` wipes it from any user's localStorage. Do not reintroduce a global tactics settings blob.
 
 ### `projectNickname` as join key — known fragility, do not extend
 
@@ -110,7 +113,6 @@ Full delta lists per storage module live in the audit addendum of the code revie
 - **`handleArchiveWeek` is inline in `ProjectTimePlannerV2.jsx`.** A previous `useArchiveOperations.js` hook duplicated this and was deleted in 2026-05 after confirming it was never imported. Do not reintroduce a hook version unless you are also planning to rip the inline implementation out at the same time.
 - **`useComputedDataV2.ts` has an intentional write-back loop.** It reads `data`, computes derived fields, then writes them back via `setData`. This is intentional and converges. Do not remove the write-back without fully understanding the convergence behaviour.
 - **`projectColumnTotals` in TacticsPage is computed but never serialised.** Do not attempt to use it in System until the Supabase migration creates a proper read path.
-- **`TacticsPage` has inline `loadTacticsChipsState` / `saveTacticsChipsState` / `loadTacticsSettings` / `saveTacticsSettings` functions** defined directly in the file rather than in a storage module. This is a known inconsistency; do not further extend the inline pattern.
 - **`tactics-column-widths-{year}` is written directly with `storage.setJSON`** inside a `useEffect` in TacticsPage, bypassing the storage module pattern. Do not replicate this.
 
 ---

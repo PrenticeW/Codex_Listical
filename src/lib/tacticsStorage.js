@@ -1,11 +1,26 @@
 import storage from './storageService';
 
-const TACTICS_SETTINGS_KEY = 'tactics-page-settings';
+const TACTICS_YEAR_SETTINGS_KEY_TEMPLATE = 'tactics-year-{yearNumber}-settings';
 const TACTICS_CHIPS_KEY_TEMPLATE = 'tactics-year-{yearNumber}-chips-state';
 const TACTICS_COLUMN_WIDTHS_KEY_TEMPLATE = 'tactics-column-widths-{yearNumber}';
 export const TACTICS_CHIPS_STORAGE_EVENT = 'tactics-chips-state-update';
+export const TACTICS_SETTINGS_STORAGE_EVENT = 'tactics-settings-state-update';
 export const TACTICS_SEND_TO_SYSTEM_EVENT = 'tactics-send-to-system';
 export const TACTICS_SEND_TO_SYSTEM_TS_KEY = 'tactics-send-to-system-ts';
+
+// One-shot cleanup of the legacy global settings key after the year-scope
+// split (May 2026). The key was previously used to store all eight tactics
+// page settings under a single un-year-scoped blob, which leaked changes on a
+// draft year into the active year. Settings are now per-year, so this blob is
+// dead data. removeItem is idempotent so calling it on every module load is
+// harmless. Safe to delete this block in a future hygiene pass once we are
+// confident no pre-split data remains in any user's localStorage.
+try {
+  storage.removeItem('tactics-page-settings');
+} catch {
+  // Best effort
+}
+
 // Internal: key builder for the year-scoped send-to-system timestamp.
 // Consumers should use the get/set/clear helpers below rather than reading
 // or writing this key directly.
@@ -48,7 +63,7 @@ export function clearSendToSystemTimestamp(yearNumber) {
   storage.removeItem(getSendToSystemTsKey(yearNumber));
 }
 
-const DEFAULT_SETTINGS = {
+const DEFAULT_YEAR_SETTINGS = {
   startHour: '',
   startMinute: '',
   incrementMinutes: 60,
@@ -75,10 +90,37 @@ const getColumnWidthsStorageKey = (yearNumber) => {
   return TACTICS_COLUMN_WIDTHS_KEY_TEMPLATE.replace('{yearNumber}', yearNumber.toString());
 };
 
-export const loadTacticsSettings = () => {
+const getYearSettingsKey = (yearNumber) => {
+  // Year-scoped settings have no legacy null-year fallback. The previous
+  // global tactics-page-settings key was the source of cross-year contamination
+  // (a draft year's wake/sleep/etc. changes leaking into the active year), so
+  // the new helpers refuse to operate without an explicit year. Throw loudly
+  // rather than fall back, so any future caller that drops the year argument
+  // surfaces the mistake at call time instead of producing silently wrong data.
+  if (yearNumber === null || yearNumber === undefined) {
+    throw new Error('tacticsStorage: yearNumber is required for year-scoped settings');
+  }
+  return TACTICS_YEAR_SETTINGS_KEY_TEMPLATE.replace('{yearNumber}', yearNumber.toString());
+};
+
+/**
+ * Read the tactics page settings for a given year.
+ *
+ * All eight settings (start hour, start minute, increment minutes, AM/PM
+ * toggle, 24-hour toggle, start day, chip display modes, summary row order)
+ * are now scoped to the year so two years can hold independent values.
+ *
+ * Throws if yearNumber is null or undefined. The legacy global key
+ * (tactics-page-settings) is no longer read.
+ *
+ * @param {number} yearNumber
+ * @returns {object} settings object matching DEFAULT_YEAR_SETTINGS shape
+ */
+export const loadTacticsYearSettings = (yearNumber) => {
   try {
-    const parsed = storage.getJSON(TACTICS_SETTINGS_KEY, null);
-    if (!parsed) return { ...DEFAULT_SETTINGS };
+    const key = getYearSettingsKey(yearNumber);
+    const parsed = storage.getJSON(key, null);
+    if (!parsed) return { ...DEFAULT_YEAR_SETTINGS };
     return {
       startHour: typeof parsed?.startHour === 'string' ? parsed.startHour : '',
       startMinute: typeof parsed?.startMinute === 'string' ? parsed.startMinute : '',
@@ -98,16 +140,50 @@ export const loadTacticsSettings = () => {
       summaryRowOrder: Array.isArray(parsed?.summaryRowOrder) ? parsed.summaryRowOrder : null,
     };
   } catch (error) {
-    console.error('Failed to read tactics settings', error);
-    return { ...DEFAULT_SETTINGS };
+    // Re-throw the explicit "yearNumber is required" error so callers see it;
+    // swallow other read errors (corrupt JSON, etc.) and return defaults so the
+    // page still renders.
+    if (error instanceof Error && error.message.startsWith('tacticsStorage:')) {
+      throw error;
+    }
+    console.error('Failed to read tactics year settings', error);
+    return { ...DEFAULT_YEAR_SETTINGS };
   }
 };
 
-export const saveTacticsSettings = (payload) => {
+/**
+ * Save the tactics page settings for a given year and broadcast the change.
+ *
+ * Throws if yearNumber is null or undefined. The dispatched event carries
+ * __eventYear in its detail so listeners on a different year can short-circuit
+ * (per the H3 cross-year event contract documented in CLAUDE.md). No live
+ * listener exists today; the event is fired for parity with the other
+ * year-scoped storage modules and to make a future cross-page consumer cheap
+ * to wire in.
+ *
+ * @param {object} payload settings object matching DEFAULT_YEAR_SETTINGS shape
+ * @param {number} yearNumber
+ */
+export const saveTacticsYearSettings = (payload, yearNumber) => {
   try {
-    storage.setJSON(TACTICS_SETTINGS_KEY, payload);
+    const key = getYearSettingsKey(yearNumber);
+    storage.setJSON(key, payload);
+
+    // Dispatch the H3-compliant event. Reserved __eventYear key does not
+    // collide with payload fields (startHour, startMinute, incrementMinutes,
+    // showAmPm, use24Hour, startDay, chipDisplayModes, summaryRowOrder).
+    if (typeof window !== 'undefined') {
+      const eventDetail = { ...(payload || {}), __eventYear: yearNumber };
+      const event = typeof CustomEvent === 'function'
+        ? new CustomEvent(TACTICS_SETTINGS_STORAGE_EVENT, { detail: eventDetail })
+        : new Event(TACTICS_SETTINGS_STORAGE_EVENT);
+      window.dispatchEvent(event);
+    }
   } catch (error) {
-    console.error('Failed to save tactics settings', error);
+    if (error instanceof Error && error.message.startsWith('tacticsStorage:')) {
+      throw error;
+    }
+    console.error('Failed to save tactics year settings', error);
   }
 };
 

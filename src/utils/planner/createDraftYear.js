@@ -49,8 +49,8 @@ import {
 import {
   loadTacticsChipsState,
   saveTacticsChipsState,
-  loadTacticsSettings,
-  saveTacticsSettings,
+  loadTacticsYearSettings,
+  saveTacticsYearSettings,
   loadTacticsColumnWidths,
   saveTacticsColumnWidths,
   saveSentChipsSnapshot,
@@ -219,7 +219,7 @@ export async function createDraftYearFromActive(activeYearNumber) {
     const stagingState = loadStagingState(activeYearNumber);
     const tacticsMetrics = loadTacticsMetrics(activeYearNumber);
     const chipsState = loadTacticsChipsState(activeYearNumber);
-    const tacticsSettings = loadTacticsSettings();
+    const tacticsYearSettings = loadTacticsYearSettings(activeYearNumber);
     const columnWidths = loadTacticsColumnWidths(activeYearNumber);
 
     // --- Create draft year metadata record ---
@@ -270,7 +270,11 @@ export async function createDraftYearFromActive(activeYearNumber) {
       );
     }
     saveTacticsChipsState(draftChipsState, draftYearNumber);
-    saveTacticsSettings(tacticsSettings);
+    // Year-scoped settings: copy the active year's eight tactics page settings
+    // (sleep/wake times, increment, AM/PM, 24-hour, start day, chip display
+    // modes, summary row order) into the draft year so the user starts with
+    // familiar values rather than defaults.
+    saveTacticsYearSettings(tacticsYearSettings, draftYearNumber);
     if (columnWidths) {
       saveTacticsColumnWidths(columnWidths, draftYearNumber);
     }
