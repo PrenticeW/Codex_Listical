@@ -80,7 +80,10 @@ export default function useComputedDataV2({
         }
       } else {
         // Task has content
-        const manualStatuses = ['Done', 'Blocked', 'On Hold', 'Abandoned'];
+        // Statuses the user has set deliberately — auto-status logic must not overwrite these.
+        // Mirror of PROTECTED_STATUSES in src/constants/plannerConstants.js (legacy/dead),
+        // kept inline here while plannerConstants.js stays out of the active import graph.
+        const manualStatuses = ['Done', 'Blocked', 'On Hold', 'Abandoned', 'Skipped', 'Special'];
         if (hasScheduledTime) {
           // Auto-update to Scheduled only if no manual status has been set
           if (status === '-' || status === 'Not Scheduled') {
