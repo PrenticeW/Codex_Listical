@@ -322,6 +322,79 @@ export function clearUserKeys(userId) {
 }
 
 /**
+ * Remove every key in the current user's scope whose unscoped form satisfies
+ * the predicate. Useful for surgical multi-key cleanup without maintaining a
+ * hand-written list (e.g. removing every key associated with a specific year
+ * during Undo Draft — M1).
+ *
+ * Behaviour mirrors the rest of the storage service:
+ *   - When a user is signed in, only keys with that user's `user:{id}:` prefix
+ *     are considered. The prefix is stripped before the predicate is called,
+ *     so callers can think in unscoped terms (e.g. `tactics-year-2-...`).
+ *   - When no user is signed in, only keys without ANY `user:` prefix are
+ *     considered. (Anonymous sessions never write user-prefixed keys.)
+ *   - Other users' keys are never touched, regardless of state.
+ *
+ * Errors are swallowed per-key so a single bad removal does not abort the
+ * whole sweep, matching the pattern in clearUserKeys.
+ *
+ * @param {(unscopedKey: string) => boolean} predicate
+ * @returns {number} Number of keys removed
+ */
+export function removeKeysMatching(predicate) {
+  if (!isBrowserEnvironment() || typeof predicate !== 'function') {
+    return 0;
+  }
+
+  const userPrefix = currentUserId ? `user:${currentUserId}:` : null;
+  let removed = 0;
+
+  try {
+    // Snapshot keys before mutating — localStorage indexes shift as we remove.
+    const allKeys = getAllKeys();
+    for (const key of allKeys) {
+      let unscopedKey;
+
+      if (userPrefix) {
+        // Signed in: only consider keys belonging to the current user.
+        if (!key.startsWith(userPrefix)) continue;
+        unscopedKey = key.slice(userPrefix.length);
+      } else {
+        // Signed out: skip any key scoped to some other user session.
+        if (key.startsWith('user:')) continue;
+        unscopedKey = key;
+      }
+
+      let matched = false;
+      try {
+        matched = predicate(unscopedKey) === true;
+      } catch (error) {
+        console.error(
+          `[StorageService] Predicate threw on key "${unscopedKey}":`,
+          error
+        );
+      }
+
+      if (matched) {
+        try {
+          window.localStorage.removeItem(key);
+          removed += 1;
+        } catch (error) {
+          console.error(
+            `[StorageService] Failed to remove key "${key}":`,
+            error
+          );
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[StorageService] removeKeysMatching failed:', error);
+  }
+
+  return removed;
+}
+
+/**
  * Get the total size of storage in bytes (approximate)
  * @returns {number} Approximate size in bytes
  */
@@ -368,6 +441,7 @@ export default {
   hasKey,
   getAllKeys,
   clearUserKeys,
+  removeKeysMatching,
   getStorageSize,
   isAvailable,
 

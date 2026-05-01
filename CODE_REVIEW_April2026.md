@@ -4,7 +4,7 @@
 
 ---
 
-## Progress log (as of 2026-04-24)
+## Progress log (as of 2026-05-01)
 
 Running tally of what's been addressed since this review was authored. Findings are annotated inline below; this log is the single place to see state at a glance.
 
@@ -19,10 +19,10 @@ Running tally of what's been addressed since this review was authored. Findings 
 | H3 | Cross-year event collisions | ✅ Done | All four custom events (`staging-state-update`, `tactics-metrics-state-update`, `tactics-chips-state-update`, `tactics-send-to-system`) now carry `__eventYear` in detail. Listeners in `useStorageSync`, `ProjectTimePlannerV2`, and `TacticsPage` compare against their own `currentYear` and short-circuit on mismatch. `yearMetadataStorage` intentionally excluded as it's inherently global. |
 | H4 | System cold-load race | 🔵 Downgraded | UX edge case, not a race. |
 | H5 | Send to System stomps user edits on chip task rows | ✅ Done | `_original*` fields now stamped and compared before overwrite. |
-| M1 | Orphaned storage cleanup in undoDraftYear | ⬜ Not started | Queued after M3/M4. |
-| M2 | Archive flow has no transaction semantics | ⬜ Not started | Queued after M3/M4. |
-| M3 | No validation before archiving (empty-goal trap) | ⬜ Not started | Next candidate. Reject archive if draft shortlist is empty. |
-| M4 | Weak password policy (6-character minimum) | ⬜ Not started | Next candidate. Bump to 10 in `SignupPage.jsx:142–144`. |
+| M1 | Orphaned storage cleanup in undoDraftYear | ✅ Done | `undoDraftYear` now sweeps every key matching `-year-{N}-` plus the `tactics-column-widths-{N}` carve-out via new `removeKeysMatching` helper in storageService. Closed two real orphans the hand-list missed (live metrics typo, sent metrics absent). |
+| M2 | Archive flow has no transaction semantics | ✅ Done | `performYearArchive` now snapshots `app-year-metadata` before the first mutation and restores it in catch. Returns additive `rolledBack` field. User can retry from a clean state on mid-flight failure. |
+| M3 | No validation before archiving (empty-goal trap) | ✅ Done | `validateYearReadyForArchive` and `performYearArchive` both reject when a draft year exists with an empty Goal shortlist. Modal renders the existing red Cannot Archive panel; programmatic call throws. |
+| M4 | Weak password policy (6-character minimum) | ✅ Done | Bumped to 10 in `SignupPage.jsx` (guard, error message, placeholder) and `ResetPasswordPage.jsx` (guard, error message, helper text) so a user cannot weaken their password via reset. |
 | M5 | Missing ErrorBoundary and 404 route | ✅ Done | `src/components/ErrorBoundary.jsx` wraps the provider tree in `App.jsx`. `src/pages/NotFoundPage.jsx` registered as catch-all at the end of the routes array, rendered outside the ProtectedRoute tree so unauthenticated visitors to bad URLs do not bounce through `/login`. |
 | P1 | `index.html` is default Vite template | ✅ Done | Proper `<title>Listical</title>`, description, OG + Twitter tags (no image yet — TODO when brand asset ships), theme-color `#d5a6bd`, `noindex, nofollow`. `public/favicon.svg` added (rounded pink square with white "L"). `public/vite.svg` deleted. |
 | P2 | Legacy `/v1` route still in router | ✅ Done | Route removed from `src/routes/index.jsx`; `src/pages/ProjectTimePlannerWireframe.jsx` deleted. |
@@ -35,10 +35,11 @@ Legend: ✅ done, 🟡 mostly done, 🟠 open / queued, ⏸ deferred, 🔵 downg
 
 ### Remaining pre-launch work
 
-- **Bugs:** M1, M2, M3, M4.
-- **Addendum cleanup (from deep-read addenda):** delete dead `src/hooks/planner/useTacticsMetrics.js`; delete dead `useArchiveOperations.js`; remove the dead `prevYearRef` effect at `ProjectTimePlannerV2.jsx:391–399`; change `buildQuotasMap` truthiness guards at `ProjectTimePlannerV2.jsx:97` and `useTacticsMetrics.js:23` from `&& quota?.weeklyHours` to `!= null` so projects with zero-minute quotas aren't silently dropped.
-- **Auth infrastructure:** custom SMTP provider (Resend / Postmark / SendGrid) in Supabase dashboard; then final B3 "Check your inbox" smoke test.
+- **Bugs:** none open. M1, M2, M3, M4 all shipped (2026-05-01). See progress log above for what shipped.
+- **Addendum cleanup (from deep-read addenda):** all done. `useTacticsMetrics.js` deleted, `useArchiveOperations.js` deleted, `prevYearRef` effect removed from `ProjectTimePlannerV2.jsx`. The `buildQuotasMap` truthiness guard was already corrected during the H1 rekey work (`ProjectTimePlannerV2.jsx:104` uses `!= null` with an explicit zero-quota comment); the parallel site in `useTacticsMetrics.js` is moot now that the file is deleted.
+- **Auth infrastructure:** custom SMTP provider (Resend / Postmark / SendGrid) in Supabase dashboard; then final B3 "Check your inbox" smoke test. Both still open.
 - **Final polish pass:** B4 (gate or remove Undo Draft / Revert Archive). Keep until then — Prentice still needs it for manual Plan Next Year testing.
+- **Brand asset:** OG card image at `/og-card.png` referenced from `index.html` with a TODO comment, awaiting brand asset.
 
 
 **Coverage:** Full structural read of routing, contexts, storage modules, auth flow, deletion flow, draft year flow. Targeted reads of auth pages and components. Parallel explorer audits on storage isolation, cross-page event wiring, draft year flow, and pre-launch hygiene. Deeper line-by-line review of `TacticsPage.jsx` (5,042 lines) and `ProjectTimePlannerV2.jsx` (2,523 lines) deferred — flagged below as needing targeted follow-up.
@@ -185,21 +186,29 @@ Implementation uses a reserved `__eventYear` key spread alongside payload fields
 
 ### 🟡 MEDIUM SEVERITY
 
-#### M1 — Draft year and orphaned storage cleanup is incomplete
+#### M1 — Draft year and orphaned storage cleanup is incomplete ✅ DONE (2026-05-01)
 
 `undoDraftYear` removes a known list of keys but doesn't fully cover all year-scoped keys that may have been created. Not destructive (orphans are inert) but creates cruft and eventually localStorage quota pressure for heavy users.
 
-#### M2 — Archive flow has no transaction semantics
+**What shipped:** New `removeKeysMatching(predicate)` helper in `src/lib/storageService.js` enumerates all keys in the current user's scope (or unprefixed keys when signed out), strips the user prefix, and removes any whose unscoped form satisfies the caller's predicate. Errors are swallowed per-key so one bad removal does not abort the sweep. `src/utils/planner/undoDraftYear.js` now uses it with a single `isKeyForYear` predicate that matches the standard `-year-{N}-` substring (flanking dashes prevent `year-1` from clobbering `year-12`) plus the exact `tactics-column-widths-{N}` carve-out. The hand-maintained list of twelve planner key templates plus seven other patterns is gone, along with all the unused `KEY_TEMPLATE` imports. The audit also turned up two real orphans the previous list had been leaking on every Undo Draft: a typo on the live metrics key (`tactics-metrics-year-{N}` was being removed instead of the actual `tactics-year-{N}-metrics-state`) and the sent metrics key (`tactics-year-{N}-sent-metrics`) which was missing from the list entirely. Both now caught by the sweep. Carve-outs verified: `app-year-metadata`, `tactics-page-settings`, `listical_age_block`, and any other-user keys are never matched. Return shape extended with `removedKeyCount` (additive; existing call sites only inspect `success`).
+
+#### M2 — Archive flow has no transaction semantics ✅ DONE (2026-05-01)
 
 `performYearArchive` has multiple independent storage writes. If one fails mid-way, the user can land in an inconsistent state (old year marked archived, new year not ready). Wrapped in try/catch but no rollback. Rare but unpleasant when it happens.
 
-#### M3 — No validation before archiving (empty-goal trap)
+**What shipped:** `performYearArchive` in `src/utils/planner/archiveYear.js` now snapshots the `app-year-metadata` blob just before the first mutation (between the read pass and the metadata flip) and attempts to restore it in the catch block. `let metadataSnapshot = null` is declared outside the try so the catch can see it. JSON round-trip provides a fully detached copy. Validation throws (year does not exist, year not active, M3 empty-shortlist guard) all fire before the snapshot, so the snapshot stays null and rollback is correctly skipped. Mid-flight mutation throws (metadata flip, draft promotion, fresh-year writes, `setCurrentYear`) trigger `saveYearMetadata(metadataSnapshot)` to restore Year N to active, undo any draft promotion, and reset the currentYear pointer. Rollback is itself wrapped in try/catch so a rollback failure does not mask the original error. Return shape extended with `rolledBack: true|false` (additive; the only consumer, `ArchiveYearModal.jsx:37`, only reads `success`, `error`, `archivedYear`, and `newYear`). Storage keys written by the no-draft branch's twelve `save*` calls are not rolled back — they remain as inert orphans on failure and a retry will overwrite them with the same values. Decision documented in catch-block comment.
+
+#### M3 — No validation before archiving (empty-goal trap) ✅ DONE (2026-05-01)
 
 A user can press "Archive Year N?" with an empty Goal page on the draft. The draft promotes to active, and the user starts a new year with no projects defined. Recoverable but jarring. Add a pre-archive validation check.
 
-#### M4 — Weak password policy (6-character minimum)
+**What shipped:** Two-layer guard added to `src/utils/planner/archiveYear.js`. `validateYearReadyForArchive` now calls `getDraftYear()` after the active-status check and returns `{ ready: false, reason }` when the draft exists with an empty shortlist. The reason string names the draft year and the active year, asks for at least one project on the Goal page, and avoids dashes per UI copy preference. `ArchiveYearModal.jsx` already renders `validation.reason` in the existing red Cannot Archive panel and disables the Archive button when not ready, so no new UI surface needed. `performYearArchive` mirrors the same guard inside its try block (after the active-status check, before the read pass) and throws a matching error if the draft shortlist is empty — defense in depth so a programmatic call cannot bypass the modal's disabled state. Three states walk cleanly: no draft → guard skipped, draft with non-empty shortlist → falls through to existing logic, draft with empty shortlist → blocked at both layers.
+
+#### M4 — Weak password policy (6-character minimum) ✅ DONE (2026-05-01)
 
 `SignupPage.jsx:142–144`. Industry baseline is 8+ with complexity or 12+ without. For an app that will have hundreds of users on potentially shared devices, 6 characters is not enough.
+
+**What shipped:** Three sites in `src/pages/SignupPage.jsx` updated: the guard at line 150 (`< 6` → `< 10`), the error message at line 151, and the input placeholder at line 306 (`Minimum 6 characters` → `Minimum 10 characters`). A grep across `src` after the change found one additional bad site in `src/pages/ResetPasswordPage.jsx` that also enforced 6 characters (the guard at line 29, the error message at line 30, and the helper text at line 109). All three reset-password sites also bumped to 10, closing the loophole where a user could sign up at 10 then immediately reset to 6. No complexity rules added; threshold-only matches the review's recommendation and standard NIST guidance for length-without-complexity. Decision can be revisited when adding a strength meter.
 
 #### M5 — Missing ErrorBoundary and 404 route ✅ DONE (2026-04-24)
 
@@ -319,7 +328,9 @@ This is a clean separation. System is insulated from in-flight changes on Plan �
 
 `TacticsPage.jsx:2580–2584` builds `projectWeeklyQuotas` as `[{ id, label, weeklyHours }]` where `label = projectNickname || projectName`. `ProjectTimePlannerV2.jsx:93–103` then builds a Map keyed by **label only** — the `id` field is discarded. `ProjectRow.jsx:86` looks up by nickname and silently falls back to 0 on miss. Both ends have the id available; neither side uses it. This is a one-line fix (key the Map by id, look up by id) that eliminates the rename bug without waiting for the Supabase migration. Given that CLAUDE.md says "do not extend nickname as a join key," the current state is actually worse than fixing it, because new code keeps landing on top of a known-broken join.
 
-### New: `useTacticsMetrics` hook is dead code
+### New: `useTacticsMetrics` hook is dead code ✅ DONE (2026-05-01)
+*File deleted. Confirmed orphaned across all `.js/.jsx/.ts/.tsx/.json` (the only reference inside `src/` was the file's own export). With it gone, `tactics-metrics-state-update` now has zero consumers in the active app — the live metrics layer is genuinely write-only, consistent with the audit's two-layer-data-model finding. CLAUDE.md updated to reflect this in the same batch.*
+
 
 `src/hooks/planner/useTacticsMetrics.js` is defined and exported but not imported anywhere. It reads from `loadTacticsMetrics` (live), which is the wrong layer for a System-facing consumer. Safe to delete; add to the dead-code list in CLAUDE.md.
 
@@ -335,7 +346,9 @@ This is a clean separation. System is insulated from in-flight changes on Plan �
 
 `src/utils/planner/createDraftYear.js:282` — `localStorage.removeItem(\`tactics-year-${draftYearNumber}-send-to-system-ts\`)`. Same pattern as B2 but in helper code. Roll into the same fix (route through storageService).
 
-### New: latent bug in `buildQuotasMap` truthiness check
+### New: latent bug in `buildQuotasMap` truthiness check ✅ DONE (already fixed during H1 work)
+*The brief's line numbers were slightly stale. The current `buildQuotasMap` in `ProjectTimePlannerV2.jsx` (now line 104, after intervening edits) already uses `quota.weeklyHours != null` with an explicit comment noting that zero-hour quotas must be preserved. That fix landed during the H1 rekey work (when the Map switched from keying on `label` to keying on `id`). Single grep across the file confirms only one occurrence of `weeklyHours`. The parallel site at `useTacticsMetrics.js:23` is moot because that file was deleted in this batch.*
+
 
 `ProjectTimePlannerV2.jsx:97` and `useTacticsMetrics.js:23` both do `if (quota?.label && quota?.weeklyHours)`. Since `weeklyHours` is a number and can legitimately be `0`, a project with zero scheduled minutes is silently dropped from the map. Currently this has the same user-visible effect as ProjectRow's `?? 0` fallback, so no bug in practice. But if the payload format ever changes (e.g. `weeklyHours: "0:00"` string form), both checks will still pass for truthy strings but fail for numeric zero. Change the guard to `quota?.label != null && quota?.weeklyHours != null`.
 
@@ -370,7 +383,9 @@ With the remount behavior and the fact that V2's `useState(() => loadMetricsData
 
 The listener at V2:1347–1360 depends on `[currentYear, resetSubprojectLabels]`. `resetSubprojectLabels` is wrapped in `useCallback` with deps `[totalDays]`. So the listener re-registers cleanly whenever `totalDays` changes — no stale closure, no accumulation under normal use. **Downgrade H2 from high to low**. The original concern was overstated; the code is correct. Leave it as a note rather than a fix.
 
-### New: `prevYearRef` effect at V2:391–399 is dead code
+### New: `prevYearRef` effect at V2:391–399 is dead code ✅ DONE (2026-05-01)
+*Effect removed. Replaced with a short comment block explaining why no year-change effect is needed (the `<Outlet key={currentYear}>` remount in `Layout.jsx` makes the `useState` initialisers re-run on year switch). The two state setters the effect called (`setMetricsData`, `setTacticsChips`) are still used by the live `tactics-send-to-system` listener at lines 1411 to 1430, so the destructuring stays. `useRef` is still used four other places in the file, so the import is unaffected.*
+
 
 ```js
 const prevYearRef = useRef(currentYear);
@@ -381,7 +396,9 @@ useEffect(() => {
 
 Because the component is force-remounted on year change, `prevYearRef.current` always equals `currentYear` on every render within the same instance. The `if` branch never fires. Safe to delete, but confusing to new readers (me, today). Recommend removing.
 
-### New: `useArchiveOperations` is dead code, not a live duplication
+### New: `useArchiveOperations` is dead code, not a live duplication ✅ DONE (2026-05-01)
+*File deleted. Confirmed orphaned across all `.js/.jsx/.ts/.tsx/.json` (only reference inside `src/` was the file's own export). The CLAUDE.md "Known issues" bullet that called this a duplication has been replaced in the same batch — the inline `handleArchiveWeek` in `ProjectTimePlannerV2.jsx` is now the only implementation, full stop.*
+
 
 CLAUDE.md says `handleArchiveWeek` is duplicated between the inline V2 version and `useArchiveOperations.js`. I checked: `useArchiveOperations` is not imported anywhere. The inline V2 version is the only live implementation. The CLAUDE.md note should change from "duplication, don't add a third" to "`useArchiveOperations` is orphaned, delete it." Add to the dead-code list.
 

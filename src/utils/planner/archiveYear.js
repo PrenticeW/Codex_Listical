@@ -12,6 +12,8 @@ import {
   getDraftYear,
   promoteDraftToActive,
   calculateNextCycleStartDate,
+  readYearMetadata,
+  saveYearMetadata,
 } from '../../lib/yearMetadataStorage';
 import {
   readTaskRows,
@@ -169,6 +171,12 @@ function getDefaultTacticsMetrics() {
 export async function performYearArchive(yearNumber) {
   console.log(`[Archive Year] Starting archive of Year ${yearNumber}...`);
 
+  // M2: holds the pre-mutation metadata snapshot for rollback on failure.
+  // Stays null through the read-only validation phase so a validation throw
+  // skips rollback (nothing to restore). Captured just before the first
+  // mutation below.
+  let metadataSnapshot = null;
+
   try {
     // 1. Verify year exists and is active
     const yearInfo = getYearInfo(yearNumber);
@@ -224,14 +232,25 @@ export async function performYearArchive(yearNumber) {
     const recurringTasks = extractRecurringTasks(taskRows);
     console.log(`[Archive Year] Found ${recurringTasks.length} recurring tasks to carry forward`);
 
-    // 5. Archive the year metadata
+    // 5. Capture the metadata blob before the first mutation, so any
+    //    subsequent failure can roll Year N back to active and undo any
+    //    partial draft promotion or new-year record (M2). Storage keys
+    //    written by the no-draft branch's save* calls below may remain
+    //    as orphans on failure but do not block a retry — a retry will
+    //    overwrite them with the same values.
+    const preMutationMeta = readYearMetadata();
+    metadataSnapshot = preMutationMeta
+      ? JSON.parse(JSON.stringify(preMutationMeta))
+      : null;
+
+    // 6. Archive the year metadata (first mutation)
     archiveYearMetadata(yearNumber, {
       totalWeeksCompleted: weeksCompleted,
       totalHoursCompleted: totalHours,
     });
     console.log(`[Archive Year] Year ${yearNumber} metadata archived`);
 
-    // 6. Determine next year: promote draft if one exists, otherwise create fresh
+    // 7. Determine next year: promote draft if one exists, otherwise create fresh
     const draftYear = getDraftYear();
     let nextYearNumber;
     let nextStartDate;
@@ -276,7 +295,7 @@ export async function performYearArchive(yearNumber) {
       console.log(`[Archive Year] Year ${nextYearNumber} initialized`);
     }
 
-    // 7. Switch to new year
+    // 8. Switch to new year
     setCurrentYear(nextYearNumber);
     console.log(`[Archive Year] Switched to Year ${nextYearNumber} as active year`);
 
@@ -296,10 +315,27 @@ export async function performYearArchive(yearNumber) {
 
   } catch (error) {
     console.error(`[Archive Year] Failed to archive Year ${yearNumber}:`, error);
+
+    // M2: restore the pre-mutation metadata so Year N is active again, any
+    // draft promotion is undone, and the currentYear pointer is reset. The
+    // user can then retry the archive. Wrapped separately so a rollback
+    // failure does not mask the original error in logs or in the return.
+    let rolledBack = false;
+    if (metadataSnapshot) {
+      try {
+        saveYearMetadata(metadataSnapshot);
+        rolledBack = true;
+        console.log(`[Archive Year] Metadata rolled back to pre-archive state`);
+      } catch (rollbackError) {
+        console.error('[Archive Year] Rollback failed:', rollbackError);
+      }
+    }
+
     return {
       success: false,
       error: error.message,
       archivedYear: yearNumber,
+      rolledBack,
     };
   }
 }

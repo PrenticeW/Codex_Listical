@@ -39,7 +39,7 @@ All planning data currently lives in localStorage. Three named storage modules o
 Pages communicate via custom browser events:
 
 - `staging-state-update` — fired by `stagingStorage.saveStagingState`; listened to by TacticsPage and `useProjectsData` (System)
-- `tactics-metrics-state-update` — fired by `tacticsMetricsStorage.saveTacticsMetrics`; listened to by `useTacticsMetrics` (System)
+- `tactics-metrics-state-update` — fired by `tacticsMetricsStorage.saveTacticsMetrics`; **no current consumers** (the previous `useTacticsMetrics` hook was deleted as orphaned dead code in 2026-05; System reads only the sent-metrics snapshot, not the live one). The event still fires so the storage module's API stays uniform with the others.
 - `tactics-chips-state-update` — fired by `tacticsStorage.saveTacticsChipsState`; listened to by `useTacticsChips` (System)
 - `tactics-send-to-system` — fired by TacticsPage `handleSendToSystem`; listened to by `ProjectTimePlannerV2`
 - `yearMetadataStorage` — fired by `yearMetadataStorage.saveYearMetadata`; listened to by `YearContext`
@@ -75,7 +75,7 @@ A draft year (`status: 'draft'`) can exist alongside the active year. Only one d
 3. The UI switches to the draft year. A violet nav group appears to the right of the main nav for quick access to the draft year's pages.
 4. The user works through Goal → Plan → System on the draft year freely. Changes save immediately (same autosave as other years).
 5. On the draft year's System page, an **Import tasks from Year N** panel appears when task rows are empty. The user selects which statuses to import (default: all except Done/Abandoned) and presses Import — one time only.
-6. When ready, user presses **Archive Year N?** in the gear menu → `ArchiveYearModal` + `performYearArchive` archives Year N and promotes the draft to `active`.
+6. When ready, user presses **Archive Year N?** in the gear menu → `ArchiveYearModal` + `performYearArchive` archives Year N and promotes the draft to `active`. Two guards apply: (a) **empty-shortlist guard** — if a draft year exists, `validateYearReadyForArchive` and `performYearArchive` both reject the operation when the draft's Goal page has no projects (M3 fix, 2026-05). The modal renders this in the existing red Cannot Archive panel and disables the Archive button. (b) **metadata rollback on failure** — `performYearArchive` snapshots `app-year-metadata` before the first mutation and restores it in the catch block, so a mid-flight failure leaves Year N active and the user can retry (M2 fix, 2026-05). The result object includes a `rolledBack: true|false` field on the failure path.
 
 ### Chip persistence
 
@@ -107,7 +107,7 @@ Full delta lists per storage module live in the audit addendum of the code revie
 
 ## Known issues — do not make worse
 
-- **Archive logic is duplicated.** `handleArchiveWeek` is implemented both inline in `ProjectTimePlannerV2.jsx` and in `useArchiveOperations.js`. Do not add a third version.
+- **`handleArchiveWeek` is inline in `ProjectTimePlannerV2.jsx`.** A previous `useArchiveOperations.js` hook duplicated this and was deleted in 2026-05 after confirming it was never imported. Do not reintroduce a hook version unless you are also planning to rip the inline implementation out at the same time.
 - **`useComputedDataV2.ts` has an intentional write-back loop.** It reads `data`, computes derived fields, then writes them back via `setData`. This is intentional and converges. Do not remove the write-back without fully understanding the convergence behaviour.
 - **`projectColumnTotals` in TacticsPage is computed but never serialised.** Do not attempt to use it in System until the Supabase migration creates a proper read path.
 - **`TacticsPage` has inline `loadTacticsChipsState` / `saveTacticsChipsState` / `loadTacticsSettings` / `saveTacticsSettings` functions** defined directly in the file rather than in a storage module. This is a known inconsistency; do not further extend the inline pattern.
@@ -131,7 +131,6 @@ The following files are orphaned or superseded. Do not import them, reference th
 | `src/utils/rowDataTransformers.js` | Likely legacy utility |
 | `src/utils/plannerStyles.js` | Likely legacy utility |
 | `src/utils/plannerFormatters.js` | Likely legacy utility |
-| `src/pages/ProjectTimePlannerWireframe.jsx` | Legacy v1 wireframe; still in router at `/v1` |
 | `src/timeline/useTimelineRows.js` | Leftover from earlier architecture |
 | `src/constants/plannerConstants.js` | Only referenced by legacy `plannerStorage.js` |
 

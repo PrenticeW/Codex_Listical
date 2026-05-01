@@ -7,7 +7,7 @@
  * DEV ONLY — remove the trigger before launch.
  */
 
-import storage from '../../lib/storageService';
+import { removeKeysMatching } from '../../lib/storageService';
 import {
   getDraftYear,
   getActiveYear,
@@ -15,63 +15,38 @@ import {
   setCurrentYear,
 } from '../../lib/yearMetadataStorage';
 import { clearSendToSystemTimestamp } from '../../lib/tacticsStorage';
-import { getProjectKey } from './storage';
-import {
-  COLUMN_SIZING_KEY_TEMPLATE,
-  SIZE_SCALE_KEY_TEMPLATE,
-  START_DATE_KEY_TEMPLATE,
-  SHOW_RECURRING_KEY_TEMPLATE,
-  SHOW_SUBPROJECTS_KEY_TEMPLATE,
-  SHOW_MAX_MIN_ROWS_KEY_TEMPLATE,
-  SORT_STATUSES_KEY_TEMPLATE,
-  SORT_PLANNER_STATUSES_KEY_TEMPLATE,
-  TASK_ROWS_KEY_TEMPLATE,
-  TOTAL_DAYS_KEY_TEMPLATE,
-  VISIBLE_DAY_COLUMNS_KEY_TEMPLATE,
-  COLLAPSED_GROUPS_KEY_TEMPLATE,
-  DEFAULT_PROJECT_ID,
-} from '../../constants/plannerStorageKeys';
 
 /**
- * All storage keys that a draft year may have written.
- * Planner keys are derived via getProjectKey (same builder used to write them)
- * so this list stays correct if key templates ever change.
+ * Predicate matching every storage key associated with a specific year.
+ *
+ * Two patterns the sweep needs to cover (M1):
+ *
+ *   1. Standard convention `{domain}-year-{N}-{descriptor}`. Catches Goal
+ *      shortlist, Plan chips (live + sent), Plan metrics (live + sent), the
+ *      send-to-system timestamp, and every per-project planner key — which
+ *      gets `-year-{N}-` injected by getProjectKey before its descriptor
+ *      (e.g. `planner-v2-project-1-year-2-task-rows`).
+ *
+ *   2. Known non-standard year-scoped keys. `tactics-column-widths-{N}` is
+ *      the only one today — CLAUDE.md flags it as bypassing the storage
+ *      module pattern. Any future bypass should be added here explicitly.
+ *
+ * The flanking dashes in `-year-${N}-` prevent `year-1` from matching
+ * `year-12`, `year-13`, etc. Global keys (`app-year-metadata`,
+ * `tactics-page-settings`, `listical_age_block`) do not contain
+ * `-year-{N}-` for any specific N and are therefore never matched.
  */
-function getDraftYearStorageKeys(yearNumber) {
-  const pid = DEFAULT_PROJECT_ID;
-  const pk = (template) => getProjectKey(template, pid, yearNumber);
-  return [
-    // Planner storage — derived via the same key builder used to write them
-    pk(COLUMN_SIZING_KEY_TEMPLATE),
-    pk(SIZE_SCALE_KEY_TEMPLATE),
-    pk(START_DATE_KEY_TEMPLATE),
-    pk(SHOW_RECURRING_KEY_TEMPLATE),
-    pk(SHOW_SUBPROJECTS_KEY_TEMPLATE),
-    pk(SHOW_MAX_MIN_ROWS_KEY_TEMPLATE),
-    pk(SORT_STATUSES_KEY_TEMPLATE),
-    pk(SORT_PLANNER_STATUSES_KEY_TEMPLATE),
-    pk(TASK_ROWS_KEY_TEMPLATE),
-    pk(TOTAL_DAYS_KEY_TEMPLATE),
-    pk(VISIBLE_DAY_COLUMNS_KEY_TEMPLATE),
-    pk(COLLAPSED_GROUPS_KEY_TEMPLATE),
-    // Staging (Goal page)
-    `staging-year-${yearNumber}-shortlist`,
-    // Tactics (Plan page)
-    `tactics-year-${yearNumber}-chips-state`,
-    `tactics-column-widths-${yearNumber}`,
-    // Tactics "sent to system" snapshot (user-scoped via storageService)
-    `tactics-year-${yearNumber}-sent-chips`,
-    // Note: send-to-system-ts is written with raw localStorage, removed separately below
-    // Tactics metrics
-    `tactics-metrics-year-${yearNumber}`,
-  ];
+function isKeyForYear(unscopedKey, yearNumber) {
+  if (unscopedKey.includes(`-year-${yearNumber}-`)) return true;
+  if (unscopedKey === `tactics-column-widths-${yearNumber}`) return true;
+  return false;
 }
 
 /**
  * Remove a draft year and all its storage data.
  * Switches the UI back to the active year.
  *
- * @returns {{ success: boolean, error?: string }}
+ * @returns {{ success: boolean, error?: string, removedKeyCount?: number }}
  */
 export function undoDraftYear() {
   try {
@@ -85,23 +60,24 @@ export function undoDraftYear() {
       return { success: false, error: 'No active year found — cannot switch back' };
     }
 
-    // Delete all draft year storage keys (user-scoped via storageService)
-    const keys = getDraftYearStorageKeys(draft.yearNumber);
-    keys.forEach((key) => {
-      try {
-        storage.removeItem(key);
-      } catch {
-        // Best effort — continue deleting remaining keys
-      }
-    });
+    // Sweep every storage key associated with this draft year (user-scoped
+    // by storageService). Replaces the previous hand-maintained list, which
+    // had a typo on the live metrics key and missed the sent-metrics key
+    // entirely. The predicate is cheap and the sweep stays correct as new
+    // year-scoped keys are introduced — provided they follow the
+    // `{domain}-year-{N}-{descriptor}` convention or are added to
+    // isKeyForYear's explicit list.
+    const removedKeyCount = removeKeysMatching(
+      (unscopedKey) => isKeyForYear(unscopedKey, draft.yearNumber)
+    );
 
-    // Clear the send-to-system timestamp for this draft year. Routed through
-    // tacticsStorage (and therefore storageService), so the correctly
-    // user-scoped key is removed.
+    // The send-to-system timestamp matches the sweep above, but route through
+    // tacticsStorage too so any side effects of the helper run (e.g. future
+    // cache invalidation). Best effort — the sweep already removed the key.
     try {
       clearSendToSystemTimestamp(draft.yearNumber);
     } catch {
-      // Best effort
+      // Ignore — already removed
     }
 
     // Remove draft year from metadata
@@ -110,7 +86,7 @@ export function undoDraftYear() {
     // Switch back to active year
     setCurrentYear(active.yearNumber);
 
-    return { success: true };
+    return { success: true, removedKeyCount };
   } catch (error) {
     return { success: false, error: error.message };
   }
