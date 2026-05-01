@@ -23,11 +23,20 @@ table td.active-cell {
   transition: box-shadow 0.15s ease;
 }
 
-/* Cell range selection highlighting - use outline instead of background fill */
+/* Cell selection highlight — thin rose outline, drawn above child content
+   so dropdowns, pills, etc. don't clip it. */
 table td.selected-cell {
-  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.5);
   position: relative;
   z-index: 1;
+}
+
+table td.selected-cell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid #cf7d9a;
+  pointer-events: none;
+  z-index: 10;
 }
 
 /* Dropdown positioning - hint to browser to show options below */
@@ -71,6 +80,11 @@ tr.selected-row td.selected-cell {
 
 tr.selected-row td.selected-cell:active {
   cursor: grabbing !important;
+}
+
+/* Goal page drag handle — black anchor when row is selected */
+tr.selected-row td.drag-handle {
+  background-color: #000000 !important;
 }
 
 /* Drag and drop visual feedback */

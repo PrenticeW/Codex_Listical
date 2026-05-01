@@ -585,7 +585,7 @@ const TableRow = React.memo(function TableRow({
                     height: `${rowHeight}px`,
                     boxSizing: 'border-box',
                   }}
-                  className="p-0"
+                  className={`p-0 ${isSelected && !isEditing ? 'selected-cell' : ''}`}
                   onMouseDown={(e) => {
                     if (isTaskColumn && handleCellMouseDown) {
                       handleCellMouseDown(e, rowId, editableColumnId);
@@ -603,7 +603,7 @@ const TableRow = React.memo(function TableRow({
                   }}
                 >
                   <div
-                    className={`h-full flex items-center ${isSelected ? 'selected-cell' : ''}`}
+                    className="h-full flex items-center"
                     style={{
                       minHeight: `${rowHeight}px`,
                       ...ARCHIVE_ROW_STYLE,

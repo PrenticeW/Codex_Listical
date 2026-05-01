@@ -208,7 +208,7 @@ const TaskRow = React.memo(function TaskRow({
                 position: 'relative',
                 overflow: isEditing ? 'visible' : 'hidden',
               }}
-              className="p-0"
+              className={`p-0 ${isSelected && !isEditing ? 'selected-cell' : ''}`}
               onDragOver={(e) => handleCellDragOver?.(e, rowId, columnId)}
               onDragLeave={(e) => handleCellDragLeave?.(e)}
               onDrop={(e) => handleCellDrop?.(e, rowId, columnId)}
@@ -247,11 +247,7 @@ const TaskRow = React.memo(function TaskRow({
             >
               <div
                 className={`h-full flex items-center w-full ${
-                  isCellDrop
-                    ? 'ring-2 ring-inset ring-black bg-[#fff5fc]'
-                    : isSelected && !isEditing
-                    ? 'ring-2 ring-inset ring-black bg-[#fff5fc]'
-                    : ''
+                  isCellDrop ? 'ring-2 ring-inset ring-black bg-[#fff5fc]' : ''
                 }`}
                 style={{
                   fontSize: `${cellFontSize}px`,
@@ -334,13 +330,11 @@ const TaskRow = React.memo(function TaskRow({
                 ) : (
                   columnId === 'checkbox' || columnId === 'recurring' ? (
                     <div
-                      className={`w-full h-full flex items-center justify-center ${
-                        isSelected && !isEditing ? 'ring-2 ring-inset ring-black' : ''
-                      }`}
+                      className="w-full h-full flex items-center justify-center"
                       style={{
                         backgroundColor: (value === 'true' || value === true)
-                          ? (isSelected && !isEditing ? '#f0d5ec' : '#d4ecbc')
-                          : (isSelected && !isEditing ? '#fff5fc' : 'transparent'),
+                          ? '#d4ecbc'
+                          : 'transparent',
                       }}
                     >
                       {/* Hidden input for copy/paste compatibility */}

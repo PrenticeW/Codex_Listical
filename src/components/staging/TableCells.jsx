@@ -3,12 +3,16 @@ import { PLAN_ESTIMATE_OPTIONS } from '../../utils/staging/planTableHelpers';
 
 /**
  * Shared cell styling utilities
+ *
+ * Selection visuals are class-driven:
+ *   - `selected-cell` class on a <td> draws the rose outline (see index.css).
+ *   - `selected-row` class on a <tr> paints every <td> pink, with `.drag-handle`
+ *     overriding the handle column to black.
+ *
+ * These helpers only resolve the *default* background per row type and the
+ * drop-target pink. Anything selection-related lives in CSS.
  */
-const getSelectionOutline = (isSelected) =>
-  isSelected ? { boxShadow: 'inset 0 0 0 2px rgba(0, 0, 0, 0.65)', position: 'relative', zIndex: 2 } : {};
-
-const getCellBackground = ({ isSelected, isDropTarget, rowType }) => {
-  if (isSelected) return '#fff5fc';
+const getCellBackground = ({ isDropTarget, rowType }) => {
   if (isDropTarget) return '#fff5fc';
 
   switch (rowType) {
@@ -23,8 +27,7 @@ const getCellBackground = ({ isSelected, isDropTarget, rowType }) => {
   }
 };
 
-const getHandleBackground = ({ isRowSelected, isDropTarget, rowType }) => {
-  if (isRowSelected) return '#000000';
+const getHandleBackground = ({ isDropTarget, rowType }) => {
   if (isDropTarget) return '#fff5fc';
 
   switch (rowType) {
@@ -39,6 +42,9 @@ const getHandleBackground = ({ isRowSelected, isDropTarget, rowType }) => {
   }
 };
 
+const cellClassName = (isSelected) =>
+  `border border-[#e5e7eb] px-3 py-0.5${isSelected ? ' selected-cell' : ''}`;
+
 /**
  * Drag handle cell - first column with grip icon
  */
@@ -50,11 +56,11 @@ export function DragHandleCell({
 }) {
   return (
     <td
-      className="border border-[#e5e7eb] px-1 py-0.5 text-center"
+      className="drag-handle border border-[#e5e7eb] px-1 py-0.5 text-center"
       style={{
         width: '24px',
         minWidth: '24px',
-        backgroundColor: getHandleBackground({ isRowSelected, isDropTarget, rowType }),
+        backgroundColor: getHandleBackground({ isDropTarget, rowType }),
         borderTop: isDropTarget ? '2px solid #000000' : undefined,
         cursor: 'grab',
       }}
@@ -93,9 +99,8 @@ export function TextInputCell({
   dataAttributes,
 }) {
   const style = {
-    backgroundColor: getCellBackground({ isSelected, isDropTarget, rowType }),
+    backgroundColor: getCellBackground({ isDropTarget, rowType }),
     borderTop: isDropTarget ? '2px solid #000000' : undefined,
-    ...getSelectionOutline(isSelected),
   };
 
   if (width) style.width = width;
@@ -110,7 +115,7 @@ export function TextInputCell({
 
   return (
     <td
-      className="border border-[#e5e7eb] px-3 py-0.5"
+      className={cellClassName(isSelected)}
       style={style}
       colSpan={colSpan}
       onMouseDown={onMouseDown}
@@ -150,9 +155,8 @@ export function StaticTextCell({
   paddingLeft,
 }) {
   const style = {
-    backgroundColor: getCellBackground({ isSelected, isDropTarget, rowType }),
+    backgroundColor: getCellBackground({ isDropTarget, rowType }),
     borderTop: isDropTarget ? '2px solid #000000' : undefined,
-    ...getSelectionOutline(isSelected),
   };
 
   if (width) style.width = width;
@@ -161,7 +165,7 @@ export function StaticTextCell({
 
   return (
     <td
-      className="border border-[#e5e7eb] px-3 py-0.5"
+      className={cellClassName(isSelected)}
       style={style}
       colSpan={colSpan}
       onMouseDown={onMouseDown}
@@ -194,14 +198,13 @@ export function EstimateSelectCell({
   const style = {
     width: '140px',
     minWidth: '140px',
-    backgroundColor: getCellBackground({ isSelected, isDropTarget, rowType }),
+    backgroundColor: getCellBackground({ isDropTarget, rowType }),
     borderTop: isDropTarget ? '2px solid #000000' : undefined,
-    ...getSelectionOutline(isSelected),
   };
 
   return (
     <td
-      className="border border-[#e5e7eb] px-3 py-0.5"
+      className={cellClassName(isSelected)}
       style={style}
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
@@ -245,14 +248,13 @@ export function TimeValueCell({
     minWidth: '120px',
     textAlign: 'right',
     paddingRight: '10px',
-    backgroundColor: getCellBackground({ isSelected, isDropTarget, rowType }),
+    backgroundColor: getCellBackground({ isDropTarget, rowType }),
     borderTop: isDropTarget ? '2px solid #000000' : undefined,
-    ...getSelectionOutline(isSelected),
   };
 
   return (
     <td
-      className="border border-[#e5e7eb] px-3 py-0.5"
+      className={cellClassName(isSelected)}
       style={style}
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
@@ -321,9 +323,8 @@ export function EmptyCell({
   colSpan,
 }) {
   const style = {
-    backgroundColor: getCellBackground({ isSelected, isDropTarget, rowType }),
+    backgroundColor: getCellBackground({ isDropTarget, rowType }),
     borderTop: isDropTarget ? '2px solid #000000' : undefined,
-    ...getSelectionOutline(isSelected),
   };
 
   if (width) style.width = width;
@@ -331,7 +332,7 @@ export function EmptyCell({
 
   return (
     <td
-      className="border border-[#e5e7eb] px-3 py-0.5"
+      className={cellClassName(isSelected)}
       style={style}
       colSpan={colSpan}
       onMouseDown={onMouseDown}

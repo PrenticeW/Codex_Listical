@@ -216,7 +216,7 @@ export default function ProjectRow({
                     userSelect: isEditing ? 'text' : 'none',
                     boxSizing: 'border-box',
                   }}
-                  className="p-0"
+                  className={`p-0 ${isSelected && !isEditing ? 'selected-cell' : ''}`}
                   onMouseDown={(e) => {
                     if (isEditing) return;
                     // Don't select the row when clicking the collapse/expand chevron
@@ -244,11 +244,13 @@ export default function ProjectRow({
                   }}
                 >
                   <div
-                    className={`h-full flex items-center gap-2 ${isSelected ? 'selected-cell' : ''}`}
+                    className="h-full flex items-center gap-2"
                     style={{
                       position: 'relative',
                       fontSize: `${cellFontSize}px`,
                       minHeight: `${rowHeight}px`,
+                      // Inner div covers the <td>, so the row-selected pink has to be
+                      // applied here rather than relying on `tr.selected-row td` CSS.
                       backgroundColor: isRowSelected ? '#fff5fc' : bgColor,
                       borderBottom: '1px solid #d3d3d3',
                       borderRight: '1px solid #d3d3d3',
@@ -460,7 +462,7 @@ export default function ProjectRow({
                   userSelect: isEditing ? 'text' : 'none',
                   boxSizing: 'border-box',
                 }}
-                className="p-0"
+                className={`p-0 ${isSelected && !isEditing ? 'selected-cell' : ''}`}
                 onMouseDown={(e) => {
                   if (isEditing) return;
                   if (handleCellMouseDown) {
@@ -480,10 +482,12 @@ export default function ProjectRow({
                 }}
               >
                 <div
-                  className={`h-full flex items-center ${isSelected ? 'selected-cell' : ''}`}
+                  className="h-full flex items-center"
                   style={{
                     fontSize: `${cellFontSize}px`,
                     minHeight: `${rowHeight}px`,
+                    // Inner div covers the <td>, so the row-selected pink has to be
+                    // applied here rather than relying on `tr.selected-row td` CSS.
                     backgroundColor: isRowSelected ? '#fff5fc' : bgColor,
                     borderBottom: '1px solid #d3d3d3',
                     borderRight: '1px solid #d3d3d3',

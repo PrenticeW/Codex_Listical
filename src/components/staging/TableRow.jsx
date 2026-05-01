@@ -57,6 +57,7 @@ export default function TableRow({
   // Common row props for drag and drop
   const rowProps = {
     draggable: true,
+    className: isRowSelected ? 'selected-row' : '',
     onDragStart: (e) => onDragStart(e, item.id, rowIdx),
     onDragOver: (e) => onDragOver(e, item.id, rowIdx),
     onDrop: (e) => onDrop(e, item.id, rowIdx),
@@ -104,12 +105,12 @@ export default function TableRow({
         />
         <td
           colSpan={showSectionTotal ? PLAN_TABLE_COLS - 1 : PLAN_TABLE_COLS}
-          className="border border-[#e5e7eb] py-0.5"
+          className={`border border-[#e5e7eb] py-0.5${isCellSelected(item.id, rowIdx, 0) ? ' selected-cell' : ''}`}
           style={{
-            backgroundColor: isCellSelected(item.id, rowIdx, 0) ? '#fff5fc' : '#b7b7b7',
+            // Default header background; `tr.selected-row td` overrides to pink.
+            backgroundColor: '#b7b7b7',
             borderTop: isDropTarget ? '2px solid #000000' : undefined,
             paddingLeft: '12px',
-            ...(isCellSelected(item.id, rowIdx, 0) ? { boxShadow: 'inset 0 0 0 2px rgba(0, 0, 0, 0.65)', position: 'relative', zIndex: 2 } : {}),
           }}
           onMouseDown={(e) => cellMouseDown(e, 0)}
           onMouseEnter={() => cellMouseEnter(0)}

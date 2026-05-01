@@ -3191,7 +3191,7 @@ export default function TacticsPage() {
               fontWeight,
               border: isCovering ? '2px dashed #f97316' : '1px solid #ffffff',
               fontSize: `${14 * textSizeScale}px`,
-              ...(isActive ? { outlineColor: '#000', outlineOffset: 0 } : null),
+              ...(isActive ? { outlineColor: '#cf7d9a', outlineOffset: 0 } : null),
             }}
             onClick={(event) => {
               event.stopPropagation();
@@ -4109,15 +4109,11 @@ export default function TacticsPage() {
                   if (isCovered) {
                     cellStyle.backgroundColor = '#d9d9d9';
                   }
-                  if (cellSelected) {
-                    cellStyle.outlineColor = '#000';
-                    cellStyle.outlineOffset = 0;
-                  }
                   return (
                     <td
                       key={`time-row-${index}`}
                       className={`relative border border-[#e5e7eb] px-3 py-px text-center overflow-visible ${
-                        cellSelected ? 'outline outline-[2px]' : ''
+                        cellSelected ? 'selected-cell' : ''
                       }`}
                       style={Object.keys(cellStyle).length ? cellStyle : undefined}
                       data-row-id={rowId}
@@ -4182,15 +4178,11 @@ export default function TacticsPage() {
                     if (isCovered) {
                       cellStyle.backgroundColor = '#d9d9d9';
                     }
-                    if (cellSelected) {
-                      cellStyle.outlineColor = '#000';
-                      cellStyle.outlineOffset = 0;
-                    }
                     return (
                       <td
                         key={`hour-${hourValue}-${index}`}
                         className={`relative border border-[#e5e7eb] px-3 py-px text-center overflow-visible ${
-                          cellSelected ? 'outline outline-[2px]' : ''
+                          cellSelected ? 'selected-cell' : ''
                         }`}
                         style={Object.keys(cellStyle).length ? cellStyle : undefined}
                         data-row-id={rowId}
@@ -4259,15 +4251,11 @@ export default function TacticsPage() {
                   if (isCovered) {
                     cellStyle.backgroundColor = '#d9d9d9';
                   }
-                  if (cellSelected) {
-                    cellStyle.outlineColor = '#000';
-                    cellStyle.outlineOffset = 0;
-                  }
                   return (
                     <td
                       key={`minute-row-${index}`}
                       className={`relative border border-[#e5e7eb] px-3 py-px text-center overflow-visible ${
-                        cellSelected ? 'outline outline-[2px]' : ''
+                        cellSelected ? 'selected-cell' : ''
                       }`}
                       style={Object.keys(cellStyle).length ? cellStyle : undefined}
                       data-row-id={rowId}
@@ -4336,15 +4324,11 @@ export default function TacticsPage() {
                     if (isCovered) {
                       cellStyle.backgroundColor = '#d9d9d9';
                     }
-                    if (cellSelected) {
-                      cellStyle.outlineColor = '#000';
-                      cellStyle.outlineOffset = 0;
-                    }
                     return (
                       <td
                         key={`trailing-${rowIdx}-${index}`}
                         className={`relative border border-[#e5e7eb] px-3 py-px text-center overflow-visible ${
-                          cellSelected ? 'outline outline-[2px]' : ''
+                          cellSelected ? 'selected-cell' : ''
                         }`}
                         style={Object.keys(cellStyle).length ? cellStyle : undefined}
                         data-row-id={rowId}
@@ -4382,7 +4366,7 @@ export default function TacticsPage() {
                 }`}
                 style={
                   selectedSummaryRowId === 'sleep-summary'
-                    ? { gridTemplateColumns, outlineColor: '#000', outlineOffset: 0 }
+                    ? { gridTemplateColumns, outlineColor: '#cf7d9a', outlineOffset: 0 }
                     : { gridTemplateColumns }
                 }
                 tabIndex={0}
@@ -4433,7 +4417,7 @@ export default function TacticsPage() {
                     }`}
                     style={
                       rowSelected
-                        ? { gridTemplateColumns, outlineColor: '#000', outlineOffset: 0 }
+                        ? { gridTemplateColumns, outlineColor: '#cf7d9a', outlineOffset: 0 }
                         : { gridTemplateColumns }
                     }
                     tabIndex={0}
@@ -4511,7 +4495,7 @@ export default function TacticsPage() {
                   color: '#ffffff',
                   fontWeight: 700,
                   ...(selectedSummaryRowId === 'rest-summary'
-                    ? { outlineColor: '#000', outlineOffset: 0 }
+                    ? { outlineColor: '#cf7d9a', outlineOffset: 0 }
                     : null),
                 }}
                 tabIndex={0}
@@ -4567,7 +4551,7 @@ export default function TacticsPage() {
                 }`}
                 style={
                   selectedSummaryRowId === 'working-summary'
-                    ? { gridTemplateColumns, outlineColor: '#000', outlineOffset: 0 }
+                    ? { gridTemplateColumns, outlineColor: '#cf7d9a', outlineOffset: 0 }
                     : { gridTemplateColumns }
                 }
                 tabIndex={0}
@@ -4618,7 +4602,7 @@ export default function TacticsPage() {
                 }`}
                 style={
                   selectedSummaryRowId === 'buffer-summary'
-                    ? { gridTemplateColumns, outlineColor: '#000', outlineOffset: 0 }
+                    ? { gridTemplateColumns, outlineColor: '#cf7d9a', outlineOffset: 0 }
                     : { gridTemplateColumns }
                 }
                 tabIndex={0}
@@ -4668,7 +4652,7 @@ export default function TacticsPage() {
                 }`}
                 style={
                   selectedSummaryRowId === 'available-summary'
-                    ? { gridTemplateColumns, outlineColor: '#000', outlineOffset: 0 }
+                    ? { gridTemplateColumns, outlineColor: '#cf7d9a', outlineOffset: 0 }
                     : { gridTemplateColumns }
                 }
                 tabIndex={0}
