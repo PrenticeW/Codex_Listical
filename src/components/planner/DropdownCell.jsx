@@ -14,7 +14,9 @@ const DROPDOWN_OPTIONS = [
   'Abandoned',
   'Blocked',
   'On Hold',
-  'Special'
+  'Special',
+  'Skipped',
+  'Accounted'
 ];
 
 // Pillbox color configuration
@@ -26,7 +28,9 @@ const PILLBOX_COLORS = {
   'Abandoned': { bg: '#e8d9f3', text: '#5a3b74' },
   'Blocked': { bg: '#f3c4c4', text: '#9c2f2f' },
   'On Hold': { bg: '#505050', text: '#ffffff' },
-  'Special': { bg: '#cce3ff', text: '#3a70b7' }
+  'Special': { bg: '#cce3ff', text: '#3a70b7' },
+  'Skipped': { bg: '#f9eeff', text: '#5a3286' },
+  'Accounted': { bg: '#b3cd99', text: '#11734b' }
 };
 
 function DropdownCell({

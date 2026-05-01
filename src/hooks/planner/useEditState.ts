@@ -27,7 +27,7 @@ function syncDayColumns(row: PlannerRow, nextTimeValue: string, prevTimeValue: s
  * - Which cell is currently being edited
  * - The current edit value
  * - Handlers for completing, canceling, and keyboard events during editing
- * - Special logic for status column (Abandoned clears day columns)
+ * - Special logic for status column (Abandoned and Skipped clear day columns)
  * - Special logic for timeValue column (auto-sets estimate to Custom)
  * - Special logic for subprojectLabel aliasing with task column
  *
@@ -90,8 +90,9 @@ export default function useEditState({
       return;
     }
 
-    // Special handling for status column when set to "Abandoned"
-    if (columnId === 'status' && newValue === 'Abandoned') {
+    // Special handling for status column when set to a status that should clear day columns.
+    // 'Abandoned' and 'Skipped' both remove the task's time values from the calendar columns.
+    if (columnId === 'status' && (newValue === 'Abandoned' || newValue === 'Skipped')) {
       // Store old day column values for undo
       const oldDayValues: Record<string, string> = {};
       for (let i = 0; i < totalDays; i++) {

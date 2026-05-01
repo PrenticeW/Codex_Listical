@@ -15,6 +15,7 @@ export const SORT_PLANNER_TARGET_MAP: Record<string, 'general' | 'unscheduled'> 
   'Abandoned': 'unscheduled',
   'Blocked': 'unscheduled',
   'On Hold': 'unscheduled',
+  'Skipped': 'unscheduled',
 };
 
 /**

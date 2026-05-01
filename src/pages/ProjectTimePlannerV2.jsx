@@ -83,7 +83,7 @@ import {
 import { useArchiveTotals } from '../hooks/planner/useArchiveTotals';
 
 // Sortable status values for the "Sort Inbox" feature
-const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned'];
+const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned', 'Skipped', 'Accounted'];
 
 // --- Tactics data helpers (loaded on mount + "Send to System" only) ---
 

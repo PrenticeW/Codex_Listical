@@ -4,7 +4,7 @@
  */
 
 // Status dropdown values
-export const STATUS_VALUES = ['-', 'Not Scheduled', 'Scheduled', 'Done', 'Blocked', 'On Hold', 'Abandoned'];
+export const STATUS_VALUES = ['-', 'Not Scheduled', 'Scheduled', 'Done', 'Blocked', 'On Hold', 'Abandoned', 'Skipped', 'Accounted'];
 
 // Estimate dropdown values
 export const ESTIMATE_VALUES = [
@@ -45,6 +45,8 @@ export const STATUS_COLOR_MAP = {
   'Blocked': { bg: '#f3c4c4', text: '#9c2f2f' },
   'On Hold': { bg: '#505050', text: '#ffffff' },
   'Special': { bg: '#cce3ff', text: '#3a70b7' },
+  'Skipped': { bg: '#f9eeff', text: '#5a3286' },
+  'Accounted': { bg: '#b3cd99', text: '#11734b' },
 };
 
 // Estimate color styling (text colors only)

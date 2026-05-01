@@ -278,7 +278,7 @@ export const readSortStatuses = (projectId = DEFAULT_PROJECT_ID, yearNumber = nu
     const key = getProjectKey(SORT_STATUSES_KEY_TEMPLATE, projectId, yearNumber);
     const parsed = storage.getJSON(key, null);
     if (!parsed) {
-      return new Set(['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned']);
+      return new Set(['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned', 'Skipped', 'Accounted']);
     }
     return new Set(Array.isArray(parsed) ? parsed : []);
   } catch (error) {
@@ -318,7 +318,7 @@ export const readSortPlannerStatuses = (projectId = DEFAULT_PROJECT_ID, yearNumb
     const key = getProjectKey(SORT_PLANNER_STATUSES_KEY_TEMPLATE, projectId, yearNumber);
     const parsed = storage.getJSON(key, null);
     if (!parsed) {
-      return new Set(['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned']);
+      return new Set(['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned', 'Skipped', 'Accounted']);
     }
     return new Set(Array.isArray(parsed) ? parsed : []);
   } catch (error) {
