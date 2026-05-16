@@ -1,67 +1,58 @@
-import storage from './storageService';
+/**
+ * Tactics Storage (Plan page chips, year settings, column widths, send-to-system marker)
+ *
+ * Storage backend: Supabase. Three tables back this module:
+ *   tactics_year_settings   one row per (user_id, year_id), holds the eight
+ *                           Plan-page settings AND column_widths
+ *   tactics_chips           many rows per (user_id, year_id, is_sent), one
+ *                           per chip on the Plan grid
+ *   tactics_custom_projects many rows per (user_id, year_id, is_sent), one
+ *                           per custom project a user added on the Plan grid
+ *   planner_settings        one row per (user_id, year_id), shared with
+ *                           helper #5; this helper only touches the
+ *                           send_to_system_at column on it
+ *
+ * Live vs sent layering: tactics_chips and tactics_custom_projects use an
+ * is_sent boolean. is_sent=false is the live, auto-saved layer. is_sent=true
+ * is the frozen snapshot written when the user presses Send to System; the
+ * System page reads exclusively from the is_sent=true layer.
+ *
+ * Public API stays the same as the localStorage version. Every function is
+ * now async:
+ *   loadTacticsYearSettings(year)             => Promise<settings>
+ *   saveTacticsYearSettings(payload, year)    => Promise<void>
+ *   loadTacticsChipsState(year)               => Promise<{ projectChips, customProjects, chipTimeOverrides }>
+ *   saveTacticsChipsState(payload, year)      => Promise<void>
+ *   loadSentChipsSnapshot(year)               => Promise<{ projectChips, customProjects, chipTimeOverrides }>
+ *   saveSentChipsSnapshot(payload, year)      => Promise<void>
+ *   loadTacticsColumnWidths(year)             => Promise<number[]|null>
+ *   saveTacticsColumnWidths(widths, year)     => Promise<void>
+ *   getSendToSystemTimestamp(year)            => Promise<string|null>  (ISO timestamp)
+ *   setSendToSystemTimestamp(year)            => Promise<void>
+ *   clearSendToSystemTimestamp(year)          => Promise<void>
+ *
+ * Chip duration source of truth: the schema deliberately has NO
+ * intrinsic duration_minutes column on tactics_chips (dropped in
+ * 20260516000003_drop_chip_duration_minutes.sql). Duration is derived at
+ * read time from start_row_id + end_row_id + the year's increment_minutes,
+ * with override_minutes (per chip) winning when explicitly set. Persisting
+ * an intrinsic duration was the cause of the May 2026 stale-field bug class.
+ */
 
-const TACTICS_YEAR_SETTINGS_KEY_TEMPLATE = 'tactics-year-{yearNumber}-settings';
-const TACTICS_CHIPS_KEY_TEMPLATE = 'tactics-year-{yearNumber}-chips-state';
-const TACTICS_COLUMN_WIDTHS_KEY_TEMPLATE = 'tactics-column-widths-{yearNumber}';
+import { supabase } from './supabase';
+
+// --- exported event names (unchanged) ---------------------------------
+
 export const TACTICS_CHIPS_STORAGE_EVENT = 'tactics-chips-state-update';
 export const TACTICS_SETTINGS_STORAGE_EVENT = 'tactics-settings-state-update';
 export const TACTICS_SEND_TO_SYSTEM_EVENT = 'tactics-send-to-system';
+
+// Legacy constant. No longer used internally (the timestamp lives in
+// planner_settings.send_to_system_at) but exported so any importer that
+// references the name still resolves.
 export const TACTICS_SEND_TO_SYSTEM_TS_KEY = 'tactics-send-to-system-ts';
 
-// One-shot cleanup of the legacy global settings key after the year-scope
-// split (May 2026). The key was previously used to store all eight tactics
-// page settings under a single un-year-scoped blob, which leaked changes on a
-// draft year into the active year. Settings are now per-year, so this blob is
-// dead data. removeItem is idempotent so calling it on every module load is
-// harmless. Safe to delete this block in a future hygiene pass once we are
-// confident no pre-split data remains in any user's localStorage.
-try {
-  storage.removeItem('tactics-page-settings');
-} catch {
-  // Best effort
-}
-
-// Internal: key builder for the year-scoped send-to-system timestamp.
-// Consumers should use the get/set/clear helpers below rather than reading
-// or writing this key directly.
-const getSendToSystemTsKey = (yearNumber) =>
-  yearNumber != null
-    ? `tactics-year-${yearNumber}-send-to-system-ts`
-    : TACTICS_SEND_TO_SYSTEM_TS_KEY;
-
-/**
- * Read the "Send to System" timestamp for a given year.
- * Returns the stored timestamp string or null if the marker is absent.
- *
- * Routing through storageService means the key is user-scoped on the
- * authenticated planner, so two users on the same device do not see each
- * other's send-to-system state.
- *
- * @param {number|null} yearNumber
- * @returns {string|null}
- */
-export function getSendToSystemTimestamp(yearNumber) {
-  return storage.getItem(getSendToSystemTsKey(yearNumber));
-}
-
-/**
- * Stamp the "Send to System" marker for a given year with the current time.
- *
- * @param {number|null} yearNumber
- */
-export function setSendToSystemTimestamp(yearNumber) {
-  storage.setItem(getSendToSystemTsKey(yearNumber), Date.now().toString());
-}
-
-/**
- * Remove the "Send to System" marker for a given year.
- * Used when (re)creating or undoing a draft year.
- *
- * @param {number|null} yearNumber
- */
-export function clearSendToSystemTimestamp(yearNumber) {
-  storage.removeItem(getSendToSystemTsKey(yearNumber));
-}
+// --- defaults ---------------------------------------------------------
 
 const DEFAULT_YEAR_SETTINGS = {
   startHour: '',
@@ -76,216 +67,523 @@ const DEFAULT_YEAR_SETTINGS = {
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-const getChipsStorageKey = (yearNumber) => {
-  if (yearNumber === null || yearNumber === undefined) {
-    return 'tactics-chips-state'; // Legacy key for backward compatibility
-  }
-  return TACTICS_CHIPS_KEY_TEMPLATE.replace('{yearNumber}', yearNumber.toString());
-};
+// --- internal helpers -------------------------------------------------
 
-const getColumnWidthsStorageKey = (yearNumber) => {
-  if (yearNumber === null || yearNumber === undefined) {
-    return 'tactics-column-widths';
-  }
-  return TACTICS_COLUMN_WIDTHS_KEY_TEMPLATE.replace('{yearNumber}', yearNumber.toString());
-};
+async function requireUserId() {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) throw new Error('No authenticated user');
+  return user.id;
+}
 
-const getYearSettingsKey = (yearNumber) => {
-  // Year-scoped settings have no legacy null-year fallback. The previous
-  // global tactics-page-settings key was the source of cross-year contamination
-  // (a draft year's wake/sleep/etc. changes leaking into the active year), so
-  // the new helpers refuse to operate without an explicit year. Throw loudly
-  // rather than fall back, so any future caller that drops the year argument
-  // surfaces the mistake at call time instead of producing silently wrong data.
+async function findYearId(userId, yearNumber) {
+  const { data, error } = await supabase
+    .from('years')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('year_number', yearNumber)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.id ?? null;
+}
+
+function requireYearNumber(yearNumber) {
   if (yearNumber === null || yearNumber === undefined) {
     throw new Error('tacticsStorage: yearNumber is required for year-scoped settings');
   }
-  return TACTICS_YEAR_SETTINGS_KEY_TEMPLATE.replace('{yearNumber}', yearNumber.toString());
-};
+}
+
+function dispatchEvent(eventName, payload, yearNumber) {
+  if (typeof window === 'undefined') return;
+  const detail = { ...(payload || {}), __eventYear: yearNumber };
+  const event = typeof CustomEvent === 'function'
+    ? new CustomEvent(eventName, { detail })
+    : new Event(eventName);
+  window.dispatchEvent(event);
+}
+
+// --- year settings + column widths (shared row) -----------------------
+
+async function readYearSettingsRow({ userId, yearId }) {
+  const { data, error } = await supabase
+    .from('tactics_year_settings')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('year_id', yearId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? null;
+}
+
+/**
+ * Write a partial column set to tactics_year_settings without clobbering
+ * the columns this caller doesn't own. saveTacticsYearSettings sends the
+ * eight settings columns; saveTacticsColumnWidths sends column_widths only;
+ * each leaves the other untouched.
+ */
+async function writeYearSettingsRow({ userId, yearId, columns }) {
+  const existing = await readYearSettingsRow({ userId, yearId });
+  if (existing) {
+    const { error } = await supabase
+      .from('tactics_year_settings')
+      .update(columns)
+      .eq('id', existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from('tactics_year_settings')
+      .insert({ user_id: userId, year_id: yearId, ...columns });
+    if (error) throw error;
+  }
+}
+
+function yearSettingsRowToPayload(row) {
+  if (!row) return { ...DEFAULT_YEAR_SETTINGS };
+  return {
+    startHour: typeof row.start_hour === 'string' ? row.start_hour : '',
+    startMinute: typeof row.start_minute === 'string' ? row.start_minute : '',
+    incrementMinutes:
+      typeof row.increment_minutes === 'number' && Number.isFinite(row.increment_minutes)
+        ? row.increment_minutes
+        : 60,
+    showAmPm: row.show_am_pm !== false,
+    use24Hour: row.use_24_hour === true,
+    startDay: DAYS_OF_WEEK.includes(row.start_day) ? row.start_day : DAYS_OF_WEEK[0],
+    chipDisplayModes:
+      row.chip_display_modes &&
+      typeof row.chip_display_modes === 'object' &&
+      !Array.isArray(row.chip_display_modes)
+        ? row.chip_display_modes
+        : { __default__: { duration: false, clock: false } },
+    summaryRowOrder: Array.isArray(row.summary_row_order) ? row.summary_row_order : null,
+  };
+}
+
+function payloadToYearSettingsColumns(payload) {
+  return {
+    start_hour: typeof payload?.startHour === 'string' ? payload.startHour : '',
+    start_minute: typeof payload?.startMinute === 'string' ? payload.startMinute : '',
+    increment_minutes:
+      typeof payload?.incrementMinutes === 'number' && Number.isFinite(payload.incrementMinutes)
+        ? payload.incrementMinutes
+        : 60,
+    show_am_pm: payload?.showAmPm !== false,
+    use_24_hour: payload?.use24Hour === true,
+    start_day: DAYS_OF_WEEK.includes(payload?.startDay) ? payload.startDay : DAYS_OF_WEEK[0],
+    chip_display_modes:
+      payload?.chipDisplayModes &&
+      typeof payload.chipDisplayModes === 'object' &&
+      !Array.isArray(payload.chipDisplayModes)
+        ? payload.chipDisplayModes
+        : { __default__: { duration: false, clock: false } },
+    summary_row_order: Array.isArray(payload?.summaryRowOrder) ? payload.summaryRowOrder : null,
+  };
+}
 
 /**
  * Read the tactics page settings for a given year.
- *
- * All eight settings (start hour, start minute, increment minutes, AM/PM
- * toggle, 24-hour toggle, start day, chip display modes, summary row order)
- * are now scoped to the year so two years can hold independent values.
- *
- * Throws if yearNumber is null or undefined. The legacy global key
- * (tactics-page-settings) is no longer read.
- *
+ * Throws if yearNumber is null or undefined.
  * @param {number} yearNumber
- * @returns {object} settings object matching DEFAULT_YEAR_SETTINGS shape
+ * @returns {Promise<object>}
  */
-export const loadTacticsYearSettings = (yearNumber) => {
+export async function loadTacticsYearSettings(yearNumber) {
+  requireYearNumber(yearNumber);
   try {
-    const key = getYearSettingsKey(yearNumber);
-    const parsed = storage.getJSON(key, null);
-    if (!parsed) return { ...DEFAULT_YEAR_SETTINGS };
-    return {
-      startHour: typeof parsed?.startHour === 'string' ? parsed.startHour : '',
-      startMinute: typeof parsed?.startMinute === 'string' ? parsed.startMinute : '',
-      incrementMinutes:
-        typeof parsed?.incrementMinutes === 'number' && Number.isFinite(parsed.incrementMinutes)
-          ? parsed.incrementMinutes
-          : 60,
-      showAmPm: parsed?.showAmPm !== false,
-      use24Hour: parsed?.use24Hour === true,
-      startDay: DAYS_OF_WEEK.includes(parsed?.startDay) ? parsed.startDay : DAYS_OF_WEEK[0],
-      chipDisplayModes:
-        parsed?.chipDisplayModes &&
-        typeof parsed.chipDisplayModes === 'object' &&
-        !Array.isArray(parsed.chipDisplayModes)
-          ? parsed.chipDisplayModes
-          : { __default__: { duration: false, clock: false } },
-      summaryRowOrder: Array.isArray(parsed?.summaryRowOrder) ? parsed.summaryRowOrder : null,
-    };
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return { ...DEFAULT_YEAR_SETTINGS };
+    const row = await readYearSettingsRow({ userId, yearId });
+    return yearSettingsRowToPayload(row);
   } catch (error) {
-    // Re-throw the explicit "yearNumber is required" error so callers see it;
-    // swallow other read errors (corrupt JSON, etc.) and return defaults so the
-    // page still renders.
-    if (error instanceof Error && error.message.startsWith('tacticsStorage:')) {
-      throw error;
-    }
+    if (error instanceof Error && error.message.startsWith('tacticsStorage:')) throw error;
     console.error('Failed to read tactics year settings', error);
     return { ...DEFAULT_YEAR_SETTINGS };
   }
-};
+}
 
 /**
  * Save the tactics page settings for a given year and broadcast the change.
- *
- * Throws if yearNumber is null or undefined. The dispatched event carries
- * __eventYear in its detail so listeners on a different year can short-circuit
- * (per the H3 cross-year event contract documented in CLAUDE.md). No live
- * listener exists today; the event is fired for parity with the other
- * year-scoped storage modules and to make a future cross-page consumer cheap
- * to wire in.
- *
- * @param {object} payload settings object matching DEFAULT_YEAR_SETTINGS shape
+ * Throws if yearNumber is null or undefined.
+ * @param {object} payload
  * @param {number} yearNumber
  */
-export const saveTacticsYearSettings = (payload, yearNumber) => {
+export async function saveTacticsYearSettings(payload, yearNumber) {
+  requireYearNumber(yearNumber);
   try {
-    const key = getYearSettingsKey(yearNumber);
-    storage.setJSON(key, payload);
-
-    // Dispatch the H3-compliant event. Reserved __eventYear key does not
-    // collide with payload fields (startHour, startMinute, incrementMinutes,
-    // showAmPm, use24Hour, startDay, chipDisplayModes, summaryRowOrder).
-    if (typeof window !== 'undefined') {
-      const eventDetail = { ...(payload || {}), __eventYear: yearNumber };
-      const event = typeof CustomEvent === 'function'
-        ? new CustomEvent(TACTICS_SETTINGS_STORAGE_EVENT, { detail: eventDetail })
-        : new Event(TACTICS_SETTINGS_STORAGE_EVENT);
-      window.dispatchEvent(event);
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) {
+      console.error(`Cannot save tactics year settings: year ${yearNumber} does not exist`);
+      return;
     }
+    const columns = payloadToYearSettingsColumns(payload);
+    await writeYearSettingsRow({ userId, yearId, columns });
+    dispatchEvent(TACTICS_SETTINGS_STORAGE_EVENT, payload, yearNumber);
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('tacticsStorage:')) {
-      throw error;
-    }
+    if (error instanceof Error && error.message.startsWith('tacticsStorage:')) throw error;
     console.error('Failed to save tactics year settings', error);
   }
-};
+}
 
-export const loadTacticsChipsState = (yearNumber = null) => {
+/**
+ * Read the Plan-grid column widths for a year.
+ * @param {number} yearNumber
+ * @returns {Promise<number[]|null>}
+ */
+export async function loadTacticsColumnWidths(yearNumber) {
   try {
-    const key = getChipsStorageKey(yearNumber);
-    const parsed = storage.getJSON(key, null);
-    if (!parsed) return { projectChips: null, customProjects: null, chipTimeOverrides: null };
-    return {
-      projectChips: Array.isArray(parsed?.projectChips) ? parsed.projectChips : null,
-      customProjects: Array.isArray(parsed?.customProjects) ? parsed.customProjects : null,
-      chipTimeOverrides:
-        parsed?.chipTimeOverrides &&
-        typeof parsed.chipTimeOverrides === 'object' &&
-        !Array.isArray(parsed.chipTimeOverrides)
-          ? parsed.chipTimeOverrides
-          : null,
-    };
-  } catch (error) {
-    console.error('Failed to read tactics chip state', error);
-    return { projectChips: null, customProjects: null, chipTimeOverrides: null };
-  }
-};
-
-export const saveTacticsChipsState = (payload, yearNumber = null) => {
-  try {
-    const key = getChipsStorageKey(yearNumber);
-    storage.setJSON(key, payload);
-
-    // Dispatch custom event for reactive updates. Include the year number in
-    // the detail so listeners on a different year can ignore stale events
-    // (H3). The reserved __eventYear key does not collide with payload fields
-    // (projectChips / customProjects / chipTimeOverrides).
-    if (typeof window !== 'undefined') {
-      const eventDetail = { ...(payload || {}), __eventYear: yearNumber };
-      const event = typeof CustomEvent === 'function'
-        ? new CustomEvent(TACTICS_CHIPS_STORAGE_EVENT, { detail: eventDetail })
-        : new Event(TACTICS_CHIPS_STORAGE_EVENT);
-      window.dispatchEvent(event);
-    }
-  } catch (error) {
-    console.error('Failed to save tactics chip state', error);
-  }
-};
-
-export const loadTacticsColumnWidths = (yearNumber = null) => {
-  try {
-    const key = getColumnWidthsStorageKey(yearNumber);
-    const saved = storage.getJSON(key, null);
-    return saved && Array.isArray(saved) ? saved : null;
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return null;
+    const row = await readYearSettingsRow({ userId, yearId });
+    const widths = row?.column_widths;
+    return Array.isArray(widths) ? widths : null;
   } catch (error) {
     console.error('Failed to read tactics column widths', error);
     return null;
   }
-};
+}
 
-// --- "Sent to System" snapshot ---
-// Written only when the user presses "Send to System". The System page reads
-// from these keys so it is isolated from live Plan page auto-saves.
-
-const SENT_CHIPS_KEY_TEMPLATE = 'tactics-year-{yearNumber}-sent-chips';
-
-const getSentChipsKey = (yearNumber) => {
-  if (yearNumber === null || yearNumber === undefined) {
-    return 'tactics-sent-chips';
-  }
-  return SENT_CHIPS_KEY_TEMPLATE.replace('{yearNumber}', yearNumber.toString());
-};
-
-export const saveSentChipsSnapshot = (payload, yearNumber = null) => {
+/**
+ * Save the Plan-grid column widths for a year. Leaves the rest of the
+ * tactics_year_settings row untouched.
+ * @param {number[]} widths
+ * @param {number} yearNumber
+ */
+export async function saveTacticsColumnWidths(widths, yearNumber) {
   try {
-    storage.setJSON(getSentChipsKey(yearNumber), payload);
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) {
+      console.error(`Cannot save tactics column widths: year ${yearNumber} does not exist`);
+      return;
+    }
+    await writeYearSettingsRow({
+      userId,
+      yearId,
+      columns: { column_widths: Array.isArray(widths) ? widths : [] },
+    });
   } catch (error) {
-    console.error('Failed to save sent chips snapshot', error);
+    console.error('Failed to save tactics column widths', error);
   }
-};
+}
 
-export const loadSentChipsSnapshot = (yearNumber = null) => {
+// --- chips state + custom projects (live + sent layers) ---------------
+
+function chipRowToPayload(row) {
+  return {
+    id: row.chip_id,
+    columnIndex: row.column_index,
+    dayName: row.day_name ?? null,
+    startRowId: row.start_row_id,
+    endRowId: row.end_row_id,
+    startMinutes: row.start_minutes ?? undefined,
+    projectId: row.project_id_external,
+    displayLabel: row.display_label ?? null,
+    userModified: row.user_modified === true,
+    // Note: no durationMinutes here. Callers derive at read time from
+    // startRowId/endRowId/incrementMinutes, with chipTimeOverrides winning.
+  };
+}
+
+function chipPayloadToRow(chip, { userId, yearId, isSent, chipTimeOverrides }) {
+  const overrideMinutes = chipTimeOverrides && typeof chipTimeOverrides === 'object'
+    ? chipTimeOverrides[chip.id]
+    : null;
+  return {
+    user_id: userId,
+    year_id: yearId,
+    is_sent: isSent,
+    chip_id: chip.id,
+    column_index: chip.columnIndex,
+    day_name: chip.dayName ?? null,
+    start_row_id: chip.startRowId,
+    end_row_id: chip.endRowId,
+    start_minutes: typeof chip.startMinutes === 'number' ? chip.startMinutes : null,
+    project_id_external: chip.projectId,
+    display_label: chip.displayLabel ?? null,
+    override_minutes:
+      typeof overrideMinutes === 'number' && Number.isFinite(overrideMinutes)
+        ? overrideMinutes
+        : null,
+    user_modified: chip.userModified === true,
+  };
+}
+
+function customProjectRowToPayload(row) {
+  return {
+    id: row.external_id,
+    label: row.label,
+    color: row.color,
+  };
+}
+
+function customProjectPayloadToRow(custom, { userId, yearId, isSent }) {
+  return {
+    user_id: userId,
+    year_id: yearId,
+    is_sent: isSent,
+    external_id: custom.id,
+    label: custom.label,
+    color: custom.color,
+  };
+}
+
+async function readChipsLayer({ userId, yearId, isSent }) {
+  const [chipsRes, customRes] = await Promise.all([
+    supabase
+      .from('tactics_chips')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('year_id', yearId)
+      .eq('is_sent', isSent),
+    supabase
+      .from('tactics_custom_projects')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('year_id', yearId)
+      .eq('is_sent', isSent),
+  ]);
+  if (chipsRes.error) throw chipsRes.error;
+  if (customRes.error) throw customRes.error;
+
+  const chipRows = chipsRes.data || [];
+  const customRows = customRes.data || [];
+
+  if (chipRows.length === 0 && customRows.length === 0) {
+    return { projectChips: null, customProjects: null, chipTimeOverrides: null };
+  }
+
+  const projectChips = chipRows.length > 0 ? chipRows.map(chipRowToPayload) : null;
+  const customProjects =
+    customRows.length > 0 ? customRows.map(customProjectRowToPayload) : null;
+
+  // Reconstruct chipTimeOverrides from per-chip override_minutes. Only
+  // include chips with a non-null override so callers' `if (overrides?.[id])`
+  // guards behave the same as they did pre-port.
+  const chipTimeOverrides = {};
+  for (const row of chipRows) {
+    if (row.override_minutes != null) {
+      chipTimeOverrides[row.chip_id] = row.override_minutes;
+    }
+  }
+  const overrides = Object.keys(chipTimeOverrides).length > 0 ? chipTimeOverrides : null;
+
+  return { projectChips, customProjects, chipTimeOverrides: overrides };
+}
+
+async function writeChipsLayer({ userId, yearId, isSent, payload }) {
+  const projectChips = Array.isArray(payload?.projectChips) ? payload.projectChips : [];
+  const customProjects = Array.isArray(payload?.customProjects) ? payload.customProjects : [];
+  const chipTimeOverrides =
+    payload?.chipTimeOverrides && typeof payload.chipTimeOverrides === 'object'
+      ? payload.chipTimeOverrides
+      : null;
+
+  // Replace-the-layer pattern: delete every chip and custom project at this
+  // (user, year, is_sent) slice, then insert the new set. Done as two
+  // parallel deletes followed by two parallel inserts to keep round-trips
+  // to two. Not transactional; pre-launch this is fine.
+  const deleteRes = await Promise.all([
+    supabase
+      .from('tactics_chips')
+      .delete()
+      .eq('user_id', userId)
+      .eq('year_id', yearId)
+      .eq('is_sent', isSent),
+    supabase
+      .from('tactics_custom_projects')
+      .delete()
+      .eq('user_id', userId)
+      .eq('year_id', yearId)
+      .eq('is_sent', isSent),
+  ]);
+  for (const r of deleteRes) {
+    if (r.error) throw r.error;
+  }
+
+  const chipRows = projectChips
+    .filter((c) => c && typeof c.id === 'string')
+    .map((c) => chipPayloadToRow(c, { userId, yearId, isSent, chipTimeOverrides }));
+  const customRows = customProjects
+    .filter((c) => c && typeof c.id === 'string')
+    .map((c) => customProjectPayloadToRow(c, { userId, yearId, isSent }));
+
+  const insertOps = [];
+  if (chipRows.length > 0) {
+    insertOps.push(supabase.from('tactics_chips').insert(chipRows));
+  }
+  if (customRows.length > 0) {
+    insertOps.push(supabase.from('tactics_custom_projects').insert(customRows));
+  }
+  if (insertOps.length > 0) {
+    const insertRes = await Promise.all(insertOps);
+    for (const r of insertRes) {
+      if (r.error) throw r.error;
+    }
+  }
+}
+
+/**
+ * Read the live chip state for a year.
+ * @param {number} yearNumber
+ * @returns {Promise<{projectChips: Array|null, customProjects: Array|null, chipTimeOverrides: object|null}>}
+ */
+export async function loadTacticsChipsState(yearNumber) {
   try {
-    const parsed = storage.getJSON(getSentChipsKey(yearNumber), null);
-    if (!parsed) return { projectChips: null, customProjects: null, chipTimeOverrides: null };
-    return {
-      projectChips: Array.isArray(parsed?.projectChips) ? parsed.projectChips : null,
-      customProjects: Array.isArray(parsed?.customProjects) ? parsed.customProjects : null,
-      chipTimeOverrides:
-        parsed?.chipTimeOverrides &&
-        typeof parsed.chipTimeOverrides === 'object' &&
-        !Array.isArray(parsed.chipTimeOverrides)
-          ? parsed.chipTimeOverrides
-          : null,
-    };
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return { projectChips: null, customProjects: null, chipTimeOverrides: null };
+    return await readChipsLayer({ userId, yearId, isSent: false });
+  } catch (error) {
+    console.error('Failed to read tactics chip state', error);
+    return { projectChips: null, customProjects: null, chipTimeOverrides: null };
+  }
+}
+
+/**
+ * Save the live chip state for a year and broadcast the change. Callers
+ * should debounce this (the Plan page autosaves on every chip edit).
+ * @param {object} payload
+ * @param {number} yearNumber
+ */
+export async function saveTacticsChipsState(payload, yearNumber) {
+  try {
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) {
+      console.error(`Cannot save tactics chip state: year ${yearNumber} does not exist`);
+      return;
+    }
+    await writeChipsLayer({ userId, yearId, isSent: false, payload });
+    dispatchEvent(TACTICS_CHIPS_STORAGE_EVENT, payload, yearNumber);
+  } catch (error) {
+    console.error('Failed to save tactics chip state', error);
+  }
+}
+
+/**
+ * Read the "sent to System" chip snapshot for a year. System page reads
+ * exclusively from this layer.
+ * @param {number} yearNumber
+ * @returns {Promise<{projectChips: Array|null, customProjects: Array|null, chipTimeOverrides: object|null}>}
+ */
+export async function loadSentChipsSnapshot(yearNumber) {
+  try {
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return { projectChips: null, customProjects: null, chipTimeOverrides: null };
+    return await readChipsLayer({ userId, yearId, isSent: true });
   } catch (error) {
     console.error('Failed to read sent chips snapshot', error);
     return { projectChips: null, customProjects: null, chipTimeOverrides: null };
   }
-};
+}
 
-export const saveTacticsColumnWidths = (widths, yearNumber = null) => {
+/**
+ * Save the "sent to System" chip snapshot for a year. Called only when the
+ * user presses Send to System.
+ * @param {object} payload
+ * @param {number} yearNumber
+ */
+export async function saveSentChipsSnapshot(payload, yearNumber) {
   try {
-    const key = getColumnWidthsStorageKey(yearNumber);
-    storage.setJSON(key, widths);
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) {
+      console.error(`Cannot save sent chips snapshot: year ${yearNumber} does not exist`);
+      return;
+    }
+    await writeChipsLayer({ userId, yearId, isSent: true, payload });
   } catch (error) {
-    console.error('Failed to save tactics column widths', error);
+    console.error('Failed to save sent chips snapshot', error);
   }
-};
+}
+
+// --- send-to-system timestamp (lives on planner_settings) -------------
+
+async function readPlannerSettingsRow({ userId, yearId }) {
+  const { data, error } = await supabase
+    .from('planner_settings')
+    .select('id, send_to_system_at')
+    .eq('user_id', userId)
+    .eq('year_id', yearId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? null;
+}
+
+async function writePlannerSettingsTimestamp({ userId, yearId, value }) {
+  const existing = await readPlannerSettingsRow({ userId, yearId });
+  if (existing) {
+    const { error } = await supabase
+      .from('planner_settings')
+      .update({ send_to_system_at: value })
+      .eq('id', existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from('planner_settings')
+      .insert({ user_id: userId, year_id: yearId, send_to_system_at: value });
+    if (error) throw error;
+  }
+}
+
+/**
+ * Read the Send-to-System timestamp for a year. Returns an ISO timestamp
+ * string (e.g. "2026-05-16T16:32:11.123Z") or null if no Send has happened.
+ * Format note: previously this returned the legacy `Date.now().toString()`
+ * epoch-ms string. Callers compare it for identity (`ts !== last`) and
+ * truthiness (`!!ts`), both of which work with ISO strings.
+ * @param {number} yearNumber
+ * @returns {Promise<string|null>}
+ */
+export async function getSendToSystemTimestamp(yearNumber) {
+  try {
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return null;
+    const row = await readPlannerSettingsRow({ userId, yearId });
+    return row?.send_to_system_at ?? null;
+  } catch (error) {
+    console.error('Failed to read send-to-system timestamp', error);
+    return null;
+  }
+}
+
+/**
+ * Stamp the Send-to-System marker for a year with the current time.
+ * @param {number} yearNumber
+ */
+export async function setSendToSystemTimestamp(yearNumber) {
+  try {
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) {
+      console.error(`Cannot set send-to-system timestamp: year ${yearNumber} does not exist`);
+      return;
+    }
+    await writePlannerSettingsTimestamp({
+      userId,
+      yearId,
+      value: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Failed to set send-to-system timestamp', error);
+  }
+}
+
+/**
+ * Clear the Send-to-System marker for a year. Used when (re)creating or
+ * undoing a draft year.
+ * @param {number} yearNumber
+ */
+export async function clearSendToSystemTimestamp(yearNumber) {
+  try {
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return; // nothing to clear
+    await writePlannerSettingsTimestamp({ userId, yearId, value: null });
+  } catch (error) {
+    console.error('Failed to clear send-to-system timestamp', error);
+  }
+}

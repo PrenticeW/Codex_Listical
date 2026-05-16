@@ -342,19 +342,17 @@ export default function TacticsPage() {
       alert(`Could not create draft year: ${result.error}`);
     }
   }, [activeYear, refreshMetadata, navigate]);
-  // Year-scoped: each year holds its own copy of the eight tactics page
-  // settings, so changes on a draft year do not leak into the active year.
-  // The page is force-remounted on year change via <Outlet key={currentYear}>
-  // in Layout.jsx, so this useMemo runs once per page instance — but the
-  // [currentYear] dep keeps it correct in any future setup that doesn't remount.
-  const initialTacticsSettings = useMemo(
-    () => loadTacticsYearSettings(currentYear),
-    [currentYear]
-  );
-  const [startDay, setStartDay] = useState(initialTacticsSettings.startDay);
-  const [incrementMinutes, setIncrementMinutes] = useState(
-    initialTacticsSettings.incrementMinutes
-  );
+  // Year-scoped settings: each of the eight Plan-page settings holds its
+  // own per-year value, so changes on a draft year do not leak into the
+  // active year. After helper #4's Supabase port the values can no longer
+  // be loaded synchronously in useState initializers, so each state starts
+  // with the same default DEFAULT_YEAR_SETTINGS in tacticsStorage.js uses.
+  // The async load effect below replaces them with the real values from
+  // Supabase a moment after mount. The settingsLoadedForYear gate keeps
+  // the autosave effect from clobbering Supabase with the defaults during
+  // that brief window.
+  const [startDay, setStartDay] = useState('Sunday');
+  const [incrementMinutes, setIncrementMinutes] = useState(60);
 
   // Page-specific size setting
   const { sizeScale: textSizeScale } = usePageSize('plan');
@@ -368,7 +366,7 @@ export default function TacticsPage() {
       return formatHour12(hour24, minutes);
     });
   }, [incrementMinutes]);
-  const [startHour, setStartHour] = useState(initialTacticsSettings.startHour);
+  const [startHour, setStartHour] = useState('');
   const minuteOptions = useMemo(() => {
     if (!startHour) return [];
     const baseMinutes = parseHour12ToMinutes(startHour);
@@ -382,11 +380,11 @@ export default function TacticsPage() {
       return formatHour12(hour24, minutes);
     });
   }, [startHour, incrementMinutes]);
-  const [startMinute, setStartMinute] = useState(initialTacticsSettings.startMinute);
-  const [showAmPm, setShowAmPm] = useState(initialTacticsSettings.showAmPm);
-  const [use24Hour, setUse24Hour] = useState(initialTacticsSettings.use24Hour);
-  const [chipDisplayModes, setChipDisplayModes] = useState(initialTacticsSettings.chipDisplayModes);
-  const [summaryRowOrder, setSummaryRowOrder] = useState(initialTacticsSettings.summaryRowOrder);
+  const [startMinute, setStartMinute] = useState('');
+  const [showAmPm, setShowAmPm] = useState(true);
+  const [use24Hour, setUse24Hour] = useState(false);
+  const [chipDisplayModes, setChipDisplayModes] = useState({ __default__: { duration: false, clock: false } });
+  const [summaryRowOrder, setSummaryRowOrder] = useState(null);
 
   const handleToggleChipDisplayFlag = useCallback((projectId, flag) => {
     setChipDisplayModes((prev) => {
@@ -396,6 +394,15 @@ export default function TacticsPage() {
   }, []);
 
   useEffect(() => {
+    // Settings load completes asynchronously after mount (see the parallel
+    // load effect below). Skip the very first save-effect run for each year
+    // so the in-memory defaults don't overwrite the freshly loaded Supabase
+    // values before they make it into state. Matches the chipsLoadedForYear
+    // gate used by the chips autosave.
+    if (settingsLoadedForYear.current == null) {
+      settingsLoadedForYear.current = currentYear;
+      return;
+    }
     saveTacticsYearSettings(
       { startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay, chipDisplayModes, summaryRowOrder },
       currentYear
@@ -456,21 +463,11 @@ export default function TacticsPage() {
     return [startDay, ...sequence].slice(0, 7);
   }, [startDay, sequence]);
   const visibleColumnCount = displayedWeekDays.length || DAY_COLUMN_COUNT;
-  const [projectChips, setProjectChips] = useState(() => {
-    // Load saved chips from storage first
-    const chipState = loadTacticsChipsState(currentYear);
-    if (chipState.projectChips) {
-      const deduped = dedupeChipsById(chipState.projectChips);
-      updateChipSequenceFromList(deduped);
-      // Backfill dayName for chips saved before this field was introduced
-      return deduped.map((chip) => {
-        if (chip.dayName != null || chip.columnIndex >= DAY_COLUMN_COUNT) return chip;
-        return { ...chip, dayName: displayedWeekDays[chip.columnIndex] ?? null };
-      });
-    }
-    // Fall back to initial sleep blocks if no saved state
-    return buildInitialSleepBlocks(displayedWeekDays);
-  });
+  // Chips load asynchronously now (Supabase). Start empty; the async load
+  // effect below populates this with the user's saved chips (or sleep-block
+  // defaults if no chips exist yet). The chipsLoadedForYear gate on the
+  // chip autosave effect prevents this empty default from clobbering DB.
+  const [projectChips, setProjectChips] = useState(() => []);
   const [selectedBlockIds, setSelectedBlockIds] = useState(() => new Set());
   // Derived: last/primary selected ID (for drag, resize, highlight, paste target)
   const selectedBlockId = useMemo(() => {
@@ -525,16 +522,21 @@ export default function TacticsPage() {
   const [cellMenu, setCellMenu] = useState(null);
   const [scheduleItemPanelOpen, setScheduleItemPanelOpen] = useState(false);
 
-  // Column widths for resizing (index 0 is the time column, rest are day/project columns)
-  const [columnWidths, setColumnWidths] = useState(() => {
-    const saved = loadTacticsColumnWidths(currentYear);
-    if (saved) return saved;
-    // Default: 120px for time column, 140px for all other columns
-    return Array.from({ length: 30 }, (_, i) => i === 0 ? 120 : 140);
-  });
+  // Column widths for resizing (index 0 is the time column, rest are day/project columns).
+  // Async-loaded from Supabase by the parallel load effect below; init with
+  // sensible defaults so the grid renders correctly during the load window.
+  const [columnWidths, setColumnWidths] = useState(() =>
+    Array.from({ length: 30 }, (_, i) => i === 0 ? 120 : 140)
+  );
 
-  // Save column widths to storage when they change
+  // Save column widths to storage when they change. Gated like the year
+  // settings autosave so the default array above doesn't clobber a
+  // previously saved width set during the initial async load window.
   useEffect(() => {
+    if (columnWidthsLoadedForYear.current == null) {
+      columnWidthsLoadedForYear.current = currentYear;
+      return;
+    }
     saveTacticsColumnWidths(columnWidths, currentYear);
   }, [columnWidths, currentYear]);
 
@@ -545,10 +547,8 @@ export default function TacticsPage() {
   const [editingChipIsCustom, setEditingChipIsCustom] = useState(false);
   const [editingChipIsTime, setEditingChipIsTime] = useState(false);
   const [editingChipMinutes, setEditingChipMinutes] = useState('');
-  const [chipTimeOverrides, setChipTimeOverrides] = useState(() => {
-    const chipState = loadTacticsChipsState(currentYear);
-    return chipState.chipTimeOverrides ?? {};
-  });
+  // Async-loaded with projectChips in the parallel load effect below.
+  const [chipTimeOverrides, setChipTimeOverrides] = useState(() => ({}));
   const editingInputRef = useRef(null);
   const editingMinutesRef = useRef(null);
   const editingChipContainerRef = useRef(null);
@@ -564,11 +564,8 @@ export default function TacticsPage() {
   const [pendingCustomId, setPendingCustomId] = useState(null);
   const [pendingCustomLabel, setPendingCustomLabel] = useState('');
   const pendingCustomInputRef = useRef(null);
-  const [customProjects, setCustomProjects] = useState(() => {
-    // Load saved custom projects from storage first
-    const chipState = loadTacticsChipsState(currentYear);
-    return chipState.customProjects || [];
-  });
+  // Async-loaded with projectChips in the parallel load effect below.
+  const [customProjects, setCustomProjects] = useState(() => []);
 
   const { undoStack, redoStack, executeCommand, undo, redo } = useCommandPattern();
 
@@ -657,7 +654,22 @@ export default function TacticsPage() {
   const headerContainerRef = useRef(null);
   const cellMenuRef = useRef(null);
   const hasLoadedInitialState = useRef(false);
-  const chipsLoadedForYear = useRef(currentYear);
+  // All three "loaded for year" refs start as null. The autosave effects
+  // treat null as "initial load still in flight" and skip saving. The async
+  // load effect below resets them to null whenever currentYear changes; each
+  // save effect's first post-load run flips its ref to the current year
+  // (gate cleared) and returns without saving. Subsequent state changes
+  // pass the gate and save normally.
+  //
+  // Pre helper #4 port the chip ref was initialised to currentYear, which
+  // was harmless when the lazy initialisers loaded synchronously (the
+  // "redundant first save" wrote the just-loaded value back). After the
+  // Supabase port the lazy initialisers can't load, so on first mount the
+  // ref would have let the save effect write DEFAULT chips over the user's
+  // saved chips before the async load completed. Null init fixes that.
+  const chipsLoadedForYear = useRef(null);
+  const settingsLoadedForYear = useRef(null);
+  const columnWidthsLoadedForYear = useRef(null);
   const [tableRect, setTableRect] = useState(null);
   useEffect(() => {
     // Ensure we always have a transparent drag image to avoid browser-specific cancellations
@@ -796,58 +808,95 @@ export default function TacticsPage() {
       }
     };
   }, [setSelectedBlockId]);
-  // Load initial state when year changes (not on first mount, since state initializers handle that)
+  // Load all Plan-page state for the current year. Runs on first mount and
+  // again whenever currentYear changes (Plan Next Year flow, draft promote,
+  // etc). After helper #4's Supabase port this is the sole load path; the
+  // useState lazy initialisers no longer touch the database.
+  //
+  // Four things load in parallel:
+  //   * staging projects (Goal page shortlist, drives the project columns)
+  //   * year settings (eight Plan-page settings)
+  //   * column widths (Plan grid layout)
+  //   * chip state (projectChips + customProjects + chipTimeOverrides)
+  //
+  // Each save-gate ref is reset to null at the top so the autosave effects
+  // skip the next run after the loaded state lands in setX, then fire
+  // normally once the user interacts.
+  //
+  // The chip dayName backfill uses the just-loaded settings.startDay (not
+  // the in-state startDay, which hasn't applied yet by the time the load
+  // resolves) so the synthetic day name matches the user's startDay
+  // preference, not the default 'Sunday'.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') return undefined;
+    let cancelled = false;
 
-    // Skip on first mount - state initializers already loaded the data
-    if (!hasLoadedInitialState.current) {
-      hasLoadedInitialState.current = true;
-
-      // Load staging projects on first mount (async since the Supabase port)
-      loadStagingState(currentYear).then((state) => {
-        const projects = Array.isArray(state?.shortlist) ? state.shortlist : [];
-        setStagingProjects(projects);
-      });
-      return;
-    }
-
-    const readProjects = async () => {
-      const state = await loadStagingState(currentYear);
-      setStagingProjects(Array.isArray(state?.shortlist) ? state.shortlist : []);
-    };
-
-    // Prevent the save effect from writing stale chips to the new year's storage.
-    // When currentYear changes, both this effect and the save effect fire in the
-    // same commit. The setProjectChips call below is batched — projectChips still
-    // holds the previous year's data when the save effect runs. Setting the ref
-    // to null here blocks the save until the re-render applies the new state and
-    // the save effect fires again with the correct chips.
+    // Reset gates so the autosave effects don't write defaults to the new
+    // year's rows. Each save effect re-arms its own ref on its first
+    // post-reset run; subsequent state changes pass through.
+    settingsLoadedForYear.current = null;
+    columnWidthsLoadedForYear.current = null;
     chipsLoadedForYear.current = null;
+    hasLoadedInitialState.current = true;
 
-    // Load tactics chips for current year when year changes
-    const chipState = loadTacticsChipsState(currentYear);
-    const weekDays = displayedWeekDaysRef.current;
-    if (chipState.projectChips) {
-      const dedupedChips = dedupeChipsById(chipState.projectChips);
-      updateChipSequenceFromList(dedupedChips);
-      // Backfill dayName for chips saved before this field was introduced
-      setProjectChips(dedupedChips.map((chip) => {
-        if (chip.dayName != null || chip.columnIndex >= DAY_COLUMN_COUNT) return chip;
-        return { ...chip, dayName: weekDays[chip.columnIndex] ?? null };
-      }));
-    } else {
-      // Reset to initial sleep blocks if no saved chips for this year
-      setProjectChips(buildInitialSleepBlocks(weekDays));
-    }
-    if (chipState.customProjects) {
-      setCustomProjects(chipState.customProjects);
-    } else {
-      setCustomProjects([]);
-    }
+    (async () => {
+      try {
+        const [stagingState, settings, widths, chipState] = await Promise.all([
+          loadStagingState(currentYear),
+          loadTacticsYearSettings(currentYear),
+          loadTacticsColumnWidths(currentYear),
+          loadTacticsChipsState(currentYear),
+        ]);
+        if (cancelled) return;
 
-    // Always reload projects for current year
-    readProjects();
+        // Staging projects (Goal page shortlist)
+        setStagingProjects(Array.isArray(stagingState?.shortlist) ? stagingState.shortlist : []);
+
+        // Year settings
+        setStartDay(settings.startDay);
+        setIncrementMinutes(settings.incrementMinutes);
+        setStartHour(settings.startHour);
+        setStartMinute(settings.startMinute);
+        setShowAmPm(settings.showAmPm);
+        setUse24Hour(settings.use24Hour);
+        setChipDisplayModes(settings.chipDisplayModes);
+        setSummaryRowOrder(settings.summaryRowOrder);
+
+        // Column widths (skip update if Supabase has no saved widths — the
+        // useState default already holds the right baseline)
+        if (Array.isArray(widths) && widths.length > 0) {
+          setColumnWidths(widths);
+        }
+
+        // Chip state. dayName backfill uses settings.startDay (the value
+        // we just loaded), not the in-state startDay (still 'Sunday' at
+        // this point in the microtask).
+        const startIndex = Math.max(0, DAYS_OF_WEEK.indexOf(settings.startDay));
+        const weekDays = DAYS_OF_WEEK.slice(startIndex).concat(DAYS_OF_WEEK.slice(0, startIndex));
+        if (chipState.projectChips) {
+          const dedupedChips = dedupeChipsById(chipState.projectChips);
+          updateChipSequenceFromList(dedupedChips);
+          setProjectChips(dedupedChips.map((chip) => {
+            if (chip.dayName != null || chip.columnIndex >= DAY_COLUMN_COUNT) return chip;
+            return { ...chip, dayName: weekDays[chip.columnIndex] ?? null };
+          }));
+        } else {
+          setProjectChips(buildInitialSleepBlocks(weekDays));
+        }
+        setCustomProjects(Array.isArray(chipState.customProjects) ? chipState.customProjects : []);
+        setChipTimeOverrides(
+          chipState.chipTimeOverrides && typeof chipState.chipTimeOverrides === 'object'
+            ? chipState.chipTimeOverrides
+            : {}
+        );
+      } catch (err) {
+        console.error('Failed to load Plan page state for year', currentYear, err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentYear]);
 
   // Set up storage event listeners
@@ -2617,18 +2666,17 @@ export default function TacticsPage() {
       },
     };
 
-    // Save live copies (for Plan page reactive use). saveTacticsChipsState
-    // is still localStorage so it stays sync; saveTacticsMetrics is async
-    // since the Supabase port and must complete before the event fires.
-    saveTacticsChipsState({ projectChips, customProjects, chipTimeOverrides }, currentYear);
-    saveSentChipsSnapshot({ projectChips, customProjects, chipTimeOverrides }, currentYear);
-    setSendToSystemTimestamp(currentYear);
-
-    // Await the metrics writes so the System page reads the freshly-saved
-    // sent snapshot. Without these awaits the dispatchEvent below races the
-    // Supabase write and System loads stale data ("subsequent changes
-    // ignored" symptom).
+    // Save the chip state (live + sent snapshot), the send-to-system
+    // timestamp, and the metrics (live + sent snapshot) before the event
+    // dispatch. All five are async since helper #4's port, and they MUST
+    // all complete before TACTICS_SEND_TO_SYSTEM_EVENT fires — otherwise
+    // the System page's event handler races the Supabase writes and reads
+    // stale data ("subsequent changes ignored" symptom from the previous
+    // session's debugging marathon).
     await Promise.all([
+      saveTacticsChipsState({ projectChips, customProjects, chipTimeOverrides }, currentYear),
+      saveSentChipsSnapshot({ projectChips, customProjects, chipTimeOverrides }, currentYear),
+      setSendToSystemTimestamp(currentYear),
       saveTacticsMetrics(metricsPayload, currentYear),
       saveSentMetricsSnapshot(metricsPayload, currentYear),
     ]);

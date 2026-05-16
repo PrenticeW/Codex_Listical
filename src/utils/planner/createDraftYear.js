@@ -218,9 +218,9 @@ export async function createDraftYearFromActive(activeYearNumber) {
 
     const stagingState = await loadStagingState(activeYearNumber);
     const tacticsMetrics = await loadTacticsMetrics(activeYearNumber);
-    const chipsState = loadTacticsChipsState(activeYearNumber);
-    const tacticsYearSettings = loadTacticsYearSettings(activeYearNumber);
-    const columnWidths = loadTacticsColumnWidths(activeYearNumber);
+    const chipsState = await loadTacticsChipsState(activeYearNumber);
+    const tacticsYearSettings = await loadTacticsYearSettings(activeYearNumber);
+    const columnWidths = await loadTacticsColumnWidths(activeYearNumber);
 
     // --- Create draft year metadata record ---
     await createDraftYearMetadata(draftYearNumber, nextStartDate);
@@ -269,22 +269,22 @@ export async function createDraftYearFromActive(activeYearNumber) {
         }
       );
     }
-    saveTacticsChipsState(draftChipsState, draftYearNumber);
+    await saveTacticsChipsState(draftChipsState, draftYearNumber);
     // Year-scoped settings: copy the active year's eight tactics page settings
     // (sleep/wake times, increment, AM/PM, 24-hour, start day, chip display
     // modes, summary row order) into the draft year so the user starts with
     // familiar values rather than defaults.
-    saveTacticsYearSettings(tacticsYearSettings, draftYearNumber);
+    await saveTacticsYearSettings(tacticsYearSettings, draftYearNumber);
     if (columnWidths) {
-      saveTacticsColumnWidths(columnWidths, draftYearNumber);
+      await saveTacticsColumnWidths(columnWidths, draftYearNumber);
     }
 
     // Clear any stale "sent to system" data for this year number — prevents
     // outdated chip subheaders from appearing on the draft System page if a
     // previous draft with the same number was undone without full cleanup.
-    saveSentChipsSnapshot({ projectChips: null, customProjects: null, chipTimeOverrides: null }, draftYearNumber);
+    await saveSentChipsSnapshot({ projectChips: null, customProjects: null, chipTimeOverrides: null }, draftYearNumber);
     try {
-      clearSendToSystemTimestamp(draftYearNumber);
+      await clearSendToSystemTimestamp(draftYearNumber);
     } catch {
       // Best effort
     }

@@ -152,29 +152,35 @@ export default function StagingPageV2() {
   const isDraftYearView = Boolean(draftYear && currentYear === draftYear.yearNumber);
 
   // Archive project and clean up associated chips + task rows
-  const handleArchiveAndCleanup = useCallback((id, status) => {
+  const handleArchiveAndCleanup = useCallback(async (id, status) => {
     handleArchiveWithStatus(id, status);
 
-    // Remove chips for the archived project
-    const chipState = loadTacticsChipsState(currentYear);
-    const projectChips = Array.isArray(chipState.projectChips) ? chipState.projectChips : [];
-    const filteredChips = projectChips.filter((chip) => chip.projectId !== id);
-    if (filteredChips.length !== projectChips.length) {
-      const remainingIds = new Set(filteredChips.map((chip) => chip.id));
-      const overrides = chipState.chipTimeOverrides && typeof chipState.chipTimeOverrides === 'object'
-        ? chipState.chipTimeOverrides
-        : null;
-      const filteredOverrides = overrides
-        ? Object.fromEntries(Object.entries(overrides).filter(([chipId]) => remainingIds.has(chipId)))
-        : overrides;
-      saveTacticsChipsState(
-        {
-          projectChips: filteredChips,
-          customProjects: chipState.customProjects,
-          chipTimeOverrides: filteredOverrides,
-        },
-        currentYear
-      );
+    // Remove chips for the archived project. After helper #4's Supabase port
+    // these calls are async; the callback now returns a Promise but no caller
+    // awaits it, which is fine — the cleanup is fire-and-forget by design.
+    try {
+      const chipState = await loadTacticsChipsState(currentYear);
+      const projectChips = Array.isArray(chipState.projectChips) ? chipState.projectChips : [];
+      const filteredChips = projectChips.filter((chip) => chip.projectId !== id);
+      if (filteredChips.length !== projectChips.length) {
+        const remainingIds = new Set(filteredChips.map((chip) => chip.id));
+        const overrides = chipState.chipTimeOverrides && typeof chipState.chipTimeOverrides === 'object'
+          ? chipState.chipTimeOverrides
+          : null;
+        const filteredOverrides = overrides
+          ? Object.fromEntries(Object.entries(overrides).filter(([chipId]) => remainingIds.has(chipId)))
+          : overrides;
+        await saveTacticsChipsState(
+          {
+            projectChips: filteredChips,
+            customProjects: chipState.customProjects,
+            chipTimeOverrides: filteredOverrides,
+          },
+          currentYear
+        );
+      }
+    } catch (err) {
+      console.error('Failed to clean up chips on archive', err);
     }
   }, [handleArchiveWithStatus, currentYear]);
 
@@ -408,35 +414,51 @@ export default function StagingPageV2() {
                 saveTaskRows(filteredRows, DEFAULT_PROJECT_ID, currentYear);
               }
             }
-            const chipState = loadTacticsChipsState(currentYear);
-            if (capturedChipState === null) {
-              capturedChipState = chipState;
-            }
-            const projectChips = Array.isArray(chipState.projectChips) ? chipState.projectChips : [];
-            const filteredChips = projectChips.filter((chip) => chip.projectId !== itemId);
-            if (filteredChips.length !== projectChips.length) {
-              const remainingIds = new Set(filteredChips.map((chip) => chip.id));
-              const overrides = chipState.chipTimeOverrides && typeof chipState.chipTimeOverrides === 'object'
-                ? chipState.chipTimeOverrides
-                : null;
-              const filteredOverrides = overrides
-                ? Object.fromEntries(Object.entries(overrides).filter(([chipId]) => remainingIds.has(chipId)))
-                : overrides;
-              saveTacticsChipsState(
-                {
-                  projectChips: filteredChips,
-                  customProjects: chipState.customProjects,
-                  chipTimeOverrides: filteredOverrides,
-                },
-                currentYear
-              );
-            }
+            // Chip cleanup is now async (Supabase). The command pattern's
+            // execute is synchronous and not awaited, so wrap the chip
+            // section in an async IIFE. capturedChipState is set inside the
+            // IIFE so undo() restores the pre-archive state — the slight
+            // delay before capture is acceptable because the command can't
+            // be undone until executeCommand returns and the user takes a
+            // distinct action.
+            (async () => {
+              try {
+                const chipState = await loadTacticsChipsState(currentYear);
+                if (capturedChipState === null) {
+                  capturedChipState = chipState;
+                }
+                const projectChips = Array.isArray(chipState.projectChips) ? chipState.projectChips : [];
+                const filteredChips = projectChips.filter((chip) => chip.projectId !== itemId);
+                if (filteredChips.length !== projectChips.length) {
+                  const remainingIds = new Set(filteredChips.map((chip) => chip.id));
+                  const overrides = chipState.chipTimeOverrides && typeof chipState.chipTimeOverrides === 'object'
+                    ? chipState.chipTimeOverrides
+                    : null;
+                  const filteredOverrides = overrides
+                    ? Object.fromEntries(Object.entries(overrides).filter(([chipId]) => remainingIds.has(chipId)))
+                    : overrides;
+                  await saveTacticsChipsState(
+                    {
+                      projectChips: filteredChips,
+                      customProjects: chipState.customProjects,
+                      chipTimeOverrides: filteredOverrides,
+                    },
+                    currentYear
+                  );
+                }
+              } catch (err) {
+                console.error('Failed to clean up chips on remove from plan', err);
+              }
+            })();
           }
         },
         undo: () => {
           if (capturedState) setState(capturedState);
           if (capturedChipState) {
-            saveTacticsChipsState(capturedChipState, currentYear);
+            // Fire-and-forget restore; matches the async pattern in execute.
+            saveTacticsChipsState(capturedChipState, currentYear).catch((err) => {
+              console.error('Failed to restore chips on undo', err);
+            });
           }
           if (capturedTaskRows) {
             saveTaskRows(capturedTaskRows, DEFAULT_PROJECT_ID, currentYear);

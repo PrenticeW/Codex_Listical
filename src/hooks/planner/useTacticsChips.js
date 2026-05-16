@@ -152,9 +152,9 @@ export default function useTacticsChips() {
   const { currentYear } = useYear();
 
   const loadChips = useCallback(async () => {
-    const { projectChips, chipTimeOverrides } = loadTacticsChipsState(currentYear);
+    const { projectChips, chipTimeOverrides } = await loadTacticsChipsState(currentYear);
     const idToNicknameMap = await buildProjectIdToNicknameMap(currentYear);
-    const { incrementMinutes } = loadTacticsYearSettings(currentYear);
+    const { incrementMinutes } = await loadTacticsYearSettings(currentYear);
     return enrichChips(projectChips, idToNicknameMap, chipTimeOverrides, incrementMinutes);
   }, [currentYear]);
 
@@ -163,7 +163,7 @@ export default function useTacticsChips() {
       const projectChips = payload?.projectChips ?? null;
       const chipTimeOverrides = payload?.chipTimeOverrides ?? null;
       const idToNicknameMap = await buildProjectIdToNicknameMap(currentYear);
-      const { incrementMinutes } = loadTacticsYearSettings(currentYear);
+      const { incrementMinutes } = await loadTacticsYearSettings(currentYear);
       return enrichChips(projectChips, idToNicknameMap, chipTimeOverrides, incrementMinutes);
     },
     [currentYear]

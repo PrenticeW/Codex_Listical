@@ -70,12 +70,16 @@ export async function undoDraftYear() {
       (unscopedKey) => isKeyForYear(unscopedKey, draft.yearNumber)
     );
 
-    // Best-effort cleanup of the legacy send-to-system marker. The sweep
-    // above also catches it; this is harmless redundancy.
+    // Best-effort cleanup of the send-to-system marker. The localStorage
+    // sweep above no longer catches it (the marker now lives in Supabase
+    // on planner_settings.send_to_system_at), so this await is the actual
+    // cleanup path post helper #4 port. The Supabase cascade on year delete
+    // will eventually make this redundant once helper #5 lands the
+    // year-row delete itself, but for now we still need it.
     try {
-      clearSendToSystemTimestamp(draft.yearNumber);
+      await clearSendToSystemTimestamp(draft.yearNumber);
     } catch {
-      // Ignore — already removed
+      // Ignore — best effort
     }
 
     // Remove draft year from metadata. With the Supabase port this also
