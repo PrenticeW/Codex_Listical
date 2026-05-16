@@ -187,8 +187,17 @@ async function loadEnrichedChips(yearNumber) {
     })
     .map((chip) => {
       const projectNickname = idToNicknameMap.get(chip.projectId) || null;
-      const storedMinutes = (chipTimeOverrides?.[chip.id] ?? chip.durationMinutes) ?? null;
-      const durationMinutes = storedMinutes ?? estimateDurationFromRowIds(chip.startRowId, chip.endRowId, incrementMinutes);
+      // Duration resolution for project chips. Plan's chip resize updates
+      // startRowId/endRowId but does NOT update `durationMinutes` on the chip
+      // object, so the stored number is stale after any resize. System used to
+      // read it directly and show a value that disagreed with Plan. System
+      // projects (sleep/rest/buffer) were filtered out above, so we can safely
+      // recompute from row IDs here. An explicit user override in
+      // chipTimeOverrides still wins; stored durationMinutes is the final
+      // fallback for chips with no usable row IDs. Debugging session 2026-05-16.
+      const overrideMinutes = chipTimeOverrides?.[chip.id];
+      const fromRows = estimateDurationFromRowIds(chip.startRowId, chip.endRowId, incrementMinutes);
+      const durationMinutes = overrideMinutes ?? fromRows ?? chip.durationMinutes ?? null;
       const formattedDuration = durationMinutes != null ? formatChipDuration(durationMinutes) : null;
       return { ...chip, projectNickname, durationMinutes, formattedDuration };
     });
