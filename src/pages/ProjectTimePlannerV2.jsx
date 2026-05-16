@@ -198,6 +198,19 @@ async function loadEnrichedChips(yearNumber) {
       const overrideMinutes = chipTimeOverrides?.[chip.id];
       const fromRows = estimateDurationFromRowIds(chip.startRowId, chip.endRowId, incrementMinutes);
       const durationMinutes = overrideMinutes ?? fromRows ?? chip.durationMinutes ?? null;
+      // [DEBUG-DURATION-V3] If this log doesn't appear, the row-based-recompute
+      // edit (commit after the race-fix) is not in the deployed bundle.
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG-DURATION-V3]', {
+        chipId: chip.id,
+        startRowId: chip.startRowId,
+        endRowId: chip.endRowId,
+        incrementMinutes,
+        overrideMinutes,
+        fromRows,
+        stored: chip.durationMinutes,
+        resolved: durationMinutes,
+      });
       const formattedDuration = durationMinutes != null ? formatChipDuration(durationMinutes) : null;
       return { ...chip, projectNickname, durationMinutes, formattedDuration };
     });
