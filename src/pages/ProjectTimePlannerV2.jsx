@@ -166,9 +166,13 @@ function formatChipDuration(minutes) {
 }
 
 async function loadEnrichedChips(yearNumber) {
-  const { projectChips, chipTimeOverrides } = loadSentChipsSnapshot(yearNumber);
-  const idToNicknameMap = await buildProjectIdToNicknameMap(yearNumber);
-  const { incrementMinutes } = loadTacticsYearSettings(yearNumber);
+  // All three loads are async post helper #4 port. Run them in parallel
+  // since none depends on the others.
+  const [{ projectChips, chipTimeOverrides }, idToNicknameMap, { incrementMinutes }] = await Promise.all([
+    loadSentChipsSnapshot(yearNumber),
+    buildProjectIdToNicknameMap(yearNumber),
+    loadTacticsYearSettings(yearNumber),
+  ]);
   if (!Array.isArray(projectChips)) return [];
   const enriched = projectChips
     .filter((chip) => {
@@ -227,9 +231,26 @@ export default function ProjectTimePlannerV2() {
 
   // True once "Send to System" has been triggered — lets draft year bypass
   // the "no imported tasks" guard so chip rows and project headers appear.
-  const [sentToSystem, setSentToSystem] = useState(() => {
-    return !!getSendToSystemTimestamp(currentYear);
-  });
+  // Default to false because post helper #4 port the timestamp lives in
+  // Supabase (planner_settings.send_to_system_at) and can't be read
+  // synchronously in the useState initializer. The async load effect just
+  // below flips this to true if a Send timestamp exists for the year.
+  const [sentToSystem, setSentToSystem] = useState(false);
+
+  // Async load of the Send-to-System marker. Mirrors the previous sync
+  // useState init but tolerates the network round-trip.
+  useEffect(() => {
+    let cancelled = false;
+    getSendToSystemTimestamp(currentYear).then((ts) => {
+      if (cancelled) return;
+      setSentToSystem(!!ts);
+    }).catch((err) => {
+      console.error('Failed to read send-to-system timestamp', err);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentYear]);
 
   // Archive modal state
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
