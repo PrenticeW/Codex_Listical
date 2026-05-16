@@ -2555,26 +2555,32 @@ export default function TacticsPage() {
     });
     return sorted;
   }, [projectSummaries, summaryRowOrder]);
+  // Debounced autosave of live tactics metrics. Plan-page metric recomputes
+  // fire on every chip drag / settings tweak; without debounce each one is
+  // a Supabase round-trip. 500ms idle window matches the staging autosave.
   useEffect(() => {
-    const projectWeeklyQuotas = projectSummaries.map((summary) => ({
-      id: summary.id,
-      label: summary.label,
-      weeklyHours: minutesToHourMinuteDecimal(summary.totalMinutes),
-    }));
-    const dailyBounds = displayedWeekDays.map((day, idx) => ({
-      day,
-      dailyMaxHours: minutesToHourMinuteDecimal(availableColumnTotals[idx] ?? 0),
-      dailyMinHours: minutesToHourMinuteDecimal(workingColumnTotals[idx] ?? 0),
-    }));
-    const weeklyTotals = {
-      availableHours: minutesToHourMinuteDecimal(totalAvailableMinutes),
-      workingHours: minutesToHourMinuteDecimal(totalWorkingMinutes),
-    };
-    saveTacticsMetrics({
-      projectWeeklyQuotas,
-      dailyBounds,
-      weeklyTotals,
-    }, currentYear);
+    const timer = setTimeout(() => {
+      const projectWeeklyQuotas = projectSummaries.map((summary) => ({
+        id: summary.id,
+        label: summary.label,
+        weeklyHours: minutesToHourMinuteDecimal(summary.totalMinutes),
+      }));
+      const dailyBounds = displayedWeekDays.map((day, idx) => ({
+        day,
+        dailyMaxHours: minutesToHourMinuteDecimal(availableColumnTotals[idx] ?? 0),
+        dailyMinHours: minutesToHourMinuteDecimal(workingColumnTotals[idx] ?? 0),
+      }));
+      const weeklyTotals = {
+        availableHours: minutesToHourMinuteDecimal(totalAvailableMinutes),
+        workingHours: minutesToHourMinuteDecimal(totalWorkingMinutes),
+      };
+      saveTacticsMetrics({
+        projectWeeklyQuotas,
+        dailyBounds,
+        weeklyTotals,
+      }, currentYear);
+    }, 500);
+    return () => clearTimeout(timer);
   }, [
     availableColumnTotals,
     displayedWeekDays,

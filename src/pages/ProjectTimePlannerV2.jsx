@@ -187,8 +187,8 @@ async function loadEnrichedChips(yearNumber) {
     });
 }
 
-function loadMetricsData(yearNumber) {
-  const metrics = loadSentMetricsSnapshot(yearNumber);
+async function loadMetricsData(yearNumber) {
+  const metrics = await loadSentMetricsSnapshot(yearNumber);
   return {
     dailyBounds: metrics?.dailyBounds || [],
     projectWeeklyQuotas: buildQuotasMap(metrics?.projectWeeklyQuotas),
@@ -396,13 +396,19 @@ export default function ProjectTimePlannerV2() {
   // this page on every year change, so the useState initialisers above (and the
   // sentToSystem initialiser earlier in this component) re-run synchronously
   // with the new year. No year-change effect needed.
-  const [{ dailyBounds, projectWeeklyQuotas }, setMetricsData] = useState(() => loadMetricsData(currentYear));
+  const [{ dailyBounds, projectWeeklyQuotas }, setMetricsData] = useState({
+    dailyBounds: [],
+    projectWeeklyQuotas: new Map(),
+  });
   const [tacticsChips, setTacticsChips] = useState([]);
 
-  // Async load of enriched chips on mount and year change (since the
-  // stagingStorage Supabase port made buildProjectIdToNicknameMap async).
+  // Async load of metrics + enriched chips on mount and year change. Both
+  // helpers became async during the Supabase port.
   useEffect(() => {
     let cancelled = false;
+    loadMetricsData(currentYear).then((data) => {
+      if (!cancelled) setMetricsData(data);
+    });
     loadEnrichedChips(currentYear).then((chips) => {
       if (!cancelled) setTacticsChips(chips);
     });
@@ -1431,7 +1437,7 @@ export default function ProjectTimePlannerV2() {
       setSentToSystem(true);
       // Reload tactics data from storage so System reflects what was just sent
       loadEnrichedChips(currentYear).then(setTacticsChips);
-      setMetricsData(loadMetricsData(currentYear));
+      loadMetricsData(currentYear).then(setMetricsData);
       resetSubprojectLabels(freshChips);
     };
     window.addEventListener(TACTICS_SEND_TO_SYSTEM_EVENT, handler);

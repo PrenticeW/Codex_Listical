@@ -214,7 +214,7 @@ export async function performYearArchive(yearNumber) {
     const totalDays = readTotalDays(DEFAULT_PROJECT_ID, yearNumber);
     const visibleDayColumns = readVisibleDayColumns(DEFAULT_PROJECT_ID, totalDays, yearNumber);
     const stagingState = await loadStagingState(yearNumber);
-    const tacticsMetrics = loadTacticsMetrics(yearNumber);
+    const tacticsMetrics = await loadTacticsMetrics(yearNumber);
 
     console.log(`[Archive Year] Data loaded from Year ${yearNumber}`);
 
@@ -290,7 +290,7 @@ export async function performYearArchive(yearNumber) {
 
       await saveStagingState({ shortlist: [], archived: [] }, nextYearNumber);
       const freshTacticsMetrics = getDefaultTacticsMetrics();
-      saveTacticsMetrics(freshTacticsMetrics, nextYearNumber);
+      await saveTacticsMetrics(freshTacticsMetrics, nextYearNumber);
 
       console.log(`[Archive Year] Year ${nextYearNumber} initialized`);
     }

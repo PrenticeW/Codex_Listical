@@ -217,7 +217,7 @@ export async function createDraftYearFromActive(activeYearNumber) {
     const totalDays = readTotalDays(DEFAULT_PROJECT_ID, activeYearNumber);
 
     const stagingState = await loadStagingState(activeYearNumber);
-    const tacticsMetrics = loadTacticsMetrics(activeYearNumber);
+    const tacticsMetrics = await loadTacticsMetrics(activeYearNumber);
     const chipsState = loadTacticsChipsState(activeYearNumber);
     const tacticsYearSettings = loadTacticsYearSettings(activeYearNumber);
     const columnWidths = loadTacticsColumnWidths(activeYearNumber);
@@ -253,7 +253,7 @@ export async function createDraftYearFromActive(activeYearNumber) {
     await saveStagingState(draftStagingState, draftYearNumber);
 
     // --- Copy Plan page (metrics + settings carry forward) ---
-    saveTacticsMetrics(tacticsMetrics, draftYearNumber);
+    await saveTacticsMetrics(tacticsMetrics, draftYearNumber);
     // Strip project and schedule chips — only keep sleep, rest, buffer, and
     // custom chips. Project chips reference staging projects whose addedToPlan
     // has been reset to false, so carrying them forward would show stale chips
