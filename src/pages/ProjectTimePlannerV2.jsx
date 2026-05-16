@@ -1412,7 +1412,13 @@ export default function ProjectTimePlannerV2() {
     });
   }, [totalDays]);
 
-  // On mount, check if "Send to System" was pressed since last reset
+  // Catch-up reset: when the System page mounts and the async chip load
+  // resolves, check whether a Send to System happened since the last reset
+  // and, if so, place the chip task rows. Pre-Supabase this could run on
+  // mount with empty deps because chips were loaded synchronously; now we
+  // have to wait for tacticsChips to populate, so the dep tracks chip
+  // identity. lastResetTsRef de-dupes so we don't reset on every chip-state
+  // change.
   useEffect(() => {
     if (!tacticsChips || tacticsChips.length === 0) return;
     const ts = getSendToSystemTimestamp(currentYear);
@@ -1421,8 +1427,7 @@ export default function ProjectTimePlannerV2() {
       setSentToSystem(true);
       resetSubprojectLabels(tacticsChips);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [tacticsChips, currentYear, resetSubprojectLabels]);
 
   // Handle the live "Send to System" event — reload all tactics data from storage
   useEffect(() => {
@@ -1435,10 +1440,16 @@ export default function ProjectTimePlannerV2() {
       const ts = getSendToSystemTimestamp(currentYear);
       lastResetTsRef.current = ts;
       setSentToSystem(true);
-      // Reload tactics data from storage so System reflects what was just sent
-      loadEnrichedChips(currentYear).then(setTacticsChips);
+      // Reload tactics data from storage so System reflects what was just sent.
+      // The async load returns the freshly loaded chips; we both set state
+      // AND pass them to resetSubprojectLabels (which is what places the
+      // chip task rows under their headers — skipping it leaves tasks
+      // invisible on the page).
+      loadEnrichedChips(currentYear).then((freshChips) => {
+        setTacticsChips(freshChips);
+        resetSubprojectLabels(freshChips);
+      });
       loadMetricsData(currentYear).then(setMetricsData);
-      resetSubprojectLabels(freshChips);
     };
     window.addEventListener(TACTICS_SEND_TO_SYSTEM_EVENT, handler);
     return () => window.removeEventListener(TACTICS_SEND_TO_SYSTEM_EVENT, handler);
