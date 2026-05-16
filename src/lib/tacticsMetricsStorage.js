@@ -42,11 +42,29 @@ async function findYearId(userId, yearNumber) {
   return data?.id ?? null;
 }
 
+/**
+ * Convert "H.MM" representation (either a string like "1.30" OR a number
+ * like 1.3 — where the decimal part is the minute count divided by 100,
+ * NOT a fraction of an hour) into integer minutes.
+ *
+ * The Plan page emits both shapes: chip duration totals come through as
+ * numbers from `minutesToHourMinuteDecimal`, while older code paths can
+ * still pass strings.
+ */
 function hmmToMinutes(hmm) {
-  if (typeof hmm !== 'string') {
-    if (typeof hmm === 'number' && Number.isFinite(hmm)) return Math.round(hmm * 60);
-    return 0;
+  if (hmm == null) return 0;
+
+  if (typeof hmm === 'number') {
+    if (!Number.isFinite(hmm) || hmm <= 0) return 0;
+    const h = Math.floor(hmm);
+    // The decimal part is minutes/100 to two decimal places.
+    // Multiply by 100 to get raw minutes, round to defeat float drift
+    // (e.g. 1.3 - 1 = 0.29999999...). Clamp to 0..59.
+    const mm = Math.round((hmm - h) * 100);
+    return h * 60 + Math.min(Math.max(mm, 0), 59);
   }
+
+  if (typeof hmm !== 'string') return 0;
   const trimmed = hmm.trim();
   if (!trimmed) return 0;
   const [hPart, mPart = '0'] = trimmed.split('.');
@@ -55,11 +73,16 @@ function hmmToMinutes(hmm) {
   return h * 60 + Math.min(Math.max(m, 0), 59);
 }
 
+/**
+ * Convert integer minutes back into the same "H.MM" decimal number the
+ * Plan page emits, so the round-trip through Supabase is a no-op for
+ * callers that read the value back.
+ */
 function minutesToHmm(minutes) {
   const total = Math.max(0, Math.round(minutes || 0));
   const h = Math.floor(total / 60);
   const m = total % 60;
-  return `${h}.${m.toString().padStart(2, '0')}`;
+  return h + m / 100;
 }
 
 function payloadToDbColumns(payload) {

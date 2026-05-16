@@ -2591,7 +2591,7 @@ export default function TacticsPage() {
     workingColumnTotals,
   ]);
   const [sendToSystemDone, setSendToSystemDone] = useState(false);
-  const handleSendToSystem = useCallback(() => {
+  const handleSendToSystem = useCallback(async () => {
     const yearInfo = getYearInfo(currentYear);
     if (yearInfo?.startDate) {
       saveStartDate(yearInfo.startDate, undefined, currentYear);
@@ -2617,18 +2617,25 @@ export default function TacticsPage() {
       },
     };
 
-    // Save live copies (for Plan page reactive use)
-    saveTacticsMetrics(metricsPayload, currentYear);
+    // Save live copies (for Plan page reactive use). saveTacticsChipsState
+    // is still localStorage so it stays sync; saveTacticsMetrics is async
+    // since the Supabase port and must complete before the event fires.
     saveTacticsChipsState({ projectChips, customProjects, chipTimeOverrides }, currentYear);
-
-    // Save "sent" snapshots — System page reads only from these
-    saveSentMetricsSnapshot(metricsPayload, currentYear);
     saveSentChipsSnapshot({ projectChips, customProjects, chipTimeOverrides }, currentYear);
-
-    // Write timestamp so System page resets subproject labels even if it mounts after this fires
     setSendToSystemTimestamp(currentYear);
-    // Also signal if System is already mounted. Tag the event with the year
-    // so a System view on a different year does not act on a stale press (H3).
+
+    // Await the metrics writes so the System page reads the freshly-saved
+    // sent snapshot. Without these awaits the dispatchEvent below races the
+    // Supabase write and System loads stale data ("subsequent changes
+    // ignored" symptom).
+    await Promise.all([
+      saveTacticsMetrics(metricsPayload, currentYear),
+      saveSentMetricsSnapshot(metricsPayload, currentYear),
+    ]);
+
+    // Signal System (and any other listeners) that the Send is committed.
+    // Tag the event with the year so a System view on a different year
+    // does not act on a stale press (H3).
     window.dispatchEvent(new CustomEvent(TACTICS_SEND_TO_SYSTEM_EVENT, {
       detail: { __eventYear: currentYear },
     }));
