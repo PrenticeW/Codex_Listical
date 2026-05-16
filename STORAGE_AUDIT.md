@@ -1,7 +1,7 @@
 # Storage Shape Audit
 
 **Status:** Complete
-**Last updated:** 2026-05-16
+**Last updated:** 2026-05-16 (chip-shape gaps patched while drafting the schema migration: added `startMinutes`, `displayLabel`, `userModified`)
 **Source files:** `src/lib/stagingStorage.js`, `src/lib/tacticsMetricsStorage.js`, `src/utils/planner/storage.js`, `src/lib/tacticsStorage.js`, `src/lib/yearMetadataStorage.js`
 
 This document captures every localStorage key currently written by Listical's planning data layer, the JSON shape stored under each key, the invariants and quirks worth preserving, and how the helpers relate to each other. It is the blueprint for step 2 of `SUPABASE_MIGRATION_PLAN.md` (rewriting the schema migration).
@@ -302,8 +302,11 @@ type ProjectChip = {
   dayName: string | null;      // 'Sunday'..'Saturday' or null for project-column chips
   startRowId: string;          // e.g. 'sleep-start', 'row-0900-15'
   endRowId: string;            // same shape as startRowId
+  startMinutes?: number;       // clock minutes since midnight, derived from startRowId via rowIdToClockMinutes
   projectId: string;           // matches stagingStorage id, or built-in 'sleep'/'wake', or a customProjects.id
+  displayLabel?: string | null; // optional override label (e.g. Schedule chips use the schedule item name)
   durationMinutes?: number;    // optional explicit duration; overridden by chipTimeOverrides[chipId] when present
+  userModified?: boolean;      // currently only set on sleep chips after the user has dragged them
 };
 
 type CustomProject = {

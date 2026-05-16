@@ -1,7 +1,7 @@
 # Supabase Migration Plan
 
-**Status:** Step 1 complete
-**Last updated:** 2026-05-16 (storage shape audit complete, task row metadata columns flagged for step 3 reassessment)
+**Status:** Step 2 complete (schema migration drafted)
+**Last updated:** 2026-05-16 (new migration file `20260516000001_planning_schema.sql` added; step 2 boxes ticked)
 
 ## Goal
 
@@ -40,27 +40,30 @@ Deliverable: `STORAGE_AUDIT.md` in the project root.
 
 ### 2. Rewrite the schema migration file
 
-Replace or update `supabase/migrations/20260102000001_initial_schema.sql` so it matches the audit. Fix the five known issues from `CLAUDE.md`:
+A new migration file `supabase/migrations/20260516000001_planning_schema.sql` was added alongside the stale `20260102000001_initial_schema.sql`. The new file drops the stale planning tables (keeping `profiles` intact) and rebuilds the schema to match `STORAGE_AUDIT.md`.
 
-* [ ] `years.status` CHECK must include `'draft'`
-* [ ] `tactics_chips` needs columns: `day_name`, `duration_minutes`, `start_minutes`, `user_modified`, `chip_time_overrides`
-* [ ] `tactics_chips.column_index CHECK (0 to 6)` must be widened to allow project-column chips
-* [ ] Add sent-snapshot layer (boolean flag plus partial unique index, or parallel `*_sent` tables)
-* [ ] `project_weekly_quotas.project_label` should become `project_id UUID FK`
-* [ ] Audit `ON DELETE CASCADE` coverage from `auth.users(id)` through the full planning tree (GDPR right to erasure)
+Known issues from `CLAUDE.md` resolved:
 
-**Also capture task row metadata.** Future analytics ("when was this task created", "how long did it take to complete", "how often does this user abandon tasks") depend on metadata that's cheap to add now and painful to backfill later. When designing `planner_rows` (and any other row-shaped tables like `projects`), include:
+* [x] `years.status` CHECK now includes `'draft'` (plus partial unique indexes enforcing at most one active and one draft per user)
+* [x] `tactics_chips` now has `day_name`, `start_minutes`, `duration_minutes`, `duration_override_minutes` (replaces the `chipTimeOverrides` map), `user_modified`, and `display_label`
+* [x] `tactics_chips.column_index` constraint widened to `>= 0` so project-column chips are valid
+* [x] Sent-snapshot layer implemented with `is_sent` boolean plus partial unique indexes on `tactics_metrics`, `tactics_chips`, and `tactics_custom_projects`
+* [x] `project_weekly_quotas.project_label` replaced with `project_id` UUID inside the `tactics_metrics.project_weekly_quotas` JSONB shape
+* [x] Every planning table CASCADEs from `auth.users(id)` so deleting a user removes their planning data
 
-* [ ] `created_at TIMESTAMPTZ DEFAULT now()` (standard Postgres convention)
-* [ ] `updated_at TIMESTAMPTZ DEFAULT now()` with a trigger to keep it fresh
-* [ ] `completed_at TIMESTAMPTZ` (set when status transitions to Done, nulled if reverted)
-* [ ] `abandoned_at TIMESTAMPTZ` (set when status transitions to Abandoned, nulled if reverted)
-* [ ] `sent_to_system_at TIMESTAMPTZ` on task rows that originate from the Plan page send-to-system flow
-* [ ] Consider `status_changed_at TIMESTAMPTZ` as a generic catch-all if specific status timestamps feel noisy
+Design decisions written into the file:
 
-> **Note (2026-05-16):** Prentice wants to reassess this column list before it lands in the migration draft. The five timestamps above were assumed during the original plan write-up, are not personally important, and may be replaced with better columns once we know what queries actually matter. Treat them as placeholders, not requirements, and revisit at the point where we would otherwise write them into the schema file.
+* [x] Calendar header rows are NOT persisted; the System page reconstructs them from `years.start_date`, `years.total_days`, and `tactics_metrics.daily_bounds`
+* [x] Archive week snapshots live in a dedicated `archived_weeks` table, not mixed into `planner_rows`
+* [x] `project_id` is the universal join key; `project_nickname` is kept as a display-only field
+* [x] Times stored as INTEGER minutes everywhere, not `"H.MM"` strings
+* [x] Booleans stored as real BOOLEAN columns, not `'true'` / `'false'` strings
+* [x] `planning_history` table from `VERSION_HISTORY_PLAN.md` step 1 is created here (triggers come in step 8)
+* [x] `profiles.current_year_id` added so the legacy `currentYear` pointer has a home
 
-The `planning_history` table from the version history plan covers full change history, so don't duplicate that here. These columns are specifically for queries that need a fast direct read on the row itself (sorting by creation date, filtering active tasks by age, etc.).
+Task row metadata placeholder columns (per Prentice's earlier note): only `created_at` and `updated_at` were added. The four status timestamps (`completed_at`, `abandoned_at`, `sent_to_system_at`, `status_changed_at`) are deliberately omitted, to be reassessed when we know which analytics queries matter.
+
+Row Level Security policies are still pending and form step 3 below.
 
 ### 3. Add Row Level Security policies
 
