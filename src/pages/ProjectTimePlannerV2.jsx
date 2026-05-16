@@ -109,8 +109,8 @@ function buildQuotasMap(quotasArray) {
   return quotasMap;
 }
 
-function buildProjectIdToNicknameMap(yearNumber) {
-  const { shortlist } = loadStagingState(yearNumber);
+async function buildProjectIdToNicknameMap(yearNumber) {
+  const { shortlist } = await loadStagingState(yearNumber);
   const map = new Map();
   if (!Array.isArray(shortlist)) return map;
   shortlist.forEach((item) => {
@@ -165,9 +165,9 @@ function formatChipDuration(minutes) {
   return `${remaining} minutes`;
 }
 
-function loadEnrichedChips(yearNumber) {
+async function loadEnrichedChips(yearNumber) {
   const { projectChips, chipTimeOverrides } = loadSentChipsSnapshot(yearNumber);
-  const idToNicknameMap = buildProjectIdToNicknameMap(yearNumber);
+  const idToNicknameMap = await buildProjectIdToNicknameMap(yearNumber);
   const { incrementMinutes } = loadTacticsYearSettings(yearNumber);
   if (!Array.isArray(projectChips)) return [];
   return projectChips
@@ -397,7 +397,17 @@ export default function ProjectTimePlannerV2() {
   // sentToSystem initialiser earlier in this component) re-run synchronously
   // with the new year. No year-change effect needed.
   const [{ dailyBounds, projectWeeklyQuotas }, setMetricsData] = useState(() => loadMetricsData(currentYear));
-  const [tacticsChips, setTacticsChips] = useState(() => loadEnrichedChips(currentYear));
+  const [tacticsChips, setTacticsChips] = useState([]);
+
+  // Async load of enriched chips on mount and year change (since the
+  // stagingStorage Supabase port made buildProjectIdToNicknameMap async).
+  useEffect(() => {
+    let cancelled = false;
+    loadEnrichedChips(currentYear).then((chips) => {
+      if (!cancelled) setTacticsChips(chips);
+    });
+    return () => { cancelled = true; };
+  }, [currentYear]);
 
   // Command pattern for undo/redo
   const { undoStack, redoStack, executeCommand, undo, redo } = useCommandPattern();
@@ -1420,8 +1430,7 @@ export default function ProjectTimePlannerV2() {
       lastResetTsRef.current = ts;
       setSentToSystem(true);
       // Reload tactics data from storage so System reflects what was just sent
-      const freshChips = loadEnrichedChips(currentYear);
-      setTacticsChips(freshChips);
+      loadEnrichedChips(currentYear).then(setTacticsChips);
       setMetricsData(loadMetricsData(currentYear));
       resetSubprojectLabels(freshChips);
     };

@@ -93,12 +93,13 @@ function formatDuration(minutes) {
 }
 
 /**
- * Build a map from staging project id → projectNickname (or projectName)
+ * Build a map from staging project id → projectNickname (or projectName).
+ * Async since the stagingStorage Supabase port.
  * @param {number|null} yearNumber
- * @returns {Map<string, string>}
+ * @returns {Promise<Map<string, string>>}
  */
-function buildProjectIdToNicknameMap(yearNumber) {
-  const { shortlist } = loadStagingState(yearNumber);
+async function buildProjectIdToNicknameMap(yearNumber) {
+  const { shortlist } = await loadStagingState(yearNumber);
   const map = new Map();
   if (!Array.isArray(shortlist)) return map;
   shortlist.forEach((item) => {
@@ -150,18 +151,18 @@ function enrichChips(projectChips, idToNicknameMap, chipTimeOverrides, increment
 export default function useTacticsChips() {
   const { currentYear } = useYear();
 
-  const loadChips = useCallback(() => {
+  const loadChips = useCallback(async () => {
     const { projectChips, chipTimeOverrides } = loadTacticsChipsState(currentYear);
-    const idToNicknameMap = buildProjectIdToNicknameMap(currentYear);
+    const idToNicknameMap = await buildProjectIdToNicknameMap(currentYear);
     const { incrementMinutes } = loadTacticsYearSettings(currentYear);
     return enrichChips(projectChips, idToNicknameMap, chipTimeOverrides, incrementMinutes);
   }, [currentYear]);
 
   const extractChips = useCallback(
-    (payload) => {
+    async (payload) => {
       const projectChips = payload?.projectChips ?? null;
       const chipTimeOverrides = payload?.chipTimeOverrides ?? null;
-      const idToNicknameMap = buildProjectIdToNicknameMap(currentYear);
+      const idToNicknameMap = await buildProjectIdToNicknameMap(currentYear);
       const { incrementMinutes } = loadTacticsYearSettings(currentYear);
       return enrichChips(projectChips, idToNicknameMap, chipTimeOverrides, incrementMinutes);
     },
@@ -178,6 +179,7 @@ export default function useTacticsChips() {
     extractData: extractChips,
     dependency: currentYear,
     currentYearNumber: currentYear, // H3: ignore chip events from other years
+    initialValue: [],
   });
 
   return { chips: chips ?? [] };

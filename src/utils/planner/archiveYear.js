@@ -194,7 +194,7 @@ export async function performYearArchive(yearNumber) {
     //     programmatic call cannot bypass the modal's disabled state.
     const draftYearForGuard = await getDraftYear();
     if (draftYearForGuard) {
-      const { shortlist: draftShortlist } = loadStagingState(draftYearForGuard.yearNumber);
+      const { shortlist: draftShortlist } = await loadStagingState(draftYearForGuard.yearNumber);
       if (!Array.isArray(draftShortlist) || draftShortlist.length === 0) {
         throw new Error(
           `Year ${draftYearForGuard.yearNumber} has no projects on the Goal page yet. Add at least one project before archiving Year ${yearNumber}.`
@@ -213,7 +213,7 @@ export async function performYearArchive(yearNumber) {
     const sortStatuses = readSortStatuses(DEFAULT_PROJECT_ID, yearNumber);
     const totalDays = readTotalDays(DEFAULT_PROJECT_ID, yearNumber);
     const visibleDayColumns = readVisibleDayColumns(DEFAULT_PROJECT_ID, totalDays, yearNumber);
-    const stagingState = loadStagingState(yearNumber);
+    const stagingState = await loadStagingState(yearNumber);
     const tacticsMetrics = loadTacticsMetrics(yearNumber);
 
     console.log(`[Archive Year] Data loaded from Year ${yearNumber}`);
@@ -288,7 +288,7 @@ export async function performYearArchive(yearNumber) {
       const initialTaskRows = createInitialDataForNewYear(nextStartDate, recurringTasks, totalDays);
       saveTaskRows(initialTaskRows, DEFAULT_PROJECT_ID, nextYearNumber);
 
-      saveStagingState({ shortlist: [], archived: [] }, nextYearNumber);
+      await saveStagingState({ shortlist: [], archived: [] }, nextYearNumber);
       const freshTacticsMetrics = getDefaultTacticsMetrics();
       saveTacticsMetrics(freshTacticsMetrics, nextYearNumber);
 
@@ -367,7 +367,7 @@ export async function validateYearReadyForArchive(yearNumber) {
   // lands on a fresh active year with nothing planned (M3).
   const draftYear = await getDraftYear();
   if (draftYear) {
-    const { shortlist } = loadStagingState(draftYear.yearNumber);
+    const { shortlist } = await loadStagingState(draftYear.yearNumber);
     if (!Array.isArray(shortlist) || shortlist.length === 0) {
       return {
         ready: false,

@@ -216,7 +216,7 @@ export async function createDraftYearFromActive(activeYearNumber) {
     const sortStatuses = readSortStatuses(DEFAULT_PROJECT_ID, activeYearNumber);
     const totalDays = readTotalDays(DEFAULT_PROJECT_ID, activeYearNumber);
 
-    const stagingState = loadStagingState(activeYearNumber);
+    const stagingState = await loadStagingState(activeYearNumber);
     const tacticsMetrics = loadTacticsMetrics(activeYearNumber);
     const chipsState = loadTacticsChipsState(activeYearNumber);
     const tacticsYearSettings = loadTacticsYearSettings(activeYearNumber);
@@ -250,7 +250,7 @@ export async function createDraftYearFromActive(activeYearNumber) {
       shortlist: (stagingState.shortlist || []).map(resetItemForDraft),
       archived: stagingState.archived || [],
     };
-    saveStagingState(draftStagingState, draftYearNumber);
+    await saveStagingState(draftStagingState, draftYearNumber);
 
     // --- Copy Plan page (metrics + settings carry forward) ---
     saveTacticsMetrics(tacticsMetrics, draftYearNumber);

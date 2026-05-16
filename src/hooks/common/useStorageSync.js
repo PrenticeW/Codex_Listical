@@ -9,30 +9,27 @@
 import { useState, useEffect, useCallback } from 'react';
 
 /**
- * Synchronizes state with storage events
+ * Synchronizes state with storage events.
+ *
+ * Async-aware: `loadData` may return either a value or a Promise. While the
+ * initial fetch is in flight, `initialValue` is what consumers see. After
+ * step-5 of the Supabase migration, every helper is async, so callers
+ * should always provide an `initialValue` (empty array / null / etc.) to
+ * avoid flashing `undefined` through state.
  *
  * @param {Object} options - Configuration options
- * @param {Function} options.loadData - Function to load initial data
+ * @param {Function} options.loadData - Function to load data (sync or async)
  * @param {string} options.customEventName - Custom event name to listen to
  * @param {string|string[]} options.storageKeys - Storage key(s) to watch for cross-tab sync
- * @param {Function} options.extractData - Function to extract data from event payload
+ * @param {Function} options.extractData - Function to extract data from event payload (sync or async)
  * @param {*} options.dependency - Dependency to trigger reload (e.g., currentYear)
  * @param {number|null} [options.currentYearNumber] - If provided, custom events
  *   whose detail.__eventYear does not match this value are ignored. Guards
  *   against cross-year event collisions (H3). Events without __eventYear fall
  *   through unchanged for backwards compatibility.
+ * @param {*} [options.initialValue=null] - Value used until the first load resolves.
  *
  * @returns {Array} [data, setData] tuple
- *
- * @example
- * const [dailyBounds, setDailyBounds] = useStorageSync({
- *   loadData: () => loadTacticsMetrics(currentYear)?.dailyBounds || [],
- *   customEventName: TACTICS_METRICS_STORAGE_EVENT,
- *   storageKeys: [`tactics-year-${currentYear}-metrics-state`, 'tactics-metrics-state'],
- *   extractData: (payload) => payload?.dailyBounds || [],
- *   dependency: currentYear,
- *   currentYearNumber: currentYear,
- * });
  */
 export default function useStorageSync({
   loadData,
@@ -41,12 +38,22 @@ export default function useStorageSync({
   extractData,
   dependency,
   currentYearNumber,
+  initialValue = null,
 }) {
-  const [data, setData] = useState(loadData);
+  const [data, setData] = useState(initialValue);
 
-  // Reload when dependency changes
+  // Reload when dependency changes (or on mount).
   useEffect(() => {
-    setData(loadData());
+    let cancelled = false;
+    Promise.resolve()
+      .then(() => loadData())
+      .then((result) => {
+        if (!cancelled) setData(result);
+      })
+      .catch((error) => {
+        console.error('useStorageSync loadData failed:', error);
+      });
+    return () => { cancelled = true; };
   }, [dependency, loadData]);
 
   // Memoize the data extraction function
@@ -54,7 +61,7 @@ export default function useStorageSync({
 
   // Listen for storage events (both custom and native)
   useEffect(() => {
-    const handleCustomEvent = (event) => {
+    const handleCustomEvent = async (event) => {
       // H3 guard: if the event is tagged with a year and this listener is
       // scoped to a different year, ignore the event. Untagged events (legacy
       // or non-year-scoped callers) pass through.
@@ -66,23 +73,21 @@ export default function useStorageSync({
       ) {
         return;
       }
-      const payload = event.detail || loadData();
-      setData(extractDataCallback(payload));
+      const payload = event.detail ?? (await loadData());
+      const extracted = await extractDataCallback(payload);
+      setData(extracted);
     };
 
-    const handleNativeStorageEvent = (e) => {
-      // Check if the changed key matches any of our expected keys
+    const handleNativeStorageEvent = async (e) => {
       const keys = Array.isArray(storageKeys) ? storageKeys : [storageKeys];
       if (keys.includes(e.key)) {
-        setData(loadData());
+        const fresh = await loadData();
+        setData(fresh);
       }
     };
 
     if (typeof window !== 'undefined') {
-      // Listen to custom event for same-page updates
       window.addEventListener(customEventName, handleCustomEvent);
-
-      // Listen to native storage event for cross-tab updates
       window.addEventListener('storage', handleNativeStorageEvent);
 
       return () => {

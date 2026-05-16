@@ -1,54 +1,66 @@
-import storage from './storageService';
+/**
+ * Staging Storage (Goal page shortlist)
+ *
+ * Storage backend: Supabase `projects` table, scoped to a year via year_id.
+ * One row per project. `plan_table_entries` is stored as JSONB and preserves
+ * the wrapped-row format (`{ cells, _rowType, _pairId, _sectionType,
+ * _isTotalRow }`) so the non-enumerable metadata round-trips.
+ *
+ * The public API is preserved from the localStorage version. Functions that
+ * used to be synchronous now return promises:
+ *
+ *   loadStagingState(yearNumber)        => Promise<{ shortlist, archived }>
+ *   saveStagingState(payload, yearNumber) => Promise<void>
+ *   getStagingShortlist(yearNumber)     => Promise<StagingItem[]>
+ *
+ * The `staging-state-update` window event still fires after every successful
+ * save, with `__eventYear` on the detail per the H3 cross-year contract.
+ */
+
+import { supabase } from './supabase';
 import { defineRowMetadata } from '../utils/staging/planTableHelpers';
 
-const STORAGE_KEY_TEMPLATE = 'staging-year-{yearNumber}-shortlist';
 export const STAGING_STORAGE_EVENT = 'staging-state-update';
+// Legacy export kept so existing event-key consumers do not break.
+export const STAGING_STORAGE_KEY = 'staging-shortlist';
 
-/**
- * Get storage key for a specific year
- * @param {number|null} yearNumber - Year number (null for legacy key)
- * @returns {string} Storage key
- */
-const getStorageKey = (yearNumber = null) => {
-  if (yearNumber === null || yearNumber === undefined) {
-    return 'staging-shortlist'; // Legacy key for backward compatibility
+// --- internal helpers --------------------------------------------------
+
+async function requireUserId() {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) {
+    throw new Error('No authenticated user');
   }
-  return STORAGE_KEY_TEMPLATE.replace('{yearNumber}', yearNumber.toString());
-};
+  return user.id;
+}
+
+async function findYearId(userId, yearNumber) {
+  const { data, error } = await supabase
+    .from('years')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('year_number', yearNumber)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.id ?? null;
+}
 
 /**
- * Serialize a row for storage.
- * Converts array with metadata to an object { cells: [...], _rowType?, _pairId? }
- * so that metadata survives JSON serialization.
+ * Serialize a row for storage as JSONB.
+ * Same wrap-and-tag shape used by the localStorage version: arrays become
+ * `{ cells: [...], _rowType?, _pairId?, _sectionType?, _isTotalRow? }`.
  */
 const serializeRow = (row) => {
   if (!Array.isArray(row)) return row;
-  const serialized = {
-    cells: [...row],
-  };
-  // Include metadata as regular object properties
-  if (row.__rowType) {
-    serialized._rowType = row.__rowType;
-  }
-  if (row.__pairId) {
-    serialized._pairId = row.__pairId;
-  }
-  if (row.__sectionType) {
-    serialized._sectionType = row.__sectionType;
-  }
-  if (row.__isTotalRow) {
-    serialized._isTotalRow = row.__isTotalRow;
-  }
+  const serialized = { cells: [...row] };
+  if (row.__rowType) serialized._rowType = row.__rowType;
+  if (row.__pairId) serialized._pairId = row.__pairId;
+  if (row.__sectionType) serialized._sectionType = row.__sectionType;
+  if (row.__isTotalRow) serialized._isTotalRow = row.__isTotalRow;
   return serialized;
 };
 
-/**
- * Deserialize a row from storage.
- * Converts object { cells: [...], _rowType?, _pairId? } back to array with non-enumerable metadata.
- * Also handles legacy format (plain arrays without metadata).
- */
 const deserializeRow = (row) => {
-  // Handle new format: { cells: [...], _rowType?, _pairId?, _sectionType?, _isTotalRow? }
   if (row && typeof row === 'object' && Array.isArray(row.cells)) {
     const deserialized = [...row.cells];
     return defineRowMetadata(deserialized, {
@@ -58,82 +70,200 @@ const deserializeRow = (row) => {
       isTotalRow: row._isTotalRow,
     });
   }
-  // Handle legacy format: plain array
   if (Array.isArray(row)) {
     return [...row];
   }
   return row;
 };
 
-/**
- * Serialize an item's planTableEntries for storage
- */
-const serializeItem = (item) => {
-  if (!item || !Array.isArray(item.planTableEntries)) return item;
+function dbRowToItem(row) {
+  const entries = Array.isArray(row.plan_table_entries)
+    ? row.plan_table_entries.map(deserializeRow)
+    : [];
   return {
-    ...item,
-    planTableEntries: item.planTableEntries.map(serializeRow),
+    id: row.id,
+    text: row.text ?? '',
+    projectName: row.project_name ?? undefined,
+    projectNickname: row.project_nickname ?? undefined,
+    color: row.color ?? undefined,
+    planTableVisible: row.plan_table_visible ?? false,
+    planTableCollapsed: row.plan_table_collapsed ?? false,
+    hasPlan: row.has_plan ?? false,
+    addedToPlan: row.added_to_plan ?? false,
+    showOutcomeTotals: row.show_outcome_totals ?? false,
+    isSimpleTable: row.is_simple_table ?? false,
+    planReasonRowCount: row.plan_reason_row_count ?? 1,
+    planOutcomeRowCount: row.plan_outcome_row_count ?? 1,
+    planOutcomeQuestionRowCount: row.plan_outcome_question_row_count ?? 1,
+    planNeedsQuestionRowCount: row.plan_needs_question_row_count ?? 1,
+    planNeedsPlanRowCount: row.plan_needs_plan_row_count ?? 1,
+    planSubprojectRowCount: row.plan_schedule_row_count ?? 1,
+    planXxxRowCount: row.plan_subproject_row_count ?? 1,
+    planTableEntries: entries,
   };
-};
+}
+
+function itemToDbRow({ userId, yearId, item, isArchived, displayOrder }) {
+  return {
+    id: item.id,
+    user_id: userId,
+    year_id: yearId,
+    text: item.text ?? '',
+    project_name: item.projectName ?? null,
+    project_nickname: item.projectNickname ?? null,
+    color: item.color ?? null,
+    plan_table_visible: item.planTableVisible ?? false,
+    plan_table_collapsed: item.planTableCollapsed ?? false,
+    has_plan: item.hasPlan ?? false,
+    added_to_plan: item.addedToPlan ?? false,
+    show_outcome_totals: item.showOutcomeTotals ?? false,
+    is_simple_table: item.isSimpleTable ?? false,
+    plan_reason_row_count: item.planReasonRowCount ?? 1,
+    plan_outcome_row_count: item.planOutcomeRowCount ?? 1,
+    plan_outcome_question_row_count: item.planOutcomeQuestionRowCount ?? 1,
+    plan_needs_question_row_count: item.planNeedsQuestionRowCount ?? 1,
+    plan_needs_plan_row_count: item.planNeedsPlanRowCount ?? 1,
+    plan_schedule_row_count: item.planSubprojectRowCount ?? 1,
+    plan_subproject_row_count: item.planXxxRowCount ?? 1,
+    plan_table_entries: Array.isArray(item.planTableEntries)
+      ? item.planTableEntries.map(serializeRow)
+      : [],
+    is_archived: isArchived,
+    display_order: displayOrder,
+  };
+}
+
+function dispatchStagingEvent(payload, yearNumber) {
+  if (typeof window === 'undefined') return;
+  const detail = { ...(payload || {}), __eventYear: yearNumber };
+  const event = typeof CustomEvent === 'function'
+    ? new CustomEvent(STAGING_STORAGE_EVENT, { detail })
+    : new Event(STAGING_STORAGE_EVENT);
+  window.dispatchEvent(event);
+}
+
+// --- public read API ---------------------------------------------------
 
 /**
- * Deserialize an item's planTableEntries from storage
+ * Load the shortlist + archived items for a year.
+ * Returns `{ shortlist: [], archived: [] }` when there's no data.
+ *
+ * @param {number} yearNumber
+ * @returns {Promise<{ shortlist: object[], archived: object[] }>}
  */
-const deserializeItem = (item) => {
-  if (!item || !Array.isArray(item.planTableEntries)) return item;
-  return {
-    ...item,
-    planTableEntries: item.planTableEntries.map(deserializeRow),
-  };
-};
-
-export const loadStagingState = (yearNumber = null) => {
+export async function loadStagingState(yearNumber) {
   try {
-    const key = getStorageKey(yearNumber);
-    const parsed = storage.getJSON(key, null);
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return { shortlist: [], archived: [] };
 
-    if (!parsed) {
-      return { shortlist: [], archived: [] };
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('year_id', yearId)
+      .order('display_order', { ascending: true });
+    if (error) throw error;
+
+    const rows = data ?? [];
+    const shortlist = [];
+    const archived = [];
+    for (const row of rows) {
+      const item = dbRowToItem(row);
+      if (row.is_archived) {
+        archived.push(item);
+      } else {
+        shortlist.push(item);
+      }
     }
-
-    return {
-      shortlist: Array.isArray(parsed?.shortlist) ? parsed.shortlist.map(deserializeItem) : [],
-      archived: Array.isArray(parsed?.archived) ? parsed.archived.map(deserializeItem) : [],
-    };
+    return { shortlist, archived };
   } catch (error) {
     console.error('Failed to read staging shortlist', error);
     return { shortlist: [], archived: [] };
   }
-};
+}
 
-export const saveStagingState = (payload, yearNumber = null) => {
+/**
+ * Shorthand for the shortlist only.
+ * @param {number} yearNumber
+ * @returns {Promise<object[]>}
+ */
+export async function getStagingShortlist(yearNumber) {
+  const state = await loadStagingState(yearNumber);
+  return state.shortlist;
+}
+
+// --- public write API --------------------------------------------------
+
+/**
+ * Save the full shortlist + archived state for a year. Performs a three-step
+ * sync against the existing rows for the year:
+ *
+ *   1. Delete rows in the DB whose id is no longer in the payload.
+ *   2. Upsert every row in the payload (shortlist + archived), tagging
+ *      is_archived and display_order from the array position.
+ *   3. Fire the staging-state-update event so listeners refresh.
+ *
+ * Callers should debounce calls to this function — every invocation is a
+ * round-trip to Supabase and unthrottled per-keystroke saves will saturate
+ * the connection. `useShortlistState` does this; new callers should too.
+ *
+ * @param {{ shortlist: object[], archived: object[] }} payload
+ * @param {number} yearNumber
+ */
+export async function saveStagingState(payload, yearNumber) {
   try {
-    const key = getStorageKey(yearNumber);
-    // Serialize items to preserve row type metadata
-    const serializedPayload = {
-      ...payload,
-      shortlist: Array.isArray(payload?.shortlist) ? payload.shortlist.map(serializeItem) : [],
-      archived: Array.isArray(payload?.archived) ? payload.archived.map(serializeItem) : [],
-    };
-    storage.setJSON(key, serializedPayload);
+    if (!payload || typeof payload !== 'object') return;
 
-    // Dispatch custom event for cross-tab sync. Include the year number in
-    // the detail so listeners on a different year can ignore stale events
-    // (H3: cross-year event collisions). The reserved __eventYear key does
-    // not collide with any known payload field (shortlist/archived).
-    if (typeof window !== 'undefined') {
-      const eventDetail = { ...(payload || {}), __eventYear: yearNumber };
-      const event = typeof CustomEvent === 'function'
-        ? new CustomEvent(STAGING_STORAGE_EVENT, { detail: eventDetail })
-        : new Event(STAGING_STORAGE_EVENT);
-      window.dispatchEvent(event);
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) {
+      console.error(`Cannot save staging state: year ${yearNumber} does not exist`);
+      return;
     }
+
+    const shortlist = Array.isArray(payload.shortlist) ? payload.shortlist : [];
+    const archived = Array.isArray(payload.archived) ? payload.archived : [];
+
+    const desiredRows = [
+      ...shortlist.map((item, idx) => itemToDbRow({
+        userId, yearId, item, isArchived: false, displayOrder: idx,
+      })),
+      ...archived.map((item, idx) => itemToDbRow({
+        userId, yearId, item, isArchived: true, displayOrder: idx,
+      })),
+    ];
+    const desiredIds = new Set(desiredRows.map((r) => r.id).filter(Boolean));
+
+    // Find ids already in the DB so we can compute deletions.
+    const { data: existingRows, error: existingErr } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('year_id', yearId);
+    if (existingErr) throw existingErr;
+
+    const idsToDelete = (existingRows ?? [])
+      .map((r) => r.id)
+      .filter((id) => !desiredIds.has(id));
+
+    if (idsToDelete.length > 0) {
+      const { error: deleteErr } = await supabase
+        .from('projects')
+        .delete()
+        .in('id', idsToDelete);
+      if (deleteErr) throw deleteErr;
+    }
+
+    if (desiredRows.length > 0) {
+      const { error: upsertErr } = await supabase
+        .from('projects')
+        .upsert(desiredRows, { onConflict: 'id' });
+      if (upsertErr) throw upsertErr;
+    }
+
+    dispatchStagingEvent(payload, yearNumber);
   } catch (error) {
     console.error('Failed to save staging shortlist', error);
   }
-};
-
-export const getStagingShortlist = (yearNumber = null) => loadStagingState(yearNumber).shortlist;
-
-// Legacy export for backward compatibility
-export const STAGING_STORAGE_KEY = 'staging-shortlist';
+}

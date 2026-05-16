@@ -20,15 +20,17 @@ const SUBPROJECT_PLACEHOLDER = SECTION_CONFIG.Subprojects.placeholder;
 export default function useProjectsData() {
   const { currentYear } = useYear();
 
-  // Memoize the load function to prevent unnecessary recreations
-  const loadData = useCallback(() => {
-    const { shortlist } = loadStagingState(currentYear);
+  // Memoize the load function. Async since the Supabase port.
+  const loadData = useCallback(async () => {
+    const { shortlist } = await loadStagingState(currentYear);
     return extractProjectsData(shortlist);
   }, [currentYear]);
 
-  // Memoize the extract function for storage sync
-  const extractData = useCallback((payload) => {
-    const shortlist = payload?.shortlist || loadStagingState(currentYear).shortlist;
+  // Memoize the extract function for storage sync. The event payload already
+  // includes the live shortlist, so this is sync in the happy path.
+  const extractData = useCallback(async (payload) => {
+    const shortlist = payload?.shortlist
+      || (await loadStagingState(currentYear)).shortlist;
     return extractProjectsData(shortlist);
   }, [currentYear]);
 
@@ -39,9 +41,10 @@ export default function useProjectsData() {
     extractData,
     dependency: currentYear,
     currentYearNumber: currentYear, // H3: ignore staging events from other years
+    initialValue: extractProjectsData([]),
   });
 
-  return projectsData;
+  return projectsData ?? extractProjectsData([]);
 }
 
 /**

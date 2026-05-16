@@ -804,15 +804,16 @@ export default function TacticsPage() {
     if (!hasLoadedInitialState.current) {
       hasLoadedInitialState.current = true;
 
-      // Load staging projects on first mount
-      const state = loadStagingState(currentYear);
-      const projects = Array.isArray(state?.shortlist) ? state.shortlist : [];
-      setStagingProjects(projects);
+      // Load staging projects on first mount (async since the Supabase port)
+      loadStagingState(currentYear).then((state) => {
+        const projects = Array.isArray(state?.shortlist) ? state.shortlist : [];
+        setStagingProjects(projects);
+      });
       return;
     }
 
-    const readProjects = () => {
-      const state = loadStagingState(currentYear);
+    const readProjects = async () => {
+      const state = await loadStagingState(currentYear);
       setStagingProjects(Array.isArray(state?.shortlist) ? state.shortlist : []);
     };
 
@@ -853,8 +854,8 @@ export default function TacticsPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
 
-    const readProjects = () => {
-      const state = loadStagingState(currentYear);
+    const readProjects = async () => {
+      const state = await loadStagingState(currentYear);
       setStagingProjects(Array.isArray(state?.shortlist) ? state.shortlist : []);
     };
 

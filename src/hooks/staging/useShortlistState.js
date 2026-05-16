@@ -104,7 +104,28 @@ const createSimpleTable = () => {
  */
 export default function useShortlistState({ currentYear, executeCommand }) {
   const [inputValue, setInputValue] = useState('');
-  const [{ shortlist, archived }, setState] = useState(() => loadStagingState(currentYear));
+  const [{ shortlist, archived }, setState] = useState({ shortlist: [], archived: [] });
+  // Skip the autosave effect until the initial load has populated state.
+  // Without this, an empty shortlist would be written back to Supabase on
+  // first render, wiping out whatever the user already had.
+  const [hasInitialLoaded, setHasInitialLoaded] = useState(false);
+
+  // Initial load (and reload on year change). Async since the Supabase port.
+  useEffect(() => {
+    let cancelled = false;
+    setHasInitialLoaded(false);
+    (async () => {
+      const data = await loadStagingState(currentYear);
+      if (!cancelled) {
+        setState({
+          shortlist: Array.isArray(data?.shortlist) ? data.shortlist : [],
+          archived: Array.isArray(data?.archived) ? data.archived : [],
+        });
+        setHasInitialLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentYear]);
 
   // Create memoized state mutation executor
   const executeStateMutation = useMemo(
@@ -156,14 +177,22 @@ export default function useShortlistState({ currentYear, executeCommand }) {
     });
   }, []);
 
-  // Save to storage whenever shortlist or archived changes
+  // Debounced autosave: every state change resets a 500ms timer; once the
+  // user pauses, we hit Supabase. Without the debounce, every keystroke
+  // would be a network round-trip and concurrent writes could land out of
+  // order, persisting stale state. The cleanup cancels any pending save
+  // when state changes or the hook unmounts.
   useEffect(() => {
-    const enrichedShortlist = shortlist.map((item) => ({
-      ...item,
-      planSummary: buildProjectPlanSummary(item),
-    }));
-    saveStagingState({ shortlist: enrichedShortlist, archived }, currentYear);
-  }, [shortlist, archived, currentYear]);
+    if (!hasInitialLoaded) return;
+    const timer = setTimeout(() => {
+      const enrichedShortlist = shortlist.map((item) => ({
+        ...item,
+        planSummary: buildProjectPlanSummary(item),
+      }));
+      saveStagingState({ shortlist: enrichedShortlist, archived }, currentYear);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [shortlist, archived, currentYear, hasInitialLoaded]);
 
   // Add new item to shortlist
   const handleAdd = useCallback(() => {
