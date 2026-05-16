@@ -102,6 +102,7 @@ Supabase calls travel over the network, so helpers now return promises.
 * [ ] Callers (pages, hooks) updated to `await` and handle loading states
 * [ ] Loading skeletons or spinners on initial page mount
 * [ ] Optimistic updates for rapid edits where it makes sense
+* [ ] **In-memory cache layer in each ported helper** so navigating between Goal, Plan, and System pages renders saved data instantly rather than blanking out for ~300ms-1s on every navigation while the Supabase round-trip completes. Module-level `Map<yearNumber, payload>` per helper; load returns cached value if present, save updates the cache. Pre-port, localStorage was synchronous and gave this behavior for free; post-port, it's a genuine regression Prentice has flagged. Plan, tactics metrics, and chip state are the three that need it. yearMetadataStorage already has equivalent caching via YearContext. plannerStorage will need it once helper #5 lands. Stale-while-revalidate vs simple cache decision can be made at implementation time.
 
 ### 7. Test end-to-end on dev
 
