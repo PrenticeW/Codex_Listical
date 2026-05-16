@@ -169,8 +169,15 @@ async function loadEnrichedChips(yearNumber) {
   const { projectChips, chipTimeOverrides } = loadSentChipsSnapshot(yearNumber);
   const idToNicknameMap = await buildProjectIdToNicknameMap(yearNumber);
   const { incrementMinutes } = loadTacticsYearSettings(yearNumber);
+  // [DEBUG-CHIP] remove after 2026-05-16 debugging session is closed
+  console.log('[DEBUG-CHIP] loadEnrichedChips', {
+    yearNumber,
+    sentChipsLen: Array.isArray(projectChips) ? projectChips.length : null,
+    mapEntries: Array.from(idToNicknameMap.entries()),
+    incrementMinutes,
+  });
   if (!Array.isArray(projectChips)) return [];
-  return projectChips
+  const enriched = projectChips
     .filter((chip) => {
       if (!chip) return false;
       if (SYSTEM_PROJECTS.has(chip.projectId)) return false;
@@ -185,6 +192,12 @@ async function loadEnrichedChips(yearNumber) {
       const formattedDuration = durationMinutes != null ? formatChipDuration(durationMinutes) : null;
       return { ...chip, projectNickname, durationMinutes, formattedDuration };
     });
+  // [DEBUG-CHIP] remove after 2026-05-16 debugging session is closed
+  console.log('[DEBUG-CHIP] loadEnrichedChips result', {
+    enrichedCount: enriched.length,
+    firstFive: enriched.slice(0, 5).map((c) => ({ id: c.id, projectId: c.projectId, projectNickname: c.projectNickname, durationMinutes: c.durationMinutes })),
+  });
+  return enriched;
 }
 
 async function loadMetricsData(yearNumber) {
@@ -1024,6 +1037,14 @@ export default function ProjectTimePlannerV2() {
 
   // Create subprojectHeader rows from Tactics chips
   useEffect(() => {
+    // [DEBUG-CHIP] remove after 2026-05-16 debugging session is closed
+    console.log('[DEBUG-CHIP] chip-sync effect fired', {
+      tacticsChipsLen: tacticsChips?.length ?? 0,
+      firstChip: tacticsChips?.[0] && { id: tacticsChips[0].id, projectNickname: tacticsChips[0].projectNickname },
+      projectsArr: projects,
+      isCurrentYearDraft,
+      sentToSystem,
+    });
     if (!tacticsChips || tacticsChips.length === 0) return;
     // Draft year starts blank — don't inject chip rows until the user imports tasks or presses "Send to System"
     if (isCurrentYearDraft && !sentToSystem && !latestDataRef.current.some(r => r._rowType === 'projectTask' && !r._chipId)) return;
@@ -1033,6 +1054,16 @@ export default function ProjectTimePlannerV2() {
       if (!isMounted) return;
 
       setData(prevData => {
+        // [DEBUG-CHIP] remove after 2026-05-16 debugging session is closed
+        const headerNicknamesInPrev = prevData
+          .filter(r => r._rowType === 'projectHeader')
+          .map(r => r.projectNickname);
+        console.log('[DEBUG-CHIP] chip-sync setData entered', {
+          prevDataLen: prevData.length,
+          projectHeaderCount: headerNicknamesInPrev.length,
+          projectHeaderNicknames: headerNicknamesInPrev,
+          chipNicknames: tacticsChips.map(c => c.projectNickname),
+        });
         const currentChipIds = new Set(tacticsChips.map(c => c.id));
 
         // Build label lookup for all current chips
@@ -1185,6 +1216,12 @@ export default function ProjectTimePlannerV2() {
           };
         };
 
+        // [DEBUG-CHIP] remove after 2026-05-16 debugging session is closed
+        console.log('[DEBUG-CHIP] entering newChips.forEach', {
+          newChipsLen: newChips.length,
+          chipsNeedingTaskRowLen: chipsNeedingTaskRow.length,
+          newChipNicknames: newChips.map(c => ({ id: c.id, pn: c.projectNickname })),
+        });
         newChips.forEach(chip => {
           if (!chip.projectNickname) return;
 
@@ -1193,6 +1230,12 @@ export default function ProjectTimePlannerV2() {
           const projectHeaderIndex = newData.findIndex(
             row => row._rowType === 'projectHeader' && row.projectNickname === chip.projectNickname
           );
+          // [DEBUG-CHIP] remove after 2026-05-16 debugging session is closed
+          console.log('[DEBUG-CHIP] header lookup', {
+            chipId: chip.id,
+            chipNickname: chip.projectNickname,
+            projectHeaderIndex,
+          });
           if (projectHeaderIndex === -1) return;
 
           // Insert after the last existing subprojectHeader (and its task row) for this project,
