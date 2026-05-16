@@ -889,6 +889,20 @@ export default function TacticsPage() {
             ? chipState.chipTimeOverrides
             : {}
         );
+
+        // Explicitly open the autosave gates now that the load is done.
+        // The skip-first-save dance in each save effect only fires if a
+        // setX call above caused a re-render — and primitive setX with an
+        // unchanged value (e.g. setStartDay('Sunday') when current is
+        // 'Sunday') is a no-op in React. Column widths in particular skip
+        // setColumnWidths entirely when Supabase has no saved widths,
+        // leaving the gate armed forever and silently swallowing every
+        // user resize. Opening the gates explicitly here costs one
+        // redundant save of the just-loaded data per autosave effect but
+        // guarantees subsequent user changes actually persist.
+        chipsLoadedForYear.current = currentYear;
+        settingsLoadedForYear.current = currentYear;
+        columnWidthsLoadedForYear.current = currentYear;
       } catch (err) {
         console.error('Failed to load Plan page state for year', currentYear, err);
       }
