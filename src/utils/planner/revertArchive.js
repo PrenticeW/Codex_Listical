@@ -15,7 +15,6 @@
 import {
   readYearMetadata,
   saveYearMetadata,
-  setCurrentYear,
 } from '../../lib/yearMetadataStorage';
 
 /**
@@ -42,11 +41,11 @@ function getMostRecentlyArchivedYear(years) {
  *   - The archived year goes back to status 'active' (endDate / archivedAt / stats cleared)
  *   - currentYear switches to the restored active year
  *
- * @returns {{ success: boolean, error?: string, restoredYear?: number, demotedYear?: number }}
+ * @returns {Promise<{ success: boolean, error?: string, restoredYear?: number, demotedYear?: number }>}
  */
-export function revertArchive() {
+export async function revertArchive() {
   try {
-    const metadata = readYearMetadata();
+    const metadata = await readYearMetadata();
     if (!metadata) {
       return { success: false, error: 'No year metadata found' };
     }
@@ -89,10 +88,10 @@ export function revertArchive() {
 
     // Switch to the restored active year
     metadata.currentYear = archivedYear.yearNumber;
-    saveYearMetadata(metadata);
+    await saveYearMetadata(metadata);
 
-    // Also call setCurrentYear to fire the custom event for cross-tab sync
-    setCurrentYear(archivedYear.yearNumber);
+    // saveYearMetadata fires the metadata event; setCurrentYear is now redundant
+    // because saveYearMetadata syncs currentYear from the payload.
 
     return {
       success: true,

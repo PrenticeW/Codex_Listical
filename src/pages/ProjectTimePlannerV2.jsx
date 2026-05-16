@@ -238,16 +238,16 @@ export default function ProjectTimePlannerV2() {
   }, [activeYear, refreshMetadata, navigate]);
 
   // Dev undo handler — remove before launch
-  const handleUndoDraft = useCallback(() => {
-    const result = undoDraftYear();
+  const handleUndoDraft = useCallback(async () => {
+    const result = await undoDraftYear();
     if (result.success) {
       refreshMetadata();
     }
   }, [refreshMetadata]);
 
   // Dev revert archive handler — remove before launch
-  const handleRevertArchive = useCallback(() => {
-    const result = revertArchive();
+  const handleRevertArchive = useCallback(async () => {
+    const result = await revertArchive();
     if (result.success) {
       refreshMetadata();
     }

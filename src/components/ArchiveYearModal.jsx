@@ -20,10 +20,16 @@ export function ArchiveYearModal({ isOpen, onClose, yearNumber }) {
 
   useEffect(() => {
     if (isOpen && yearNumber) {
-      // Validate when modal opens
-      const validationResult = validateYearReadyForArchive(yearNumber);
-      setValidation(validationResult);
-      setResult(null);
+      // Validate when modal opens (async since the Supabase port)
+      let cancelled = false;
+      (async () => {
+        const validationResult = await validateYearReadyForArchive(yearNumber);
+        if (!cancelled) {
+          setValidation(validationResult);
+          setResult(null);
+        }
+      })();
+      return () => { cancelled = true; };
     }
   }, [isOpen, yearNumber]);
 

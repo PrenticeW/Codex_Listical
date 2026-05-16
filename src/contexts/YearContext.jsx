@@ -2,28 +2,27 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import {
   readYearMetadata,
   initializeYearMetadata,
-  getCurrentYear,
-  getYearInfo,
-  getAllYears,
-  getActiveYear,
-  getDraftYear,
-  setCurrentYear as setCurrentYearStorage
+  setCurrentYear as setCurrentYearStorage,
 } from '../lib/yearMetadataStorage';
-
-function getOrInitMetadata() {
-  const existing = readYearMetadata();
-  if (existing) return existing;
-  return initializeYearMetadata(new Date().toISOString().split('T')[0]);
-}
+import { supabase } from '../lib/supabase';
 
 /**
- * YearContext provides year-level state management across the application
+ * YearContext provides year-level state management across the application.
+ *
+ * Since the move to Supabase (step 5 of SUPABASE_MIGRATION_PLAN.md) the
+ * helpers are async, so the provider does an initial fetch in useEffect
+ * and gates rendering on that completing. Consumers continue to read
+ * `currentYear`, `allYears`, etc. synchronously from the context value.
+ *
+ * The `yearMetadataStorage` window event is dispatched by the helper after
+ * every successful mutation. The provider listens for it and replaces the
+ * local cache so child pages re-render with the new state.
  */
+
 const YearContext = createContext(null);
 
 /**
- * Hook to access year context
- * @returns {Object} Year context value
+ * Hook to access year context.
  */
 export function useYear() {
   const context = useContext(YearContext);
@@ -33,75 +32,100 @@ export function useYear() {
   return context;
 }
 
-/**
- * YearProvider component
- * Manages the current year state and provides year-related operations
- */
 export function YearProvider({ children }) {
-  const [metadata, setMetadata] = useState(() => getOrInitMetadata());
-  const [currentYear, setCurrentYearState] = useState(() => getCurrentYear());
-  const [isLoading, setIsLoading] = useState(false);
+  const [metadata, setMetadata] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Sync with localStorage changes (cross-tab support)
+  // Initial load (and first-time init for fresh users).
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      let next = await readYearMetadata();
+      if (!next) {
+        const today = new Date().toISOString().split('T')[0];
+        next = await initializeYearMetadata(today);
+      }
+      setMetadata(next);
+    } catch (error) {
+      console.error('Failed to load year metadata', error);
+      setMetadata(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const handleStorageChange = (event) => {
-      if (event.type === 'yearMetadataStorage') {
+    load();
+  }, [load]);
+
+  // Refetch when the authenticated user changes (sign in / sign out).
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      load();
+    });
+    return () => subscription?.unsubscribe?.();
+  }, [load]);
+
+  // Listen for explicit metadata mutations from yearMetadataStorage.
+  useEffect(() => {
+    const handler = (event) => {
+      if (event.detail) {
         setMetadata(event.detail);
-        setCurrentYearState(event.detail.currentYear);
       }
     };
-
-    window.addEventListener('yearMetadataStorage', handleStorageChange);
-    return () => window.removeEventListener('yearMetadataStorage', handleStorageChange);
+    window.addEventListener('yearMetadataStorage', handler);
+    return () => window.removeEventListener('yearMetadataStorage', handler);
   }, []);
 
-  // Refresh metadata from storage
-  const refreshMetadata = useCallback(() => {
-    const freshMetadata = getOrInitMetadata();
-    setMetadata(freshMetadata);
-    setCurrentYearState(freshMetadata.currentYear);
+  const refreshMetadata = useCallback(async () => {
+    const fresh = await readYearMetadata();
+    if (fresh) setMetadata(fresh);
   }, []);
 
-  // Switch to a different year (for viewing history)
-  const switchToYear = useCallback((yearNumber) => {
+  const switchToYear = useCallback(async (yearNumber) => {
     if (!metadata) return;
-
-    const yearInfo = metadata.years.find(y => y.yearNumber === yearNumber);
+    const yearInfo = metadata.years.find((y) => y.yearNumber === yearNumber);
     if (!yearInfo) {
       console.error(`Year ${yearNumber} does not exist`);
       return;
     }
+    // setCurrentYearStorage fires the metadata event, which updates our cache.
+    await setCurrentYearStorage(yearNumber);
+  }, [metadata]);
 
-    setCurrentYearStorage(yearNumber);
-    setCurrentYearState(yearNumber);
-    refreshMetadata();
-  }, [metadata, refreshMetadata]);
-
-  // Switch back to the active year
-  const switchToActiveYear = useCallback(() => {
-    const activeYear = getActiveYear();
+  const switchToActiveYear = useCallback(async () => {
+    if (!metadata) return;
+    const activeYear = metadata.years.find((y) => y.status === 'active');
     if (activeYear) {
-      switchToYear(activeYear.yearNumber);
+      await switchToYear(activeYear.yearNumber);
     }
-  }, [switchToYear]);
+  }, [metadata, switchToYear]);
 
-  // Get current year info
-  const currentYearInfo = metadata?.years.find(y => y.yearNumber === currentYear) || null;
-
-  // Check if current year is archived
+  // Derive view values from cached metadata.
+  const currentYear = metadata?.currentYear ?? 1;
+  const currentYearInfo = metadata?.years.find((y) => y.yearNumber === currentYear) ?? null;
   const isCurrentYearArchived = currentYearInfo?.status === 'archived';
-
-  // Check if current year is a draft
   const isCurrentYearDraft = currentYearInfo?.status === 'draft';
+  const allYears = metadata?.years ?? [];
+  const activeYear = metadata?.years.find((y) => y.status === 'active') ?? null;
+  const draftYear = metadata?.years.find((y) => y.status === 'draft') ?? null;
 
-  // Get all years
-  const allYears = getAllYears();
+  // Synchronous accessor exposed on the context value, served from the cache.
+  const getYearInfoFromCache = useCallback(
+    (yearNumber) => metadata?.years.find((y) => y.yearNumber === yearNumber) ?? null,
+    [metadata],
+  );
 
-  // Get active year
-  const activeYear = getActiveYear();
-
-  // Get draft year (if one exists)
-  const draftYear = getDraftYear();
+  // Gate rendering on the first load so callers can rely on currentYear
+  // being a real number (every page does loadStagingState(currentYear) and
+  // similar; passing null would force a wide rewrite).
+  if (isLoading || !metadata) {
+    return (
+      <div className="flex items-center justify-center min-h-screen text-stone-500">
+        Loading…
+      </div>
+    );
+  }
 
   const value = {
     // Current state
@@ -123,7 +147,7 @@ export function YearProvider({ children }) {
     refreshMetadata,
 
     // Helper functions
-    getYearInfo: (yearNumber) => getYearInfo(yearNumber)
+    getYearInfo: getYearInfoFromCache,
   };
 
   return (

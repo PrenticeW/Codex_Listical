@@ -46,45 +46,44 @@ function isKeyForYear(unscopedKey, yearNumber) {
  * Remove a draft year and all its storage data.
  * Switches the UI back to the active year.
  *
- * @returns {{ success: boolean, error?: string, removedKeyCount?: number }}
+ * @returns {Promise<{ success: boolean, error?: string, removedKeyCount?: number }>}
  */
-export function undoDraftYear() {
+export async function undoDraftYear() {
   try {
-    const draft = getDraftYear();
+    const draft = await getDraftYear();
     if (!draft) {
       return { success: false, error: 'No draft year found' };
     }
 
-    const active = getActiveYear();
+    const active = await getActiveYear();
     if (!active) {
       return { success: false, error: 'No active year found — cannot switch back' };
     }
 
-    // Sweep every storage key associated with this draft year (user-scoped
-    // by storageService). Replaces the previous hand-maintained list, which
-    // had a typo on the live metrics key and missed the sent-metrics key
-    // entirely. The predicate is cheap and the sweep stays correct as new
-    // year-scoped keys are introduced — provided they follow the
-    // `{domain}-year-{N}-{descriptor}` convention or are added to
-    // isKeyForYear's explicit list.
+    // Sweep every localStorage key associated with this draft year. After the
+    // step-5 port lands fully, year-scoped data will live in Supabase under
+    // year_id foreign keys with ON DELETE CASCADE, so deleting the year row
+    // will tear down its planning data automatically. Until every helper is
+    // ported, the localStorage sweep stays useful for keys whose helpers
+    // have not migrated yet.
     const removedKeyCount = removeKeysMatching(
       (unscopedKey) => isKeyForYear(unscopedKey, draft.yearNumber)
     );
 
-    // The send-to-system timestamp matches the sweep above, but route through
-    // tacticsStorage too so any side effects of the helper run (e.g. future
-    // cache invalidation). Best effort — the sweep already removed the key.
+    // Best-effort cleanup of the legacy send-to-system marker. The sweep
+    // above also catches it; this is harmless redundancy.
     try {
       clearSendToSystemTimestamp(draft.yearNumber);
     } catch {
       // Ignore — already removed
     }
 
-    // Remove draft year from metadata
-    deleteDraftYearRecord(draft.yearNumber);
+    // Remove draft year from metadata. With the Supabase port this also
+    // cascades any rows in year-scoped tables that reference this year_id.
+    await deleteDraftYearRecord(draft.yearNumber);
 
     // Switch back to active year
-    setCurrentYear(active.yearNumber);
+    await setCurrentYear(active.yearNumber);
 
     return { success: true, removedKeyCount };
   } catch (error) {

@@ -21,7 +21,6 @@ import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm, buildProjectPlanSummary } from '../utils/staging/planTableHelpers';
 import { pickCustomChipColour } from '../utils/staging/projectColour';
 import { saveTacticsMetrics, saveSentMetricsSnapshot } from '../lib/tacticsMetricsStorage';
-import { getYearInfo } from '../lib/yearMetadataStorage';
 import { saveStartDate } from '../utils/planner/storage';
 import {
   loadTacticsYearSettings,
@@ -313,20 +312,20 @@ export default function TacticsPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
-  const { currentYear, draftYear, activeYear, allYears, isCurrentYearArchived, refreshMetadata } = useYear();
+  const { currentYear, draftYear, activeYear, allYears, isCurrentYearArchived, refreshMetadata, getYearInfo } = useYear();
 
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
-  const handleUndoDraft = useCallback(() => {
-    const result = undoDraftYear();
+  const handleUndoDraft = useCallback(async () => {
+    const result = await undoDraftYear();
     if (result.success) {
       refreshMetadata();
     }
   }, [refreshMetadata]);
 
   // Dev revert archive handler — remove before launch
-  const handleRevertArchive = useCallback(() => {
-    const result = revertArchive();
+  const handleRevertArchive = useCallback(async () => {
+    const result = await revertArchive();
     if (result.success) {
       refreshMetadata();
     }

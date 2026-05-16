@@ -1,7 +1,7 @@
 # Supabase Migration Plan
 
-**Status:** Step 2 complete (schema migration drafted)
-**Last updated:** 2026-05-16 (new migration file `20260516000001_planning_schema.sql` added; step 2 boxes ticked)
+**Status:** Step 4 complete (migrations applied to the live Supabase project, RLS confirmed)
+**Last updated:** 2026-05-16 (both planning migrations applied via SQL editor, RLS verified via pg_policies sanity query)
 
 ## Goal
 
@@ -67,19 +67,21 @@ Row Level Security policies are still pending and form step 3 below.
 
 ### 3. Add Row Level Security policies
 
-Every new table must have RLS enabled and policies restricting reads and writes to the row's owner.
+Every new table must have RLS enabled and policies restricting reads and writes to the row's owner. Captured in `supabase/migrations/20260516000002_planning_rls.sql`.
 
-* [ ] Enable RLS on every planning table
-* [ ] Write SELECT policy on each: row's `user_id` matches `auth.uid()`
-* [ ] Write INSERT, UPDATE, DELETE policies likewise
-* [ ] Write integration tests confirming user A cannot read user B's data
+* [x] Enable RLS on every planning table (years, projects, planner_rows, archived_weeks, tactics_year_settings, tactics_metrics, tactics_custom_projects, tactics_chips, planner_settings, planning_history, plus profiles)
+* [x] Write SELECT/INSERT/UPDATE/DELETE policy on each: row's `user_id` matches `auth.uid()` (single `FOR ALL` policy per table, equivalent to four separate ones)
+* [x] `planning_history` is SELECT-only at the policy level; writes happen via the trigger added in step 8, which bypasses RLS
+* [x] Integration test script drafted at `scripts/verify-rls.mjs`. Run after step 4 applies the migrations. Needs two pre-confirmed test accounts and the env vars listed in the script header.
 
 ### 4. Run the migration in Supabase
 
-* [ ] Apply migration on dev project first
-* [ ] Verify tables exist with correct shapes via Supabase dashboard
-* [ ] Confirm RLS is active
-* [ ] Apply migration on production project
+Only one Supabase project exists right now, so "dev" and "production" are the same project. The second project will be added later, before public launch.
+
+* [x] Apply migration on dev project first (both `20260516000001_planning_schema.sql` and `20260516000002_planning_rls.sql` applied via the dashboard SQL editor)
+* [x] Verify tables exist with correct shapes via Supabase dashboard (lock icon present on all 11 planning tables in the Table editor)
+* [x] Confirm RLS is active (`pg_policies` sanity query returned 11 rows, all with `rls_enabled = true` and `policy_count = 1`)
+* [ ] Apply migration on production project (deferred until a separate production project exists)
 
 ### 5. Rewrite storage helper internals
 

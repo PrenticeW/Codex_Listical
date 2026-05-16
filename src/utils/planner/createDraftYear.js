@@ -188,7 +188,7 @@ const resetItemForDraft = (item) => {
 export async function createDraftYearFromActive(activeYearNumber) {
   try {
     // Guard: verify active year exists
-    const yearInfo = getYearInfo(activeYearNumber);
+    const yearInfo = await getYearInfo(activeYearNumber);
     if (!yearInfo) {
       throw new Error(`Year ${activeYearNumber} does not exist`);
     }
@@ -197,7 +197,7 @@ export async function createDraftYearFromActive(activeYearNumber) {
     }
 
     // Guard: prevent creating a second draft
-    const existingDraft = getDraftYear();
+    const existingDraft = await getDraftYear();
     if (existingDraft) {
       throw new Error(`A draft year (Year ${existingDraft.yearNumber}) already exists`);
     }
@@ -223,7 +223,7 @@ export async function createDraftYearFromActive(activeYearNumber) {
     const columnWidths = loadTacticsColumnWidths(activeYearNumber);
 
     // --- Create draft year metadata record ---
-    createDraftYearMetadata(draftYearNumber, nextStartDate);
+    await createDraftYearMetadata(draftYearNumber, nextStartDate);
 
     // --- Copy planner UI settings ---
     saveColumnSizing(columnSizing, DEFAULT_PROJECT_ID, draftYearNumber);
@@ -290,7 +290,7 @@ export async function createDraftYearFromActive(activeYearNumber) {
     }
 
     // --- Switch UI to draft year ---
-    setCurrentYear(draftYearNumber);
+    await setCurrentYear(draftYearNumber);
 
     return { success: true, draftYear: draftYearNumber };
   } catch (error) {

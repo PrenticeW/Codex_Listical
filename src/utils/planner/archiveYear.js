@@ -179,7 +179,7 @@ export async function performYearArchive(yearNumber) {
 
   try {
     // 1. Verify year exists and is active
-    const yearInfo = getYearInfo(yearNumber);
+    const yearInfo = await getYearInfo(yearNumber);
     if (!yearInfo) {
       throw new Error(`Year ${yearNumber} does not exist`);
     }
@@ -192,7 +192,7 @@ export async function performYearArchive(yearNumber) {
     //     does not land on a fresh active year with an empty Goal page (M3).
     //     This mirrors the guard in validateYearReadyForArchive so a
     //     programmatic call cannot bypass the modal's disabled state.
-    const draftYearForGuard = getDraftYear();
+    const draftYearForGuard = await getDraftYear();
     if (draftYearForGuard) {
       const { shortlist: draftShortlist } = loadStagingState(draftYearForGuard.yearNumber);
       if (!Array.isArray(draftShortlist) || draftShortlist.length === 0) {
@@ -238,20 +238,20 @@ export async function performYearArchive(yearNumber) {
     //    written by the no-draft branch's save* calls below may remain
     //    as orphans on failure but do not block a retry — a retry will
     //    overwrite them with the same values.
-    const preMutationMeta = readYearMetadata();
+    const preMutationMeta = await readYearMetadata();
     metadataSnapshot = preMutationMeta
       ? JSON.parse(JSON.stringify(preMutationMeta))
       : null;
 
     // 6. Archive the year metadata (first mutation)
-    archiveYearMetadata(yearNumber, {
+    await archiveYearMetadata(yearNumber, {
       totalWeeksCompleted: weeksCompleted,
       totalHoursCompleted: totalHours,
     });
     console.log(`[Archive Year] Year ${yearNumber} metadata archived`);
 
     // 7. Determine next year: promote draft if one exists, otherwise create fresh
-    const draftYear = getDraftYear();
+    const draftYear = await getDraftYear();
     let nextYearNumber;
     let nextStartDate;
 
@@ -259,14 +259,14 @@ export async function performYearArchive(yearNumber) {
       // Draft year already set up by "Plan Next Year" — just promote it
       nextYearNumber = draftYear.yearNumber;
       nextStartDate = draftYear.startDate;
-      promoteDraftToActive(nextYearNumber);
+      await promoteDraftToActive(nextYearNumber);
       console.log(`[Archive Year] Promoted draft Year ${nextYearNumber} to active`);
     } else {
       // Legacy path: no draft year, create fresh next year
       nextYearNumber = yearNumber + 1;
       nextStartDate = calculateNextCycleStartDate(startDate);
 
-      createNewYear(nextYearNumber, nextStartDate);
+      await createNewYear(nextYearNumber, nextStartDate);
       console.log(`[Archive Year] Year ${nextYearNumber} created with start date: ${nextStartDate}`);
 
       // Copy settings
@@ -296,7 +296,7 @@ export async function performYearArchive(yearNumber) {
     }
 
     // 8. Switch to new year
-    setCurrentYear(nextYearNumber);
+    await setCurrentYear(nextYearNumber);
     console.log(`[Archive Year] Switched to Year ${nextYearNumber} as active year`);
 
     console.log(`[Archive Year] Archive complete!`);
@@ -323,7 +323,7 @@ export async function performYearArchive(yearNumber) {
     let rolledBack = false;
     if (metadataSnapshot) {
       try {
-        saveYearMetadata(metadataSnapshot);
+        await saveYearMetadata(metadataSnapshot);
         rolledBack = true;
         console.log(`[Archive Year] Metadata rolled back to pre-archive state`);
       } catch (rollbackError) {
@@ -343,10 +343,10 @@ export async function performYearArchive(yearNumber) {
 /**
  * Validate if a year is ready to be archived
  * @param {number} yearNumber - Year to validate
- * @returns {Object} Validation result
+ * @returns {Promise<Object>} Validation result
  */
-export function validateYearReadyForArchive(yearNumber) {
-  const yearInfo = getYearInfo(yearNumber);
+export async function validateYearReadyForArchive(yearNumber) {
+  const yearInfo = await getYearInfo(yearNumber);
 
   if (!yearInfo) {
     return {
@@ -365,7 +365,7 @@ export function validateYearReadyForArchive(yearNumber) {
   // If a draft year exists, archiving will promote it to active. Reject when
   // the draft's Goal page has no projects shortlisted, otherwise the user
   // lands on a fresh active year with nothing planned (M3).
-  const draftYear = getDraftYear();
+  const draftYear = await getDraftYear();
   if (draftYear) {
     const { shortlist } = loadStagingState(draftYear.yearNumber);
     if (!Array.isArray(shortlist) || shortlist.length === 0) {

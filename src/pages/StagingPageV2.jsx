@@ -102,16 +102,16 @@ export default function StagingPageV2() {
 
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
-  const handleUndoDraft = useCallback(() => {
-    const result = undoDraftYear();
+  const handleUndoDraft = useCallback(async () => {
+    const result = await undoDraftYear();
     if (result.success) {
       refreshMetadata();
     }
   }, [refreshMetadata]);
 
   // Dev revert archive handler — remove before launch
-  const handleRevertArchive = useCallback(() => {
-    const result = revertArchive();
+  const handleRevertArchive = useCallback(async () => {
+    const result = await revertArchive();
     if (result.success) {
       refreshMetadata();
     }
