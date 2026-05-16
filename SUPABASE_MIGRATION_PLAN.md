@@ -1,7 +1,7 @@
 # Supabase Migration Plan
 
-**Status:** Not started
-**Last updated:** 2026-05-01
+**Status:** Step 1 complete
+**Last updated:** 2026-05-16 (storage shape audit complete, task row metadata columns flagged for step 3 reassessment)
 
 ## Goal
 
@@ -30,11 +30,13 @@ Data survives browser crashes and accidental localStorage clears. Syncs across d
 
 Document the exact keys and JSON shapes used by each storage helper. This is the blueprint for designing the tables.
 
-* [ ] `stagingStorage` (Goal page)
-* [ ] `tacticsMetricsStorage` (Plan page metrics)
-* [ ] `plannerStorage` (System page task rows)
-* [ ] `tacticsStorage` (chips state, year settings, column widths)
-* [ ] `yearMetadataStorage` (year statuses, draft year tracking)
+* [x] `stagingStorage` (Goal page)
+* [x] `tacticsMetricsStorage` (Plan page metrics)
+* [x] `plannerStorage` (System page task rows)
+* [x] `tacticsStorage` (chips state, year settings, column widths)
+* [x] `yearMetadataStorage` (year statuses, draft year tracking)
+
+Deliverable: `STORAGE_AUDIT.md` in the project root.
 
 ### 2. Rewrite the schema migration file
 
@@ -46,6 +48,19 @@ Replace or update `supabase/migrations/20260102000001_initial_schema.sql` so it 
 * [ ] Add sent-snapshot layer (boolean flag plus partial unique index, or parallel `*_sent` tables)
 * [ ] `project_weekly_quotas.project_label` should become `project_id UUID FK`
 * [ ] Audit `ON DELETE CASCADE` coverage from `auth.users(id)` through the full planning tree (GDPR right to erasure)
+
+**Also capture task row metadata.** Future analytics ("when was this task created", "how long did it take to complete", "how often does this user abandon tasks") depend on metadata that's cheap to add now and painful to backfill later. When designing `planner_rows` (and any other row-shaped tables like `projects`), include:
+
+* [ ] `created_at TIMESTAMPTZ DEFAULT now()` (standard Postgres convention)
+* [ ] `updated_at TIMESTAMPTZ DEFAULT now()` with a trigger to keep it fresh
+* [ ] `completed_at TIMESTAMPTZ` (set when status transitions to Done, nulled if reverted)
+* [ ] `abandoned_at TIMESTAMPTZ` (set when status transitions to Abandoned, nulled if reverted)
+* [ ] `sent_to_system_at TIMESTAMPTZ` on task rows that originate from the Plan page send-to-system flow
+* [ ] Consider `status_changed_at TIMESTAMPTZ` as a generic catch-all if specific status timestamps feel noisy
+
+> **Note (2026-05-16):** Prentice wants to reassess this column list before it lands in the migration draft. The five timestamps above were assumed during the original plan write-up, are not personally important, and may be replaced with better columns once we know what queries actually matter. Treat them as placeholders, not requirements, and revisit at the point where we would otherwise write them into the schema file.
+
+The `planning_history` table from the version history plan covers full change history, so don't duplicate that here. These columns are specifically for queries that need a fast direct read on the row itself (sorting by creation date, filtering active tasks by age, etc.).
 
 ### 3. Add Row Level Security policies
 
