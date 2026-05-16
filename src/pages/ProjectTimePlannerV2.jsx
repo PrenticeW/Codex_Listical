@@ -1458,13 +1458,21 @@ export default function ProjectTimePlannerV2() {
   // identity. lastResetTsRef de-dupes so we don't reset on every chip-state
   // change.
   useEffect(() => {
-    if (!tacticsChips || tacticsChips.length === 0) return;
-    const ts = getSendToSystemTimestamp(currentYear);
-    if (ts && ts !== lastResetTsRef.current) {
-      lastResetTsRef.current = ts;
-      setSentToSystem(true);
-      resetSubprojectLabels(tacticsChips);
-    }
+    if (!tacticsChips || tacticsChips.length === 0) return undefined;
+    let cancelled = false;
+    getSendToSystemTimestamp(currentYear).then((ts) => {
+      if (cancelled) return;
+      if (ts && ts !== lastResetTsRef.current) {
+        lastResetTsRef.current = ts;
+        setSentToSystem(true);
+        resetSubprojectLabels(tacticsChips);
+      }
+    }).catch((err) => {
+      console.error('Failed to read send-to-system timestamp', err);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [tacticsChips, currentYear, resetSubprojectLabels]);
 
   // Handle the live "Send to System" event — reload all tactics data from storage
@@ -1475,9 +1483,17 @@ export default function ProjectTimePlannerV2() {
       // backwards compatibility.
       const eventYear = event?.detail?.__eventYear;
       if (eventYear != null && eventYear !== currentYear) return;
-      const ts = getSendToSystemTimestamp(currentYear);
-      lastResetTsRef.current = ts;
+      // The timestamp read is async post helper #4 port. Fire-and-forget
+      // (no await) is acceptable here because event handlers can't be
+      // awaited by their dispatchers anyway, and the lastResetTsRef
+      // update + setSentToSystem just need to happen before the user
+      // notices anything missing.
       setSentToSystem(true);
+      getSendToSystemTimestamp(currentYear).then((ts) => {
+        lastResetTsRef.current = ts;
+      }).catch((err) => {
+        console.error('Failed to read send-to-system timestamp in event handler', err);
+      });
       // Reload tactics data from storage so System reflects what was just sent.
       // The async load returns the freshly loaded chips; we both set state
       // AND pass them to resetSubprojectLabels (which is what places the
