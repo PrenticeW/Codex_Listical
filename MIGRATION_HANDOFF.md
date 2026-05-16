@@ -1,126 +1,151 @@
 # Supabase Migration Handoff
 
-**Author:** Claude (session ending 2026-05-16 mid-way through step 5)
+**Author:** Claude (session ending 2026-05-16, late afternoon, after the chip-rendering debugging marathon)
 **For:** Whoever picks this up next (likely a fresh Claude session)
-**Read first:** `SUPABASE_MIGRATION_PLAN.md`, `STORAGE_AUDIT.md`, `CLAUDE.md`
+**Read first:** `SUPABASE_MIGRATION_PLAN.md`, `STORAGE_AUDIT.md`, `CLAUDE.md`, and the previous handoff content in git history at `MIGRATION_HANDOFF.md` pre this overwrite if you want the original step-by-step.
 
 ## Where we are
 
-Steps 1 through 4 of the migration plan are complete and verified working in the live Supabase project. Step 5 (rewriting the storage helper internals) is in progress: three of five helpers are ported, two are still on localStorage.
+Steps 1 through 4 of the migration plan remain complete and verified working. Step 5 (storage helper rewrites) still has helpers 4 and 5 pending. We did NOT advance the helper count this session. What we did do was unstick two real bugs that were blocking the Plan→System pipeline. Prentice burned hours on these; both are now closed.
 
 | Helper | Status |
 |---|---|
 | `yearMetadataStorage` | Ported, verified working |
 | `stagingStorage` | Ported, verified working |
-| `tacticsMetricsStorage` | Ported, **has open bugs** (see below) |
-| `tacticsStorage` | Not started, still localStorage |
+| `tacticsMetricsStorage` | Ported, **previous "open bugs" were resolved this session** (see below) |
+| `tacticsStorage` | Not started, still localStorage. **Read the schema recommendation below before porting.** |
 | `plannerStorage` | Not started, still localStorage |
 
-The two pending helpers still write to the browser's localStorage. Their public API is preserved so the rest of the app keeps working. Once they port, the localStorage tail goes away entirely.
+## What was fixed in this session
 
-## Live Supabase project
+### Fix 1: race between async loads in System
 
-* `supabase/migrations/20260516000001_planning_schema.sql` is applied (schema, 11 planning tables, indexes, partial unique indexes).
-* `supabase/migrations/20260516000002_planning_rls.sql` is applied (RLS enabled on every planning table with `user_id = auth.uid()` policies).
-* `scripts/verify-rls.mjs` exists but Prentice has not run it. The dashboard `pg_policies` sanity query returned 11 rows all with policies, which was accepted as proof of RLS.
-* Old `supabase/migrations/20260102000001_initial_schema.sql` is in place but its planning tables were dropped at the top of the new schema migration. `profiles` was left intact.
+**Symptom.** On page mount or navigation to System, project headers eventually rendered with their quotas but no subproject or task rows appeared. Send to System looked like it was doing nothing.
 
-## Open bugs from helper #3 (tacticsMetricsStorage)
+**Root cause.** Two `useEffect`s in `src/pages/ProjectTimePlannerV2.jsx` race on first mount:
 
-Prentice deployed the helper and saw two issues that I tried to fix and then ran out of confidence about.
+1. The project-header insertion effect (line 846) fires when `projects` (from `useProjectsData → loadStagingState`) resolves.
+2. The chip-sync effect (line 1026 area, see current source for exact location) fires when `tacticsChips` (from `loadEnrichedChips`) resolves.
 
-### Bug A: project quota reads `1.18` instead of `1.30`
+Pre-migration both were sync, so order didn't matter. Post-migration the chip path can resolve first, run, find zero project headers in `prevData` (because the staging load hasn't completed), and silently skip every chip via the `projectHeaderIndex === -1` guard inside `newChips.forEach`. The chip-sync effect then never re-fires because `tacticsChips` doesn't change.
 
-Setup: one project with a 1h chip and a 30min chip. Press Send to System. The project header in System shows `of 1.18` in the TimeValue column. Should be `1.30`.
+**Fix.** Added `projects` to the chip-sync effect's dep array so it re-runs when staging finishes loading. The setData callback then sees the now-present project headers and inserts subproject + task rows correctly. Comment in the source flags the change with `Debugging session 2026-05-16`.
 
-The chain:
+### Fix 2: stale `durationMinutes` masking Plan resizes
 
-1. Plan's `minutesToHourMinuteDecimal(minutes)` returns a **number** like `1.3` for 90 minutes (decimal part is minutes/100, not a fraction of an hour).
-2. The old `tacticsMetricsStorage.hmmToMinutes` mishandled the number case, did `1.3 * 60 = 78`, and stored 78 minutes in `tactics_metrics.project_weekly_quotas[].weekly_minutes`.
-3. The current code (after my fix in commit `dada7f8`) handles the number case correctly: `Math.floor(1.3) = 1, Math.round(0.3 * 100) = 30, total = 90 minutes`. Reading 90 back through `minutesToHmm` returns the number `1.3` which `ProjectRow` formats as `"1.30"`.
-4. **Suspicion (unconfirmed):** the DB still has the 78-minute value from before the fix, because either (a) browser cache kept Prentice running the old JS, or (b) my second fix has another flaw I didn't see.
+**Symptom.** Even with chip rows finally appearing in System, the durations shown were always the original chip duration at creation time, never the user's resized value. Quota numbers on the project header were sometimes correct, sometimes not. Changes on Plan never propagated.
 
-**What the next session should do:** ask Prentice to open Supabase Table editor → `tactics_metrics` → the row with `is_sent = true` for his year → check `project_weekly_quotas[*].weekly_minutes`. If it's 78, push the user to hard-refresh, press Send again with the new code, recheck. If it's 90 but System still displays 1.18, the bug is in the read or render path. The relevant files are `src/lib/tacticsMetricsStorage.js` (helper) and `src/components/planner/rows/ProjectRow.jsx` (display).
+**Root cause.** Plan's chip-resize handler updates `chip.startRowId` and `chip.endRowId` on the chip object, but does NOT update `chip.durationMinutes`. Plan's UI displays the correct duration because it recomputes from row spans at render time. But the persisted chip blob carries the stale original number. System used to read `durationMinutes` directly, so it always showed the wrong value.
 
-### Bug B: task rows don't update consistently after Send
+**Fix.** Changed `loadEnrichedChips` in `src/pages/ProjectTimePlannerV2.jsx` to recompute duration from row IDs as the primary source, with `chipTimeOverrides` winning when explicitly set and the stored `durationMinutes` only used as a last-resort fallback. System projects (sleep, rest, buffer) are filtered out earlier so row-based math is safe.
 
-Symptom: change a chip's length on Plan, press Send. System sometimes doesn't add the task row at all, sometimes shows the task row but with the previous length, sometimes the project total updates but the task row doesn't.
+**Note.** This is a System-side workaround. The underlying Plan-side bug still lives in the resize handler. The right permanent fix is the schema decision below, taken at helper #4 port time. Until then, the workaround keeps the app working.
 
-Root cause I identified and tried to fix (commit `3baa8e8`): in `ProjectTimePlannerV2.jsx` the `tactics-send-to-system` event handler had a `resetSubprojectLabels(freshChips)` call where `freshChips` was an undefined variable. I introduced this when converting the handler to async. The original sync code grabbed `loadEnrichedChips(...)` into a local variable; my async version did `.then(setTacticsChips)` but forgot to pass the resolved value to `resetSubprojectLabels`. Fix in place is:
+## Critical design decision for helper #4: drop `duration_minutes` from `tactics_chips`
 
-```js
-loadEnrichedChips(currentYear).then((freshChips) => {
-  setTacticsChips(freshChips);
-  resetSubprojectLabels(freshChips);
-});
+When porting `tacticsStorage` to Supabase, **do not include a `duration_minutes` column on `tactics_chips`**. Duration should be a pure derivation from `start_row_id` + `end_row_id` + the year's `increment_minutes`. Persisting both invites the exact stale-field bug we just spent hours debugging.
+
+Reasoning:
+
+* Plan's chip-resize logic updates row IDs reliably. It does not update `duration_minutes`. Six months of debugging suggests this is unlikely to change without a deliberate engineering push.
+* `loadEnrichedChips` already derives duration from row IDs successfully (our Fix 2).
+* If `duration_minutes` exists in the schema, future code paths will read from it again, the stale-field bug will return, and you'll be back here.
+* The only legitimate "stored duration" case is the explicit user override, which already has its own home in `chip_time_overrides` (currently a JSONB field on the chip blob; in Supabase it can be a separate `tactics_chip_time_overrides` table or a JSONB column on `tactics_chips`, either is fine).
+
+Recommended `tactics_chips` schema (rough sketch, refine when you read the existing migration draft):
+
+```sql
+CREATE TABLE tactics_chips (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  year_id UUID NOT NULL REFERENCES years(id) ON DELETE CASCADE,
+  is_sent BOOLEAN NOT NULL DEFAULT false,
+  chip_id_external TEXT NOT NULL,        -- the existing 'chip-19' / 'schedule-chip-...' strings
+  project_id_external TEXT NOT NULL,     -- references staging projects.id as text (chip blobs use text)
+  column_index SMALLINT NOT NULL,
+  day_name TEXT NOT NULL,
+  start_row_id TEXT NOT NULL,
+  end_row_id TEXT NOT NULL,
+  start_minutes INTEGER,                 -- optional, only some chips have it (schedule-chip-* + chip-20)
+  display_label TEXT,
+  has_schedule_name BOOLEAN DEFAULT false,
+  override_minutes INTEGER,              -- chip_time_overrides moved inline; null when not overridden
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  -- NO duration_minutes column. Derive at read time.
+);
 ```
 
-I also fixed the on-mount catch-up effect so it re-runs when `tacticsChips` loads asynchronously (was previously `[]` deps which only ran once on first mount with empty chips).
+Indexes and RLS follow the same pattern as `tactics_metrics`. Partial unique indexes on `(user_id, year_id, chip_id_external) WHERE is_sent = false` and same with `is_sent = true` so live and sent rows can coexist.
 
-**Unverified:** Prentice has not confirmed whether the latest fixes resolved the symptom. The next session should ask him to repeat the test sequence I gave him at the end of the conversation (1h chip + 30min chip → Send → check System → resize chip → Send → check System) and report exactly what happens at each step plus any console errors and the relevant Supabase row values.
+When System reads, it should do the same row-based calculation we wrote in `loadEnrichedChips`:
 
-There may be a separate pre-existing bug in the chip→task-row sync logic in `src/pages/ProjectTimePlannerV2.jsx` around lines 1026-1267 (the big chip-syncing useEffect) and lines 1272-1413 (`resetSubprojectLabels`). Both modify the `data` state and could race. I didn't dig deep enough to be sure.
+```
+duration_minutes = override_minutes ?? deriveFromRowIds(start_row_id, end_row_id, year_increment_minutes)
+```
+
+Apply this consistently. The Plan page will need a parallel update: wherever it currently reads `chip.durationMinutes` for display, recompute from row IDs the same way. That removes the divergence between Plan and System once and for all.
 
 ## What's safe to assume
 
-* Helpers #1 and #2 work. Prentice signed off on stagingStorage end-to-end.
-* The chip data and the task row data are both still in localStorage (tacticsStorage and plannerStorage are not yet ported). Only `years`, `projects`, and `tactics_metrics` are coming from Supabase.
-* Prentice has no precious data and is fine with fresh-start losses.
-* He uses Vercel for deployment and pastes SQL into the Supabase dashboard for migrations.
-* He has one Supabase project (no separate dev/prod yet).
+* Helpers 1, 2, 3 work. Prentice has been using them end-to-end this session.
+* The chip data and the task row data are still in localStorage (tacticsStorage and plannerStorage are not yet ported). Only `years`, `projects`, and `tactics_metrics` come from Supabase.
+* The race-condition fix and row-recompute fix are in `src/pages/ProjectTimePlannerV2.jsx` and pushed to Vercel. The current build hash at session end was `index-BNQeUE1s.js`.
+* Prentice has minimal precious data and is fine with fresh-start losses during testing.
+* He deploys via Vercel (push to git, Vercel rebuilds). He runs SQL via the Supabase dashboard.
 
 ## What to do next
 
-1. **Pin down Bug A.** Ask Prentice to share the `tactics_metrics` row content for his current year. Based on that, either push him to hard-refresh and re-Send, or diagnose the read path.
+1. **Port helper #4: `tacticsStorage`** using the schema recommendation above. Apply the new SQL migration to Supabase. Rewrite the helper's internals to use Supabase while keeping the public API (`loadTacticsChipsState`, `saveTacticsChipsState`, `loadSentChipsSnapshot`, `saveSentChipsSnapshot`, `loadTacticsYearSettings`, `saveTacticsYearSettings`, `loadTacticsColumnWidths`, `saveTacticsColumnWidths`, send-to-system timestamp helpers) intact. Same pattern as helpers 1 to 3: async public API, await every callsite, debounce autosave at the owning hook. Column widths go into `tactics_year_settings` and the send-to-system timestamp moves to `planner_settings.send_to_system_at` per the original handoff.
 
-2. **Pin down Bug B.** Run the test sequence in the last reply of this conversation and get the exact step-by-step results. If the freshChips fix solved it, mark Bug B closed. If not, instrument or read the chip-sync useEffect in `ProjectTimePlannerV2.jsx` carefully.
+2. **Update Plan-side duration reads** so Plan derives chip durations from row IDs the same way System does. Right now Plan computes its display correctly somewhere internally, but you want a single shared helper used by both pages so the formula can never drift. Pull the existing `estimateDurationFromRowIds` out of `ProjectTimePlannerV2.jsx` into a shared util (`src/utils/chips/duration.js` or similar) and import it from both Plan and System.
 
-3. **Port helper #4: tacticsStorage.** This holds chip state (live + sent layer in `tactics_chips`, `tactics_custom_projects`), the year settings (`tactics_year_settings`), column widths (also into `tactics_year_settings`), and the send-to-system timestamp (move to `planner_settings.send_to_system_at`). The schema is already in place. Pattern follows helpers #1-#3: async public API, debounced autosave at every caller, await every callsite. The chip ID is text and references staging project UUIDs as text — keep that string-y join intentionally, the schema's `project_id_external TEXT` column already accommodates it.
+3. **Port helper #5: `plannerStorage`** following the same pattern. Task rows into `planner_rows` with `day_entries` JSONB; per-year settings into `planner_settings`; archive rows into `archived_weeks`. Calendar header rows are derived at render time, not persisted.
 
-4. **Port helper #5: plannerStorage.** This is the biggest. Task rows go into `planner_rows` (one row per task with `day_entries` as JSONB), per-year settings go into `planner_settings`. Calendar header rows (`_isMonthRow`, `_isWeekRow`, etc.) are NOT persisted per the design decision; derive them at render. Archive rows go into the dedicated `archived_weeks` table, NOT into `planner_rows`.
+4. **Step 6: async-aware sweep.** Audit every caller of every helper one more time for `await` correctness, loading states, and any other race conditions analogous to the one we just fixed. The pattern to watch for: a `useEffect` that reads cross-cutting state (project headers, chip data, task rows) needs to depend on ALL the async sources that could populate that state, not just the one it primarily reacts to.
 
-5. **Step 6: async-aware sweep.** Audit every caller of every helper one more time for `await` correctness and loading states. Add loading spinners on cold mount.
+5. **Step 7: end-to-end testing.** Full flow as documented in the previous handoff.
 
-6. **Step 7: end-to-end testing.** Full flow: create projects, plan chips, send to system, edit tasks, archive a week, plan next year, archive year, undo draft.
+6. **Step 8: history table triggers + cleanup job.** See `VERSION_HISTORY_PLAN.md`.
 
-7. **Step 8: history table triggers + cleanup job.** See `VERSION_HISTORY_PLAN.md`.
+7. **Step 9: deploy + remove dev controls.**
 
-8. **Step 9: deploy + remove dev controls.**
+## Open items (not blocking, worth noting)
 
-## Code conventions established during this work
+* **Plan-side chip resize doesn't update `durationMinutes` on the chip object.** Worked around in System via row-based recompute. Properly resolved by the schema change in step 1 above. If you can't port helper #4 right away for some reason, fix the resize handler in Plan as a tactical patch.
+* **"of 1.18" Bug A from the previous handoff** should be closed now. The metrics path was always writing correct in-memory chip totals to Supabase. The "1.18 not 1.30" came from chip duration computation that's now fixed for project chips (the same fix in the metrics calc on Plan would also affect this). If Prentice sees a 1.18 again, hard-refresh and re-Send overwrites with the right value.
+* **Bug B from the previous handoff** ("task rows don't update consistently after Send") is closed. The `freshChips` closure fix the previous Claude wrote was correct. The remaining issues were the two we fixed in this session.
+* **Greyed-out chips on Plan during initial mount.** Same race-condition shape, lower priority because it self-resolves a second later. Worth a single useEffect dep fix similar to Fix 1 above when you next touch that area. Not blocking the migration.
 
-* Storage helpers return `Promise<T>` and the public API name/signature is preserved otherwise.
-* Autosaves are debounced at 500ms in the hook that owns the state (`useShortlistState` does this for staging; `TacticsPage` does it for metrics).
-* `useStorageSync` accepts an `initialValue` option and now handles both sync and async `loadData`.
-* The window event name for each helper still fires on save, with `__eventYear` on `CustomEvent.detail` (yearMetadataStorage is the exception — global by design).
-* `requireUserId()` and `findYearId(userId, yearNumber)` are the internal patterns each storage helper uses to scope work to the current authenticated user and a specific year.
+## Code conventions reminder
+
+* Storage helpers return `Promise<T>` and preserve their public API name and signature.
+* Autosaves debounce at 500ms in the hook that owns the state.
+* `useStorageSync` accepts an `initialValue` option and handles both sync and async `loadData`.
+* The window event name for each helper fires on save, with `__eventYear` on `CustomEvent.detail`.
+* `requireUserId()` and `findYearId(userId, yearNumber)` are the standard internal patterns. `findYearId` uses `.maybeSingle()` so it will THROW if two `years` rows ever share a `year_number` for the same user. The draft year flow already protects this invariant; don't break it during the port.
 
 ## Bug avoidance for the next session
 
-* When converting sync code to async, grep for every variable name that was previously a sync return value and double-check it's still defined inside the async callback. The `freshChips` bug was exactly this — `const freshChips = loadSync()` became `loadAsync().then(setX)` and the variable disappeared.
-* Don't trust your own converters round-trip until you've written a test or manually walked through both directions with concrete numbers. The `hmmToMinutes(1.3) === 90` round-trip was assumed correct twice before I noticed the format wasn't what I thought.
-* The Plan page emits times as numbers `1.3 = 1h30m` (decimal part is `minutes/100`), NOT as decimal hours. This is a project-specific convention and trips everyone up. `STORAGE_AUDIT.md` documents it but easy to miss.
-* When making React effects depend on async state, remember the empty initial render. An effect that runs on `[tacticsChips]` will fire once with `[]` and then again with the loaded value. Guards inside the effect must handle the empty case gracefully.
+* **When introducing an async load, check every effect that reads the resulting state for sibling-load dependencies.** This is exactly the race we just fixed. The chip-sync effect ran before staging completed, found nothing, and never re-ran. Treat every effect that walks the data structure as a candidate for adding more deps post-port.
+* **Don't trust persisted "computed" fields after a UI gesture.** If Plan's resize updates row IDs but not `durationMinutes`, the persisted `durationMinutes` is a lie. Either keep one source of truth in storage (row IDs) and derive everything else, or make the UI gesture update every persisted field that depends on it. The schema recommendation above picks the first option for chip durations.
+* **Round-trip your converters with concrete numbers.** The previous Claude noted this; we hit a variation of it again. `minutesToHmm` and `hmmToMinutes` round-trip cleanly now, but the chip duration path goes through a separate `estimateDurationFromRowIds` that you should also walk through with concrete row IDs (e.g., trailing-3 to trailing-10 = 8 rows = 240 min at 30min increments).
+* **The Plan page emits times as numbers `1.3 = 1h30m` (decimal part is `minutes/100`), NOT as decimal hours.** Still trips everyone up. `STORAGE_AUDIT.md` documents it.
 
 ## Files modified in this session
 
-For the next session to know what's "fresh":
+* `src/pages/ProjectTimePlannerV2.jsx`
+  * Added `projects` to chip-sync effect deps (race fix). Inline comment marks the change.
+  * Rewrote duration resolution in `loadEnrichedChips` to prefer row-based recompute over stored `chip.durationMinutes` for project chips. Inline comment marks the change.
+  * Temporary debug logs were added and then removed in the same session. None remain in the file.
 
-* `src/lib/yearMetadataStorage.js` — full rewrite
-* `src/lib/stagingStorage.js` — full rewrite
-* `src/lib/tacticsMetricsStorage.js` — full rewrite, hmm number-format bug fix
-* `src/contexts/YearContext.jsx` — async load, INITIAL_SESSION filter
-* `src/hooks/common/useStorageSync.js` — async-aware, `initialValue` option
-* `src/hooks/staging/useShortlistState.js` — async load, debounced autosave
-* `src/hooks/planner/useProjectsData.js` — async loadData + initialValue
-* `src/hooks/planner/useTacticsChips.js` — async loadData + initialValue
-* `src/pages/TacticsPage.jsx` — removed sync getYearInfo import, awaited send-to-system saves, debounced metrics autosave
-* `src/pages/ProjectTimePlannerV2.jsx` — async loadMetricsData and loadEnrichedChips, fixed freshChips closure, fixed on-mount catch-up effect
-* `src/pages/StagingPageV2.jsx` — async undoDraftYear and revertArchive handlers
-* `src/components/ArchiveYearModal.jsx` — async validateYearReadyForArchive call
-* `src/utils/planner/createDraftYear.js` — awaited all helper calls
-* `src/utils/planner/archiveYear.js` — awaited all helper calls, validateYearReadyForArchive made async
-* `src/utils/planner/undoDraftYear.js` — async, awaited yearMetadataStorage calls
-* `src/utils/planner/revertArchive.js` — async, removed redundant setCurrentYear
+No schema changes were made this session. No other helper files were touched.
 
-Plus the two SQL migration files in `supabase/migrations/` and `scripts/verify-rls.mjs`. Plus `STORAGE_AUDIT.md` (chip-shape gap patched) and `SUPABASE_MIGRATION_PLAN.md` (status updates and step boxes ticked through step 4).
+## Test plan to verify current state before starting helper #4
+
+1. Hard-refresh System. Project headers appear with their quotas after a brief moment.
+2. After project headers appear, subproject and task rows for each chip appear underneath.
+3. Resize a chip on Plan. Press Send to System. Navigate to System. The subproject header label, task row Estimate, and task row TimeValue all match the resized duration on Plan.
+4. The quota ("of X.XX") on the project header matches the sum of chip durations for that project.
+5. Repeat steps 3 to 4 with a second resize. Values should update both times.
+
+If all five pass, you're cleared to start helper #4.
