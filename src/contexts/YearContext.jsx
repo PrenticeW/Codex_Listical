@@ -59,8 +59,13 @@ export function YearProvider({ children }) {
   }, [load]);
 
   // Refetch when the authenticated user changes (sign in / sign out).
+  // Skip INITIAL_SESSION because the mount effect above already loads on
+  // first render; if we don't filter it out we end up with two concurrent
+  // loads, two concurrent initializeYearMetadata inserts, and a 409 on the
+  // unique (user_id, year_number) constraint.
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'INITIAL_SESSION') return;
       load();
     });
     return () => subscription?.unsubscribe?.();

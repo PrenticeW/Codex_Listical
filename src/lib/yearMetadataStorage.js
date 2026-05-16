@@ -267,6 +267,11 @@ export async function saveYearMetadata(metadata) {
  * Initialise year metadata for a first-time user. Creates Year 1 as the
  * active year and points the profile at it.
  *
+ * Idempotent: if Year 1 already exists for this user, the existing row is
+ * reused. This protects against React StrictMode double-effects, parallel
+ * mount + auth-state-change initial fires, and any other concurrent
+ * initialiser racing on the (user_id, year_number) unique constraint.
+ *
  * @param {string} startDate
  * @returns {Promise<YearMetadata|null>}
  */
@@ -274,21 +279,52 @@ export async function initializeYearMetadata(startDate) {
   try {
     const userId = await requireUserId();
 
-    const { data: insertedYear, error: insertErr } = await supabase
+    // Look first; the row may already exist from a concurrent init.
+    const { data: existing, error: existingErr } = await supabase
       .from('years')
-      .insert({
-        user_id: userId,
-        year_number: 1,
-        status: 'active',
-        start_date: startDate,
-      })
-      .select()
-      .single();
-    if (insertErr) throw insertErr;
+      .select('*')
+      .eq('user_id', userId)
+      .eq('year_number', 1)
+      .maybeSingle();
+    if (existingErr) throw existingErr;
 
+    let yearRow = existing;
+    if (!yearRow) {
+      const { data: inserted, error: insertErr } = await supabase
+        .from('years')
+        .insert({
+          user_id: userId,
+          year_number: 1,
+          status: 'active',
+          start_date: startDate,
+        })
+        .select()
+        .single();
+
+      if (insertErr) {
+        // 23505 = Postgres unique_violation. A concurrent init won the
+        // race; recover by re-reading the row it inserted.
+        if (insertErr.code === '23505') {
+          const { data: refetched, error: refetchErr } = await supabase
+            .from('years')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('year_number', 1)
+            .single();
+          if (refetchErr) throw refetchErr;
+          yearRow = refetched;
+        } else {
+          throw insertErr;
+        }
+      } else {
+        yearRow = inserted;
+      }
+    }
+
+    // Idempotent: set the profile pointer regardless of whether we inserted.
     const { error: profileErr } = await supabase
       .from('profiles')
-      .update({ current_year_id: insertedYear.id })
+      .update({ current_year_id: yearRow.id })
       .eq('id', userId);
     if (profileErr) throw profileErr;
 
