@@ -1264,7 +1264,14 @@ export default function ProjectTimePlannerV2() {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [tacticsChips, totalDays, isCurrentYearDraft, sentToSystem]);
+  // `projects` is included so this effect re-fires when staging finishes
+  // loading after the Supabase port. Without it, chips can be enriched and
+  // this effect can run before project headers have been inserted by the
+  // sibling effect (line 846), causing every chip to silently fail the
+  // `findIndex(row._rowType === 'projectHeader')` lookup and producing
+  // "no subproject/task rows in System" even though chip data is intact.
+  // Debugging session 2026-05-16. Remove only with a replacement signal.
+  }, [tacticsChips, totalDays, isCurrentYearDraft, sentToSystem, projects]);
 
   // Track the last send-to-system timestamp we've already acted on
   const lastResetTsRef = useRef(null);
