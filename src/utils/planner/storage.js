@@ -711,7 +711,7 @@ function plannerRowPayloadToDb({ row, userId, yearId, displayOrder }) {
     project_id: null,
     parent_row_id: null,
     row_kind: 'task',
-    checkbox: row.checkbox === true,
+    checkbox: row.checkbox === true || row.checkbox === 'true' || row.checkbox === 1 || row.checkbox === 'on',
     subproject_label: typeof row.subproject === 'string' ? row.subproject : '',
     status: typeof row.status === 'string' ? row.status : '-',
     task: typeof row.task === 'string' ? row.task : '',

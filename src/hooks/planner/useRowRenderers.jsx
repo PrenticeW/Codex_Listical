@@ -603,9 +603,13 @@ export default function useRowRenderers({
               type="checkbox"
               className={checkboxInputClass}
               tabIndex={0}
+              checked={row.checkbox === true || row.checkbox === 'true'}
               onClick={(e) => e.stopPropagation()}
               onFocus={() => handleCellActivate(rowId, 'check')}
-              onChange={ensureInteractionMarked}
+              onChange={(event) => {
+                ensureInteractionMarked();
+                commitRowUpdate({ checkbox: event.target.checked }, { markInteraction: true });
+              }}
             />
           </div>
         </td>
