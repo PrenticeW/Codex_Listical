@@ -309,20 +309,18 @@ export default function ProjectTimePlannerV2() {
     setTotalDays,
     visibleDayColumns,
     setVisibleDayColumns,
+    isLoaded: storageLoaded,
   } = usePlannerStorage({ yearNumber: currentYear });
 
   // Page-specific size setting
   const { sizeScale } = usePageSize('system');
 
-  // Initialize data from storage or create new
-  const [data, setDataRaw] = useState(() => {
-    // Try to load from storage first
-    if (taskRows && taskRows.length > 0) {
-      return taskRows;
-    }
-    // Otherwise create initial data with just 20 task rows (users can add more as needed)
-    return createInitialData(20, totalDays, startDate);
-  });
+  // Initialize data with a blank skeleton. The real data hydrates from
+  // taskRows once usePlannerStorage finishes its async load (see effect
+  // below). useState's lazy initialiser only fires once on mount, so trying
+  // to read taskRows here would give the empty default and let the debounce
+  // wipe the loaded data — that's the bug fix from 2026-05-23.
+  const [data, setDataRaw] = useState(() => createInitialData(20, totalDays, startDate));
 
   // Keep a ref to the latest committed data value, updated synchronously alongside setData.
   // This lets the unmount flush always write the newest data, even if React hasn't re-rendered.
@@ -337,9 +335,24 @@ export default function ProjectTimePlannerV2() {
     });
   }, []);
 
-  // Save data to storage when it changes (debounced).
-  // On unmount, flush immediately so navigation away doesn't lose pending edits.
+  // Hydrate `data` from taskRows once the async storage load completes.
+  // dataHydrated stays false until this fires so the autosave + unmount
+  // flush below don't wipe loaded data with the initial blank skeleton.
+  const dataHydrated = useRef(false);
   useEffect(() => {
+    if (!storageLoaded) return;
+    if (dataHydrated.current) return;
+    dataHydrated.current = true;
+    if (Array.isArray(taskRows) && taskRows.length > 0) {
+      setData(taskRows);
+    }
+  }, [storageLoaded, taskRows, setData]);
+
+  // Save data to storage when it changes (debounced).
+  // Only after dataHydrated, so the initial blank skeleton doesn't get
+  // pushed back to Supabase and wipe the loaded rows.
+  useEffect(() => {
+    if (!dataHydrated.current) return;
     const timeoutId = setTimeout(() => {
       setTaskRows(data);
     }, 500); // Debounce saves by 500ms to avoid too many writes
@@ -349,9 +362,12 @@ export default function ProjectTimePlannerV2() {
     };
   }, [data, setTaskRows]);
 
-  // Flush unsaved data to storage on unmount (bypasses debounce so navigation away doesn't lose edits)
+  // Flush unsaved data to storage on unmount (bypasses debounce so navigation away doesn't lose edits).
+  // Guarded by dataHydrated so React strict-mode's dev double-mount can't
+  // wipe loaded data with the initial blank skeleton on first mount.
   useEffect(() => {
     return () => {
+      if (!dataHydrated.current) return;
       // saveTaskRows is now async (Supabase). Fire-and-forget on unmount —
       // the user is navigating away so there's no caller to await.
       saveTaskRows(latestDataRef.current, DEFAULT_PROJECT_ID, currentYear).catch((err) => {

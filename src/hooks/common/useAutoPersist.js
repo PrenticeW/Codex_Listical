@@ -37,10 +37,15 @@ export default function useAutoPersist(value, saveFunction, options = {}) {
     yearNumber,
     skipInitialSave = true,
     enabled = true,
-    shouldSave = () => true,
+    shouldSave,
   } = options;
 
   const isInitialMount = useRef(skipInitialSave);
+  // shouldSave is held in a ref so callers can safely pass an inline
+  // predicate without making the effect re-fire every render (which would
+  // cause a save on every render once the gate is open).
+  const shouldSaveRef = useRef(shouldSave);
+  shouldSaveRef.current = shouldSave;
 
   useEffect(() => {
     if (!enabled) return;
@@ -48,9 +53,8 @@ export default function useAutoPersist(value, saveFunction, options = {}) {
       isInitialMount.current = false;
       return;
     }
-
-    if (shouldSave(value)) {
-      saveFunction(value, projectId, yearNumber);
-    }
-  }, [value, saveFunction, projectId, yearNumber, shouldSave, enabled]);
+    const predicate = shouldSaveRef.current;
+    if (predicate && !predicate(value)) return;
+    saveFunction(value, projectId, yearNumber);
+  }, [value, saveFunction, projectId, yearNumber, enabled]);
 }
