@@ -520,16 +520,21 @@ export default function ProjectTimePlannerV2() {
     () => peekEnrichedChips(currentYear) || [],
   );
 
-  // Async load of metrics + enriched chips on mount and year change. Both
-  // helpers became async during the Supabase port.
+  // Async load of metrics + enriched chips. Skipped on cache hit so the
+  // page doesn't re-render with freshly-allocated wrapper objects after
+  // the initial paint (that was the "page builds in front of me" flash).
   useEffect(() => {
     let cancelled = false;
-    loadMetricsData(currentYear).then((data) => {
-      if (!cancelled) setMetricsData(data);
-    });
-    loadEnrichedChips(currentYear).then((chips) => {
-      if (!cancelled) setTacticsChips(chips);
-    });
+    if (!peekMetricsData(currentYear)) {
+      loadMetricsData(currentYear).then((data) => {
+        if (!cancelled) setMetricsData(data);
+      });
+    }
+    if (!peekEnrichedChips(currentYear)) {
+      loadEnrichedChips(currentYear).then((chips) => {
+        if (!cancelled) setTacticsChips(chips);
+      });
+    }
     return () => { cancelled = true; };
   }, [currentYear]);
 

@@ -161,13 +161,14 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
   // miss after the first network response.
   const [isLoaded, setIsLoaded] = useState(cachedHadData);
 
-  // The async load fires on mount and every year change. On cache hit it
-  // effectively re-reads from cache and is near-instant; on miss it does
-  // the actual round-trip. Either way, results are set into state — if
-  // they match what's already there, React bails out and there's no
-  // visible re-render.
+  // The async load only fires on a cold cache miss. On a cache hit we
+  // trust the in-memory + localStorage cache (saves keep it in sync), so
+  // the load is skipped entirely — no unnecessary setStates, no risk of
+  // a slow round-trip clobbering an in-flight user edit.
   const loadGen = useRef(0);
   useEffect(() => {
+    if (cachedHadData) return undefined;
+
     const gen = ++loadGen.current;
     let cancelled = false;
 

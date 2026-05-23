@@ -34,6 +34,7 @@ import {
   saveSentChipsSnapshot,
   peekTacticsCache,
 } from '../lib/tacticsStorage';
+import { peekStagingCache } from '../lib/stagingStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
 import usePageSize from '../hooks/usePageSize';
 import ColourPicker from '../components/ColourPicker';
@@ -351,9 +352,11 @@ export default function TacticsPage() {
   // each useState falls back to the same default DEFAULT_YEAR_SETTINGS
   // uses, and the async load below swaps them in once it resolves.
   const tacticsCacheInit = peekTacticsCache(currentYear);
+  const stagingCacheInit = peekStagingCache(currentYear);
   const cachedYearSettings = tacticsCacheInit.yearSettings;
   const cachedLiveChips = tacticsCacheInit.liveChips;
   const cachedColumnWidths = tacticsCacheInit.columnWidths;
+  const cachedShortlist = Array.isArray(stagingCacheInit?.shortlist) ? stagingCacheInit.shortlist : null;
 
   const [startDay, setStartDay] = useState(cachedYearSettings?.startDay ?? 'Sunday');
   const [incrementMinutes, setIncrementMinutes] = useState(cachedYearSettings?.incrementMinutes ?? 60);
@@ -499,7 +502,7 @@ export default function TacticsPage() {
   const [dragPreview, setDragPreview] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [columnRects, setColumnRects] = useState([]);
-  const [stagingProjects, setStagingProjects] = useState([]);
+  const [stagingProjects, setStagingProjects] = useState(() => cachedShortlist ?? []);
   const highlightedProjectsCount = useMemo(
     () =>
       stagingProjects.filter((project) => {
@@ -854,6 +857,28 @@ export default function TacticsPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     let cancelled = false;
+
+    // Skip the async load entirely on cache hit. The useState initialisers
+    // already used peekTacticsCache + peekStagingCache to populate state
+    // with the saved values; running the load again would set new object
+    // references and trigger redundant re-renders (the "page builds in
+    // front of me" flash). Saves keep the cache in sync, so the cache is
+    // authoritative for the in-session experience.
+    const cachedTactics = peekTacticsCache(currentYear);
+    const cachedStaging = peekStagingCache(currentYear);
+    const hasCachedTacticsState =
+      cachedTactics.yearSettings != null ||
+      cachedTactics.liveChips != null ||
+      cachedTactics.columnWidths != null;
+    if (hasCachedTacticsState && cachedStaging) {
+      // Still open the autosave gates so user edits persist; the load
+      // would have done this at the end of its async block.
+      chipsLoadedForYear.current = currentYear;
+      settingsLoadedForYear.current = currentYear;
+      columnWidthsLoadedForYear.current = currentYear;
+      hasLoadedInitialState.current = true;
+      return () => {};
+    }
 
     // Reset gates so the autosave effects don't write defaults to the new
     // year's rows. Each save effect re-arms its own ref on its first
