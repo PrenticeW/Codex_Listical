@@ -1,20 +1,20 @@
 # Supabase Migration Handoff
 
-**Author:** Claude (session ending 2026-05-16, evening, after helper #4 port and async-aware callsite sweep across all six callers)
-**For:** Whoever picks this up next (likely a fresh Claude session for helper #5)
+**Author:** Claude (session ending 2026-05-23, after helper #5 port). Lint and `vite build` pass cleanly; user verification of the new behaviour still pending.
+**For:** Whoever picks this up next (likely a fresh Claude session for step 6 cache layer or step 7 end-to-end testing)
 **Read first:** `SUPABASE_MIGRATION_PLAN.md`, `STORAGE_AUDIT.md`, `CLAUDE.md`. Git history holds prior handoff iterations if you want the long view.
 
 ## Where we are
 
-Steps 1 through 4 of the migration plan are still complete. Step 5 (storage helper rewrites) advanced one helper this session: **helper #4 (tacticsStorage) is now fully ported and verified working end-to-end**. Helper #5 (plannerStorage) is the only remaining helper.
+Steps 1 through 4 of the migration plan are still complete. **Step 5 (storage helper rewrites) is now complete.** All five storage helpers flow through Supabase.
 
 | Helper | Status |
 |---|---|
 | `yearMetadataStorage` | Ported, verified working |
 | `stagingStorage` | Ported, verified working |
 | `tacticsMetricsStorage` | Ported, verified working |
-| `tacticsStorage` | **Ported and verified working as of 2026-05-16 evening.** All four sub-domains (chips state, year settings, column widths, send-to-system timestamp) flow through Supabase. The 5-step test plan from the previous handoff passes. |
-| `plannerStorage` | Not started, still localStorage. **Read the helper #5 design notes below before porting.** |
+| `tacticsStorage` | Ported, verified working as of 2026-05-16. |
+| `plannerStorage` | **Ported as of 2026-05-23.** Lint and build pass. End-to-end user verification still pending — see "Test plan" at the bottom. |
 
 ## What was done this session
 
@@ -76,85 +76,107 @@ Fix: explicitly set all three loaded-gate refs to `currentYear` at the end of th
 * Pre-port chips saved in localStorage did NOT migrate to Supabase. Prentice's existing chips appeared "wiped" on first Plan-page load post-port; new chips placed now save and persist correctly. He's fine with that fresh-start loss.
 * Build state at session end: latest changes are in the working tree but NOT yet deployed to Vercel. Push when ready.
 
+## What was done in the 2026-05-23 session (helper #5 port)
+
+### 1. `src/utils/planner/storage.js` fully rewritten
+
+All 12 read/save pairs (plus `getProjectKey` legacy helper) now async and Supabase-backed. The legacy `plannerStorage.js` re-exports were dropped (no consumers).
+
+Mapping:
+
+| Function | Supabase home |
+|---|---|
+| `readColumnSizing` / `saveColumnSizing` | `planner_settings.column_sizing` |
+| `readSizeScale` / `saveSizeScale` | `planner_settings.size_scale` |
+| `readStartDate` / `saveStartDate` | `years.start_date` (NOT planner_settings) |
+| `readShowRecurring` / `saveShowRecurring` | `planner_settings.show_recurring` |
+| `readShowSubprojects` / `saveShowSubprojects` | `planner_settings.show_subprojects` |
+| `readShowMaxMinRows` / `saveShowMaxMinRows` | `planner_settings.show_max_min_rows` |
+| `readSortStatuses` / `saveSortStatuses` | `planner_settings.sort_statuses` (returns Set) |
+| `readSortPlannerStatuses` / `saveSortPlannerStatuses` | `planner_settings.sort_planner_statuses` (returns Set) |
+| `readTotalDays` / `saveTotalDays` | `years.total_days` (NOT planner_settings) |
+| `readVisibleDayColumns` / `saveVisibleDayColumns` | `planner_settings.visible_day_columns` |
+| `readCollapsedGroups` / `saveCollapsedGroups` | `planner_settings.collapsed_groups` (returns Set) |
+| `readTaskRows` / `saveTaskRows` | `planner_rows` (live tasks) + `archived_weeks` (archive snapshots), plus calendar header rows reconstructed at read time |
+
+### 2. Calendar header reconstruction at read time
+
+`readTaskRows` calls `createInitialData(0, totalDays, startDate)` to build the seven calendar header rows (month, week, day, dayofweek, daily-min, daily-max, filter), then overlays `daily_min_minutes` / `daily_max_minutes` from `tactics_metrics` onto the min/max rows by matching each day index's weekday (computed from `startDate + i days`) to the bound for that weekday. Calendar headers are stripped from the array before write.
+
+### 3. Archive week split
+
+`saveTaskRows` filters out rows where `archiveWeekLabel` is set, `id` starts with `archive-week-`, or status starts with `archive`. Those are routed to `archived_weeks` (one row per archive press, full row stashed in the `snapshot` JSONB column). On read they're appended after the live task rows in `week_number` order. This is a slight behavioural change from the previous inline-interleaved order; if positional ordering ever matters for rendering it can be revisited.
+
+### 4. JSONB wrapping of extra row fields (watch-out)
+
+Real task rows carry many extra fields the React rendering relies on (`_rowType`, `parentGroupId`, `groupId`, `projectNickname`, etc.). The schema's intended `day_entries` shape is just per-day minute integers, but if I forced first-class columns for everything the schema would need substantial changes. So `plannerRowPayloadToDb` packs day-* cells into `day_entries.__cells`, the project nickname into `day_entries.__project`, and everything else into `day_entries.__extra`. `plannerRowDbToPayload` unpacks the reverse. The schema's `time_value_minutes` integer column rounds `(timeValue * 60)`, which is fine for hour-resolution values but loses sub-minute precision (not currently used). The next session may want to normalise this — promote frequently-rendered fields like `_rowType` and `parentGroupId` to first-class columns and constrain `day_entries` to its documented shape. Not blocking.
+
+### 5. useAutoPersist gained an `enabled` flag
+
+To avoid the race where the user interacts before the async load resolves and gets their change overwritten, `useAutoPersist` now accepts `enabled: boolean` (default true). `usePlannerStorage` keeps an `isLoaded` boolean that flips true once all eleven reads complete in parallel, and passes it as `enabled` to all eleven `useAutoPersist` calls. Single gate covers everything.
+
+### 6. Page-level callsite conversions
+
+* `TacticsPage.jsx` — one `saveStartDate` call inside `handleSendToSystem` got an `await`.
+* `ProjectTimePlannerV2.jsx` — unmount-flush `saveTaskRows` became fire-and-forget with `.catch`; `handleImportTasks` became `async` with `try/catch`.
+* `StagingPageV2.jsx` — the "remove from plan" command's `execute` block wraps its task-row read/filter/save in an async IIFE (matches the chip cleanup pattern just below it); the `undo` block uses `.catch()` fire-and-forget on the restore save.
+* `createDraftYear.js` — all 7 reads parallelised in a `Promise.all`; all 8 writes parallelised in a second `Promise.all`; remaining 3 writes (`saveVisibleDayColumns`, `saveTaskRows([], ...)` and the start-date write inside the parallel block) all awaited.
+* `useCollapsibleGroups.ts` — converted from sync useState lazy init to default-plus-async-load-effect with a `loadedForYear` ref guarding the save effect.
+
+### 7. Files changed
+
+* `src/utils/planner/storage.js` — full rewrite, ~720 lines.
+* `src/hooks/common/useAutoPersist.js` — added `enabled` option and docstring update.
+* `src/hooks/planner/usePlannerStorage.js` — full rewrite (defaults + consolidated async load + `isLoaded` gate).
+* `src/hooks/planner/useCollapsibleGroups.ts` — async load + gate ref.
+* `src/pages/TacticsPage.jsx` — 1 await added.
+* `src/pages/ProjectTimePlannerV2.jsx` — 2 callsites converted.
+* `src/pages/StagingPageV2.jsx` — 2 callsites converted.
+* `src/utils/planner/createDraftYear.js` — all reads/writes awaited and parallelised.
+
+`SESSION_HANDOVER_2026-04-24.md` was deleted as superseded.
+
 ## What to do next
 
-### 1. Port helper #5: `plannerStorage`
+### 0. End-to-end verification of helper #5 (DO THIS FIRST)
 
-Largest single helper, with 13 read/save function pairs plus the archive-week table. Spread across `src/utils/planner/storage.js` and `src/constants/plannerStorageKeys.js`. Public API surface (all should keep their names and signatures, just become async):
+The build passes but no user has actually clicked through the System page on the new code. Recommended manual smoke test:
 
-```
-readTaskRows / saveTaskRows
-readColumnSizing / saveColumnSizing
-readSizeScale / saveSizeScale
-readStartDate / saveStartDate
-readShowRecurring / saveShowRecurring
-readShowSubprojects / saveShowSubprojects
-readShowMaxMinRows / saveShowMaxMinRows
-readSortStatuses / saveSortStatuses
-readSortPlannerStatuses / saveSortPlannerStatuses
-readTotalDays / saveTotalDays
-readVisibleDayColumns / saveVisibleDayColumns
-readCollapsedGroups / saveCollapsedGroups
-```
+1. Hard-refresh System. Calendar headers appear with month/week/day labels.
+2. Daily min/max rows fill in (these come from tactics_metrics).
+3. Add a task row, set its estimate, type into a day cell. Navigate away. Come back. Values persist.
+4. Toggle Show Recurring / Show Subprojects. Refresh. Toggle survives.
+5. Resize a column. Refresh. Width survives.
+6. Collapse a project group. Refresh. State survives.
+7. Archive a week. The archived rows still appear in the table. Refresh. They survive.
+8. Plan Next Year. Draft year settings copy across. Goal page is reset per the existing rules.
+9. Sign out, sign in as a second account. No crosstalk.
 
-Plus archive snapshots, which today are stored as `archive-week-*` rows inside `task-rows`. Schema-wise these split into a dedicated `archived_weeks` table (already exists in `20260516000001_planning_schema.sql`).
-
-**Schema is already in place.** `planner_rows`, `archived_weeks`, and `planner_settings` are all created with RLS. Read sections 5, 6, and 11 of `supabase/migrations/20260516000001_planning_schema.sql` to refresh on shape. The only thing I touched on `planner_settings` in helper #4 was `send_to_system_at`; the rest is helper #5's domain. No new schema migration should be needed unless you find a column missing during port.
-
-**Watch out for:**
-
-* The seven calendar header rows that currently live as the first seven entries of `task-rows` are not persisted in the new schema. They're derived at render time from `years.start_date`, `years.total_days`, and `tactics_metrics.daily_bounds`. The current `createInitialData` produces them. The Supabase port must compute and prepend them on read in the helper or in the consuming hook.
-* `archive-week-*` rows mixed into `task-rows` today must split out to `archived_weeks` on save.
-* Boolean settings (`showRecurring`, `showSubprojects`, `showMaxMinRows`) are stored as `'true'`/`'false'` strings in localStorage today. The schema's boolean columns will coerce naturally; just make sure the helper converts at the boundary.
-* `task.project` and `task.subproject` are nickname-based join keys today. STORAGE_AUDIT.md flags this as fragile. The schema uses `project_id` UUID. Port will need a translation layer when reading legacy nickname-only chip references.
-* `tactics-column-widths-{N}` was the only key bypassing the storage module pattern. After helper #4 it's been folded into `tactics_year_settings.column_widths`. Helper #5's `column-sizing` (different key, different module) is still its own thing; it maps to `planner_settings.column_sizing`.
-
-Same pattern as helpers 1-4: async public API preserving names and signatures, debounce autosave at the owning hook, `__eventYear` on the one event this module fires (`planner-start-date-update`), `requireUserId()` + `findYearId()` internal helpers.
-
-### 2. Apply the gate-pattern lesson from this session
-
-When you replace a sync useState lazy init with a default + async load effect, also add a "skip first save" gate on the corresponding autosave effect, AND explicitly open the gate at the end of the async load. Without the explicit open, an autosave gated by "skip first save" can stay armed forever if the loaded value happens to equal the default (React's setState bail-out short-circuits the re-render, the save effect doesn't fire, the gate never clears, and the first real user change is silently swallowed).
-
-Pattern, abbreviated:
-
-```js
-const xLoadedForYear = useRef(null);
-
-useEffect(() => {
-  if (xLoadedForYear.current == null) {
-    xLoadedForYear.current = currentYear;
-    return;
-  }
-  saveX(x, currentYear);
-}, [x, currentYear]);
-
-// inside the load effect's async block, after all setX calls:
-xLoadedForYear.current = currentYear;
-```
-
-This trades one redundant first-load write for guaranteed correctness on subsequent user changes.
-
-### 3. Step 6: async-aware sweep
+### 1. Step 6: async-aware sweep
 
 The migration plan's step 6 now has a new item flagged as a real regression Prentice hit: **in-memory cache layer in each ported helper** so navigating between Goal, Plan, and System pages renders saved data instantly rather than blanking out for ~300ms-1s on every navigation while the Supabase round-trip completes. Module-level `Map<yearNumber, payload>` per helper; load returns cached value if present, save updates the cache. Pre-port, localStorage was synchronous and gave this behavior for free; post-port, the navigation latency is noticeable enough that Prentice asked about it directly. Apply to stagingStorage, tacticsMetricsStorage, tacticsStorage, and (once it ports) plannerStorage. yearMetadataStorage already has equivalent caching via YearContext.
 
 Decision still open at implementation time: simple "use cache if present" vs stale-while-revalidate. Either is fine; the latter adds a background refresh on every cached read at the cost of one Supabase round-trip per navigation (still non-blocking).
 
-### 4. Step 7: end-to-end testing
+### 2. Step 7: end-to-end testing
 
 Full flow: create project on Goal → schedule chips on Plan → Send to System → edit task rows on System → archive a week → Plan Next Year → work on draft → archive year N. Sign out + back in to confirm data restores. Sign in as a second user to confirm no crosstalk.
 
-### 5. Step 8: history table triggers + cleanup job
+### 3. Step 8: history table triggers + cleanup job
 
 See `VERSION_HISTORY_PLAN.md`. Schema is in place from helper #4's migration.
 
-### 6. Step 9: deploy + remove dev controls
+### 4. Step 9: deploy + remove dev controls
 
 Push to Vercel. Monitor. Remove the dev-only Undo Draft button (B4 in CODE_REVIEW). Delete dead code listed in CLAUDE.md.
 
+### 5. Revisit JSONB wrapping in `planner_rows.day_entries`
+
+Cosmetic, not blocking. The current helper packs extra row fields (`_rowType`, `parentGroupId`, `groupId`, `projectNickname`, etc.) into `day_entries.__cells` / `__project` / `__extra` because the rendering layer relies on them. If you promote the frequently-referenced ones to first-class columns and constrain `day_entries` to its documented shape (`{ "0": minutes, "1": minutes, ... }`) the schema and code become cleaner. Worth doing alongside step 8 when planning_history triggers go in.
+
 ## Open items (not blocking, worth noting)
 
-* **Pre-port chip data didn't migrate.** New users start fresh in Supabase as designed. Prentice's existing local chips are still in localStorage but never read. They're effectively lost. He's OK with that. If you want to write a one-time client-side migration that reads localStorage and writes to Supabase before clearing, that's a small script; not required.
+* **Pre-port chip data didn't migrate, and now neither do pre-port task rows.** New users start fresh in Supabase as designed. Prentice's existing local task rows, like his local chips, are still in localStorage but never read. He'll see a blank System page on first load for any year that had its data in localStorage. Same trade-off as helper #4 — fine for pre-launch. If you want a one-time client-side migration that reads localStorage and writes to Supabase before clearing, that's a small script; not required.
 * **Navigation snappiness regression.** Documented in step 6 above. Logged in `SUPABASE_MIGRATION_PLAN.md`. Don't lose it.
 * **Cross-tab and cross-device staleness.** Mentioned in the cache discussion. Single-user-single-tab is fine for now. Add BroadcastChannel or Supabase realtime later if it becomes a real problem.
 * **Sign-out/sign-in without page reload.** Would leak previous user's React state and (once cache lands) cache data. Standard practice is a hard reload on auth state change. Out of scope for the migration but worth fixing during cleanup.
@@ -171,33 +193,17 @@ Push to Vercel. Monitor. Remove the dev-only Undo Draft button (B4 in CODE_REVIE
 * When introducing a save effect for new state, add a "skip first save" gate ref AND explicitly clear it at the end of the async load (lesson from this session, section 2 above).
 * Read-modify-write inside React command-pattern `execute` blocks: wrap the read+write in an async IIFE so the sync command interface stays intact; `.catch()` for fire-and-forget error logging.
 
-## Files modified in this session
+## Files modified in this session (2026-05-23, helper #5 port)
 
-* `supabase/migrations/20260516000003_drop_chip_duration_minutes.sql` — new file, applied via dashboard.
-* `src/lib/tacticsStorage.js` — full rewrite (Supabase internals, async API preserved).
-* `src/utils/planner/createDraftYear.js` — added 8 awaits.
-* `src/utils/planner/undoDraftYear.js` — added 1 await, updated comment.
-* `src/hooks/planner/useTacticsChips.js` — added 2 awaits.
-* `src/pages/StagingPageV2.jsx` — 3 callsites converted (async IIFE pattern in command-pattern blocks).
-* `src/pages/TacticsPage.jsx` — substantial: 8 useState defaults replace the useMemo settings load, 3 chip useStates replaced with defaults, new consolidated async load effect, new gate refs, explicit gate-opening at end of load, handleSendToSystem extended.
-* `src/pages/ProjectTimePlannerV2.jsx` — 4 callsites converted, sentToSystem moved from sync lazy init to async load effect with cancelled-flag cleanup, loadEnrichedChips parallel-loaded.
-* `SUPABASE_MIGRATION_PLAN.md` — step 6 gained a new bullet for the cache layer (documented as a real regression).
+* `src/utils/planner/storage.js` — full rewrite; ~720 lines; Supabase internals, async API preserving the same public function names and signatures.
+* `src/hooks/common/useAutoPersist.js` — added `enabled: boolean` option (gates saves until the async load resolves).
+* `src/hooks/planner/usePlannerStorage.js` — full rewrite; defaults plus consolidated async load via `Promise.all`; single `isLoaded` boolean gates all eleven autosaves.
+* `src/hooks/planner/useCollapsibleGroups.ts` — async load with a `loadedForYear` ref gating the save effect.
+* `src/pages/TacticsPage.jsx` — added one `await` to `saveStartDate` inside `handleSendToSystem`.
+* `src/pages/ProjectTimePlannerV2.jsx` — unmount-flush `saveTaskRows` became `.catch()` fire-and-forget; `handleImportTasks` made `async` with `try/catch`.
+* `src/pages/StagingPageV2.jsx` — task-row cleanup in command `execute` block wrapped in an async IIFE; `.catch()` fire-and-forget on the `undo` restore.
+* `src/utils/planner/createDraftYear.js` — all reads and writes awaited; parallelised via two `Promise.all` blocks.
 * `MIGRATION_HANDOFF.md` — this file.
+* `SESSION_HANDOVER_2026-04-24.md` — deleted as superseded.
 
-No new debug logs were added. None remain in any of the above files.
-
-## Test plan to verify current state before starting helper #5
-
-Same 5-step plan from the previous handoff. All five pass as of session end:
-
-1. Hard-refresh System. Project headers appear with their quotas after a brief moment.
-2. After project headers appear, subproject and task rows for each chip appear underneath.
-3. Resize a chip on Plan. Press Send to System. Navigate to System. The subproject header label, task row Estimate, and task row TimeValue all match the resized duration on Plan.
-4. The quota ("of X.XX") on the project header matches the sum of chip durations for that project.
-5. Repeat steps 3 to 4 with a second resize. Values update both times.
-
-If all five pass, you're cleared to start helper #5.
-
-A bonus test for helper #4's specific surface:
-
-6. Resize a day-of-week column on Plan. Refresh. Width survives. (This was the regression bug we caught and fixed in this session; the gate-pattern lesson above is the takeaway.)
+No new debug logs were added. Lint and `vite build` both pass cleanly on the changed files.

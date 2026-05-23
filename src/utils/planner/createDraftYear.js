@@ -205,16 +205,27 @@ export async function createDraftYearFromActive(activeYearNumber) {
     const draftYearNumber = activeYearNumber + 1;
 
     // --- Read active year data ---
-    const startDate = readStartDate(DEFAULT_PROJECT_ID, activeYearNumber);
+    // All planner reads are now async (helper #5 Supabase port).
+    const startDate = await readStartDate(DEFAULT_PROJECT_ID, activeYearNumber);
     const nextStartDate = calculateNextCycleStartDate(startDate);
 
-    const columnSizing = readColumnSizing(DEFAULT_PROJECT_ID, activeYearNumber);
-    const sizeScale = readSizeScale(DEFAULT_PROJECT_ID, activeYearNumber);
-    const showRecurring = readShowRecurring(DEFAULT_PROJECT_ID, activeYearNumber);
-    const showSubprojects = readShowSubprojects(DEFAULT_PROJECT_ID, activeYearNumber);
-    const showMaxMinRows = readShowMaxMinRows(DEFAULT_PROJECT_ID, activeYearNumber);
-    const sortStatuses = readSortStatuses(DEFAULT_PROJECT_ID, activeYearNumber);
-    const totalDays = readTotalDays(DEFAULT_PROJECT_ID, activeYearNumber);
+    const [
+      columnSizing,
+      sizeScale,
+      showRecurring,
+      showSubprojects,
+      showMaxMinRows,
+      sortStatuses,
+      totalDays,
+    ] = await Promise.all([
+      readColumnSizing(DEFAULT_PROJECT_ID, activeYearNumber),
+      readSizeScale(DEFAULT_PROJECT_ID, activeYearNumber),
+      readShowRecurring(DEFAULT_PROJECT_ID, activeYearNumber),
+      readShowSubprojects(DEFAULT_PROJECT_ID, activeYearNumber),
+      readShowMaxMinRows(DEFAULT_PROJECT_ID, activeYearNumber),
+      readSortStatuses(DEFAULT_PROJECT_ID, activeYearNumber),
+      readTotalDays(DEFAULT_PROJECT_ID, activeYearNumber),
+    ]);
 
     const stagingState = await loadStagingState(activeYearNumber);
     const tacticsMetrics = await loadTacticsMetrics(activeYearNumber);
@@ -226,24 +237,27 @@ export async function createDraftYearFromActive(activeYearNumber) {
     await createDraftYearMetadata(draftYearNumber, nextStartDate);
 
     // --- Copy planner UI settings ---
-    saveColumnSizing(columnSizing, DEFAULT_PROJECT_ID, draftYearNumber);
-    saveSizeScale(sizeScale, DEFAULT_PROJECT_ID, draftYearNumber);
-    saveShowRecurring(showRecurring, DEFAULT_PROJECT_ID, draftYearNumber);
-    saveShowSubprojects(showSubprojects, DEFAULT_PROJECT_ID, draftYearNumber);
-    saveShowMaxMinRows(showMaxMinRows, DEFAULT_PROJECT_ID, draftYearNumber);
-    saveSortStatuses(sortStatuses, DEFAULT_PROJECT_ID, draftYearNumber);
-    saveTotalDays(totalDays, DEFAULT_PROJECT_ID, draftYearNumber);
-    saveStartDate(nextStartDate, DEFAULT_PROJECT_ID, draftYearNumber);
+    // All planner writes are now async (helper #5 Supabase port).
+    await Promise.all([
+      saveColumnSizing(columnSizing, DEFAULT_PROJECT_ID, draftYearNumber),
+      saveSizeScale(sizeScale, DEFAULT_PROJECT_ID, draftYearNumber),
+      saveShowRecurring(showRecurring, DEFAULT_PROJECT_ID, draftYearNumber),
+      saveShowSubprojects(showSubprojects, DEFAULT_PROJECT_ID, draftYearNumber),
+      saveShowMaxMinRows(showMaxMinRows, DEFAULT_PROJECT_ID, draftYearNumber),
+      saveSortStatuses(sortStatuses, DEFAULT_PROJECT_ID, draftYearNumber),
+      saveTotalDays(totalDays, DEFAULT_PROJECT_ID, draftYearNumber),
+      saveStartDate(nextStartDate, DEFAULT_PROJECT_ID, draftYearNumber),
+    ]);
 
     // All day columns visible in new year
     const freshVisibleDayColumns = {};
     for (let i = 0; i < totalDays; i++) {
       freshVisibleDayColumns[`day-${i}`] = true;
     }
-    saveVisibleDayColumns(freshVisibleDayColumns, DEFAULT_PROJECT_ID, draftYearNumber);
+    await saveVisibleDayColumns(freshVisibleDayColumns, DEFAULT_PROJECT_ID, draftYearNumber);
 
     // Start with an empty System page — tasks are imported via the Import Wizard
-    saveTaskRows([], DEFAULT_PROJECT_ID, draftYearNumber);
+    await saveTaskRows([], DEFAULT_PROJECT_ID, draftYearNumber);
 
     // --- Copy Goal page (keep identity + subareas, reset template answers) ---
     const draftStagingState = {

@@ -1,517 +1,974 @@
 /**
- * Centralized Storage Manager for Project Time Planner V2
- * Handles all localStorage operations with multi-project support
+ * Planner Storage (System page task rows, UI settings, archive snapshots)
+ *
+ * Storage backend: Supabase. Three tables back this module:
+ *   planner_settings   one row per (user_id, year_id), holds the nine System
+ *                      page UI settings (column sizing, size scale, the three
+ *                      show toggles, two sort status arrays, visible day
+ *                      columns, collapsed groups). Shared with helper #4,
+ *                      which owns send_to_system_at on the same row.
+ *   planner_rows       many rows per (user_id, year_id), one per task. The
+ *                      seven calendar header rows are NOT persisted; they are
+ *                      reconstructed on read from years.start_date,
+ *                      years.total_days, and the daily bounds.
+ *   archived_weeks     many rows per (user_id, year_id), one per Archive
+ *                      Week press. Stores the week snapshot as JSONB. On
+ *                      read these are interleaved back into the flat row
+ *                      array so the consuming code does not have to change.
+ *   years              start_date and total_days live here (not on
+ *                      planner_settings). Read and written through the two
+ *                      year-table helpers below.
+ *
+ * Public API stays the same as the localStorage version. Every public
+ * function now returns a Promise. Function names and argument order are
+ * unchanged so existing call sites only need `await` plus the gate pattern.
+ *
+ * Calendar header row reconstruction: readTaskRows returns the flat array
+ * the consuming code expects, which starts with the seven calendar header
+ * rows (month, week, day, dayofweek, daily-min, daily-max, filter) followed
+ * by the user's task rows and any archive-week snapshots interleaved by
+ * display_order. saveTaskRows strips the calendar headers before writing,
+ * splits archive-week rows out to archived_weeks, and writes the rest as
+ * planner_rows.
+ *
+ * Project scoping: the current code base hard-codes DEFAULT_PROJECT_ID
+ * ('project-1') everywhere. The Supabase schema has no project_id column on
+ * planner_settings, so the projectId argument is accepted for API parity
+ * but currently ignored. If multi-project ever ships, a project_id column
+ * can be added to planner_settings without changing this helper's external
+ * signature.
  */
 
-import storage from '../../lib/storageService';
-import {
-  COLUMN_SIZING_KEY_TEMPLATE,
-  SIZE_SCALE_KEY_TEMPLATE,
-  START_DATE_KEY_TEMPLATE,
-  SHOW_RECURRING_KEY_TEMPLATE,
-  SHOW_SUBPROJECTS_KEY_TEMPLATE,
-  SHOW_MAX_MIN_ROWS_KEY_TEMPLATE,
-  SORT_STATUSES_KEY_TEMPLATE,
-  SORT_PLANNER_STATUSES_KEY_TEMPLATE,
-  TASK_ROWS_KEY_TEMPLATE,
-  TOTAL_DAYS_KEY_TEMPLATE,
-  VISIBLE_DAY_COLUMNS_KEY_TEMPLATE,
-  COLLAPSED_GROUPS_KEY_TEMPLATE,
-  DEFAULT_PROJECT_ID,
-} from '../../constants/plannerStorageKeys';
+import { supabase } from '../../lib/supabase';
+import { createInitialData } from './dataCreators';
+import { loadTacticsMetrics } from '../../lib/tacticsMetricsStorage';
+import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
 
-// ============================================================
-// STORAGE KEY GENERATORS (Multi-Project Support)
-// ============================================================
+export { DEFAULT_PROJECT_ID };
+
+// --- exported event names (unchanged) ---------------------------------
+
+export const PLANNER_START_DATE_EVENT = 'planner-start-date-update';
+
+// --- defaults ---------------------------------------------------------
+
+const DEFAULT_TOTAL_DAYS = 84;
+const DEFAULT_SIZE_SCALE = 1.0;
+const DEFAULT_SHOW_RECURRING = true;
+const DEFAULT_SHOW_SUBPROJECTS = true;
+const DEFAULT_SHOW_MAX_MIN_ROWS = true;
+const DEFAULT_SORT_STATUSES = [
+  'Done',
+  'Scheduled',
+  'Not Scheduled',
+  'Blocked',
+  'On Hold',
+  'Abandoned',
+  'Skipped',
+  'Accounted',
+];
+
+const todayIso = () => new Date().toISOString().split('T')[0];
+
+// --- internal helpers -------------------------------------------------
+
+async function requireUserId() {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) throw new Error('No authenticated user');
+  return user.id;
+}
+
+async function findYearRow(userId, yearNumber) {
+  const { data, error } = await supabase
+    .from('years')
+    .select('id, start_date, total_days')
+    .eq('user_id', userId)
+    .eq('year_number', yearNumber)
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? null;
+}
+
+async function findYearId(userId, yearNumber) {
+  const row = await findYearRow(userId, yearNumber);
+  return row?.id ?? null;
+}
+
+function dispatchPlannerStartDateEvent({ startDate, projectId, yearNumber }) {
+  if (typeof window === 'undefined') return;
+  const detail = { startDate, projectId, yearNumber, __eventYear: yearNumber };
+  const event = typeof CustomEvent === 'function'
+    ? new CustomEvent(PLANNER_START_DATE_EVENT, { detail })
+    : new Event(PLANNER_START_DATE_EVENT);
+  window.dispatchEvent(event);
+}
+
+// --- planner_settings row read/write ---------------------------------
+
+async function readPlannerSettingsRow({ userId, yearId }) {
+  const { data, error } = await supabase
+    .from('planner_settings')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('year_id', yearId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? null;
+}
 
 /**
- * Generates namespaced storage key for a specific project and year
- * @param {string} template - Key template with {projectId} placeholder
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic keys)
- * @returns {string} Namespaced storage key
+ * Write a partial column set to planner_settings without clobbering columns
+ * this caller does not own. Mirrors the writeYearSettingsRow pattern from
+ * helper #4 so each save function only touches its own columns.
  */
-export const getProjectKey = (template, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  let key = template.replace('{projectId}', projectId);
-
-  // If yearNumber is provided, insert it before the final part of the key
-  // e.g., "planner-v2-project-1-task-rows" becomes "planner-v2-project-1-year-2-task-rows"
-  if (yearNumber !== null && yearNumber !== undefined) {
-    const parts = key.split('-');
-    const lastPart = parts.pop(); // Remove the last part (e.g., "rows", "date", etc.)
-    parts.push('year', yearNumber.toString(), lastPart);
-    key = parts.join('-');
+async function writePlannerSettingsColumns({ userId, yearId, columns }) {
+  const existing = await readPlannerSettingsRow({ userId, yearId });
+  if (existing) {
+    const { error } = await supabase
+      .from('planner_settings')
+      .update(columns)
+      .eq('id', existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from('planner_settings')
+      .insert({ user_id: userId, year_id: yearId, ...columns });
+    if (error) throw error;
   }
+}
 
-  return key;
-};
+// --- years table updates (start_date, total_days live here) -----------
+
+async function updateYearColumns({ yearId, columns }) {
+  const { error } = await supabase
+    .from('years')
+    .update(columns)
+    .eq('id', yearId);
+  if (error) throw error;
+}
 
 // ============================================================
-// COLUMN SIZING
+// COLUMN SIZING (planner_settings.column_sizing)
 // ============================================================
 
-/**
- * Reads column sizing settings for a project
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- * @returns {Object} Column sizing object (e.g., { "project": 120, "status": 150 })
- */
-export const readColumnSizing = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const readColumnSizing = async (
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(COLUMN_SIZING_KEY_TEMPLATE, projectId, yearNumber);
-    const parsed = storage.getJSON(key, {});
-    return typeof parsed === 'object' && parsed ? parsed : {};
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return {};
+    const row = await readPlannerSettingsRow({ userId, yearId });
+    const value = row?.column_sizing;
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   } catch (error) {
     console.error('Failed to read column sizing', error);
     return {};
   }
 };
 
-/**
- * Saves column sizing settings for a project
- * @param {Object} columnSizing - Column sizing object
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- */
-export const saveColumnSizing = (columnSizing, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const saveColumnSizing = async (
+  columnSizing,
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(COLUMN_SIZING_KEY_TEMPLATE, projectId, yearNumber);
-    storage.setJSON(key, columnSizing);
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return;
+    await writePlannerSettingsColumns({
+      userId,
+      yearId,
+      columns: {
+        column_sizing:
+          columnSizing && typeof columnSizing === 'object' && !Array.isArray(columnSizing)
+            ? columnSizing
+            : {},
+      },
+    });
   } catch (error) {
     console.error('Failed to save column sizing', error);
   }
 };
 
 // ============================================================
-// SIZE SCALE
+// SIZE SCALE (planner_settings.size_scale)
 // ============================================================
 
-/**
- * Reads UI size scale for a project
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- * @returns {number} Size scale (defaults to 1.0, range: 0.5 to 3.0)
- */
-export const readSizeScale = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const readSizeScale = async (
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(SIZE_SCALE_KEY_TEMPLATE, projectId, yearNumber);
-    const raw = storage.getItem(key);
-    if (!raw) return 1.0;
-    const parsed = parseFloat(raw);
-    return Number.isFinite(parsed) ? parsed : 1.0;
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return DEFAULT_SIZE_SCALE;
+    const row = await readPlannerSettingsRow({ userId, yearId });
+    const value = typeof row?.size_scale === 'number' ? row.size_scale : Number(row?.size_scale);
+    return Number.isFinite(value) ? value : DEFAULT_SIZE_SCALE;
   } catch (error) {
     console.error('Failed to read size scale', error);
-    return 1.0;
+    return DEFAULT_SIZE_SCALE;
   }
 };
 
-/**
- * Saves UI size scale for a project
- * @param {number} sizeScale - Size scale value (0.5 to 3.0)
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- */
-export const saveSizeScale = (sizeScale, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const saveSizeScale = async (
+  sizeScale,
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(SIZE_SCALE_KEY_TEMPLATE, projectId, yearNumber);
-    storage.setItem(key, sizeScale.toString());
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return;
+    const value = Number(sizeScale);
+    await writePlannerSettingsColumns({
+      userId,
+      yearId,
+      columns: { size_scale: Number.isFinite(value) ? value : DEFAULT_SIZE_SCALE },
+    });
   } catch (error) {
     console.error('Failed to save size scale', error);
   }
 };
 
 // ============================================================
-// START DATE
+// START DATE (years.start_date)
 // ============================================================
 
-/**
- * Reads start date for a project
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- * @returns {string} Start date in YYYY-MM-DD format, or today's date if not set
- */
-export const readStartDate = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  const today = new Date().toISOString().split('T')[0];
+export const readStartDate = async (
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
+  const today = todayIso();
   try {
-    const key = getProjectKey(START_DATE_KEY_TEMPLATE, projectId, yearNumber);
-    const raw = storage.getItem(key);
-    return raw || today;
+    const userId = await requireUserId();
+    const yearRow = await findYearRow(userId, yearNumber);
+    return yearRow?.start_date || today;
   } catch (error) {
     console.error('Failed to read start date', error);
     return today;
   }
 };
 
-export const PLANNER_START_DATE_EVENT = 'planner-start-date-update';
-
-/**
- * Saves start date for a project and fires a custom event so System refreshes.
- * @param {string} startDate - Start date in YYYY-MM-DD format
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- */
-export const saveStartDate = (startDate, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const saveStartDate = async (
+  startDate,
+  projectId = DEFAULT_PROJECT_ID,
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(START_DATE_KEY_TEMPLATE, projectId, yearNumber);
-    storage.setItem(key, startDate);
-    window.dispatchEvent(new CustomEvent(PLANNER_START_DATE_EVENT, { detail: { startDate, projectId, yearNumber } }));
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return;
+    await updateYearColumns({
+      yearId,
+      columns: { start_date: startDate },
+    });
+    dispatchPlannerStartDateEvent({ startDate, projectId, yearNumber });
   } catch (error) {
     console.error('Failed to save start date', error);
   }
 };
 
 // ============================================================
-// UI TOGGLES (Show Recurring, Show Subprojects, Show Max/Min Rows)
+// UI TOGGLES (planner_settings.show_*)
 // ============================================================
 
-/**
- * Reads show recurring column setting for a project
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- * @returns {boolean} Show recurring column (defaults to true)
- */
-export const readShowRecurring = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const readShowRecurring = async (
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(SHOW_RECURRING_KEY_TEMPLATE, projectId, yearNumber);
-    const raw = storage.getItem(key);
-    if (raw === null) return true;
-    return raw === 'true';
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return DEFAULT_SHOW_RECURRING;
+    const row = await readPlannerSettingsRow({ userId, yearId });
+    return row ? row.show_recurring !== false : DEFAULT_SHOW_RECURRING;
   } catch (error) {
     console.error('Failed to read show recurring', error);
-    return true;
+    return DEFAULT_SHOW_RECURRING;
   }
 };
 
-/**
- * Saves show recurring column setting for a project
- * @param {boolean} showRecurring - Show recurring column
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- */
-export const saveShowRecurring = (showRecurring, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const saveShowRecurring = async (
+  showRecurring,
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(SHOW_RECURRING_KEY_TEMPLATE, projectId, yearNumber);
-    storage.setItem(key, showRecurring.toString());
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return;
+    await writePlannerSettingsColumns({
+      userId,
+      yearId,
+      columns: { show_recurring: showRecurring === true || showRecurring === 'true' },
+    });
   } catch (error) {
     console.error('Failed to save show recurring', error);
   }
 };
 
-/**
- * Reads show subprojects column setting for a project
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- * @returns {boolean} Show subprojects column (defaults to true)
- */
-export const readShowSubprojects = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const readShowSubprojects = async (
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(SHOW_SUBPROJECTS_KEY_TEMPLATE, projectId, yearNumber);
-    const raw = storage.getItem(key);
-    if (raw === null) return true;
-    return raw === 'true';
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return DEFAULT_SHOW_SUBPROJECTS;
+    const row = await readPlannerSettingsRow({ userId, yearId });
+    return row ? row.show_subprojects !== false : DEFAULT_SHOW_SUBPROJECTS;
   } catch (error) {
     console.error('Failed to read show subprojects', error);
-    return true;
+    return DEFAULT_SHOW_SUBPROJECTS;
   }
 };
 
-/**
- * Saves show subprojects column setting for a project
- * @param {boolean} showSubprojects - Show subprojects column
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- */
-export const saveShowSubprojects = (showSubprojects, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const saveShowSubprojects = async (
+  showSubprojects,
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(SHOW_SUBPROJECTS_KEY_TEMPLATE, projectId, yearNumber);
-    storage.setItem(key, showSubprojects.toString());
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return;
+    await writePlannerSettingsColumns({
+      userId,
+      yearId,
+      columns: { show_subprojects: showSubprojects === true || showSubprojects === 'true' },
+    });
   } catch (error) {
     console.error('Failed to save show subprojects', error);
   }
 };
 
-/**
- * Reads show max/min rows setting for a project
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- * @returns {boolean} Show max/min rows (defaults to true)
- */
-export const readShowMaxMinRows = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const readShowMaxMinRows = async (
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(SHOW_MAX_MIN_ROWS_KEY_TEMPLATE, projectId, yearNumber);
-    const raw = storage.getItem(key);
-    if (raw === null) return true;
-    return raw === 'true';
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return DEFAULT_SHOW_MAX_MIN_ROWS;
+    const row = await readPlannerSettingsRow({ userId, yearId });
+    return row ? row.show_max_min_rows !== false : DEFAULT_SHOW_MAX_MIN_ROWS;
   } catch (error) {
     console.error('Failed to read show max/min rows', error);
-    return true;
+    return DEFAULT_SHOW_MAX_MIN_ROWS;
   }
 };
 
-/**
- * Saves show max/min rows setting for a project
- * @param {boolean} showMaxMinRows - Show max/min rows
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- */
-export const saveShowMaxMinRows = (showMaxMinRows, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const saveShowMaxMinRows = async (
+  showMaxMinRows,
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(SHOW_MAX_MIN_ROWS_KEY_TEMPLATE, projectId, yearNumber);
-    storage.setItem(key, showMaxMinRows.toString());
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return;
+    await writePlannerSettingsColumns({
+      userId,
+      yearId,
+      columns: { show_max_min_rows: showMaxMinRows === true || showMaxMinRows === 'true' },
+    });
   } catch (error) {
     console.error('Failed to save show max/min rows', error);
   }
 };
 
 // ============================================================
-// SORT STATUSES
+// SORT STATUSES (planner_settings.sort_statuses, returns Set)
 // ============================================================
 
-/**
- * Reads selected sort statuses for a project
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- * @returns {Set<string>} Set of selected status values (defaults to all sortable statuses)
- */
-export const readSortStatuses = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const readSortStatuses = async (
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(SORT_STATUSES_KEY_TEMPLATE, projectId, yearNumber);
-    const parsed = storage.getJSON(key, null);
-    if (!parsed) {
-      return new Set(['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned', 'Skipped', 'Accounted']);
-    }
-    return new Set(Array.isArray(parsed) ? parsed : []);
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return new Set(DEFAULT_SORT_STATUSES);
+    const row = await readPlannerSettingsRow({ userId, yearId });
+    const arr = Array.isArray(row?.sort_statuses) ? row.sort_statuses : DEFAULT_SORT_STATUSES;
+    return new Set(arr);
   } catch (error) {
     console.error('Failed to read sort statuses', error);
-    return new Set(['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned']);
+    return new Set(DEFAULT_SORT_STATUSES);
   }
 };
 
-/**
- * Saves selected sort statuses for a project
- * @param {Set<string>} sortStatuses - Set of selected status values
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- */
-export const saveSortStatuses = (sortStatuses, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const saveSortStatuses = async (
+  sortStatuses,
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(SORT_STATUSES_KEY_TEMPLATE, projectId, yearNumber);
-    const statusArray = Array.from(sortStatuses);
-    storage.setJSON(key, statusArray);
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return;
+    const arr = Array.from(sortStatuses || []);
+    await writePlannerSettingsColumns({
+      userId,
+      yearId,
+      columns: { sort_statuses: arr },
+    });
   } catch (error) {
     console.error('Failed to save sort statuses', error);
   }
 };
 
 // ============================================================
-// SORT PLANNER STATUSES
+// SORT PLANNER STATUSES (planner_settings.sort_planner_statuses, returns Set)
 // ============================================================
 
-/**
- * Reads selected sort planner statuses for a project
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- * @returns {Set<string>} Set of selected status values (defaults to all sortable statuses)
- */
-export const readSortPlannerStatuses = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const readSortPlannerStatuses = async (
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(SORT_PLANNER_STATUSES_KEY_TEMPLATE, projectId, yearNumber);
-    const parsed = storage.getJSON(key, null);
-    if (!parsed) {
-      return new Set(['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned', 'Skipped', 'Accounted']);
-    }
-    return new Set(Array.isArray(parsed) ? parsed : []);
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return new Set(DEFAULT_SORT_STATUSES);
+    const row = await readPlannerSettingsRow({ userId, yearId });
+    const arr = Array.isArray(row?.sort_planner_statuses)
+      ? row.sort_planner_statuses
+      : DEFAULT_SORT_STATUSES;
+    return new Set(arr);
   } catch (error) {
     console.error('Failed to read sort planner statuses', error);
-    return new Set(['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned']);
+    return new Set(DEFAULT_SORT_STATUSES);
   }
 };
 
-/**
- * Saves selected sort planner statuses for a project
- * @param {Set<string>} sortPlannerStatuses - Set of selected status values
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- */
-export const saveSortPlannerStatuses = (sortPlannerStatuses, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const saveSortPlannerStatuses = async (
+  sortPlannerStatuses,
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(SORT_PLANNER_STATUSES_KEY_TEMPLATE, projectId, yearNumber);
-    const statusArray = Array.from(sortPlannerStatuses);
-    storage.setJSON(key, statusArray);
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return;
+    const arr = Array.from(sortPlannerStatuses || []);
+    await writePlannerSettingsColumns({
+      userId,
+      yearId,
+      columns: { sort_planner_statuses: arr },
+    });
   } catch (error) {
     console.error('Failed to save sort planner statuses', error);
   }
 };
 
 // ============================================================
-// TASK ROWS DATA
+// TOTAL DAYS (years.total_days)
 // ============================================================
 
-/**
- * Reads task rows data for a project
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- * @returns {Array} Array of task row objects (empty array if not found)
- */
-export const readTaskRows = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const readTotalDays = async (
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(TASK_ROWS_KEY_TEMPLATE, projectId, yearNumber);
-    const parsed = storage.getJSON(key, []);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error('Failed to read task rows', error);
-    return [];
-  }
-};
-
-/**
- * Saves task rows data for a project
- * @param {Array} taskRows - Array of task row objects
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- */
-export const saveTaskRows = (taskRows, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  try {
-    const key = getProjectKey(TASK_ROWS_KEY_TEMPLATE, projectId, yearNumber);
-    storage.setJSON(key, taskRows);
-  } catch (error) {
-    console.error('Failed to save task rows', error);
-  }
-};
-
-// ============================================================
-// TOTAL DAYS
-// ============================================================
-
-/**
- * Reads total days (timeline length) for a project
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- * @returns {number} Total days (defaults to 84 = 12 weeks)
- */
-export const readTotalDays = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
-  try {
-    const key = getProjectKey(TOTAL_DAYS_KEY_TEMPLATE, projectId, yearNumber);
-    const raw = storage.getItem(key);
-    if (!raw) return 84;
-    const parsed = parseInt(raw, 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 84;
+    const userId = await requireUserId();
+    const yearRow = await findYearRow(userId, yearNumber);
+    const value =
+      typeof yearRow?.total_days === 'number' ? yearRow.total_days : Number(yearRow?.total_days);
+    return Number.isFinite(value) && value > 0 ? value : DEFAULT_TOTAL_DAYS;
   } catch (error) {
     console.error('Failed to read total days', error);
-    return 84;
+    return DEFAULT_TOTAL_DAYS;
   }
 };
 
-/**
- * Saves total days (timeline length) for a project
- * @param {number} totalDays - Total days value
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- */
-export const saveTotalDays = (totalDays, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const saveTotalDays = async (
+  totalDays,
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(TOTAL_DAYS_KEY_TEMPLATE, projectId, yearNumber);
-    storage.setItem(key, totalDays.toString());
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return;
+    const value = Number(totalDays);
+    await updateYearColumns({
+      yearId,
+      columns: { total_days: Number.isFinite(value) && value > 0 ? value : DEFAULT_TOTAL_DAYS },
+    });
   } catch (error) {
     console.error('Failed to save total days', error);
   }
 };
 
 // ============================================================
-// VISIBLE DAY COLUMNS
+// VISIBLE DAY COLUMNS (planner_settings.visible_day_columns)
 // ============================================================
 
-/**
- * Reads visible day columns for a project
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number} totalDays - Total days to initialize if no saved state (defaults to 84)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- * @returns {Object} Object mapping day column IDs to visibility booleans
- */
-export const readVisibleDayColumns = (projectId = DEFAULT_PROJECT_ID, totalDays = 84, yearNumber = null) => {
+const defaultVisibleDayColumns = (totalDays) => {
+  const visible = {};
+  for (let i = 0; i < totalDays; i++) {
+    visible[`day-${i}`] = true;
+  }
+  return visible;
+};
 
+export const readVisibleDayColumns = async (
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  totalDays = DEFAULT_TOTAL_DAYS,
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(VISIBLE_DAY_COLUMNS_KEY_TEMPLATE, projectId, yearNumber);
-    const parsed = storage.getJSON(key, null);
-    if (!parsed) {
-      // Default: all columns visible
-const visible = {};
-      for (let i = 0; i < totalDays; i++) {
-        visible[`day-${i}`] = true;
-      }
-      return visible;
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return defaultVisibleDayColumns(totalDays);
+    const row = await readPlannerSettingsRow({ userId, yearId });
+    const value = row?.visible_day_columns;
+    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length === 0) {
+      return defaultVisibleDayColumns(totalDays);
     }
-    return typeof parsed === 'object' && parsed ? parsed : {};
+    return value;
   } catch (error) {
     console.error('Failed to read visible day columns', error);
-    const visible = {};
-    for (let i = 0; i < totalDays; i++) {
-      visible[`day-${i}`] = true;
-    }
-    return visible;
+    return defaultVisibleDayColumns(totalDays);
   }
 };
 
-/**
- * Saves visible day columns for a project
- * @param {Object} visibleDayColumns - Object mapping day column IDs to visibility booleans
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- */
-export const saveVisibleDayColumns = (visibleDayColumns, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const saveVisibleDayColumns = async (
+  visibleDayColumns,
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(VISIBLE_DAY_COLUMNS_KEY_TEMPLATE, projectId, yearNumber);
-    storage.setJSON(key, visibleDayColumns);
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return;
+    await writePlannerSettingsColumns({
+      userId,
+      yearId,
+      columns: {
+        visible_day_columns:
+          visibleDayColumns && typeof visibleDayColumns === 'object' && !Array.isArray(visibleDayColumns)
+            ? visibleDayColumns
+            : {},
+      },
+    });
   } catch (error) {
     console.error('Failed to save visible day columns', error);
   }
 };
 
 // ============================================================
-// COLLAPSED GROUPS
+// COLLAPSED GROUPS (planner_settings.collapsed_groups, returns Set)
 // ============================================================
 
-/**
- * Reads collapsed group IDs for a project
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- * @returns {Set<string>} Set of collapsed group IDs
- */
-export const readCollapsedGroups = (projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const readCollapsedGroups = async (
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(COLLAPSED_GROUPS_KEY_TEMPLATE, projectId, yearNumber);
-    const parsed = storage.getJSON(key, null);
-    return new Set(Array.isArray(parsed) ? parsed : []);
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return new Set();
+    const row = await readPlannerSettingsRow({ userId, yearId });
+    return new Set(Array.isArray(row?.collapsed_groups) ? row.collapsed_groups : []);
   } catch (error) {
     console.error('Failed to read collapsed groups', error);
     return new Set();
   }
 };
 
-/**
- * Saves collapsed group IDs for a project
- * @param {Set<string>} collapsedGroups - Set of collapsed group IDs
- * @param {string} projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} yearNumber - Year number (null for year-agnostic)
- */
-export const saveCollapsedGroups = (collapsedGroups, projectId = DEFAULT_PROJECT_ID, yearNumber = null) => {
+export const saveCollapsedGroups = async (
+  collapsedGroups,
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
   try {
-    const key = getProjectKey(COLLAPSED_GROUPS_KEY_TEMPLATE, projectId, yearNumber);
-    storage.setJSON(key, Array.from(collapsedGroups));
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return;
+    const arr = Array.from(collapsedGroups || []);
+    await writePlannerSettingsColumns({
+      userId,
+      yearId,
+      columns: { collapsed_groups: arr },
+    });
   } catch (error) {
     console.error('Failed to save collapsed groups', error);
   }
 };
 
 // ============================================================
-// RE-EXPORT EXISTING STORAGE FUNCTIONS (Backward Compatibility)
+// TASK ROWS (planner_rows + archived_weeks, with calendar headers)
+// ============================================================
+//
+// Task row shape (the JS object the React code expects):
+//   {
+//     id: string,                  // 'row-0', 'archive-week-...', or DB UUID
+//     checkbox: string|boolean,
+//     project: string,             // nickname display string
+//     subproject: string,
+//     status: string,              // free-form dropdown value
+//     task: string,
+//     recurring: string,
+//     estimate: string,
+//     timeValue: string,           // '0.00' style, derived
+//     [`day-${i}`]: string,        // per-day cell values
+//     _isMonthRow / _isWeekRow / ... : boolean (calendar headers only),
+//     archiveWeekLabel?: string,   // archive marker
+//     ...other archive snapshot fields
+//   }
+//
+// On save the helper:
+//   1. Strips calendar header rows (the ones flagged `_isMonthRow`, etc.)
+//   2. Splits archive-week rows out to archived_weeks
+//   3. Writes the remainder to planner_rows
+//
+// On read the helper:
+//   1. Reads planner_rows and archived_weeks
+//   2. Reads daily_bounds from tactics_metrics for the daily min/max rows
+//   3. Builds the seven calendar headers using createInitialData and the
+//      daily bounds
+//   4. Interleaves archive weeks back into the row list by display_order
+//   5. Returns the flat array the consuming code expects
+
+const CALENDAR_HEADER_IDS = new Set([
+  'month-row',
+  'week-row',
+  'day-row',
+  'dayofweek-row',
+  'daily-min-row',
+  'daily-max-row',
+  'filter-row',
+]);
+
+const isCalendarHeaderRow = (row) => {
+  if (!row) return false;
+  if (CALENDAR_HEADER_IDS.has(row.id)) return true;
+  return Boolean(
+    row._isMonthRow ||
+    row._isWeekRow ||
+    row._isDayRow ||
+    row._isDayOfWeekRow ||
+    row._isDailyMinRow ||
+    row._isDailyMaxRow ||
+    row._isFilterRow,
+  );
+};
+
+const isArchiveRow = (row) => {
+  if (!row) return false;
+  if (typeof row.archiveWeekLabel === 'string' && row.archiveWeekLabel.length > 0) return true;
+  if (typeof row.id === 'string' && row.id.startsWith('archive-week-')) return true;
+  if (typeof row.status === 'string' && row.status.toLowerCase().startsWith('archive')) return true;
+  return false;
+};
+
+// Per-row fields stored as JSONB so we can round-trip future schema changes
+// without losing data. day-* keys are split out into day_entries; status,
+// estimate, etc. become first-class columns; everything else falls into
+// extra_data.
+const FIRST_CLASS_KEYS = new Set([
+  'id',
+  'checkbox',
+  'project',
+  'subproject',
+  'status',
+  'task',
+  'recurring',
+  'estimate',
+  'timeValue',
+]);
+
+function plannerRowPayloadToDb({ row, userId, yearId, displayOrder }) {
+  const dayEntries = {};
+  const extraData = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (FIRST_CLASS_KEYS.has(key)) continue;
+    if (typeof key === 'string' && key.startsWith('day-')) {
+      const idx = Number.parseInt(key.slice(4), 10);
+      if (Number.isFinite(idx)) dayEntries[String(idx)] = value;
+      continue;
+    }
+    extraData[key] = value;
+  }
+
+  const timeValueRaw = row.timeValue;
+  const timeValueMinutes = (() => {
+    if (typeof timeValueRaw === 'number') return Math.round(timeValueRaw * 60);
+    if (typeof timeValueRaw === 'string') {
+      const parsed = parseFloat(timeValueRaw);
+      if (Number.isFinite(parsed)) return Math.round(parsed * 60);
+    }
+    return 0;
+  })();
+
+  return {
+    user_id: userId,
+    year_id: yearId,
+    project_id: null,
+    parent_row_id: null,
+    row_kind: 'task',
+    checkbox: row.checkbox === true,
+    subproject_label: typeof row.subproject === 'string' ? row.subproject : '',
+    status: typeof row.status === 'string' ? row.status : '-',
+    task: typeof row.task === 'string' ? row.task : '',
+    recurring: typeof row.recurring === 'string' ? row.recurring : '',
+    estimate: typeof row.estimate === 'string' ? row.estimate : '',
+    time_value_minutes: timeValueMinutes,
+    day_entries: { __cells: dayEntries, __project: row.project ?? '', __extra: extraData },
+    display_order: displayOrder,
+  };
+}
+
+function plannerRowDbToPayload(dbRow) {
+  const cells = dbRow.day_entries?.__cells || {};
+  const project = dbRow.day_entries?.__project ?? '';
+  const extra = dbRow.day_entries?.__extra || {};
+  const row = {
+    id: dbRow.id,
+    checkbox: dbRow.checkbox === true,
+    project,
+    subproject: dbRow.subproject_label || '',
+    status: dbRow.status || '-',
+    task: dbRow.task || '',
+    recurring: dbRow.recurring || '',
+    estimate: dbRow.estimate || '',
+    timeValue: typeof dbRow.time_value_minutes === 'number'
+      ? (dbRow.time_value_minutes / 60).toFixed(2)
+      : '0.00',
+  };
+  for (const [idxStr, value] of Object.entries(cells)) {
+    row[`day-${idxStr}`] = value;
+  }
+  for (const [key, value] of Object.entries(extra)) {
+    row[key] = value;
+  }
+  return row;
+}
+
+function archiveRowPayloadToDb({ row, userId, yearId, weekNumber }) {
+  return {
+    user_id: userId,
+    year_id: yearId,
+    week_number: weekNumber,
+    week_range_label: typeof row.archiveWeekLabel === 'string' ? row.archiveWeekLabel : null,
+    archived_at: row.archivedAt || new Date().toISOString(),
+    total_minutes: typeof row.totalMinutes === 'number' ? row.totalMinutes : null,
+    daily_min_minutes: Array.isArray(row.dailyMinMinutes) ? row.dailyMinMinutes : [],
+    daily_max_minutes: Array.isArray(row.dailyMaxMinutes) ? row.dailyMaxMinutes : [],
+    snapshot: row,
+  };
+}
+
+function archiveRowDbToPayload(dbRow) {
+  const snapshot = dbRow.snapshot && typeof dbRow.snapshot === 'object' ? dbRow.snapshot : {};
+  return {
+    ...snapshot,
+    id: snapshot.id || `archive-week-${dbRow.week_number}`,
+    archiveWeekLabel: dbRow.week_range_label || snapshot.archiveWeekLabel || '',
+  };
+}
+
+function applyDailyBoundsToHeaders(headers, dailyBounds, startDate) {
+  // dailyBounds is an array of 7 { day, daily_max_minutes, daily_min_minutes }
+  // returned by loadTacticsMetrics. Each day index in the cycle maps to a
+  // specific calendar date (startDate + i days); we look up the bound by
+  // that date's weekday name.
+  if (!Array.isArray(dailyBounds) || dailyBounds.length === 0) return headers;
+
+  const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  const boundsByDay = new Map();
+  for (const entry of dailyBounds) {
+    if (entry && typeof entry.day === 'string') boundsByDay.set(entry.day, entry);
+  }
+
+  const formatMinutes = (m) => {
+    if (typeof m !== 'number' || !Number.isFinite(m)) return '';
+    return (m / 60).toFixed(2);
+  };
+
+  const dailyMinRow = headers.find((r) => r._isDailyMinRow);
+  const dailyMaxRow = headers.find((r) => r._isDailyMaxRow);
+
+  if (!dailyMinRow && !dailyMaxRow) return headers;
+
+  const baseDate = new Date(startDate || todayIso());
+
+  let i = 0;
+  while (true) {
+    const key = `day-${i}`;
+    if (!(dailyMinRow && key in dailyMinRow) && !(dailyMaxRow && key in dailyMaxRow)) break;
+    const d = new Date(baseDate);
+    d.setDate(baseDate.getDate() + i);
+    const weekday = daysOfWeek[d.getDay()];
+    const bound = boundsByDay.get(weekday);
+    if (dailyMinRow) dailyMinRow[key] = formatMinutes(bound?.daily_min_minutes);
+    if (dailyMaxRow) dailyMaxRow[key] = formatMinutes(bound?.daily_max_minutes);
+    i += 1;
+    if (i > 365) break; // safety guard
+  }
+
+  return headers;
+}
+
+export const readTaskRows = async (
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
+  try {
+    const userId = await requireUserId();
+    const yearRow = await findYearRow(userId, yearNumber);
+    if (!yearRow) return [];
+
+    const [tasksRes, archivesRes, metrics] = await Promise.all([
+      supabase
+        .from('planner_rows')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('year_id', yearRow.id)
+        .order('display_order', { ascending: true }),
+      supabase
+        .from('archived_weeks')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('year_id', yearRow.id)
+        .order('week_number', { ascending: true }),
+      loadTacticsMetrics(yearNumber).catch(() => null),
+    ]);
+
+    if (tasksRes.error) throw tasksRes.error;
+    if (archivesRes.error) throw archivesRes.error;
+
+    const totalDays = yearRow.total_days || DEFAULT_TOTAL_DAYS;
+    const startDate = yearRow.start_date || todayIso();
+    const taskCount = (tasksRes.data || []).length;
+
+    // Build the seven calendar header rows from scratch. createInitialData
+    // produces both headers and a configurable number of blank rows; we
+    // discard the blank rows and keep only the seven headers, then overlay
+    // the daily bounds from tactics_metrics.
+    const initial = createInitialData(0, totalDays, startDate);
+    const headers = initial.slice(0, 7);
+    applyDailyBoundsToHeaders(
+      headers,
+      metrics?.dailyBounds || metrics?.daily_bounds || [],
+      startDate,
+    );
+
+    const taskRows = (tasksRes.data || []).map(plannerRowDbToPayload);
+    const archiveRows = (archivesRes.data || []).map(archiveRowDbToPayload);
+
+    // If there are no task rows and no archive rows we still return at least
+    // some blank rows so the table renders the empty grid the user expects.
+    if (taskCount === 0 && archiveRows.length === 0) {
+      return [...headers, ...createInitialData(100, totalDays, startDate).slice(7)];
+    }
+
+    // Archive rows are appended after the live task rows. The original code
+    // interleaved them inline based on `archive-week-*` ids in `task-rows`;
+    // post-port they live in a separate table, so appending in week_number
+    // order is the simplest faithful reconstruction. If insertion order
+    // matters more than weekly order we can revisit.
+    return [...headers, ...taskRows, ...archiveRows];
+  } catch (error) {
+    console.error('Failed to read task rows', error);
+    return [];
+  }
+};
+
+export const saveTaskRows = async (
+  taskRows,
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
+  try {
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return;
+
+    const allRows = Array.isArray(taskRows) ? taskRows : [];
+    const persistedTaskRows = [];
+    const archiveRowsToWrite = [];
+    let archiveCounter = 0;
+
+    for (const row of allRows) {
+      if (isCalendarHeaderRow(row)) continue;
+      if (isArchiveRow(row)) {
+        archiveCounter += 1;
+        archiveRowsToWrite.push({ row, weekNumber: archiveCounter });
+        continue;
+      }
+      persistedTaskRows.push(row);
+    }
+
+    // Replace-the-layer pattern (same as helper #4): delete all existing
+    // planner_rows + archived_weeks for this year, then bulk insert.
+    const [taskDelete, archiveDelete] = await Promise.all([
+      supabase
+        .from('planner_rows')
+        .delete()
+        .eq('user_id', userId)
+        .eq('year_id', yearId),
+      supabase
+        .from('archived_weeks')
+        .delete()
+        .eq('user_id', userId)
+        .eq('year_id', yearId),
+    ]);
+    if (taskDelete.error) throw taskDelete.error;
+    if (archiveDelete.error) throw archiveDelete.error;
+
+    const insertOps = [];
+
+    const dbTaskRows = persistedTaskRows.map((row, idx) =>
+      plannerRowPayloadToDb({ row, userId, yearId, displayOrder: idx }),
+    );
+    if (dbTaskRows.length > 0) {
+      insertOps.push(supabase.from('planner_rows').insert(dbTaskRows));
+    }
+
+    const dbArchiveRows = archiveRowsToWrite.map(({ row, weekNumber }) =>
+      archiveRowPayloadToDb({ row, userId, yearId, weekNumber }),
+    );
+    if (dbArchiveRows.length > 0) {
+      insertOps.push(supabase.from('archived_weeks').insert(dbArchiveRows));
+    }
+
+    if (insertOps.length > 0) {
+      const insertRes = await Promise.all(insertOps);
+      for (const r of insertRes) {
+        if (r.error) throw r.error;
+      }
+    }
+  } catch (error) {
+    console.error('Failed to save task rows', error);
+  }
+};
+
+// ============================================================
+// Legacy storage key helper (kept for any one-off consumer)
 // ============================================================
 
-// Re-export existing storage functions from plannerStorage.js
-// These maintain backward compatibility with existing code
-export {
-  readStoredSettings,
-  saveSettings,
-  readStoredTaskRows,
-  saveTaskRows as saveLegacyTaskRows,
-} from '../plannerStorage';
+/**
+ * Kept exported because a small number of utility scripts (and the dev-only
+ * undo-draft sweep) still build storage keys the old way. Post-port, no
+ * production code path should rely on this.
+ */
+export const getProjectKey = (
+  template,
+  projectId = DEFAULT_PROJECT_ID,
+  yearNumber = null,
+) => {
+  let key = template.replace('{projectId}', projectId);
+  if (yearNumber !== null && yearNumber !== undefined) {
+    const parts = key.split('-');
+    const lastPart = parts.pop();
+    parts.push('year', yearNumber.toString(), lastPart);
+    key = parts.join('-');
+  }
+  return key;
+};

@@ -9,28 +9,40 @@ interface UseCollapsibleGroupsOptions {
 }
 
 /**
- * Hook to manage collapsed groups (archive weeks and project groups)
- *
- * This hook manages which groups are collapsed in the planner view.
- * Groups can be archive weeks or project sections that can be expanded/collapsed.
- * State is persisted to localStorage so it survives page refresh.
- *
- * @returns Object with collapsedGroups state and helper functions
+ * Hook to manage collapsed groups (archive weeks and project groups).
+ * Post-Supabase-port: starts empty, then loads the saved set asynchronously.
+ * A `loadedForYear` ref gates saves until the load completes so an early
+ * toggle cannot be overwritten when the Supabase round-trip resolves.
  */
 export default function useCollapsibleGroups(
   { projectId = DEFAULT_PROJECT_ID, yearNumber = null }: UseCollapsibleGroupsOptions = {}
 ): UseCollapsibleGroupsReturn {
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
-    () => readCollapsedGroups(projectId, yearNumber)
-  );
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
+  const loadedForYear = useRef<number | null | symbol>(null);
 
-  // Persist whenever collapsedGroups changes (skip initial mount)
-  const isInitialMount = useRef(true);
   useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
+    let cancelled = false;
+    loadedForYear.current = null;
+    (async () => {
+      try {
+        const loaded = await readCollapsedGroups(projectId, yearNumber);
+        if (cancelled) return;
+        setCollapsedGroups(loaded);
+        loadedForYear.current = yearNumber as any;
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load collapsed groups', error);
+          loadedForYear.current = yearNumber as any;
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [projectId, yearNumber]);
+
+  // Persist whenever collapsedGroups changes, but only after the load for
+  // the current year has completed.
+  useEffect(() => {
+    if (loadedForYear.current !== yearNumber) return;
     saveCollapsedGroups(collapsedGroups, projectId, yearNumber);
   }, [collapsedGroups, projectId, yearNumber]);
 

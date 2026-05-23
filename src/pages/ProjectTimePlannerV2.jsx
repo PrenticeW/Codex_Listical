@@ -352,7 +352,11 @@ export default function ProjectTimePlannerV2() {
   // Flush unsaved data to storage on unmount (bypasses debounce so navigation away doesn't lose edits)
   useEffect(() => {
     return () => {
-      saveTaskRows(latestDataRef.current, DEFAULT_PROJECT_ID, currentYear);
+      // saveTaskRows is now async (Supabase). Fire-and-forget on unmount —
+      // the user is navigating away so there's no caller to await.
+      saveTaskRows(latestDataRef.current, DEFAULT_PROJECT_ID, currentYear).catch((err) => {
+        console.error('Failed to flush task rows on unmount', err);
+      });
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -415,12 +419,16 @@ export default function ProjectTimePlannerV2() {
   const { projects, subprojects, projectSubprojectsMap, projectNamesMap, projectTaglinesMap, projectIdByNickname } = useProjectsData();
 
   // Import tasks from active year into draft (single action, no wizard)
-  const handleImportTasks = useCallback(() => {
+  const handleImportTasks = useCallback(async () => {
     if (!activeYear) return;
-    const sourceRows = readTaskRows('project-1', activeYear.yearNumber);
-    const draftNicknames = projects.filter((p) => p !== '-');
-    const imported = importTasksForDraftYear(sourceRows, draftNicknames, projectSubprojectsMap);
-    setData((prev) => placeImportedTasks(prev, imported));
+    try {
+      const sourceRows = await readTaskRows('project-1', activeYear.yearNumber);
+      const draftNicknames = projects.filter((p) => p !== '-');
+      const imported = importTasksForDraftYear(sourceRows, draftNicknames, projectSubprojectsMap);
+      setData((prev) => placeImportedTasks(prev, imported));
+    } catch (err) {
+      console.error('Failed to import tasks from active year', err);
+    }
   }, [activeYear, projects, projectSubprojectsMap, setData]);
 
   // Load tactics data on mount — Layout's <Outlet key={currentYear}> remounts

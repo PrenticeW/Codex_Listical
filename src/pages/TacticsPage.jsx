@@ -2657,7 +2657,7 @@ export default function TacticsPage() {
   const handleSendToSystem = useCallback(async () => {
     const yearInfo = getYearInfo(currentYear);
     if (yearInfo?.startDate) {
-      saveStartDate(yearInfo.startDate, undefined, currentYear);
+      await saveStartDate(yearInfo.startDate, undefined, currentYear);
     }
 
     // Build metrics payload

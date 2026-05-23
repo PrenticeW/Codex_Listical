@@ -384,35 +384,46 @@ export default function StagingPageV2() {
             const removedItem = shortlist.find((item) => item.id === itemId);
             const projectKey = ((removedItem?.projectNickname || '').trim()) || ((removedItem?.projectName || '').trim());
             if (projectKey) {
-              const taskRows = readTaskRows(DEFAULT_PROJECT_ID, currentYear);
-              if (capturedTaskRows === null) {
-                capturedTaskRows = taskRows;
-              }
-              const projectGroupId = `project-${projectKey}`;
-              const groupIdsToRemove = new Set([projectGroupId]);
-              taskRows.forEach((row) => {
-                if (
-                  row?._rowType === 'subprojectHeader' &&
-                  row?.parentGroupId === projectGroupId &&
-                  row?.groupId
-                ) {
-                  groupIdsToRemove.add(row.groupId);
+              // Task-row cleanup is now async (Supabase). The command
+              // pattern's execute is synchronous and not awaited, so wrap
+              // the read + filter + save in an async IIFE. capturedTaskRows
+              // is set inside the IIFE so undo() restores the pre-archive
+              // state; same trade-off as the chip cleanup just below.
+              (async () => {
+                try {
+                  const taskRows = await readTaskRows(DEFAULT_PROJECT_ID, currentYear);
+                  if (capturedTaskRows === null) {
+                    capturedTaskRows = taskRows;
+                  }
+                  const projectGroupId = `project-${projectKey}`;
+                  const groupIdsToRemove = new Set([projectGroupId]);
+                  taskRows.forEach((row) => {
+                    if (
+                      row?._rowType === 'subprojectHeader' &&
+                      row?.parentGroupId === projectGroupId &&
+                      row?.groupId
+                    ) {
+                      groupIdsToRemove.add(row.groupId);
+                    }
+                  });
+                  const isArchived = (row) => {
+                    const rowType = row?._rowType || '';
+                    return rowType.toLowerCase().startsWith('archive') || !!row?.archiveWeekLabel;
+                  };
+                  const filteredRows = taskRows.filter((row) => {
+                    if (isArchived(row)) return true;
+                    if (row?._rowType === 'projectHeader' && row.projectNickname === projectKey) return false;
+                    if (row?.parentGroupId && groupIdsToRemove.has(row.parentGroupId)) return false;
+                    if (row?.projectNickname === projectKey) return false;
+                    return true;
+                  });
+                  if (filteredRows.length !== taskRows.length) {
+                    await saveTaskRows(filteredRows, DEFAULT_PROJECT_ID, currentYear);
+                  }
+                } catch (err) {
+                  console.error('Failed to clean up task rows on remove from plan', err);
                 }
-              });
-              const isArchived = (row) => {
-                const rowType = row?._rowType || '';
-                return rowType.toLowerCase().startsWith('archive') || !!row?.archiveWeekLabel;
-              };
-              const filteredRows = taskRows.filter((row) => {
-                if (isArchived(row)) return true;
-                if (row?._rowType === 'projectHeader' && row.projectNickname === projectKey) return false;
-                if (row?.parentGroupId && groupIdsToRemove.has(row.parentGroupId)) return false;
-                if (row?.projectNickname === projectKey) return false;
-                return true;
-              });
-              if (filteredRows.length !== taskRows.length) {
-                saveTaskRows(filteredRows, DEFAULT_PROJECT_ID, currentYear);
-              }
+              })();
             }
             // Chip cleanup is now async (Supabase). The command pattern's
             // execute is synchronous and not awaited, so wrap the chip
@@ -461,7 +472,10 @@ export default function StagingPageV2() {
             });
           }
           if (capturedTaskRows) {
-            saveTaskRows(capturedTaskRows, DEFAULT_PROJECT_ID, currentYear);
+            // Fire-and-forget restore; matches the async pattern in execute.
+            saveTaskRows(capturedTaskRows, DEFAULT_PROJECT_ID, currentYear).catch((err) => {
+              console.error('Failed to restore task rows on undo', err);
+            });
           }
         },
       };
