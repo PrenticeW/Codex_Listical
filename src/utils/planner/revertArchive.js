@@ -16,6 +16,7 @@ import {
   readYearMetadata,
   saveYearMetadata,
 } from '../../lib/yearMetadataStorage';
+import { clearForYear } from '../../lib/storageCache';
 
 /**
  * Find the most recently archived year (highest yearNumber with status 'archived').
@@ -92,6 +93,11 @@ export async function revertArchive() {
 
     // saveYearMetadata fires the metadata event; setCurrentYear is now redundant
     // because saveYearMetadata syncs currentYear from the payload.
+
+    // Both years' `years.status` columns changed. Clear any cached row for
+    // either year so the next read sees the restored state.
+    clearForYear(archivedYear.yearNumber);
+    clearForYear(activeYear.yearNumber);
 
     return {
       success: true,

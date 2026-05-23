@@ -43,8 +43,20 @@ import { supabase } from '../../lib/supabase';
 import { createInitialData } from './dataCreators';
 import { loadTacticsMetrics } from '../../lib/tacticsMetricsStorage';
 import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
+import {
+  getCached,
+  hasCached,
+  setCached,
+} from '../../lib/storageCache';
 
 export { DEFAULT_PROJECT_ID };
+
+// --- cache namespacing -------------------------------------------------
+
+const CACHE_NS = 'plannerStorage';
+const yearKey = (userId, yearNumber) => `years:${userId}:${yearNumber}`;
+const settingsKey = (userId, yearNumber) => `planner_settings:${userId}:${yearNumber}`;
+const taskRowsKey = (userId, yearNumber) => `task_rows:${userId}:${yearNumber}`;
 
 // --- exported event names (unchanged) ---------------------------------
 
@@ -79,6 +91,8 @@ async function requireUserId() {
 }
 
 async function findYearRow(userId, yearNumber) {
+  const key = yearKey(userId, yearNumber);
+  if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
   const { data, error } = await supabase
     .from('years')
     .select('id, start_date, total_days')
@@ -86,7 +100,9 @@ async function findYearRow(userId, yearNumber) {
     .eq('year_number', yearNumber)
     .maybeSingle();
   if (error) throw error;
-  return data ?? null;
+  const row = data ?? null;
+  setCached(CACHE_NS, key, row);
+  return row;
 }
 
 async function findYearId(userId, yearNumber) {
@@ -105,7 +121,13 @@ function dispatchPlannerStartDateEvent({ startDate, projectId, yearNumber }) {
 
 // --- planner_settings row read/write ---------------------------------
 
-async function readPlannerSettingsRow({ userId, yearId }) {
+async function readPlannerSettingsRow({ userId, yearId, yearNumber }) {
+  // yearNumber drives the cache key so two helpers reading the same row
+  // share a cache slot. yearId is still needed for the actual DB query.
+  if (yearNumber != null) {
+    const key = settingsKey(userId, yearNumber);
+    if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
+  }
   const { data, error } = await supabase
     .from('planner_settings')
     .select('*')
@@ -113,38 +135,60 @@ async function readPlannerSettingsRow({ userId, yearId }) {
     .eq('year_id', yearId)
     .maybeSingle();
   if (error) throw error;
-  return data ?? null;
+  const row = data ?? null;
+  if (yearNumber != null) {
+    setCached(CACHE_NS, settingsKey(userId, yearNumber), row);
+  }
+  return row;
 }
 
 /**
  * Write a partial column set to planner_settings without clobbering columns
  * this caller does not own. Mirrors the writeYearSettingsRow pattern from
  * helper #4 so each save function only touches its own columns.
+ *
+ * Refreshes the cache with the freshly-written row so the next read returns
+ * the new value without a round-trip.
  */
-async function writePlannerSettingsColumns({ userId, yearId, columns }) {
-  const existing = await readPlannerSettingsRow({ userId, yearId });
+async function writePlannerSettingsColumns({ userId, yearId, yearNumber, columns }) {
+  const existing = await readPlannerSettingsRow({ userId, yearId, yearNumber });
+  let updatedRow;
   if (existing) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('planner_settings')
       .update(columns)
-      .eq('id', existing.id);
+      .eq('id', existing.id)
+      .select()
+      .single();
     if (error) throw error;
+    updatedRow = data;
   } else {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('planner_settings')
-      .insert({ user_id: userId, year_id: yearId, ...columns });
+      .insert({ user_id: userId, year_id: yearId, ...columns })
+      .select()
+      .single();
     if (error) throw error;
+    updatedRow = data;
+  }
+  if (yearNumber != null) {
+    setCached(CACHE_NS, settingsKey(userId, yearNumber), updatedRow);
   }
 }
 
 // --- years table updates (start_date, total_days live here) -----------
 
-async function updateYearColumns({ yearId, columns }) {
-  const { error } = await supabase
+async function updateYearColumns({ userId, yearId, yearNumber, columns }) {
+  const { data, error } = await supabase
     .from('years')
     .update(columns)
-    .eq('id', yearId);
+    .eq('id', yearId)
+    .select('id, start_date, total_days')
+    .single();
   if (error) throw error;
+  if (userId != null && yearNumber != null) {
+    setCached(CACHE_NS, yearKey(userId, yearNumber), data ?? null);
+  }
 }
 
 // ============================================================
@@ -159,7 +203,7 @@ export const readColumnSizing = async (
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return {};
-    const row = await readPlannerSettingsRow({ userId, yearId });
+    const row = await readPlannerSettingsRow({ userId, yearId, yearNumber });
     const value = row?.column_sizing;
     return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   } catch (error) {
@@ -180,6 +224,7 @@ export const saveColumnSizing = async (
     await writePlannerSettingsColumns({
       userId,
       yearId,
+      yearNumber,
       columns: {
         column_sizing:
           columnSizing && typeof columnSizing === 'object' && !Array.isArray(columnSizing)
@@ -204,7 +249,7 @@ export const readSizeScale = async (
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return DEFAULT_SIZE_SCALE;
-    const row = await readPlannerSettingsRow({ userId, yearId });
+    const row = await readPlannerSettingsRow({ userId, yearId, yearNumber });
     const value = typeof row?.size_scale === 'number' ? row.size_scale : Number(row?.size_scale);
     return Number.isFinite(value) ? value : DEFAULT_SIZE_SCALE;
   } catch (error) {
@@ -226,6 +271,7 @@ export const saveSizeScale = async (
     await writePlannerSettingsColumns({
       userId,
       yearId,
+      yearNumber,
       columns: { size_scale: Number.isFinite(value) ? value : DEFAULT_SIZE_SCALE },
     });
   } catch (error) {
@@ -262,7 +308,9 @@ export const saveStartDate = async (
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return;
     await updateYearColumns({
+      userId,
       yearId,
+      yearNumber,
       columns: { start_date: startDate },
     });
     dispatchPlannerStartDateEvent({ startDate, projectId, yearNumber });
@@ -283,7 +331,7 @@ export const readShowRecurring = async (
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return DEFAULT_SHOW_RECURRING;
-    const row = await readPlannerSettingsRow({ userId, yearId });
+    const row = await readPlannerSettingsRow({ userId, yearId, yearNumber });
     return row ? row.show_recurring !== false : DEFAULT_SHOW_RECURRING;
   } catch (error) {
     console.error('Failed to read show recurring', error);
@@ -303,6 +351,7 @@ export const saveShowRecurring = async (
     await writePlannerSettingsColumns({
       userId,
       yearId,
+      yearNumber,
       columns: { show_recurring: showRecurring === true || showRecurring === 'true' },
     });
   } catch (error) {
@@ -318,7 +367,7 @@ export const readShowSubprojects = async (
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return DEFAULT_SHOW_SUBPROJECTS;
-    const row = await readPlannerSettingsRow({ userId, yearId });
+    const row = await readPlannerSettingsRow({ userId, yearId, yearNumber });
     return row ? row.show_subprojects !== false : DEFAULT_SHOW_SUBPROJECTS;
   } catch (error) {
     console.error('Failed to read show subprojects', error);
@@ -338,6 +387,7 @@ export const saveShowSubprojects = async (
     await writePlannerSettingsColumns({
       userId,
       yearId,
+      yearNumber,
       columns: { show_subprojects: showSubprojects === true || showSubprojects === 'true' },
     });
   } catch (error) {
@@ -353,7 +403,7 @@ export const readShowMaxMinRows = async (
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return DEFAULT_SHOW_MAX_MIN_ROWS;
-    const row = await readPlannerSettingsRow({ userId, yearId });
+    const row = await readPlannerSettingsRow({ userId, yearId, yearNumber });
     return row ? row.show_max_min_rows !== false : DEFAULT_SHOW_MAX_MIN_ROWS;
   } catch (error) {
     console.error('Failed to read show max/min rows', error);
@@ -373,6 +423,7 @@ export const saveShowMaxMinRows = async (
     await writePlannerSettingsColumns({
       userId,
       yearId,
+      yearNumber,
       columns: { show_max_min_rows: showMaxMinRows === true || showMaxMinRows === 'true' },
     });
   } catch (error) {
@@ -392,7 +443,7 @@ export const readSortStatuses = async (
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return new Set(DEFAULT_SORT_STATUSES);
-    const row = await readPlannerSettingsRow({ userId, yearId });
+    const row = await readPlannerSettingsRow({ userId, yearId, yearNumber });
     const arr = Array.isArray(row?.sort_statuses) ? row.sort_statuses : DEFAULT_SORT_STATUSES;
     return new Set(arr);
   } catch (error) {
@@ -414,6 +465,7 @@ export const saveSortStatuses = async (
     await writePlannerSettingsColumns({
       userId,
       yearId,
+      yearNumber,
       columns: { sort_statuses: arr },
     });
   } catch (error) {
@@ -433,7 +485,7 @@ export const readSortPlannerStatuses = async (
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return new Set(DEFAULT_SORT_STATUSES);
-    const row = await readPlannerSettingsRow({ userId, yearId });
+    const row = await readPlannerSettingsRow({ userId, yearId, yearNumber });
     const arr = Array.isArray(row?.sort_planner_statuses)
       ? row.sort_planner_statuses
       : DEFAULT_SORT_STATUSES;
@@ -457,6 +509,7 @@ export const saveSortPlannerStatuses = async (
     await writePlannerSettingsColumns({
       userId,
       yearId,
+      yearNumber,
       columns: { sort_planner_statuses: arr },
     });
   } catch (error) {
@@ -495,7 +548,9 @@ export const saveTotalDays = async (
     if (!yearId) return;
     const value = Number(totalDays);
     await updateYearColumns({
+      userId,
       yearId,
+      yearNumber,
       columns: { total_days: Number.isFinite(value) && value > 0 ? value : DEFAULT_TOTAL_DAYS },
     });
   } catch (error) {
@@ -524,7 +579,7 @@ export const readVisibleDayColumns = async (
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return defaultVisibleDayColumns(totalDays);
-    const row = await readPlannerSettingsRow({ userId, yearId });
+    const row = await readPlannerSettingsRow({ userId, yearId, yearNumber });
     const value = row?.visible_day_columns;
     if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length === 0) {
       return defaultVisibleDayColumns(totalDays);
@@ -548,6 +603,7 @@ export const saveVisibleDayColumns = async (
     await writePlannerSettingsColumns({
       userId,
       yearId,
+      yearNumber,
       columns: {
         visible_day_columns:
           visibleDayColumns && typeof visibleDayColumns === 'object' && !Array.isArray(visibleDayColumns)
@@ -572,7 +628,7 @@ export const readCollapsedGroups = async (
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return new Set();
-    const row = await readPlannerSettingsRow({ userId, yearId });
+    const row = await readPlannerSettingsRow({ userId, yearId, yearNumber });
     return new Set(Array.isArray(row?.collapsed_groups) ? row.collapsed_groups : []);
   } catch (error) {
     console.error('Failed to read collapsed groups', error);
@@ -593,6 +649,7 @@ export const saveCollapsedGroups = async (
     await writePlannerSettingsColumns({
       userId,
       yearId,
+      yearNumber,
       columns: { collapsed_groups: arr },
     });
   } catch (error) {
@@ -821,8 +878,14 @@ export const readTaskRows = async (
 ) => {
   try {
     const userId = await requireUserId();
+    const cacheKey = taskRowsKey(userId, yearNumber);
+    if (hasCached(CACHE_NS, cacheKey)) return getCached(CACHE_NS, cacheKey);
+
     const yearRow = await findYearRow(userId, yearNumber);
-    if (!yearRow) return [];
+    if (!yearRow) {
+      setCached(CACHE_NS, cacheKey, []);
+      return [];
+    }
 
     const [tasksRes, archivesRes, metrics] = await Promise.all([
       supabase
@@ -862,18 +925,21 @@ export const readTaskRows = async (
     const taskRows = (tasksRes.data || []).map(plannerRowDbToPayload);
     const archiveRows = (archivesRes.data || []).map(archiveRowDbToPayload);
 
-    // If there are no task rows and no archive rows we still return at least
-    // some blank rows so the table renders the empty grid the user expects.
+    let result;
     if (taskCount === 0 && archiveRows.length === 0) {
-      return [...headers, ...createInitialData(100, totalDays, startDate).slice(7)];
+      // If there are no task rows and no archive rows we still return at least
+      // some blank rows so the table renders the empty grid the user expects.
+      result = [...headers, ...createInitialData(100, totalDays, startDate).slice(7)];
+    } else {
+      // Archive rows are appended after the live task rows. The original code
+      // interleaved them inline based on `archive-week-*` ids in `task-rows`;
+      // post-port they live in a separate table, so appending in week_number
+      // order is the simplest faithful reconstruction. If insertion order
+      // matters more than weekly order we can revisit.
+      result = [...headers, ...taskRows, ...archiveRows];
     }
-
-    // Archive rows are appended after the live task rows. The original code
-    // interleaved them inline based on `archive-week-*` ids in `task-rows`;
-    // post-port they live in a separate table, so appending in week_number
-    // order is the simplest faithful reconstruction. If insertion order
-    // matters more than weekly order we can revisit.
-    return [...headers, ...taskRows, ...archiveRows];
+    setCached(CACHE_NS, cacheKey, result);
+    return result;
   } catch (error) {
     console.error('Failed to read task rows', error);
     return [];
@@ -944,6 +1010,10 @@ export const saveTaskRows = async (
         if (r.error) throw r.error;
       }
     }
+
+    // Cache the just-saved array so the next read returns it instantly
+    // (snappy navigation between pages without losing user edits).
+    setCached(CACHE_NS, taskRowsKey(userId, yearNumber), allRows);
   } catch (error) {
     console.error('Failed to save task rows', error);
   }

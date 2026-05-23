@@ -40,6 +40,14 @@
  */
 
 import { supabase } from './supabase';
+import { getCached, hasCached, setCached } from './storageCache';
+
+// --- cache namespacing -------------------------------------------------
+
+const CACHE_NS = 'tacticsStorage';
+const yearSettingsKey = (userId, yearNumber) => `tactics_year_settings:${userId}:${yearNumber}`;
+const chipsLayerKey = (userId, yearNumber, isSent) => `tactics_chips:${userId}:${isSent ? 'sent' : 'live'}:${yearNumber}`;
+const sendTsKey = (userId, yearNumber) => `send_to_system_at:${userId}:${yearNumber}`;
 
 // --- exported event names (unchanged) ---------------------------------
 
@@ -103,7 +111,11 @@ function dispatchEvent(eventName, payload, yearNumber) {
 
 // --- year settings + column widths (shared row) -----------------------
 
-async function readYearSettingsRow({ userId, yearId }) {
+async function readYearSettingsRow({ userId, yearId, yearNumber }) {
+  if (yearNumber != null) {
+    const key = yearSettingsKey(userId, yearNumber);
+    if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
+  }
   const { data, error } = await supabase
     .from('tactics_year_settings')
     .select('*')
@@ -111,7 +123,11 @@ async function readYearSettingsRow({ userId, yearId }) {
     .eq('year_id', yearId)
     .maybeSingle();
   if (error) throw error;
-  return data ?? null;
+  const row = data ?? null;
+  if (yearNumber != null) {
+    setCached(CACHE_NS, yearSettingsKey(userId, yearNumber), row);
+  }
+  return row;
 }
 
 /**
@@ -120,19 +136,29 @@ async function readYearSettingsRow({ userId, yearId }) {
  * eight settings columns; saveTacticsColumnWidths sends column_widths only;
  * each leaves the other untouched.
  */
-async function writeYearSettingsRow({ userId, yearId, columns }) {
-  const existing = await readYearSettingsRow({ userId, yearId });
+async function writeYearSettingsRow({ userId, yearId, yearNumber, columns }) {
+  const existing = await readYearSettingsRow({ userId, yearId, yearNumber });
+  let updatedRow;
   if (existing) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('tactics_year_settings')
       .update(columns)
-      .eq('id', existing.id);
+      .eq('id', existing.id)
+      .select()
+      .single();
     if (error) throw error;
+    updatedRow = data;
   } else {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('tactics_year_settings')
-      .insert({ user_id: userId, year_id: yearId, ...columns });
+      .insert({ user_id: userId, year_id: yearId, ...columns })
+      .select()
+      .single();
     if (error) throw error;
+    updatedRow = data;
+  }
+  if (yearNumber != null) {
+    setCached(CACHE_NS, yearSettingsKey(userId, yearNumber), updatedRow);
   }
 }
 
@@ -191,7 +217,7 @@ export async function loadTacticsYearSettings(yearNumber) {
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return { ...DEFAULT_YEAR_SETTINGS };
-    const row = await readYearSettingsRow({ userId, yearId });
+    const row = await readYearSettingsRow({ userId, yearId, yearNumber });
     return yearSettingsRowToPayload(row);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('tacticsStorage:')) throw error;
@@ -234,7 +260,7 @@ export async function loadTacticsColumnWidths(yearNumber) {
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return null;
-    const row = await readYearSettingsRow({ userId, yearId });
+    const row = await readYearSettingsRow({ userId, yearId, yearNumber });
     const widths = row?.column_widths;
     return Array.isArray(widths) ? widths : null;
   } catch (error) {
@@ -260,6 +286,7 @@ export async function saveTacticsColumnWidths(widths, yearNumber) {
     await writeYearSettingsRow({
       userId,
       yearId,
+      yearNumber,
       columns: { column_widths: Array.isArray(widths) ? widths : [] },
     });
   } catch (error) {
@@ -328,7 +355,11 @@ function customProjectPayloadToRow(custom, { userId, yearId, isSent }) {
   };
 }
 
-async function readChipsLayer({ userId, yearId, isSent }) {
+async function readChipsLayer({ userId, yearId, yearNumber, isSent }) {
+  if (yearNumber != null) {
+    const key = chipsLayerKey(userId, yearNumber, isSent);
+    if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
+  }
   const [chipsRes, customRes] = await Promise.all([
     supabase
       .from('tactics_chips')
@@ -349,29 +380,34 @@ async function readChipsLayer({ userId, yearId, isSent }) {
   const chipRows = chipsRes.data || [];
   const customRows = customRes.data || [];
 
+  let result;
   if (chipRows.length === 0 && customRows.length === 0) {
-    return { projectChips: null, customProjects: null, chipTimeOverrides: null };
-  }
+    result = { projectChips: null, customProjects: null, chipTimeOverrides: null };
+  } else {
+    const projectChips = chipRows.length > 0 ? chipRows.map(chipRowToPayload) : null;
+    const customProjects =
+      customRows.length > 0 ? customRows.map(customProjectRowToPayload) : null;
 
-  const projectChips = chipRows.length > 0 ? chipRows.map(chipRowToPayload) : null;
-  const customProjects =
-    customRows.length > 0 ? customRows.map(customProjectRowToPayload) : null;
-
-  // Reconstruct chipTimeOverrides from per-chip override_minutes. Only
-  // include chips with a non-null override so callers' `if (overrides?.[id])`
-  // guards behave the same as they did pre-port.
-  const chipTimeOverrides = {};
-  for (const row of chipRows) {
-    if (row.override_minutes != null) {
-      chipTimeOverrides[row.chip_id] = row.override_minutes;
+    // Reconstruct chipTimeOverrides from per-chip override_minutes. Only
+    // include chips with a non-null override so callers' `if (overrides?.[id])`
+    // guards behave the same as they did pre-port.
+    const chipTimeOverrides = {};
+    for (const row of chipRows) {
+      if (row.override_minutes != null) {
+        chipTimeOverrides[row.chip_id] = row.override_minutes;
+      }
     }
+    const overrides = Object.keys(chipTimeOverrides).length > 0 ? chipTimeOverrides : null;
+    result = { projectChips, customProjects, chipTimeOverrides: overrides };
   }
-  const overrides = Object.keys(chipTimeOverrides).length > 0 ? chipTimeOverrides : null;
 
-  return { projectChips, customProjects, chipTimeOverrides: overrides };
+  if (yearNumber != null) {
+    setCached(CACHE_NS, chipsLayerKey(userId, yearNumber, isSent), result);
+  }
+  return result;
 }
 
-async function writeChipsLayer({ userId, yearId, isSent, payload }) {
+async function writeChipsLayer({ userId, yearId, yearNumber, isSent, payload }) {
   const projectChips = Array.isArray(payload?.projectChips) ? payload.projectChips : [];
   const customProjects = Array.isArray(payload?.customProjects) ? payload.customProjects : [];
   const chipTimeOverrides =
@@ -421,6 +457,18 @@ async function writeChipsLayer({ userId, yearId, isSent, payload }) {
       if (r.error) throw r.error;
     }
   }
+
+  // Cache the freshly-saved layer so the next read returns it instantly.
+  if (yearNumber != null) {
+    const cached = {
+      projectChips: projectChips.length > 0 ? projectChips : null,
+      customProjects: customProjects.length > 0 ? customProjects : null,
+      chipTimeOverrides: chipTimeOverrides && Object.keys(chipTimeOverrides).length > 0
+        ? chipTimeOverrides
+        : null,
+    };
+    setCached(CACHE_NS, chipsLayerKey(userId, yearNumber, isSent), cached);
+  }
 }
 
 /**
@@ -433,7 +481,7 @@ export async function loadTacticsChipsState(yearNumber) {
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return { projectChips: null, customProjects: null, chipTimeOverrides: null };
-    return await readChipsLayer({ userId, yearId, isSent: false });
+    return await readChipsLayer({ userId, yearId, yearNumber, isSent: false });
   } catch (error) {
     console.error('Failed to read tactics chip state', error);
     return { projectChips: null, customProjects: null, chipTimeOverrides: null };
@@ -454,7 +502,7 @@ export async function saveTacticsChipsState(payload, yearNumber) {
       console.error(`Cannot save tactics chip state: year ${yearNumber} does not exist`);
       return;
     }
-    await writeChipsLayer({ userId, yearId, isSent: false, payload });
+    await writeChipsLayer({ userId, yearId, yearNumber, isSent: false, payload });
     dispatchEvent(TACTICS_CHIPS_STORAGE_EVENT, payload, yearNumber);
   } catch (error) {
     console.error('Failed to save tactics chip state', error);
@@ -472,7 +520,7 @@ export async function loadSentChipsSnapshot(yearNumber) {
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return { projectChips: null, customProjects: null, chipTimeOverrides: null };
-    return await readChipsLayer({ userId, yearId, isSent: true });
+    return await readChipsLayer({ userId, yearId, yearNumber, isSent: true });
   } catch (error) {
     console.error('Failed to read sent chips snapshot', error);
     return { projectChips: null, customProjects: null, chipTimeOverrides: null };
@@ -493,7 +541,7 @@ export async function saveSentChipsSnapshot(payload, yearNumber) {
       console.error(`Cannot save sent chips snapshot: year ${yearNumber} does not exist`);
       return;
     }
-    await writeChipsLayer({ userId, yearId, isSent: true, payload });
+    await writeChipsLayer({ userId, yearId, yearNumber, isSent: true, payload });
   } catch (error) {
     console.error('Failed to save sent chips snapshot', error);
   }
@@ -540,10 +588,17 @@ async function writePlannerSettingsTimestamp({ userId, yearId, value }) {
 export async function getSendToSystemTimestamp(yearNumber) {
   try {
     const userId = await requireUserId();
+    const key = sendTsKey(userId, yearNumber);
+    if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
     const yearId = await findYearId(userId, yearNumber);
-    if (!yearId) return null;
+    if (!yearId) {
+      setCached(CACHE_NS, key, null);
+      return null;
+    }
     const row = await readPlannerSettingsRow({ userId, yearId });
-    return row?.send_to_system_at ?? null;
+    const value = row?.send_to_system_at ?? null;
+    setCached(CACHE_NS, key, value);
+    return value;
   } catch (error) {
     console.error('Failed to read send-to-system timestamp', error);
     return null;
@@ -562,11 +617,9 @@ export async function setSendToSystemTimestamp(yearNumber) {
       console.error(`Cannot set send-to-system timestamp: year ${yearNumber} does not exist`);
       return;
     }
-    await writePlannerSettingsTimestamp({
-      userId,
-      yearId,
-      value: new Date().toISOString(),
-    });
+    const value = new Date().toISOString();
+    await writePlannerSettingsTimestamp({ userId, yearId, value });
+    setCached(CACHE_NS, sendTsKey(userId, yearNumber), value);
   } catch (error) {
     console.error('Failed to set send-to-system timestamp', error);
   }
@@ -583,6 +636,7 @@ export async function clearSendToSystemTimestamp(yearNumber) {
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return; // nothing to clear
     await writePlannerSettingsTimestamp({ userId, yearId, value: null });
+    setCached(CACHE_NS, sendTsKey(userId, yearNumber), null);
   } catch (error) {
     console.error('Failed to clear send-to-system timestamp', error);
   }

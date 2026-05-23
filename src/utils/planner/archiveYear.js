@@ -46,6 +46,7 @@ import {
   saveTacticsMetrics,
 } from '../../lib/tacticsMetricsStorage';
 import { isProjectTask } from './rowTypeChecks';
+import { clearForYear } from '../../lib/storageCache';
 
 const DEFAULT_PROJECT_ID = 'project-1';
 
@@ -248,6 +249,9 @@ export async function performYearArchive(yearNumber) {
       totalWeeksCompleted: weeksCompleted,
       totalHoursCompleted: totalHours,
     });
+    // The archived year's `years.status` flipped; clear any cached row for
+    // that year so the next read returns the new state.
+    clearForYear(yearNumber);
     console.log(`[Archive Year] Year ${yearNumber} metadata archived`);
 
     // 7. Determine next year: promote draft if one exists, otherwise create fresh
@@ -260,6 +264,9 @@ export async function performYearArchive(yearNumber) {
       nextYearNumber = draftYear.yearNumber;
       nextStartDate = draftYear.startDate;
       await promoteDraftToActive(nextYearNumber);
+      // The promoted year's status flipped from 'draft' to 'active'; clear
+      // any cached years-row for it so the next read sees the new status.
+      clearForYear(nextYearNumber);
       console.log(`[Archive Year] Promoted draft Year ${nextYearNumber} to active`);
     } else {
       // Legacy path: no draft year, create fresh next year
@@ -269,28 +276,29 @@ export async function performYearArchive(yearNumber) {
       await createNewYear(nextYearNumber, nextStartDate);
       console.log(`[Archive Year] Year ${nextYearNumber} created with start date: ${nextStartDate}`);
 
-      // Copy settings
-      saveColumnSizing(columnSizing, DEFAULT_PROJECT_ID, nextYearNumber);
-      saveSizeScale(sizeScale, DEFAULT_PROJECT_ID, nextYearNumber);
-      saveShowRecurring(showRecurring, DEFAULT_PROJECT_ID, nextYearNumber);
-      saveShowSubprojects(showSubprojects, DEFAULT_PROJECT_ID, nextYearNumber);
-      saveShowMaxMinRows(showMaxMinRows, DEFAULT_PROJECT_ID, nextYearNumber);
-      saveSortStatuses(sortStatuses, DEFAULT_PROJECT_ID, nextYearNumber);
-      saveTotalDays(totalDays, DEFAULT_PROJECT_ID, nextYearNumber);
-
+      // Copy settings. All planner writes are now async (Supabase port);
+      // parallelise to keep the archive flow snappy and surface errors.
       const freshVisibleDayColumns = {};
       for (let i = 0; i < totalDays; i++) {
         freshVisibleDayColumns[`day-${i}`] = true;
       }
-      saveVisibleDayColumns(freshVisibleDayColumns, DEFAULT_PROJECT_ID, nextYearNumber);
-      saveStartDate(nextStartDate, DEFAULT_PROJECT_ID, nextYearNumber);
-
       const initialTaskRows = createInitialDataForNewYear(nextStartDate, recurringTasks, totalDays);
-      saveTaskRows(initialTaskRows, DEFAULT_PROJECT_ID, nextYearNumber);
-
-      await saveStagingState({ shortlist: [], archived: [] }, nextYearNumber);
       const freshTacticsMetrics = getDefaultTacticsMetrics();
-      await saveTacticsMetrics(freshTacticsMetrics, nextYearNumber);
+
+      await Promise.all([
+        saveColumnSizing(columnSizing, DEFAULT_PROJECT_ID, nextYearNumber),
+        saveSizeScale(sizeScale, DEFAULT_PROJECT_ID, nextYearNumber),
+        saveShowRecurring(showRecurring, DEFAULT_PROJECT_ID, nextYearNumber),
+        saveShowSubprojects(showSubprojects, DEFAULT_PROJECT_ID, nextYearNumber),
+        saveShowMaxMinRows(showMaxMinRows, DEFAULT_PROJECT_ID, nextYearNumber),
+        saveSortStatuses(sortStatuses, DEFAULT_PROJECT_ID, nextYearNumber),
+        saveTotalDays(totalDays, DEFAULT_PROJECT_ID, nextYearNumber),
+        saveVisibleDayColumns(freshVisibleDayColumns, DEFAULT_PROJECT_ID, nextYearNumber),
+        saveStartDate(nextStartDate, DEFAULT_PROJECT_ID, nextYearNumber),
+        saveTaskRows(initialTaskRows, DEFAULT_PROJECT_ID, nextYearNumber),
+        saveStagingState({ shortlist: [], archived: [] }, nextYearNumber),
+        saveTacticsMetrics(freshTacticsMetrics, nextYearNumber),
+      ]);
 
       console.log(`[Archive Year] Year ${nextYearNumber} initialized`);
     }

@@ -20,8 +20,15 @@
  */
 
 import { supabase } from './supabase';
+import { getCached, hasCached, setCached } from './storageCache';
 
 export const TACTICS_METRICS_STORAGE_EVENT = 'tactics-metrics-state-update';
+
+// --- cache namespacing -------------------------------------------------
+
+const CACHE_NS = 'tacticsMetricsStorage';
+const metricsKey = (userId, yearNumber, isSent) =>
+  `tactics_metrics:${userId}:${isSent ? 'sent' : 'live'}:${yearNumber}`;
 
 // --- internal helpers --------------------------------------------------
 
@@ -138,7 +145,11 @@ function dbRowToPayload(row) {
   };
 }
 
-async function readMetricsRow({ userId, yearId, isSent }) {
+async function readMetricsRow({ userId, yearId, yearNumber, isSent }) {
+  if (yearNumber != null) {
+    const key = metricsKey(userId, yearNumber, isSent);
+    if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
+  }
   const { data, error } = await supabase
     .from('tactics_metrics')
     .select('*')
@@ -147,19 +158,27 @@ async function readMetricsRow({ userId, yearId, isSent }) {
     .eq('is_sent', isSent)
     .maybeSingle();
   if (error) throw error;
-  return data ?? null;
+  const row = data ?? null;
+  if (yearNumber != null) {
+    setCached(CACHE_NS, metricsKey(userId, yearNumber, isSent), row);
+  }
+  return row;
 }
 
-async function writeMetricsRow({ userId, yearId, isSent, columns }) {
-  const existing = await readMetricsRow({ userId, yearId, isSent });
+async function writeMetricsRow({ userId, yearId, yearNumber, isSent, columns }) {
+  const existing = await readMetricsRow({ userId, yearId, yearNumber, isSent });
+  let updatedRow;
   if (existing) {
     const update = { ...columns };
     if (isSent) update.sent_at = new Date().toISOString();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('tactics_metrics')
       .update(update)
-      .eq('id', existing.id);
+      .eq('id', existing.id)
+      .select()
+      .single();
     if (error) throw error;
+    updatedRow = data;
   } else {
     const insert = {
       user_id: userId,
@@ -168,8 +187,16 @@ async function writeMetricsRow({ userId, yearId, isSent, columns }) {
       ...columns,
     };
     if (isSent) insert.sent_at = new Date().toISOString();
-    const { error } = await supabase.from('tactics_metrics').insert(insert);
+    const { data, error } = await supabase
+      .from('tactics_metrics')
+      .insert(insert)
+      .select()
+      .single();
     if (error) throw error;
+    updatedRow = data;
+  }
+  if (yearNumber != null) {
+    setCached(CACHE_NS, metricsKey(userId, yearNumber, isSent), updatedRow);
   }
 }
 
@@ -194,7 +221,7 @@ export async function loadTacticsMetrics(yearNumber) {
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return null;
-    const row = await readMetricsRow({ userId, yearId, isSent: false });
+    const row = await readMetricsRow({ userId, yearId, yearNumber, isSent: false });
     return dbRowToPayload(row);
   } catch (error) {
     console.error('Failed to read tactics metrics', error);
@@ -218,7 +245,7 @@ export async function saveTacticsMetrics(payload, yearNumber) {
       return;
     }
     const columns = payloadToDbColumns(payload);
-    await writeMetricsRow({ userId, yearId, isSent: false, columns });
+    await writeMetricsRow({ userId, yearId, yearNumber, isSent: false, columns });
     dispatchEvent(payload, yearNumber);
   } catch (error) {
     console.error('Failed to save tactics metrics', error);
@@ -240,7 +267,7 @@ export async function saveSentMetricsSnapshot(payload, yearNumber) {
       return;
     }
     const columns = payloadToDbColumns(payload);
-    await writeMetricsRow({ userId, yearId, isSent: true, columns });
+    await writeMetricsRow({ userId, yearId, yearNumber, isSent: true, columns });
   } catch (error) {
     console.error('Failed to save sent metrics snapshot', error);
   }
@@ -256,7 +283,7 @@ export async function loadSentMetricsSnapshot(yearNumber) {
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return null;
-    const row = await readMetricsRow({ userId, yearId, isSent: true });
+    const row = await readMetricsRow({ userId, yearId, yearNumber, isSent: true });
     return dbRowToPayload(row);
   } catch (error) {
     console.error('Failed to read sent metrics snapshot', error);

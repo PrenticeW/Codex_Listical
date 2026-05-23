@@ -152,7 +152,15 @@ The build passes but no user has actually clicked through the System page on the
 8. Plan Next Year. Draft year settings copy across. Goal page is reset per the existing rules.
 9. Sign out, sign in as a second account. No crosstalk.
 
-### 1. Step 6: async-aware sweep
+### 1. Step 6: async-aware sweep (DONE 2026-05-23)
+
+In-memory cache layer landed across all four ported helpers (stagingStorage, tacticsMetricsStorage, tacticsStorage, plannerStorage) via `src/lib/storageCache.js`. Cache hits return the saved value instantly so page-to-page navigation no longer blanks out for ~300ms-1s. Save functions update the cache with the just-written row so the next read is consistent.
+
+Sign-out invalidation: `storageCache.js` subscribes to `supabase.auth.onAuthStateChange` and calls `clearAll()` on `SIGNED_OUT`/`USER_DELETED`. Year mutations (`createDraftYear`, `undoDraftYear`, `performYearArchive`, `revertArchive`) call `clearForYear(yearNumber)` so cached `years.status` flips are seen immediately.
+
+Caveat: this is an in-tab cache only. Two browser tabs on the same account won't see each other's edits until refresh. Documented as acceptable pre-launch.
+
+### 1b. Step 6 (original): async-aware sweep — historical notes
 
 The migration plan's step 6 now has a new item flagged as a real regression Prentice hit: **in-memory cache layer in each ported helper** so navigating between Goal, Plan, and System pages renders saved data instantly rather than blanking out for ~300ms-1s on every navigation while the Supabase round-trip completes. Module-level `Map<yearNumber, payload>` per helper; load returns cached value if present, save updates the cache. Pre-port, localStorage was synchronous and gave this behavior for free; post-port, the navigation latency is noticeable enough that Prentice asked about it directly. Apply to stagingStorage, tacticsMetricsStorage, tacticsStorage, and (once it ports) plannerStorage. yearMetadataStorage already has equivalent caching via YearContext.
 

@@ -15,6 +15,7 @@ import {
   setCurrentYear,
 } from '../../lib/yearMetadataStorage';
 import { clearSendToSystemTimestamp } from '../../lib/tacticsStorage';
+import { clearForYear } from '../../lib/storageCache';
 
 /**
  * Predicate matching every storage key associated with a specific year.
@@ -85,6 +86,11 @@ export async function undoDraftYear() {
     // Remove draft year from metadata. With the Supabase port this also
     // cascades any rows in year-scoped tables that reference this year_id.
     await deleteDraftYearRecord(draft.yearNumber);
+
+    // Invalidate every cached entry tied to the deleted draft year so that
+    // future reads (e.g. switching back to this year number after another
+    // draft is created) don't return stale cached data.
+    clearForYear(draft.yearNumber);
 
     // Switch back to active year
     await setCurrentYear(active.yearNumber);

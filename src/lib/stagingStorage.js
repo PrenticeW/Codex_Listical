@@ -19,8 +19,14 @@
 
 import { supabase } from './supabase';
 import { defineRowMetadata } from '../utils/staging/planTableHelpers';
+import { getCached, hasCached, setCached } from './storageCache';
 
 export const STAGING_STORAGE_EVENT = 'staging-state-update';
+
+// --- cache namespacing -------------------------------------------------
+
+const CACHE_NS = 'stagingStorage';
+const stagingKey = (userId, yearNumber) => `staging_state:${userId}:${yearNumber}`;
 // Legacy export kept so existing event-key consumers do not break.
 export const STAGING_STORAGE_KEY = 'staging-shortlist';
 
@@ -154,8 +160,15 @@ function dispatchStagingEvent(payload, yearNumber) {
 export async function loadStagingState(yearNumber) {
   try {
     const userId = await requireUserId();
+    const cacheKey = stagingKey(userId, yearNumber);
+    if (hasCached(CACHE_NS, cacheKey)) return getCached(CACHE_NS, cacheKey);
+
     const yearId = await findYearId(userId, yearNumber);
-    if (!yearId) return { shortlist: [], archived: [] };
+    if (!yearId) {
+      const empty = { shortlist: [], archived: [] };
+      setCached(CACHE_NS, cacheKey, empty);
+      return empty;
+    }
 
     const { data, error } = await supabase
       .from('projects')
@@ -176,7 +189,9 @@ export async function loadStagingState(yearNumber) {
         shortlist.push(item);
       }
     }
-    return { shortlist, archived };
+    const result = { shortlist, archived };
+    setCached(CACHE_NS, cacheKey, result);
+    return result;
   } catch (error) {
     console.error('Failed to read staging shortlist', error);
     return { shortlist: [], archived: [] };
@@ -261,6 +276,13 @@ export async function saveStagingState(payload, yearNumber) {
         .upsert(desiredRows, { onConflict: 'id' });
       if (upsertErr) throw upsertErr;
     }
+
+    // Refresh the cache with the just-saved shape so the next read returns
+    // it instantly without a round-trip.
+    setCached(CACHE_NS, stagingKey(userId, yearNumber), {
+      shortlist,
+      archived,
+    });
 
     dispatchStagingEvent(payload, yearNumber);
   } catch (error) {
