@@ -277,10 +277,6 @@ function peekEnrichedChips(yearNumber) {
  * - Row virtualization
  */
 
-// [DEBUG cache] Temporary render counter so we can see how many times
-// ProjectTimePlannerV2 re-renders per navigation. Remove after debug.
-const SYSTEM_RENDER_COUNT = { current: 0 };
-
 export default function ProjectTimePlannerV2() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -288,10 +284,6 @@ export default function ProjectTimePlannerV2() {
 
   // Year context for year-based storage
   const { currentYear, isCurrentYearArchived, isCurrentYearDraft, activeYear, draftYear, allYears, switchToActiveYear, refreshMetadata } = useYear();
-
-  // [DEBUG cache] Track every render and what triggered it.
-  SYSTEM_RENDER_COUNT.current += 1;
-  console.log(`[cache-debug] SystemPage render #${SYSTEM_RENDER_COUNT.current}, currentYear=${currentYear}`);
 
   // True once "Send to System" has been triggered — lets draft year bypass
   // the "no imported tasks" guard so chip rows and project headers appear.
@@ -307,12 +299,9 @@ export default function ProjectTimePlannerV2() {
   // value is a React no-op (no re-render). On cache miss this is the real
   // refresh.
   useEffect(() => {
-    // [DEBUG cache]
-    console.log(`[cache-debug] sentToSystem effect fired. cached=${sendToSystemCached}, initial state=${!!sendToSystemCached}`);
     let cancelled = false;
     getSendToSystemTimestamp(currentYear).then((ts) => {
       if (cancelled) return;
-      console.log(`[cache-debug] setSentToSystem(${!!ts}) called (cached was ${!!sendToSystemCached})`);
       setSentToSystem(!!ts);
     }).catch((err) => {
       console.error('Failed to read send-to-system timestamp', err);
@@ -320,7 +309,6 @@ export default function ProjectTimePlannerV2() {
     return () => {
       cancelled = true;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentYear]);
 
   // Archive modal state
@@ -414,15 +402,11 @@ export default function ProjectTimePlannerV2() {
   // used the cached rows). On a cold miss this effect fires when the load
   // resolves and swaps in the real data.
   const dataHydrated = useRef(Array.isArray(taskRows) && taskRows.length > 0);
-  // [DEBUG cache]
-  console.log(`[cache-debug] dataHydrated init=${dataHydrated.current}, taskRows.length=${Array.isArray(taskRows) ? taskRows.length : 'N/A'}, storageLoaded=${storageLoaded}`);
   useEffect(() => {
-    console.log(`[cache-debug] hydration effect fired. storageLoaded=${storageLoaded}, dataHydrated.current=${dataHydrated.current}, taskRows.length=${Array.isArray(taskRows) ? taskRows.length : 'N/A'}`);
     if (!storageLoaded) return;
     if (dataHydrated.current) return;
     dataHydrated.current = true;
     if (Array.isArray(taskRows) && taskRows.length > 0) {
-      console.log('[cache-debug] setData fired from hydration effect');
       setData(taskRows);
     }
   }, [storageLoaded, taskRows, setData]);
@@ -543,27 +527,15 @@ export default function ProjectTimePlannerV2() {
   // page doesn't re-render with freshly-allocated wrapper objects after
   // the initial paint (that was the "page builds in front of me" flash).
   useEffect(() => {
-    // [DEBUG cache]
-    const cachedMetrics = peekMetricsData(currentYear);
-    const cachedChips = peekEnrichedChips(currentYear);
-    console.log(`[cache-debug] metrics/chips effect fired. cachedMetrics=${cachedMetrics ? 'HIT' : 'MISS'} cachedChips=${cachedChips ? 'HIT' : 'MISS'}`);
     let cancelled = false;
-    if (!cachedMetrics) {
-      console.log('[cache-debug] firing loadMetricsData (cache miss)');
+    if (!peekMetricsData(currentYear)) {
       loadMetricsData(currentYear).then((data) => {
-        if (!cancelled) {
-          console.log('[cache-debug] setMetricsData fired from async load');
-          setMetricsData(data);
-        }
+        if (!cancelled) setMetricsData(data);
       });
     }
-    if (!cachedChips) {
-      console.log('[cache-debug] firing loadEnrichedChips (cache miss)');
+    if (!peekEnrichedChips(currentYear)) {
       loadEnrichedChips(currentYear).then((chips) => {
-        if (!cancelled) {
-          console.log('[cache-debug] setTacticsChips fired from async load');
-          setTacticsChips(chips);
-        }
+        if (!cancelled) setTacticsChips(chips);
       });
     }
     return () => { cancelled = true; };

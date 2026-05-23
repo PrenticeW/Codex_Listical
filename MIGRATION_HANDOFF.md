@@ -160,7 +160,32 @@ Sign-out invalidation: `storageCache.js` subscribes to `supabase.auth.onAuthStat
 
 Caveat: this is an in-tab cache only. Two browser tabs on the same account won't see each other's edits until refresh. Documented as acceptable pre-launch.
 
-### 1b. Step 6 (original): async-aware sweep — historical notes
+### 1c. Open issue: System page renders ~20 times on every navigation
+
+Symptom: navigating to System (or refreshing it) causes a visible "rebuild" — the user sees the page assembling itself rather than appearing complete from the first paint. Plan page does NOT exhibit this any more.
+
+What we know (from debug logging on 2026-05-23):
+
+* `usePlannerStorage` cache hits cleanly on mount (`cachedHadData=true`, no async load fires).
+* The async metrics/chips load skips cleanly (cache HIT both).
+* The Send-to-System effect fires and bails (`setSentToSystem(true)` matches initial state — React no-op).
+* Despite all that, ProjectTimePlannerV2 still re-renders 20 times on a single navigation. The hook's `taskRows` state value cycles through **34 → 29 → 34 items** during that mount sequence. Each transition is a real `setState` call that triggers a re-render AND an autosave to Supabase.
+
+What that means: at least two useEffects on the System page mutate `data` on mount with conflicting opinions about the array's contents. One effect strips 5 rows (probably the daily min/max filter, archive rows filter, or similar). A later effect adds them back. Each setState fires a save, so the DB receives intermediate states — including the 29-item state, which means a refresh during the wrong window can persist as data loss.
+
+This is **not** a cache bug. The effect cascade was always there but was invisible when localStorage was synchronous (saves resolved instantly, cascade renders were imperceptible). With async Supabase saves, the cascade interacts badly with the cache and the user perceives a rebuild.
+
+To diagnose properly: add targeted logging at every `setData(...)` call in ProjectTimePlannerV2 to identify which two effects are doing the conflicting mutations, then either memoize them or strengthen their bail conditions. Likely candidates to inspect first:
+
+* Line ~630: month/week span updater (triggers on totalDays change)
+* Line ~793: archive week totals updater
+* Line ~816: daily min/max row updater (toggles rows when showMaxMinRows flips)
+* Line ~903 and 1000ish: more setData effects to audit
+* Any useEffect that calls setData without a value-equality guard
+
+Could also be in `useComputedDataV2.ts` (CLAUDE.md mentions it has an intentional write-back loop — worth checking whether it's contributing).
+
+### 1d. Step 6 (original): async-aware sweep — historical notes
 
 The migration plan's step 6 now has a new item flagged as a real regression Prentice hit: **in-memory cache layer in each ported helper** so navigating between Goal, Plan, and System pages renders saved data instantly rather than blanking out for ~300ms-1s on every navigation while the Supabase round-trip completes. Module-level `Map<yearNumber, payload>` per helper; load returns cached value if present, save updates the cache. Pre-port, localStorage was synchronous and gave this behavior for free; post-port, the navigation latency is noticeable enough that Prentice asked about it directly. Apply to stagingStorage, tacticsMetricsStorage, tacticsStorage, and (once it ports) plannerStorage. yearMetadataStorage already has equivalent caching via YearContext.
 

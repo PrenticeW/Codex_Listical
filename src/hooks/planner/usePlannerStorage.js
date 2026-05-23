@@ -125,9 +125,6 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
     initialCache.yearRow != null ||
     initialCache.taskRows != null;
 
-  // [DEBUG cache]
-  console.log(`[cache-debug] usePlannerStorage render. yearNumber=${yearNumber}, cachedHadData=${cachedHadData}, plannerSettings=${initialCache.plannerSettings ? 'HIT' : 'MISS'}, yearRow=${initialCache.yearRow ? 'HIT' : 'MISS'}, taskRows=${Array.isArray(initialCache.taskRows) ? `HIT(${initialCache.taskRows.length})` : 'MISS'}`);
-
   const initialTotalDays = initTotalDays(initialCache.yearRow);
 
   const [totalDays, setTotalDays] = useState(initialTotalDays);
@@ -170,7 +167,6 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
   // a slow round-trip clobbering an in-flight user edit.
   const loadGen = useRef(0);
   useEffect(() => {
-    console.log(`[cache-debug] usePlannerStorage async-load effect fired. cachedHadData=${cachedHadData}, will skip=${cachedHadData}`);
     if (cachedHadData) return undefined;
 
     const gen = ++loadGen.current;
