@@ -26,7 +26,17 @@ export const STAGING_STORAGE_EVENT = 'staging-state-update';
 // --- cache namespacing -------------------------------------------------
 
 const CACHE_NS = 'stagingStorage';
-const stagingKey = (userId, yearNumber) => `staging_state:${userId}:${yearNumber}`;
+const stagingKey = (yearNumber) => `staging_state:${yearNumber}`;
+
+/**
+ * Synchronous peek into the staging cache. Returns the cached
+ * `{ shortlist, archived }` shape or null on miss.
+ */
+export function peekStagingCache(yearNumber) {
+  if (yearNumber == null) return null;
+  const k = stagingKey(yearNumber);
+  return hasCached(CACHE_NS, k) ? getCached(CACHE_NS, k) : null;
+}
 // Legacy export kept so existing event-key consumers do not break.
 export const STAGING_STORAGE_KEY = 'staging-shortlist';
 
@@ -160,7 +170,7 @@ function dispatchStagingEvent(payload, yearNumber) {
 export async function loadStagingState(yearNumber) {
   try {
     const userId = await requireUserId();
-    const cacheKey = stagingKey(userId, yearNumber);
+    const cacheKey = stagingKey(yearNumber);
     if (hasCached(CACHE_NS, cacheKey)) return getCached(CACHE_NS, cacheKey);
 
     const yearId = await findYearId(userId, yearNumber);
@@ -279,7 +289,7 @@ export async function saveStagingState(payload, yearNumber) {
 
     // Refresh the cache with the just-saved shape so the next read returns
     // it instantly without a round-trip.
-    setCached(CACHE_NS, stagingKey(userId, yearNumber), {
+    setCached(CACHE_NS, stagingKey(yearNumber), {
       shortlist,
       archived,
     });

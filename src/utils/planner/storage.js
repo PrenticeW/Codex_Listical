@@ -52,11 +52,34 @@ import {
 export { DEFAULT_PROJECT_ID };
 
 // --- cache namespacing -------------------------------------------------
+//
+// Keys are scoped by yearNumber only (no userId). The cache is cleared
+// on sign-out (see storageCache.js auth listener), so it's implicitly
+// per-user. Dropping userId from the key lets hooks do a sync cache
+// lookup without awaiting supabase.auth.getUser().
 
 const CACHE_NS = 'plannerStorage';
-const yearKey = (userId, yearNumber) => `years:${userId}:${yearNumber}`;
-const settingsKey = (userId, yearNumber) => `planner_settings:${userId}:${yearNumber}`;
-const taskRowsKey = (userId, yearNumber) => `task_rows:${userId}:${yearNumber}`;
+const yearKey = (yearNumber) => `years:${yearNumber}`;
+const settingsKey = (yearNumber) => `planner_settings:${yearNumber}`;
+const taskRowsKey = (yearNumber) => `task_rows:${yearNumber}`;
+
+/**
+ * Synchronous peek into the planner cache for a year. Returns the raw
+ * cached rows (or null when missing). Hooks use this in useState lazy
+ * initialisers so the very first render shows the cached values rather
+ * than defaults that get replaced a tick later by the async load.
+ */
+export function peekPlannerCache(yearNumber) {
+  if (yearNumber == null) return { plannerSettings: null, yearRow: null, taskRows: null };
+  const sk = settingsKey(yearNumber);
+  const yk = yearKey(yearNumber);
+  const tk = taskRowsKey(yearNumber);
+  return {
+    plannerSettings: hasCached(CACHE_NS, sk) ? getCached(CACHE_NS, sk) : null,
+    yearRow: hasCached(CACHE_NS, yk) ? getCached(CACHE_NS, yk) : null,
+    taskRows: hasCached(CACHE_NS, tk) ? getCached(CACHE_NS, tk) : null,
+  };
+}
 
 // --- exported event names (unchanged) ---------------------------------
 
@@ -91,7 +114,7 @@ async function requireUserId() {
 }
 
 async function findYearRow(userId, yearNumber) {
-  const key = yearKey(userId, yearNumber);
+  const key = yearKey(yearNumber);
   if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
   const { data, error } = await supabase
     .from('years')
@@ -125,7 +148,7 @@ async function readPlannerSettingsRow({ userId, yearId, yearNumber }) {
   // yearNumber drives the cache key so two helpers reading the same row
   // share a cache slot. yearId is still needed for the actual DB query.
   if (yearNumber != null) {
-    const key = settingsKey(userId, yearNumber);
+    const key = settingsKey(yearNumber);
     if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
   }
   const { data, error } = await supabase
@@ -137,7 +160,7 @@ async function readPlannerSettingsRow({ userId, yearId, yearNumber }) {
   if (error) throw error;
   const row = data ?? null;
   if (yearNumber != null) {
-    setCached(CACHE_NS, settingsKey(userId, yearNumber), row);
+    setCached(CACHE_NS, settingsKey(yearNumber), row);
   }
   return row;
 }
@@ -172,7 +195,7 @@ async function writePlannerSettingsColumns({ userId, yearId, yearNumber, columns
     updatedRow = data;
   }
   if (yearNumber != null) {
-    setCached(CACHE_NS, settingsKey(userId, yearNumber), updatedRow);
+    setCached(CACHE_NS, settingsKey(yearNumber), updatedRow);
   }
 }
 
@@ -187,7 +210,7 @@ async function updateYearColumns({ userId, yearId, yearNumber, columns }) {
     .single();
   if (error) throw error;
   if (userId != null && yearNumber != null) {
-    setCached(CACHE_NS, yearKey(userId, yearNumber), data ?? null);
+    setCached(CACHE_NS, yearKey(yearNumber), data ?? null);
   }
 }
 
@@ -878,7 +901,7 @@ export const readTaskRows = async (
 ) => {
   try {
     const userId = await requireUserId();
-    const cacheKey = taskRowsKey(userId, yearNumber);
+    const cacheKey = taskRowsKey(yearNumber);
     if (hasCached(CACHE_NS, cacheKey)) return getCached(CACHE_NS, cacheKey);
 
     const yearRow = await findYearRow(userId, yearNumber);
@@ -1013,7 +1036,7 @@ export const saveTaskRows = async (
 
     // Cache the just-saved array so the next read returns it instantly
     // (snappy navigation between pages without losing user edits).
-    setCached(CACHE_NS, taskRowsKey(userId, yearNumber), allRows);
+    setCached(CACHE_NS, taskRowsKey(yearNumber), allRows);
   } catch (error) {
     console.error('Failed to save task rows', error);
   }

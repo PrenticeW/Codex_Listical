@@ -14,7 +14,9 @@ import usePlannerColumns from '../hooks/planner/usePlannerColumns';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
 import { TACTICS_SEND_TO_SYSTEM_EVENT, getSendToSystemTimestamp, loadSentChipsSnapshot, loadTacticsYearSettings } from '../lib/tacticsStorage';
-import { loadSentMetricsSnapshot } from '../lib/tacticsMetricsStorage';
+import { loadSentMetricsSnapshot, peekTacticsMetricsCache } from '../lib/tacticsMetricsStorage';
+import { peekTacticsCache } from '../lib/tacticsStorage';
+import { peekStagingCache } from '../lib/stagingStorage';
 import { loadStagingState } from '../lib/stagingStorage';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { undoDraftYear } from '../utils/planner/undoDraftYear';
@@ -210,6 +212,60 @@ async function loadMetricsData(yearNumber) {
 }
 
 /**
+ * Synchronous version of loadMetricsData using only the in-memory cache.
+ * Returns null when the cache has nothing for this year so callers can
+ * fall back to defaults.
+ */
+function peekMetricsData(yearNumber) {
+  const cached = peekTacticsMetricsCache(yearNumber);
+  if (!cached.sent) return null;
+  return {
+    dailyBounds: cached.sent.dailyBounds || [],
+    projectWeeklyQuotas: buildQuotasMap(cached.sent.projectWeeklyQuotas),
+  };
+}
+
+/**
+ * Synchronous version of loadEnrichedChips. Returns the enriched chip list
+ * when all three sources (sent chips snapshot, staging nicknames, year
+ * settings) are present in the cache. Returns null on any miss so callers
+ * can fall back to defaults.
+ */
+function peekEnrichedChips(yearNumber) {
+  const tactics = peekTacticsCache(yearNumber);
+  const stagingState = peekStagingCache(yearNumber);
+  if (!tactics.sentChips || !tactics.yearSettings || !stagingState) return null;
+  const projectChips = Array.isArray(tactics.sentChips.projectChips)
+    ? tactics.sentChips.projectChips
+    : [];
+  const chipTimeOverrides = tactics.sentChips.chipTimeOverrides || {};
+  const incrementMinutes = tactics.yearSettings.incrementMinutes;
+  const idToNicknameMap = new Map();
+  for (const item of stagingState.shortlist || []) {
+    if (!item?.id) continue;
+    const nickname = (item.projectNickname || '').trim();
+    const name = (item.projectName || '').trim();
+    idToNicknameMap.set(item.id, nickname || name);
+  }
+  return projectChips
+    .filter((chip) => {
+      if (!chip) return false;
+      if (SYSTEM_PROJECTS.has(chip.projectId)) return false;
+      if (chip.columnIndex >= DAY_COLUMN_COUNT) return false;
+      if (!chip.dayName) return false;
+      return true;
+    })
+    .map((chip) => {
+      const projectNickname = idToNicknameMap.get(chip.projectId) || null;
+      const overrideMinutes = chipTimeOverrides?.[chip.id];
+      const fromRows = estimateDurationFromRowIds(chip.startRowId, chip.endRowId, incrementMinutes);
+      const durationMinutes = overrideMinutes ?? fromRows ?? chip.durationMinutes ?? null;
+      const formattedDuration = durationMinutes != null ? formatChipDuration(durationMinutes) : null;
+      return { ...chip, projectNickname, durationMinutes, formattedDuration };
+    });
+}
+
+/**
  * Google Sheets-like Spreadsheet using TanStack Table v8
  *
  * Phase 1: Core spreadsheet features
@@ -315,12 +371,15 @@ export default function ProjectTimePlannerV2() {
   // Page-specific size setting
   const { sizeScale } = usePageSize('system');
 
-  // Initialize data with a blank skeleton. The real data hydrates from
-  // taskRows once usePlannerStorage finishes its async load (see effect
-  // below). useState's lazy initialiser only fires once on mount, so trying
-  // to read taskRows here would give the empty default and let the debounce
-  // wipe the loaded data — that's the bug fix from 2026-05-23.
-  const [data, setDataRaw] = useState(() => createInitialData(20, totalDays, startDate));
+  // Initialise data from cached taskRows when available, otherwise a blank
+  // skeleton. On a sync cache hit (the common case after the first visit)
+  // the first render already shows real data without a flash. On a cold
+  // cache miss the skeleton renders briefly and the hydration effect
+  // below swaps in the loaded rows once the async load resolves.
+  const [data, setDataRaw] = useState(() => {
+    if (Array.isArray(taskRows) && taskRows.length > 0) return taskRows;
+    return createInitialData(20, totalDays, startDate);
+  });
 
   // Keep a ref to the latest committed data value, updated synchronously alongside setData.
   // This lets the unmount flush always write the newest data, even if React hasn't re-rendered.
@@ -336,9 +395,10 @@ export default function ProjectTimePlannerV2() {
   }, []);
 
   // Hydrate `data` from taskRows once the async storage load completes.
-  // dataHydrated stays false until this fires so the autosave + unmount
-  // flush below don't wipe loaded data with the initial blank skeleton.
-  const dataHydrated = useRef(false);
+  // On a sync cache hit dataHydrated starts true (initialiser above already
+  // used the cached rows). On a cold miss this effect fires when the load
+  // resolves and swaps in the real data.
+  const dataHydrated = useRef(Array.isArray(taskRows) && taskRows.length > 0);
   useEffect(() => {
     if (!storageLoaded) return;
     if (dataHydrated.current) return;
@@ -451,11 +511,14 @@ export default function ProjectTimePlannerV2() {
   // this page on every year change, so the useState initialisers above (and the
   // sentToSystem initialiser earlier in this component) re-run synchronously
   // with the new year. No year-change effect needed.
-  const [{ dailyBounds, projectWeeklyQuotas }, setMetricsData] = useState({
-    dailyBounds: [],
-    projectWeeklyQuotas: new Map(),
-  });
-  const [tacticsChips, setTacticsChips] = useState([]);
+  // Sync cache peek for metrics + enriched chips. On a hit, the page
+  // renders with project quotas and chips on the very first paint.
+  const [{ dailyBounds, projectWeeklyQuotas }, setMetricsData] = useState(
+    () => peekMetricsData(currentYear) || { dailyBounds: [], projectWeeklyQuotas: new Map() },
+  );
+  const [tacticsChips, setTacticsChips] = useState(
+    () => peekEnrichedChips(currentYear) || [],
+  );
 
   // Async load of metrics + enriched chips on mount and year change. Both
   // helpers became async during the Supabase port.

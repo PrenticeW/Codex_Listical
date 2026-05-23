@@ -2,15 +2,16 @@
  * Planner Storage Hook
  * Manages all planner settings, now backed by Supabase (helper #5 port).
  *
- * Pattern: every piece of state starts at its default value, then a single
- * consolidated load effect fetches the saved values in parallel via
- * Promise.all. While the load is in flight, `isLoaded` stays false and
- * useAutoPersist is gated off so an early user interaction cannot be
- * overwritten by the load completing afterward. Once the load resolves,
- * `isLoaded` flips true and the autosaves arm.
+ * Sync-on-cache-hit: every useState initialiser below calls
+ * `peekPlannerCache(yearNumber)` to read any data already in the in-memory
+ * (and localStorage-backed) cache. If the cache has the row, the very
+ * first render shows real data instead of defaults. The async load below
+ * still fires to refresh from Supabase; if the fresh data matches the
+ * cache, React's setState bail-out means no visible re-render. If it
+ * differs, the user briefly sees the cache, then it updates.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import useAutoPersist from '../common/useAutoPersist';
 import {
   readColumnSizing,
@@ -36,12 +37,13 @@ import {
   readVisibleDayColumns,
   saveVisibleDayColumns,
   PLANNER_START_DATE_EVENT,
+  peekPlannerCache,
 } from '../../utils/planner/storage';
 import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
 
 const DEFAULT_TOTAL_DAYS = 84;
 
-const DEFAULT_SORT_STATUSES = new Set([
+const DEFAULT_SORT_STATUSES = [
   'Done',
   'Scheduled',
   'Not Scheduled',
@@ -50,12 +52,10 @@ const DEFAULT_SORT_STATUSES = new Set([
   'Abandoned',
   'Skipped',
   'Accounted',
-]);
+];
 
 /**
  * Get default column sizing based on column definitions
- * @param {number} totalDays - Total number of day columns
- * @returns {Object} Default column sizing object
  */
 const getDefaultColumnSizing = (totalDays) => {
   const sizing = {
@@ -69,12 +69,9 @@ const getDefaultColumnSizing = (totalDays) => {
     estimate: 164,
     timeValue: 117,
   };
-
-  // Add day columns (default 59px each)
   for (let i = 0; i < totalDays; i++) {
     sizing[`day-${i}`] = 59;
   }
-
   return sizing;
 };
 
@@ -88,42 +85,96 @@ const defaultVisibleDayColumns = (totalDays) => {
 
 const todayIso = () => new Date().toISOString().split('T')[0];
 
-/**
- * Hook to manage planner storage (all settings)
- * Automatically syncs with Supabase.
- *
- * @param {Object} options - Hook options
- * @param {string} options.projectId - Project identifier (defaults to DEFAULT_PROJECT_ID)
- * @param {number|null} options.yearNumber - Year number for year-based storage
- * @returns {Object} Storage state and setters
- */
+// Initialiser helpers: each takes the cached row (or null) plus the
+// fallback default, and returns the right initial value for useState.
+const initTotalDays = (yearRow) => {
+  const v = typeof yearRow?.total_days === 'number' ? yearRow.total_days : Number(yearRow?.total_days);
+  return Number.isFinite(v) && v > 0 ? v : DEFAULT_TOTAL_DAYS;
+};
+const initStartDate = (yearRow) => yearRow?.start_date || todayIso();
+const initColumnSizing = (settingsRow, totalDays) => {
+  const v = settingsRow?.column_sizing;
+  if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length > 0) return v;
+  return getDefaultColumnSizing(totalDays);
+};
+const initSizeScale = (settingsRow) => {
+  const v = typeof settingsRow?.size_scale === 'number' ? settingsRow.size_scale : Number(settingsRow?.size_scale);
+  return Number.isFinite(v) ? v : 1.0;
+};
+const initShow = (settingsRow, field) => {
+  if (!settingsRow) return true;
+  return settingsRow[field] !== false;
+};
+const initSortSet = (settingsRow, field) => {
+  const arr = Array.isArray(settingsRow?.[field]) ? settingsRow[field] : DEFAULT_SORT_STATUSES;
+  return new Set(arr);
+};
+const initVisibleDayColumns = (settingsRow, totalDays) => {
+  const v = settingsRow?.visible_day_columns;
+  if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length > 0) return v;
+  return defaultVisibleDayColumns(totalDays);
+};
+
 export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, yearNumber = null } = {}) {
-  // All values start at their defaults; the async load below replaces them.
-  const [totalDays, setTotalDays] = useState(DEFAULT_TOTAL_DAYS);
-  const [columnSizing, setColumnSizing] = useState(() => getDefaultColumnSizing(DEFAULT_TOTAL_DAYS));
-  const [sizeScale, setSizeScale] = useState(1.0);
-  const [startDate, setStartDate] = useState(todayIso());
-  const [showRecurring, setShowRecurring] = useState(true);
-  const [showSubprojects, setShowSubprojects] = useState(true);
-  const [showMaxMinRows, setShowMaxMinRows] = useState(true);
-  const [selectedSortStatuses, setSelectedSortStatuses] = useState(() => new Set(DEFAULT_SORT_STATUSES));
-  const [selectedSortPlannerStatuses, setSelectedSortPlannerStatuses] = useState(() => new Set(DEFAULT_SORT_STATUSES));
-  const [taskRows, setTaskRows] = useState([]);
-  const [visibleDayColumns, setVisibleDayColumns] = useState(() => defaultVisibleDayColumns(DEFAULT_TOTAL_DAYS));
+  // Synchronous cache peek. If anything is cached, the initialisers below
+  // give the real data on the very first render. If nothing is cached,
+  // they fall back to defaults and the async load swaps them in shortly.
+  const initialCache = peekPlannerCache(yearNumber);
+  const cachedHadData =
+    initialCache.plannerSettings != null ||
+    initialCache.yearRow != null ||
+    initialCache.taskRows != null;
 
-  // isLoaded gates every autosave. Flips true once the load below resolves.
-  const [isLoaded, setIsLoaded] = useState(false);
+  const initialTotalDays = initTotalDays(initialCache.yearRow);
 
+  const [totalDays, setTotalDays] = useState(initialTotalDays);
+  const [columnSizing, setColumnSizing] = useState(() =>
+    initColumnSizing(initialCache.plannerSettings, initialTotalDays),
+  );
+  const [sizeScale, setSizeScale] = useState(() => initSizeScale(initialCache.plannerSettings));
+  const [startDate, setStartDate] = useState(() => initStartDate(initialCache.yearRow));
+  const [showRecurring, setShowRecurring] = useState(() =>
+    initShow(initialCache.plannerSettings, 'show_recurring'),
+  );
+  const [showSubprojects, setShowSubprojects] = useState(() =>
+    initShow(initialCache.plannerSettings, 'show_subprojects'),
+  );
+  const [showMaxMinRows, setShowMaxMinRows] = useState(() =>
+    initShow(initialCache.plannerSettings, 'show_max_min_rows'),
+  );
+  const [selectedSortStatuses, setSelectedSortStatuses] = useState(() =>
+    initSortSet(initialCache.plannerSettings, 'sort_statuses'),
+  );
+  const [selectedSortPlannerStatuses, setSelectedSortPlannerStatuses] = useState(() =>
+    initSortSet(initialCache.plannerSettings, 'sort_planner_statuses'),
+  );
+  const [taskRows, setTaskRows] = useState(() =>
+    Array.isArray(initialCache.taskRows) ? initialCache.taskRows : [],
+  );
+  const [visibleDayColumns, setVisibleDayColumns] = useState(() =>
+    initVisibleDayColumns(initialCache.plannerSettings, initialTotalDays),
+  );
+
+  // isLoaded starts true if the cache had anything for this year, so
+  // dependent effects (data hydration, autosave gating) don't briefly see
+  // a false → true flip on cache hit. The async load will set it again on
+  // miss after the first network response.
+  const [isLoaded, setIsLoaded] = useState(cachedHadData);
+
+  // The async load fires on mount and every year change. On cache hit it
+  // effectively re-reads from cache and is near-instant; on miss it does
+  // the actual round-trip. Either way, results are set into state — if
+  // they match what's already there, React bails out and there's no
+  // visible re-render.
+  const loadGen = useRef(0);
   useEffect(() => {
+    const gen = ++loadGen.current;
     let cancelled = false;
-    setIsLoaded(false);
 
     (async () => {
       try {
-        // totalDays is needed for default visibleDayColumns / columnSizing,
-        // so read it first and use its value when reading the rest.
         const loadedTotalDays = await readTotalDays(projectId, yearNumber);
-        if (cancelled) return;
+        if (cancelled || gen !== loadGen.current) return;
 
         const [
           loadedColumnSizing,
@@ -148,7 +199,7 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
           readTaskRows(projectId, yearNumber),
           readVisibleDayColumns(projectId, loadedTotalDays, yearNumber),
         ]);
-        if (cancelled) return;
+        if (cancelled || gen !== loadGen.current) return;
 
         setTotalDays(loadedTotalDays);
         setColumnSizing(
@@ -167,9 +218,9 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
         setVisibleDayColumns(loadedVisibleDayColumns);
         setIsLoaded(true);
       } catch (error) {
-        if (!cancelled) {
+        if (!cancelled && gen === loadGen.current) {
           console.error('Failed to load planner storage', error);
-          setIsLoaded(true); // unblock saves even on failure
+          setIsLoaded(true);
         }
       }
     })();
@@ -191,7 +242,7 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
   }, [yearNumber]);
 
   // Auto-persist all settings, gated on isLoaded so early interactions
-  // cannot be overwritten by a slow Supabase round-trip.
+  // cannot be overwritten by a slow Supabase round-trip on cold cache.
   const autoOpts = { projectId, yearNumber, enabled: isLoaded };
   useAutoPersist(columnSizing, saveColumnSizing, {
     ...autoOpts,

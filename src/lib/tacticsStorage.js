@@ -45,9 +45,46 @@ import { getCached, hasCached, setCached } from './storageCache';
 // --- cache namespacing -------------------------------------------------
 
 const CACHE_NS = 'tacticsStorage';
-const yearSettingsKey = (userId, yearNumber) => `tactics_year_settings:${userId}:${yearNumber}`;
-const chipsLayerKey = (userId, yearNumber, isSent) => `tactics_chips:${userId}:${isSent ? 'sent' : 'live'}:${yearNumber}`;
-const sendTsKey = (userId, yearNumber) => `send_to_system_at:${userId}:${yearNumber}`;
+const yearSettingsKey = (yearNumber) => `tactics_year_settings:${yearNumber}`;
+const chipsLayerKey = (yearNumber, isSent) => `tactics_chips:${isSent ? 'sent' : 'live'}:${yearNumber}`;
+const sendTsKey = (yearNumber) => `send_to_system_at:${yearNumber}`;
+
+/**
+ * Synchronous peek into the tactics cache for a year. Returns shapes
+ * matching the async load functions:
+ *   yearSettings      same shape as loadTacticsYearSettings(), or null
+ *   columnWidths      same shape as loadTacticsColumnWidths(), or null
+ *   liveChips         same shape as loadTacticsChipsState(), or null
+ *   sentChips         same shape as loadSentChipsSnapshot(), or null
+ *   sendToSystemAt    ISO string or null
+ * Used in useState lazy initialisers so the Plan page renders instantly
+ * on cache hit instead of flashing defaults before the async load resolves.
+ */
+export function peekTacticsCache(yearNumber) {
+  if (yearNumber == null) {
+    return {
+      yearSettings: null,
+      columnWidths: null,
+      liveChips: null,
+      sentChips: null,
+      sendToSystemAt: null,
+    };
+  }
+  const ysk = yearSettingsKey(yearNumber);
+  const lk = chipsLayerKey(yearNumber, false);
+  const sk = chipsLayerKey(yearNumber, true);
+  const tk = sendTsKey(yearNumber);
+  const settingsRow = hasCached(CACHE_NS, ysk) ? getCached(CACHE_NS, ysk) : null;
+  return {
+    yearSettings: settingsRow ? yearSettingsRowToPayload(settingsRow) : null,
+    columnWidths: settingsRow && Array.isArray(settingsRow.column_widths)
+      ? settingsRow.column_widths
+      : null,
+    liveChips: hasCached(CACHE_NS, lk) ? getCached(CACHE_NS, lk) : null,
+    sentChips: hasCached(CACHE_NS, sk) ? getCached(CACHE_NS, sk) : null,
+    sendToSystemAt: hasCached(CACHE_NS, tk) ? getCached(CACHE_NS, tk) : null,
+  };
+}
 
 // --- exported event names (unchanged) ---------------------------------
 
@@ -113,7 +150,7 @@ function dispatchEvent(eventName, payload, yearNumber) {
 
 async function readYearSettingsRow({ userId, yearId, yearNumber }) {
   if (yearNumber != null) {
-    const key = yearSettingsKey(userId, yearNumber);
+    const key = yearSettingsKey(yearNumber);
     if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
   }
   const { data, error } = await supabase
@@ -125,7 +162,7 @@ async function readYearSettingsRow({ userId, yearId, yearNumber }) {
   if (error) throw error;
   const row = data ?? null;
   if (yearNumber != null) {
-    setCached(CACHE_NS, yearSettingsKey(userId, yearNumber), row);
+    setCached(CACHE_NS, yearSettingsKey(yearNumber), row);
   }
   return row;
 }
@@ -158,7 +195,7 @@ async function writeYearSettingsRow({ userId, yearId, yearNumber, columns }) {
     updatedRow = data;
   }
   if (yearNumber != null) {
-    setCached(CACHE_NS, yearSettingsKey(userId, yearNumber), updatedRow);
+    setCached(CACHE_NS, yearSettingsKey(yearNumber), updatedRow);
   }
 }
 
@@ -357,7 +394,7 @@ function customProjectPayloadToRow(custom, { userId, yearId, isSent }) {
 
 async function readChipsLayer({ userId, yearId, yearNumber, isSent }) {
   if (yearNumber != null) {
-    const key = chipsLayerKey(userId, yearNumber, isSent);
+    const key = chipsLayerKey(yearNumber, isSent);
     if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
   }
   const [chipsRes, customRes] = await Promise.all([
@@ -402,7 +439,7 @@ async function readChipsLayer({ userId, yearId, yearNumber, isSent }) {
   }
 
   if (yearNumber != null) {
-    setCached(CACHE_NS, chipsLayerKey(userId, yearNumber, isSent), result);
+    setCached(CACHE_NS, chipsLayerKey(yearNumber, isSent), result);
   }
   return result;
 }
@@ -467,7 +504,7 @@ async function writeChipsLayer({ userId, yearId, yearNumber, isSent, payload }) 
         ? chipTimeOverrides
         : null,
     };
-    setCached(CACHE_NS, chipsLayerKey(userId, yearNumber, isSent), cached);
+    setCached(CACHE_NS, chipsLayerKey(yearNumber, isSent), cached);
   }
 }
 
@@ -588,7 +625,7 @@ async function writePlannerSettingsTimestamp({ userId, yearId, value }) {
 export async function getSendToSystemTimestamp(yearNumber) {
   try {
     const userId = await requireUserId();
-    const key = sendTsKey(userId, yearNumber);
+    const key = sendTsKey(yearNumber);
     if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) {
@@ -619,7 +656,7 @@ export async function setSendToSystemTimestamp(yearNumber) {
     }
     const value = new Date().toISOString();
     await writePlannerSettingsTimestamp({ userId, yearId, value });
-    setCached(CACHE_NS, sendTsKey(userId, yearNumber), value);
+    setCached(CACHE_NS, sendTsKey(yearNumber), value);
   } catch (error) {
     console.error('Failed to set send-to-system timestamp', error);
   }
@@ -636,7 +673,7 @@ export async function clearSendToSystemTimestamp(yearNumber) {
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return; // nothing to clear
     await writePlannerSettingsTimestamp({ userId, yearId, value: null });
-    setCached(CACHE_NS, sendTsKey(userId, yearNumber), null);
+    setCached(CACHE_NS, sendTsKey(yearNumber), null);
   } catch (error) {
     console.error('Failed to clear send-to-system timestamp', error);
   }

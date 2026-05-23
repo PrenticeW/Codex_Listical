@@ -27,8 +27,22 @@ export const TACTICS_METRICS_STORAGE_EVENT = 'tactics-metrics-state-update';
 // --- cache namespacing -------------------------------------------------
 
 const CACHE_NS = 'tacticsMetricsStorage';
-const metricsKey = (userId, yearNumber, isSent) =>
-  `tactics_metrics:${userId}:${isSent ? 'sent' : 'live'}:${yearNumber}`;
+const metricsKey = (yearNumber, isSent) => `tactics_metrics:${isSent ? 'sent' : 'live'}:${yearNumber}`;
+
+/**
+ * Synchronous peek for the Plan page. Returns the raw cached rows; consumers
+ * convert via dbRowToPayload if needed (kept private so callers don't have
+ * to know about the wire shape).
+ */
+export function peekTacticsMetricsCache(yearNumber) {
+  if (yearNumber == null) return { live: null, sent: null };
+  const lk = metricsKey(yearNumber, false);
+  const sk = metricsKey(yearNumber, true);
+  return {
+    live: hasCached(CACHE_NS, lk) ? dbRowToPayload(getCached(CACHE_NS, lk)) : null,
+    sent: hasCached(CACHE_NS, sk) ? dbRowToPayload(getCached(CACHE_NS, sk)) : null,
+  };
+}
 
 // --- internal helpers --------------------------------------------------
 
@@ -147,7 +161,7 @@ function dbRowToPayload(row) {
 
 async function readMetricsRow({ userId, yearId, yearNumber, isSent }) {
   if (yearNumber != null) {
-    const key = metricsKey(userId, yearNumber, isSent);
+    const key = metricsKey(yearNumber, isSent);
     if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
   }
   const { data, error } = await supabase
@@ -160,7 +174,7 @@ async function readMetricsRow({ userId, yearId, yearNumber, isSent }) {
   if (error) throw error;
   const row = data ?? null;
   if (yearNumber != null) {
-    setCached(CACHE_NS, metricsKey(userId, yearNumber, isSent), row);
+    setCached(CACHE_NS, metricsKey(yearNumber, isSent), row);
   }
   return row;
 }
@@ -196,7 +210,7 @@ async function writeMetricsRow({ userId, yearId, yearNumber, isSent, columns }) 
     updatedRow = data;
   }
   if (yearNumber != null) {
-    setCached(CACHE_NS, metricsKey(userId, yearNumber, isSent), updatedRow);
+    setCached(CACHE_NS, metricsKey(yearNumber, isSent), updatedRow);
   }
 }
 

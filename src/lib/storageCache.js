@@ -32,6 +32,92 @@ import { supabase } from './supabase';
 /** @type {Map<string, Map<string, any>>} */
 const caches = new Map();
 
+// --- localStorage persistence ---------------------------------------
+//
+// The in-memory cache alone makes page-to-page navigation snappy, but a
+// hard refresh wipes the JS module so the next render flashes defaults
+// again before the Supabase load resolves. Mirroring the cache to
+// localStorage closes that gap: the next page load rehydrates from
+// localStorage before React renders, so the first paint already shows
+// real data.
+//
+// Layout: one localStorage key per (namespace, cache-key) pair, prefixed
+// with LS_PREFIX. Writes happen on every setCached; reads happen lazily
+// on module init (see hydrateFromLocalStorage below).
+
+const LS_PREFIX = 'cw-cache:';
+const LS_AVAILABLE = (() => {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return false;
+    const probe = `${LS_PREFIX}__probe__`;
+    window.localStorage.setItem(probe, '1');
+    window.localStorage.removeItem(probe);
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+const lsKey = (namespace, key) => `${LS_PREFIX}${namespace}::${key}`;
+
+function persistToLocalStorage(namespace, key, value) {
+  if (!LS_AVAILABLE) return;
+  try {
+    window.localStorage.setItem(lsKey(namespace, key), JSON.stringify(value));
+  } catch {
+    // Quota exceeded or value not serialisable — silently skip; the
+    // in-memory cache still works.
+  }
+}
+
+function removeFromLocalStorage(namespace, key) {
+  if (!LS_AVAILABLE) return;
+  try {
+    window.localStorage.removeItem(lsKey(namespace, key));
+  } catch {
+    // ignore
+  }
+}
+
+function clearAllLocalStorage() {
+  if (!LS_AVAILABLE) return;
+  try {
+    const keys = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (k && k.startsWith(LS_PREFIX)) keys.push(k);
+    }
+    keys.forEach((k) => window.localStorage.removeItem(k));
+  } catch {
+    // ignore
+  }
+}
+
+function hydrateFromLocalStorage() {
+  if (!LS_AVAILABLE) return;
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (!k || !k.startsWith(LS_PREFIX)) continue;
+      const stripped = k.slice(LS_PREFIX.length);
+      const sep = stripped.indexOf('::');
+      if (sep < 0) continue;
+      const namespace = stripped.slice(0, sep);
+      const cacheKey = stripped.slice(sep + 2);
+      try {
+        const raw = window.localStorage.getItem(k);
+        if (raw == null) continue;
+        const value = JSON.parse(raw);
+        ensureNs(namespace).set(cacheKey, value);
+      } catch {
+        // skip malformed entry
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
 function ensureNs(namespace) {
   let ns = caches.get(namespace);
   if (!ns) {
@@ -40,6 +126,10 @@ function ensureNs(namespace) {
   }
   return ns;
 }
+
+// Rehydrate the in-memory cache from localStorage at module-init time so
+// the very first render after a refresh already sees cached data.
+hydrateFromLocalStorage();
 
 /**
  * Returns the cached value if present. Returns `undefined` for cache miss.
@@ -59,19 +149,34 @@ export function hasCached(namespace, key) {
 
 export function setCached(namespace, key, value) {
   ensureNs(namespace).set(key, value);
+  persistToLocalStorage(namespace, key, value);
 }
 
 export function invalidate(namespace, key) {
   const ns = caches.get(namespace);
   if (ns) ns.delete(key);
+  removeFromLocalStorage(namespace, key);
 }
 
 export function invalidateNamespace(namespace) {
   caches.delete(namespace);
+  if (!LS_AVAILABLE) return;
+  try {
+    const prefix = `${LS_PREFIX}${namespace}::`;
+    const keys = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (k && k.startsWith(prefix)) keys.push(k);
+    }
+    keys.forEach((k) => window.localStorage.removeItem(k));
+  } catch {
+    // ignore
+  }
 }
 
 export function clearAll() {
   caches.clear();
+  clearAllLocalStorage();
 }
 
 /**
@@ -82,9 +187,12 @@ export function clearAll() {
 export function clearForYear(yearNumber) {
   if (yearNumber === null || yearNumber === undefined) return;
   const suffix = `:${yearNumber}`;
-  for (const map of caches.values()) {
+  for (const [namespace, map] of caches.entries()) {
     for (const key of [...map.keys()]) {
-      if (key.endsWith(suffix)) map.delete(key);
+      if (key.endsWith(suffix)) {
+        map.delete(key);
+        removeFromLocalStorage(namespace, key);
+      }
     }
   }
 }

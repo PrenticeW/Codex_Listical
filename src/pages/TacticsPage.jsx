@@ -32,6 +32,7 @@ import {
   TACTICS_SEND_TO_SYSTEM_EVENT,
   setSendToSystemTimestamp,
   saveSentChipsSnapshot,
+  peekTacticsCache,
 } from '../lib/tacticsStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
 import usePageSize from '../hooks/usePageSize';
@@ -343,16 +344,19 @@ export default function TacticsPage() {
     }
   }, [activeYear, refreshMetadata, navigate]);
   // Year-scoped settings: each of the eight Plan-page settings holds its
-  // own per-year value, so changes on a draft year do not leak into the
-  // active year. After helper #4's Supabase port the values can no longer
-  // be loaded synchronously in useState initializers, so each state starts
-  // with the same default DEFAULT_YEAR_SETTINGS in tacticsStorage.js uses.
-  // The async load effect below replaces them with the real values from
-  // Supabase a moment after mount. The settingsLoadedForYear gate keeps
-  // the autosave effect from clobbering Supabase with the defaults during
-  // that brief window.
-  const [startDay, setStartDay] = useState('Sunday');
-  const [incrementMinutes, setIncrementMinutes] = useState(60);
+  // own per-year value. After helper #4's Supabase port the values can no
+  // longer be loaded synchronously, but the in-memory + localStorage cache
+  // makes a synchronous peek possible — so on a cache hit the page renders
+  // with the user's real values on the very first paint. On a cold miss
+  // each useState falls back to the same default DEFAULT_YEAR_SETTINGS
+  // uses, and the async load below swaps them in once it resolves.
+  const tacticsCacheInit = peekTacticsCache(currentYear);
+  const cachedYearSettings = tacticsCacheInit.yearSettings;
+  const cachedLiveChips = tacticsCacheInit.liveChips;
+  const cachedColumnWidths = tacticsCacheInit.columnWidths;
+
+  const [startDay, setStartDay] = useState(cachedYearSettings?.startDay ?? 'Sunday');
+  const [incrementMinutes, setIncrementMinutes] = useState(cachedYearSettings?.incrementMinutes ?? 60);
 
   // Page-specific size setting
   const { sizeScale: textSizeScale } = usePageSize('plan');
@@ -366,7 +370,7 @@ export default function TacticsPage() {
       return formatHour12(hour24, minutes);
     });
   }, [incrementMinutes]);
-  const [startHour, setStartHour] = useState('');
+  const [startHour, setStartHour] = useState(cachedYearSettings?.startHour ?? '');
   const minuteOptions = useMemo(() => {
     if (!startHour) return [];
     const baseMinutes = parseHour12ToMinutes(startHour);
@@ -380,11 +384,19 @@ export default function TacticsPage() {
       return formatHour12(hour24, minutes);
     });
   }, [startHour, incrementMinutes]);
-  const [startMinute, setStartMinute] = useState('');
-  const [showAmPm, setShowAmPm] = useState(true);
-  const [use24Hour, setUse24Hour] = useState(false);
-  const [chipDisplayModes, setChipDisplayModes] = useState({ __default__: { duration: false, clock: false } });
-  const [summaryRowOrder, setSummaryRowOrder] = useState(null);
+  const [startMinute, setStartMinute] = useState(cachedYearSettings?.startMinute ?? '');
+  const [showAmPm, setShowAmPm] = useState(
+    cachedYearSettings ? cachedYearSettings.showAmPm !== false : true,
+  );
+  const [use24Hour, setUse24Hour] = useState(
+    cachedYearSettings ? cachedYearSettings.use24Hour === true : false,
+  );
+  const [chipDisplayModes, setChipDisplayModes] = useState(
+    cachedYearSettings?.chipDisplayModes ?? { __default__: { duration: false, clock: false } },
+  );
+  const [summaryRowOrder, setSummaryRowOrder] = useState(
+    cachedYearSettings?.summaryRowOrder ?? null,
+  );
 
   const handleToggleChipDisplayFlag = useCallback((projectId, flag) => {
     setChipDisplayModes((prev) => {
@@ -467,7 +479,9 @@ export default function TacticsPage() {
   // effect below populates this with the user's saved chips (or sleep-block
   // defaults if no chips exist yet). The chipsLoadedForYear gate on the
   // chip autosave effect prevents this empty default from clobbering DB.
-  const [projectChips, setProjectChips] = useState(() => []);
+  const [projectChips, setProjectChips] = useState(
+    () => (Array.isArray(cachedLiveChips?.projectChips) ? cachedLiveChips.projectChips : []),
+  );
   const [selectedBlockIds, setSelectedBlockIds] = useState(() => new Set());
   // Derived: last/primary selected ID (for drag, resize, highlight, paste target)
   const selectedBlockId = useMemo(() => {
@@ -523,10 +537,13 @@ export default function TacticsPage() {
   const [scheduleItemPanelOpen, setScheduleItemPanelOpen] = useState(false);
 
   // Column widths for resizing (index 0 is the time column, rest are day/project columns).
-  // Async-loaded from Supabase by the parallel load effect below; init with
-  // sensible defaults so the grid renders correctly during the load window.
+  // On cache hit (peek above), starts with the user's saved widths so the
+  // first render shows the right column layout. On miss, falls back to a
+  // sensible default and the async load swaps it in shortly.
   const [columnWidths, setColumnWidths] = useState(() =>
-    Array.from({ length: 30 }, (_, i) => i === 0 ? 120 : 140)
+    Array.isArray(cachedColumnWidths) && cachedColumnWidths.length > 0
+      ? cachedColumnWidths
+      : Array.from({ length: 30 }, (_, i) => i === 0 ? 120 : 140),
   );
 
   // Save column widths to storage when they change. Gated like the year
@@ -548,7 +565,11 @@ export default function TacticsPage() {
   const [editingChipIsTime, setEditingChipIsTime] = useState(false);
   const [editingChipMinutes, setEditingChipMinutes] = useState('');
   // Async-loaded with projectChips in the parallel load effect below.
-  const [chipTimeOverrides, setChipTimeOverrides] = useState(() => ({}));
+  // Hydrates from cache when available so the first render shows the
+  // user's overrides without the post-load shimmer.
+  const [chipTimeOverrides, setChipTimeOverrides] = useState(
+    () => cachedLiveChips?.chipTimeOverrides ?? {},
+  );
   const editingInputRef = useRef(null);
   const editingMinutesRef = useRef(null);
   const editingChipContainerRef = useRef(null);
@@ -565,7 +586,10 @@ export default function TacticsPage() {
   const [pendingCustomLabel, setPendingCustomLabel] = useState('');
   const pendingCustomInputRef = useRef(null);
   // Async-loaded with projectChips in the parallel load effect below.
-  const [customProjects, setCustomProjects] = useState(() => []);
+  // Hydrates from cache when available.
+  const [customProjects, setCustomProjects] = useState(
+    () => (Array.isArray(cachedLiveChips?.customProjects) ? cachedLiveChips.customProjects : []),
+  );
 
   const { undoStack, redoStack, executeCommand, undo, redo } = useCommandPattern();
 
