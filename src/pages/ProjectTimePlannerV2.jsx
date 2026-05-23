@@ -287,14 +287,17 @@ export default function ProjectTimePlannerV2() {
 
   // True once "Send to System" has been triggered — lets draft year bypass
   // the "no imported tasks" guard so chip rows and project headers appear.
-  // Default to false because post helper #4 port the timestamp lives in
-  // Supabase (planner_settings.send_to_system_at) and can't be read
-  // synchronously in the useState initializer. The async load effect just
-  // below flips this to true if a Send timestamp exists for the year.
-  const [sentToSystem, setSentToSystem] = useState(false);
+  // On a cache hit the initialiser reads the cached send-to-system marker
+  // directly so the page doesn't flash a "draft is empty" UI before the
+  // async load resolves. On a cache miss it falls back to false and the
+  // async load below sets the real value.
+  const sendToSystemCached = peekTacticsCache(currentYear).sendToSystemAt;
+  const [sentToSystem, setSentToSystem] = useState(() => !!sendToSystemCached);
 
-  // Async load of the Send-to-System marker. Mirrors the previous sync
-  // useState init but tolerates the network round-trip.
+  // Async load of the Send-to-System marker. On cache hit, the read returns
+  // the cached value almost immediately and setSentToSystem with the same
+  // value is a React no-op (no re-render). On cache miss this is the real
+  // refresh.
   useEffect(() => {
     let cancelled = false;
     getSendToSystemTimestamp(currentYear).then((ts) => {

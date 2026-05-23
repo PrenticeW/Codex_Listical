@@ -444,7 +444,35 @@ async function readChipsLayer({ userId, yearId, yearNumber, isSent }) {
   return result;
 }
 
+// Serialises writeChipsLayer calls per (userId, yearNumber, isSent) slice.
+// Without this, a rapid sequence of saves can race their delete + insert
+// operations against each other and Supabase rejects the second insert
+// with a 409 unique-constraint violation on (user_id, year_id, chip_id,
+// is_sent). Queuing the saves means each completes before the next begins.
+const chipSaveQueues = new Map();
+
+async function withChipSaveLock(key, fn) {
+  const prior = chipSaveQueues.get(key);
+  const run = (async () => {
+    if (prior) {
+      try { await prior; } catch { /* swallow prior errors so they don't block follow-on saves */ }
+    }
+    return fn();
+  })();
+  chipSaveQueues.set(key, run);
+  try {
+    return await run;
+  } finally {
+    if (chipSaveQueues.get(key) === run) chipSaveQueues.delete(key);
+  }
+}
+
 async function writeChipsLayer({ userId, yearId, yearNumber, isSent, payload }) {
+  const lockKey = `${userId}:${yearNumber ?? 'global'}:${isSent}`;
+  return withChipSaveLock(lockKey, () => writeChipsLayerInner({ userId, yearId, yearNumber, isSent, payload }));
+}
+
+async function writeChipsLayerInner({ userId, yearId, yearNumber, isSent, payload }) {
   const projectChips = Array.isArray(payload?.projectChips) ? payload.projectChips : [];
   const customProjects = Array.isArray(payload?.customProjects) ? payload.customProjects : [];
   const chipTimeOverrides =

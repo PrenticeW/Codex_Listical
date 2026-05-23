@@ -871,11 +871,13 @@ export default function TacticsPage() {
       cachedTactics.liveChips != null ||
       cachedTactics.columnWidths != null;
     if (hasCachedTacticsState && cachedStaging) {
-      // Still open the autosave gates so user edits persist; the load
-      // would have done this at the end of its async block.
-      chipsLoadedForYear.current = currentYear;
-      settingsLoadedForYear.current = currentYear;
-      columnWidthsLoadedForYear.current = currentYear;
+      // Cache hit: skip the load AND leave the autosave gates alone. Each
+      // autosave effect's own first-run bail (`if ref.current == null`)
+      // handles the on-mount skip, then user interactions flow through
+      // normally. Pre-setting the gates here used to cause the autosave to
+      // fire on mount with the cached state, which raced against itself
+      // across React's dev double-mount and triggered 409 conflicts on
+      // tactics_chips inserts.
       hasLoadedInitialState.current = true;
       return () => {};
     }
