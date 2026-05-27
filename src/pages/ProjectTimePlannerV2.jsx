@@ -901,12 +901,6 @@ export default function ProjectTimePlannerV2() {
       const currentHasArchiveHeader = newData.some(row => row._rowType === 'archiveHeader');
       const currentHasInboxRow = newData.some(row => row._isInboxRow);
 
-      // TEMPORARY DEBUG — remove before launch
-      if (!currentHasInboxRow || !currentHasArchiveHeader) {
-        // eslint-disable-next-line no-console
-        console.warn(`[structural] inserting missing rows: hasInbox=${currentHasInboxRow} hasArchive=${currentHasArchiveHeader} totalRows=${newData.length}`);
-      }
-
       // If both exist, nothing more to do
       if (currentHasInboxRow && currentHasArchiveHeader) return newData;
 
@@ -1132,9 +1126,6 @@ export default function ProjectTimePlannerV2() {
 
     // No setTimeout: functional updater form means React applies this after project injection's
     // updater in the same flush, so chip rows see project headers already inserted.
-    // TEMPORARY DEBUG — remove before launch
-    // eslint-disable-next-line no-console
-    console.warn(`[chip-sync] firing: tacticsChips=${tacticsChips.length}`);
     setData(prevData => {
         const currentChipIds = new Set(tacticsChips.map(c => c.id));
 
@@ -1255,12 +1246,6 @@ export default function ProjectTimePlannerV2() {
         );
 
         if (newChips.length === 0 && chipsNeedingTaskRow.length === 0 && !changed) return prevData;
-
-        // TEMPORARY DEBUG — remove before launch
-        if (newChips.length > 0 || chipsNeedingTaskRow.length > 0) {
-          // eslint-disable-next-line no-console
-          console.warn(`[chip-sync] inserting rows: newChips=${newChips.length} needsTask=${chipsNeedingTaskRow.length} existingHeaders=${existingChipHeaderIds.size}`);
-        }
 
         const newData = [...reordered];
 

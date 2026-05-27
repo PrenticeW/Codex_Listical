@@ -903,9 +903,6 @@ export default function TacticsPage() {
         // this same cache, so opening the gate is safe — there are no
         // sleep-block-only chips pending in state.
         chipsLoadedForYear.current = currentYear;
-        // TEMPORARY DEBUG — remove before launch
-        // eslint-disable-next-line no-console
-        console.warn(`[chip-gate] cache-hit path: gate opened for year=${currentYear}, chips in cache=${cachedTactics.liveChips.projectChips?.length ?? 0}`);
         return () => {};
       }
       // liveChips missing from cache (unusual — settings or widths hit but
@@ -991,9 +988,6 @@ export default function TacticsPage() {
           // discarded because saveTacticsChipsState never fires.
           chipsLoadedForYear.current = currentYear;
         } else if (chipState.projectChips && chipState.projectChips.length > 0) {
-          // TEMPORARY DEBUG — remove before launch
-          // eslint-disable-next-line no-console
-          console.warn(`[chip-gate] load-ok: year=${currentYear} chips=${chipState.projectChips.length}`);
           const dedupedChips = dedupeChipsById(chipState.projectChips);
           updateChipSequenceFromList(dedupedChips);
           setProjectChips(dedupedChips.map((chip) => {
@@ -1009,9 +1003,6 @@ export default function TacticsPage() {
           chipsLoadedForYear.current = currentYear;
         } else {
           // Confirmed empty DB (first-time user for this year).
-          // TEMPORARY DEBUG — remove before launch
-          // eslint-disable-next-line no-console
-          console.warn(`[chip-gate] load-empty: year=${currentYear} — no chips in DB`);
           setProjectChips(buildInitialSleepBlocks(weekDays));
           setCustomProjects([]);
           setChipTimeOverrides({});
@@ -2079,9 +2070,6 @@ export default function TacticsPage() {
     const payload = { projectChips, customProjects, chipTimeOverrides };
     const yearToSave = currentYear;
     const timer = setTimeout(() => {
-      // TEMPORARY DEBUG — remove before launch
-      // eslint-disable-next-line no-console
-      console.warn(`[autosave-fire] year=${yearToSave} chips=${projectChips.length}`);
       saveTacticsChipsState(payload, yearToSave);
     }, 600);
     return () => clearTimeout(timer);

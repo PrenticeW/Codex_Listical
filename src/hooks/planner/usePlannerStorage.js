@@ -12,6 +12,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { supabase } from '../../lib/supabase';
 import useAutoPersist from '../common/useAutoPersist';
 import {
   readColumnSizing,
@@ -116,6 +117,21 @@ const initVisibleDayColumns = (settingsRow, totalDays) => {
 };
 
 export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, yearNumber = null } = {}) {
+  // Track the authenticated user ID so the load effect re-fires on login/logout.
+  // This prevents a rapid logout→login from skipping the fresh load because
+  // projectId and yearNumber didn't change, which would leave the component
+  // showing stale cached data (or, worse, triggering saves with wrong state).
+  const [userId, setUserId] = useState(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUserId(user?.id ?? null);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserId(session?.user?.id ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   // Synchronous cache peek. If anything is cached, the initialisers below
   // give the real data on the very first render. If nothing is cached,
   // they fall back to defaults and the async load swaps them in shortly.
@@ -161,13 +177,15 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
   // miss after the first network response.
   const [isLoaded, setIsLoaded] = useState(cachedHadData);
 
-  // The async load only fires on a cold cache miss. On a cache hit we
-  // trust the in-memory + localStorage cache (saves keep it in sync), so
-  // the load is skipped entirely — no unnecessary setStates, no risk of
-  // a slow round-trip clobbering an in-flight user edit.
+  // The async load only fires on a cold cache miss OR when the authenticated
+  // user changes. On a same-user cache hit we trust the in-memory +
+  // localStorage cache (saves keep it in sync). Adding userId to the dep
+  // array ensures a rapid logout→login always triggers a fresh Supabase
+  // read, preventing the old session's pending save from re-populating the
+  // cache and being served to the new component as if it were fresh.
   const loadGen = useRef(0);
   useEffect(() => {
-    if (cachedHadData) return undefined;
+    if (cachedHadData && userId != null) return undefined;
 
     const gen = ++loadGen.current;
     let cancelled = false;
@@ -227,7 +245,7 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
     })();
 
     return () => { cancelled = true; };
-  }, [projectId, yearNumber]);
+  }, [projectId, yearNumber, userId]);
 
   // Refresh startDate when another page (e.g. Plan's Send to System) writes
   // it externally. Only react to events for this hook's year.

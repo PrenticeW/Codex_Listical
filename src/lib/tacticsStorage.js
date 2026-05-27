@@ -583,10 +583,6 @@ export async function loadTacticsChipsState(yearNumber) {
  * @param {number} yearNumber
  */
 export async function saveTacticsChipsState(payload, yearNumber) {
-  // TEMPORARY DEBUG — remove before launch
-  const chipCount = Array.isArray(payload?.projectChips) ? payload.projectChips.length : 'non-array';
-  // eslint-disable-next-line no-console
-  console.warn(`[saveTacticsChipsState] year=${yearNumber} chips=${chipCount}`, new Error('stack').stack);
   try {
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);

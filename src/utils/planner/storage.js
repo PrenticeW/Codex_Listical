@@ -961,6 +961,19 @@ export const readTaskRows = async (
       // matters more than weekly order we can revisit.
       result = [...headers, ...taskRows, ...archiveRows];
     }
+
+    // Deduplicate by row id — a safety net against the concurrent-save race
+    // (two DELETEs then two INSERTs) that can land duplicate rows in
+    // planner_rows. Calendar header rows above are always fresh-built so they
+    // can never be duplicated; only the user rows need the check.
+    const seenIds = new Set();
+    result = result.filter(row => {
+      if (!row?.id) return true; // keep id-less rows (shouldn't exist but be safe)
+      if (seenIds.has(row.id)) return false;
+      seenIds.add(row.id);
+      return true;
+    });
+
     setCached(CACHE_NS, cacheKey, result);
     return result;
   } catch (error) {
@@ -1057,7 +1070,14 @@ async function _saveTaskRowsImpl(taskRows, yearNumber) {
 
     // Cache the just-saved array so the next read returns it instantly
     // (snappy navigation between pages without losing user edits).
-    setCached(CACHE_NS, taskRowsKey(yearNumber), allRows);
+    // Guard: only cache if the session that initiated the save is still the
+    // active user. Without this, an in-flight save from a just-logged-out
+    // session calls setCached *after* clearAll(), repopulating the cache with
+    // the old user's data and causing the next login to skip its fresh load.
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (currentUser?.id === userId) {
+      setCached(CACHE_NS, taskRowsKey(yearNumber), allRows);
+    }
   } catch (error) {
     console.error('Failed to save task rows', error);
   }
