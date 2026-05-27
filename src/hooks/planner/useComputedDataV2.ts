@@ -131,6 +131,7 @@ export default function useComputedDataV2({
     });
 
     if (hasChanges) {
+      console.count('[Probe] setData: computedDataV2 write-back'); // RENDER PROBE
       setData(prevData =>
         prevData.map(row => {
           const computed = row.id ? computedById.get(row.id) : undefined;

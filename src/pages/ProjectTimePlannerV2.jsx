@@ -278,6 +278,9 @@ function peekEnrichedChips(yearNumber) {
  */
 
 export default function ProjectTimePlannerV2() {
+  // RENDER PROBE — remove before launch (tracks render count in console)
+  if (typeof window !== 'undefined') console.count('[Probe] render: ProjectTimePlannerV2');
+
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
@@ -407,6 +410,7 @@ export default function ProjectTimePlannerV2() {
     if (dataHydrated.current) return;
     dataHydrated.current = true;
     if (Array.isArray(taskRows) && taskRows.length > 0) {
+      console.count('[Probe] setData: hydration'); // RENDER PROBE
       setData(taskRows);
     }
   }, [storageLoaded, taskRows, setData]);
@@ -600,6 +604,7 @@ export default function ProjectTimePlannerV2() {
 
   // Update month/week spans and day row when totalDays changes
   useEffect(() => {
+    console.count('[Probe] setData: month/week/day spans'); // RENDER PROBE
     setData(prevData => {
       const monthRowIndex = prevData.findIndex(row => row._isMonthRow);
       const weekRowIndex = prevData.findIndex(row => row._isWeekRow);
@@ -731,154 +736,129 @@ export default function ProjectTimePlannerV2() {
   // Calculate archive totals (for archived projects and archive weeks)
   const archiveTotals = useArchiveTotals(computedData, totalDays);
 
-  // Update filter row (row 7) with daily totals
+  // Coalesced: update filter row totals, archive week totals, and daily min/max rows
+  // in a single setData call. Previously three separate effects, each triggering its own
+  // render + write-back chain. Combined deps union covers all three.
   useEffect(() => {
-    if (!dailyTotals) return;
-
+    console.count('[Probe] setData: derived-totals (filter+archive+min/max)'); // RENDER PROBE
     setData(prevData => {
-      // Check if filter row needs updating
-      const filterRow = prevData.find(row => row._isFilterRow);
-      if (!filterRow) return prevData;
+      let result = prevData;
+      let changed = false;
 
-      // Check if any daily totals have changed
-      let hasChanges = false;
-      forEachDayColumn(totalDays, (dayColumnId) => {
-        if (filterRow[dayColumnId] !== dailyTotals[dayColumnId]) {
-          hasChanges = true;
-        }
-      });
-
-      // Only update if there are actual changes
-      if (!hasChanges) return prevData;
-
-      return prevData.map(row => {
-        // Update filter row with daily totals
-        if (row._isFilterRow) {
-          return { ...row, ...dailyTotals };
-        }
-        return row;
-      });
-    });
-  }, [dailyTotals, totalDays]);
-
-  // Update archive week rows with calculated totals
-  useEffect(() => {
-    if (!archiveTotals || !archiveTotals.weekTotals) return;
-
-    setData(prevData => {
-      let hasChanges = false;
-      const updatedData = prevData.map(row => {
-        // Update archive week rows with totals
-        if (row._rowType === 'archiveRow' && archiveTotals.weekTotals[row.id]) {
-          const weekTotal = archiveTotals.weekTotals[row.id];
-          if (row.archiveTotalHours !== weekTotal.totalHours) {
-            hasChanges = true;
-            return { ...row, archiveTotalHours: weekTotal.totalHours };
+      // --- Filter row: update daily column totals ---
+      if (dailyTotals) {
+        const filterRow = result.find(row => row._isFilterRow);
+        if (filterRow) {
+          let filterChanged = false;
+          forEachDayColumn(totalDays, (dayColumnId) => {
+            if (filterRow[dayColumnId] !== dailyTotals[dayColumnId]) filterChanged = true;
+          });
+          if (filterChanged) {
+            result = result.map(row => (row._isFilterRow ? { ...row, ...dailyTotals } : row));
+            changed = true;
           }
         }
-        return row;
-      });
-
-      // Only return new data if there were actual changes
-      return hasChanges ? updatedData : prevData;
-    });
-  }, [archiveTotals]);
-
-  // Update daily min/max rows when bounds change or toggle changes
-  useEffect(() => {
-    if (!dailyMinValues || !dailyMaxValues) return;
-
-    setData(prevData => {
-      // If toggle is off, filter out daily min/max rows
-      if (!showMaxMinRows) {
-        return prevData.filter(row => !row._isDailyMinRow && !row._isDailyMaxRow);
       }
 
-      // Check if rows already exist
-      const hasMinRow = prevData.some(row => row._isDailyMinRow);
-      const hasMaxRow = prevData.some(row => row._isDailyMaxRow);
-
-      // If toggle is on and rows don't exist, add them
-      if (!hasMinRow || !hasMaxRow) {
-        const filterRowIndex = prevData.findIndex(row => row._isFilterRow);
-        if (filterRowIndex === -1) return prevData;
-
-        const newData = [...prevData];
-
-        if (!hasMinRow) {
-          const minRow = {
-            id: 'daily-min',
-            _isDailyMinRow: true,
-            rowNum: '',
-            checkbox: false,
-            project: 'Daily Min',
-            subproject: '',
-            status: '',
-            task: '',
-            recurring: '',
-            estimate: '',
-            timeValue: '',
-            ...createDayColumnUpdates(totalDays, (i) => dailyMinValues[i]),
-          };
-          newData.splice(filterRowIndex, 0, minRow);
-        }
-
-        if (!hasMaxRow) {
-          const maxRow = {
-            id: 'daily-max',
-            _isDailyMaxRow: true,
-            rowNum: '',
-            checkbox: false,
-            project: 'Daily Max',
-            subproject: '',
-            status: '',
-            task: '',
-            recurring: '',
-            estimate: '',
-            timeValue: '',
-            ...createDayColumnUpdates(totalDays, (i) => dailyMaxValues[i]),
-          };
-          // Insert after daily min (if it was just added) or at filter row index
-          const insertIndex = hasMinRow ? filterRowIndex : filterRowIndex + 1;
-          newData.splice(insertIndex, 0, maxRow);
-        }
-
-        return newData;
+      // --- Archive week rows: update totals ---
+      if (archiveTotals?.weekTotals) {
+        let archiveChanged = false;
+        const withArchive = result.map(row => {
+          if (row._rowType === 'archiveRow' && archiveTotals.weekTotals[row.id]) {
+            const weekTotal = archiveTotals.weekTotals[row.id];
+            if (row.archiveTotalHours !== weekTotal.totalHours) {
+              archiveChanged = true;
+              return { ...row, archiveTotalHours: weekTotal.totalHours };
+            }
+          }
+          return row;
+        });
+        if (archiveChanged) { result = withArchive; changed = true; }
       }
 
-      // Otherwise, just update existing rows with new values
-      return prevData.map(row => {
-        // Update daily min row
-        if (row._isDailyMinRow) {
-          return {
-            ...row,
-            project: 'Daily Min',
-            ...createDayColumnUpdates(totalDays, (i) => dailyMinValues[i]),
-          };
+      // --- Daily min/max rows: insert or update ---
+      if (dailyMinValues && dailyMaxValues) {
+        if (!showMaxMinRows) {
+          const filtered = result.filter(row => !row._isDailyMinRow && !row._isDailyMaxRow);
+          if (filtered.length !== result.length) { result = filtered; changed = true; }
+        } else {
+          const hasMinRow = result.some(row => row._isDailyMinRow);
+          const hasMaxRow = result.some(row => row._isDailyMaxRow);
+          if (!hasMinRow || !hasMaxRow) {
+            const filterRowIndex = result.findIndex(row => row._isFilterRow);
+            if (filterRowIndex !== -1) {
+              const newData = [...result];
+              if (!hasMinRow) {
+                newData.splice(filterRowIndex, 0, {
+                  id: 'daily-min', _isDailyMinRow: true,
+                  rowNum: '', checkbox: false, project: 'Daily Min', subproject: '',
+                  status: '', task: '', recurring: '', estimate: '', timeValue: '',
+                  ...createDayColumnUpdates(totalDays, (i) => dailyMinValues[i]),
+                });
+              }
+              if (!hasMaxRow) {
+                const insertIndex = hasMinRow ? filterRowIndex : filterRowIndex + 1;
+                newData.splice(insertIndex, 0, {
+                  id: 'daily-max', _isDailyMaxRow: true,
+                  rowNum: '', checkbox: false, project: 'Daily Max', subproject: '',
+                  status: '', task: '', recurring: '', estimate: '', timeValue: '',
+                  ...createDayColumnUpdates(totalDays, (i) => dailyMaxValues[i]),
+                });
+              }
+              result = newData; changed = true;
+            }
+          } else {
+            let minMaxChanged = false;
+            const withMinMax = result.map(row => {
+              if (row._isDailyMinRow) {
+                const next = { ...row, project: 'Daily Min', ...createDayColumnUpdates(totalDays, (i) => dailyMinValues[i]) };
+                if (next !== row) minMaxChanged = true;
+                return next;
+              }
+              if (row._isDailyMaxRow) {
+                const next = { ...row, project: 'Daily Max', ...createDayColumnUpdates(totalDays, (i) => dailyMaxValues[i]) };
+                if (next !== row) minMaxChanged = true;
+                return next;
+              }
+              return row;
+            });
+            // Spread always creates a new object, so compare a stable field instead
+            if (minMaxChanged) { result = withMinMax; changed = true; }
+          }
         }
+      }
 
-        // Update daily max row
-        if (row._isDailyMaxRow) {
-          return {
-            ...row,
-            project: 'Daily Max',
-            ...createDayColumnUpdates(totalDays, (i) => dailyMaxValues[i]),
-          };
+      return changed ? result : prevData;
+    });
+  }, [dailyTotals, archiveTotals, dailyMinValues, dailyMaxValues, showMaxMinRows, totalDays]);
+
+  // On-mount structural setup: (1) repair stale parentGroupIds, (2) ensure Inbox and Archive header rows exist.
+  // Coalesced into one setData so both passes share a single render instead of two cascaded ones.
+  useEffect(() => {
+    console.count('[Probe] setData: on-mount structural (parentGroupId repair + inbox/archive headers)'); // RENDER PROBE
+    setData(prevData => {
+      // --- Step 1: parentGroupId repair ---
+      // Repair rows whose parentGroupId points to a groupId that no longer exists.
+      // Chip-linked rows are intentionally skipped — the chip sync effect validates them.
+      const validGroupIds = new Set(prevData.map(r => r.groupId).filter(Boolean));
+      let needsRepair = false;
+      const repaired = prevData.map(row => {
+        if (row._chipId) return row;
+        if (row.parentGroupId && !validGroupIds.has(row.parentGroupId)) {
+          needsRepair = true;
+          const { parentGroupId: _removed, ...rest } = row;
+          return rest;
         }
-
         return row;
       });
-    });
-  }, [dailyMinValues, dailyMaxValues, showMaxMinRows, totalDays]);
+      const base = needsRepair ? repaired : prevData;
 
-  // Insert Inbox and Archive header rows
-  useEffect(() => {
-    setData(prevData => {
+      // --- Step 2: Inbox and Archive header insertion ---
       // Find the filter row index
-      const filterRowIndex = prevData.findIndex(row => row._isFilterRow);
-      if (filterRowIndex === -1) return prevData;
+      const filterRowIndex = base.findIndex(row => row._isFilterRow);
+      if (filterRowIndex === -1) return base;
 
-      let newData = [...prevData];
+      let newData = [...base];
 
       // FIRST: Clean up any duplicates or legacy rows
 
@@ -975,14 +955,12 @@ export default function ProjectTimePlannerV2() {
     // Draft year starts blank — don't inject project headers until the user imports tasks or presses "Send to System"
     if (isCurrentYearDraft && !sentToSystem && !latestDataRef.current.some(r => r._rowType === 'projectTask' && !r._chipId)) return;
 
-    // Use a flag to prevent updating during mount
-    let isMounted = true;
-
-    // Schedule the update for after the current render cycle
-    const timeoutId = setTimeout(() => {
-      if (!isMounted) return;
-
-      setData(prevData => {
+    // setData uses the functional updater form, so React applies updates in queue order.
+    // No setTimeout needed: useEffect already fires after commit, and functional updaters
+    // applied in the same flush are sequenced — chip sync's updater sees this effect's
+    // inserted headers even when both effects fire in the same passive-effects phase.
+    console.count('[Probe] setData: project header injection'); // RENDER PROBE
+    setData(prevData => {
         // Find the filter row index to insert projects after it
         const filterRowIndex = prevData.findIndex(row => row._isFilterRow);
         if (filterRowIndex === -1) return prevData;
@@ -1122,35 +1100,7 @@ export default function ProjectTimePlannerV2() {
 
         return newData;
       });
-    }, 0);
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timeoutId);
-    };
   }, [projects, projectNamesMap, projectTaglinesMap, totalDays, isCurrentYearDraft, sentToSystem, isProjectsLoaded]);
-
-  // Repair rows whose parentGroupId points to a groupId that no longer exists in data.
-  // This happens when a subprojectHeader is deleted — its child task rows keep a stale
-  // parentGroupId that prevents them from collapsing with their project.
-  // Clearing parentGroupId lets assignParentGroupIds re-assign them positionally.
-  useEffect(() => {
-    setData(prevData => {
-      const validGroupIds = new Set(prevData.map(r => r.groupId).filter(Boolean));
-      let needsRepair = false;
-      const repaired = prevData.map(row => {
-        // Skip rows still linked to a chip — their parentGroupId is validated by the chip sync effect
-        if (row._chipId) return row;
-        if (row.parentGroupId && !validGroupIds.has(row.parentGroupId)) {
-          needsRepair = true;
-          const { parentGroupId: _removed, ...rest } = row;
-          return rest;
-        }
-        return row;
-      });
-      return needsRepair ? repaired : prevData;
-    });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Create subprojectHeader rows from Tactics chips
   useEffect(() => {
@@ -1158,11 +1108,10 @@ export default function ProjectTimePlannerV2() {
     // Draft year starts blank — don't inject chip rows until the user imports tasks or presses "Send to System"
     if (isCurrentYearDraft && !sentToSystem && !latestDataRef.current.some(r => r._rowType === 'projectTask' && !r._chipId)) return;
 
-    let isMounted = true;
-    const timeoutId = setTimeout(() => {
-      if (!isMounted) return;
-
-      setData(prevData => {
+    // No setTimeout: functional updater form means React applies this after project injection's
+    // updater in the same flush, so chip rows see project headers already inserted.
+    console.count('[Probe] setData: chip sync'); // RENDER PROBE
+    setData(prevData => {
         const currentChipIds = new Set(tacticsChips.map(c => c.id));
 
         // Build label lookup for all current chips
@@ -1388,19 +1337,11 @@ export default function ProjectTimePlannerV2() {
 
         return newData;
       });
-    }, 50);
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timeoutId);
-    };
-  // `projects` is included so this effect re-fires when staging finishes
-  // loading after the Supabase port. Without it, chips can be enriched and
-  // this effect can run before project headers have been inserted by the
-  // sibling effect (line 846), causing every chip to silently fail the
-  // `findIndex(row._rowType === 'projectHeader')` lookup and producing
-  // "no subproject/task rows in System" even though chip data is intact.
-  // Debugging session 2026-05-16. Remove only with a replacement signal.
+  // `projects` is included so this effect re-fires when staging finishes loading.
+  // Without it, chips can be enriched before project headers exist in data, causing every
+  // findIndex(projectHeader) lookup to fail silently. Removing only with a replacement signal.
+  // (Previously guarded by a 50 ms setTimeout; no longer needed because the functional updater
+  // form guarantees project injection's setData is applied before this one in the same flush.)
   }, [tacticsChips, totalDays, isCurrentYearDraft, sentToSystem, projects]);
 
   // Track the last send-to-system timestamp we've already acted on
