@@ -705,6 +705,11 @@ export default function TacticsPage() {
   // ref would have let the save effect write DEFAULT chips over the user's
   // saved chips before the async load completed. Null init fixes that.
   const chipsLoadedForYear = useRef(null);
+  // Set to true when loadTacticsChipsState returns null (auth/network error).
+  // The autosave effect checks this after the standard gate so a failed load
+  // never lets the save effect write [] (or sleep blocks) over real DB chips.
+  // Reset to false at the start of every load effect run.
+  const chipLoadFailed = useRef(false);
   const settingsLoadedForYear = useRef(null);
   const columnWidthsLoadedForYear = useRef(null);
   const [tableRect, setTableRect] = useState(null);
@@ -898,6 +903,7 @@ export default function TacticsPage() {
     settingsLoadedForYear.current = null;
     columnWidthsLoadedForYear.current = null;
     chipsLoadedForYear.current = null;
+    chipLoadFailed.current = false;
     hasLoadedInitialState.current = true;
 
     (async () => {
@@ -959,6 +965,7 @@ export default function TacticsPage() {
           // trigger a save. The user sees an empty Plan page; navigating away
           // and back retries the load.
           console.error('Chip load failed for year', currentYear, '— autosave disabled. Refresh to retry.');
+          chipLoadFailed.current = true;
           // chipsLoadedForYear.current intentionally NOT set here.
         } else if (chipState.projectChips && chipState.projectChips.length > 0) {
           const dedupedChips = dedupeChipsById(chipState.projectChips);
@@ -2022,6 +2029,12 @@ export default function TacticsPage() {
       // The load effect set this to null — the next render (with correct chips
       // in state) will re-fire this effect and land here with the guard passing.
       chipsLoadedForYear.current = currentYear;
+      return;
+    }
+    // If the chip load itself failed (auth/network error), never save.
+    // chipLoadFailed is reset to false at the start of every new load, so this
+    // only blocks autosaves for the specific year + load cycle that errored.
+    if (chipLoadFailed.current) {
       return;
     }
     // Debounce: chip resize fires setProjectChips on every mousemove pixel,
