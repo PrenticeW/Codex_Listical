@@ -964,7 +964,9 @@ export default function TacticsPage() {
           // Leaving projectChips as [] means no chip-related effect can
           // trigger a save. The user sees an empty Plan page; navigating away
           // and back retries the load.
-          console.error('Chip load failed for year', currentYear, '— chips served from cache. Autosave gate opened from cache.');
+          // TEMPORARY DEBUG — remove before launch
+          // eslint-disable-next-line no-console
+          console.warn(`[chip-load-null] year=${currentYear} — opening gate from cache. chips in state=${projectChips.length}`);
           chipLoadFailed.current = true;
           // Open the gate anyway: chips in state come from peekTacticsCache
           // (the useState initializer ran before this effect). The sleep-blocks-ADD
@@ -974,6 +976,9 @@ export default function TacticsPage() {
           // discarded because saveTacticsChipsState never fires.
           chipsLoadedForYear.current = currentYear;
         } else if (chipState.projectChips && chipState.projectChips.length > 0) {
+          // TEMPORARY DEBUG — remove before launch
+          // eslint-disable-next-line no-console
+          console.warn(`[chip-load-ok] year=${currentYear} chips=${chipState.projectChips.length}`);
           const dedupedChips = dedupeChipsById(chipState.projectChips);
           updateChipSequenceFromList(dedupedChips);
           setProjectChips(dedupedChips.map((chip) => {
@@ -2044,6 +2049,9 @@ export default function TacticsPage() {
     //     no state changes are pending by the time the async branch runs.
     // The old design (arm on first run, skip once) let any subsequent state
     // change pass the gate before load completed — this was the wipe bug.
+    // TEMPORARY DEBUG — remove before launch
+    // eslint-disable-next-line no-console
+    console.warn(`[autosave-gate] chipsLoadedForYear=${chipsLoadedForYear.current} currentYear=${currentYear} chips=${projectChips.length}`);
     if (chipsLoadedForYear.current !== currentYear) {
       return;
     }

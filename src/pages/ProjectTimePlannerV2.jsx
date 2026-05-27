@@ -811,18 +811,24 @@ export default function ProjectTimePlannerV2() {
             let minMaxChanged = false;
             const withMinMax = result.map(row => {
               if (row._isDailyMinRow) {
-                const next = { ...row, project: 'Daily Min', ...createDayColumnUpdates(totalDays, (i) => dailyMinValues[i]) };
-                if (next !== row) minMaxChanged = true;
-                return next;
+                const updates = createDayColumnUpdates(totalDays, (i) => dailyMinValues[i]);
+                // Compare actual values — spread always creates a new reference so
+                // `next !== row` would be unconditionally true and trigger an
+                // infinite setData → recompute → effect loop.
+                const hasChange = Object.keys(updates).some(k => row[k] !== updates[k]);
+                if (!hasChange) return row;
+                minMaxChanged = true;
+                return { ...row, project: 'Daily Min', ...updates };
               }
               if (row._isDailyMaxRow) {
-                const next = { ...row, project: 'Daily Max', ...createDayColumnUpdates(totalDays, (i) => dailyMaxValues[i]) };
-                if (next !== row) minMaxChanged = true;
-                return next;
+                const updates = createDayColumnUpdates(totalDays, (i) => dailyMaxValues[i]);
+                const hasChange = Object.keys(updates).some(k => row[k] !== updates[k]);
+                if (!hasChange) return row;
+                minMaxChanged = true;
+                return { ...row, project: 'Daily Max', ...updates };
               }
               return row;
             });
-            // Spread always creates a new object, so compare a stable field instead
             if (minMaxChanged) { result = withMinMax; changed = true; }
           }
         }
