@@ -932,26 +932,44 @@ export default function TacticsPage() {
         // Chip state. dayName backfill uses settings.startDay (the value
         // we just loaded), not the in-state startDay (still 'Sunday' at
         // this point in the microtask).
+        //
+        // chipState contract (from loadTacticsChipsState):
+        //   null                       — read failed (auth/network error). Do NOT
+        //                               save default state; real chips may still be
+        //                               in DB. Gate stays closed so no autosave fires.
+        //   { projectChips: [] }       — confirmed empty DB (first-time user).
+        //   { projectChips: [...] }    — real chips loaded.
         const startIndex = Math.max(0, DAYS_OF_WEEK.indexOf(settings.startDay));
         const weekDays = DAYS_OF_WEEK.slice(startIndex).concat(DAYS_OF_WEEK.slice(0, startIndex));
-        if (chipState.projectChips) {
+        if (chipState === null) {
+          // Read failed. Show sleep blocks as a safe visual default but do NOT
+          // open the chip autosave gate — that would wipe the real chips from
+          // Supabase 600ms after auth settles. The user can refresh to retry.
+          setProjectChips(buildInitialSleepBlocks(weekDays));
+          // chipsLoadedForYear.current intentionally NOT set here.
+        } else if (chipState.projectChips && chipState.projectChips.length > 0) {
           const dedupedChips = dedupeChipsById(chipState.projectChips);
           updateChipSequenceFromList(dedupedChips);
           setProjectChips(dedupedChips.map((chip) => {
             if (chip.dayName != null || chip.columnIndex >= DAY_COLUMN_COUNT) return chip;
             return { ...chip, dayName: weekDays[chip.columnIndex] ?? null };
           }));
+          setCustomProjects(Array.isArray(chipState.customProjects) ? chipState.customProjects : []);
+          setChipTimeOverrides(
+            chipState.chipTimeOverrides && typeof chipState.chipTimeOverrides === 'object'
+              ? chipState.chipTimeOverrides
+              : {}
+          );
+          chipsLoadedForYear.current = currentYear;
         } else {
+          // Confirmed empty DB (first-time user for this year).
           setProjectChips(buildInitialSleepBlocks(weekDays));
+          setCustomProjects([]);
+          setChipTimeOverrides({});
+          chipsLoadedForYear.current = currentYear;
         }
-        setCustomProjects(Array.isArray(chipState.customProjects) ? chipState.customProjects : []);
-        setChipTimeOverrides(
-          chipState.chipTimeOverrides && typeof chipState.chipTimeOverrides === 'object'
-            ? chipState.chipTimeOverrides
-            : {}
-        );
 
-        // Explicitly open the autosave gates now that the load is done.
+        // Explicitly open the settings + column-widths autosave gates.
         // The skip-first-save dance in each save effect only fires if a
         // setX call above caused a re-render — and primitive setX with an
         // unchanged value (e.g. setStartDay('Sunday') when current is
@@ -961,7 +979,6 @@ export default function TacticsPage() {
         // user resize. Opening the gates explicitly here costs one
         // redundant save of the just-loaded data per autosave effect but
         // guarantees subsequent user changes actually persist.
-        chipsLoadedForYear.current = currentYear;
         settingsLoadedForYear.current = currentYear;
         columnWidthsLoadedForYear.current = currentYear;
       } catch (err) {

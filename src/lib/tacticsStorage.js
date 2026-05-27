@@ -419,7 +419,13 @@ async function readChipsLayer({ userId, yearId, yearNumber, isSent }) {
 
   let result;
   if (chipRows.length === 0 && customRows.length === 0) {
-    result = { projectChips: null, customProjects: null, chipTimeOverrides: null };
+    // Confirmed empty: the DB has 0 chip rows for this (user, year, is_sent)
+    // slice. Empty arrays (not null) let callers distinguish "confirmed no
+    // data" from "read failed". loadTacticsChipsState returns null on any
+    // error so the load effect never treats a failed read as a first-time
+    // user and calls buildInitialSleepBlocks — which would then autosave,
+    // deleting the real chips from the DB.
+    result = { projectChips: [], customProjects: [], chipTimeOverrides: null };
   } else {
     const projectChips = chipRows.length > 0 ? chipRows.map(chipRowToPayload) : null;
     const customProjects =
@@ -538,18 +544,35 @@ async function writeChipsLayerInner({ userId, yearId, yearNumber, isSent, payloa
 
 /**
  * Read the live chip state for a year.
+ *
+ * Return value contract:
+ *   null                          — read failed (auth error, network error, etc).
+ *                                   Callers MUST NOT save default state when this
+ *                                   is returned; the real chips may still be in DB.
+ *   { projectChips: [], ... }     — confirmed no chips in DB (first-time user).
+ *                                   Callers may call buildInitialSleepBlocks.
+ *   { projectChips: [...], ... }  — real chips loaded successfully.
+ *
  * @param {number} yearNumber
- * @returns {Promise<{projectChips: Array|null, customProjects: Array|null, chipTimeOverrides: object|null}>}
+ * @returns {Promise<{projectChips: Array, customProjects: Array, chipTimeOverrides: object|null}|null>}
  */
 export async function loadTacticsChipsState(yearNumber) {
   try {
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
-    if (!yearId) return { projectChips: null, customProjects: null, chipTimeOverrides: null };
+    if (!yearId) {
+      // Year doesn't exist yet (e.g. mid-setup). Treat as confirmed empty so
+      // the caller can initialise sleep blocks — but only if auth succeeded.
+      return { projectChips: [], customProjects: [], chipTimeOverrides: null };
+    }
     return await readChipsLayer({ userId, yearId, yearNumber, isSent: false });
   } catch (error) {
+    // Return null (not the shape object) so callers know this was a failure,
+    // not a confirmed-empty DB. This prevents the load effect from calling
+    // buildInitialSleepBlocks and opening the autosave gate, which would
+    // wipe the real chips 600ms later once auth has settled.
     console.error('Failed to read tactics chip state', error);
-    return { projectChips: null, customProjects: null, chipTimeOverrides: null };
+    return null;
   }
 }
 
