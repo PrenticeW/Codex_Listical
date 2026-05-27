@@ -969,11 +969,32 @@ export const readTaskRows = async (
   }
 };
 
-export const saveTaskRows = async (
+// Serialize planner saves so concurrent DELETE+INSERT calls can't interleave.
+//
+// saveTaskRows uses a replace-the-layer pattern (DELETE all rows, then bulk
+// INSERT). If two saves run concurrently — e.g. the 500ms debounce fires just
+// before the user signs out, and the unmount flush fires immediately after —
+// both DELETEs clear the table first, then both INSERTs add their rows,
+// producing duplicate rows in Supabase. Chaining every save onto this promise
+// ensures they execute one at a time: the second waits until the first's INSERT
+// has committed before starting its own DELETE.
+let _taskRowsSaveQueue = Promise.resolve();
+
+export const saveTaskRows = (
   taskRows,
   projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
   yearNumber = null,
 ) => {
+  // Always run the next save regardless of whether the previous one threw, so
+  // a transient network error doesn't permanently block future saves.
+  _taskRowsSaveQueue = _taskRowsSaveQueue.then(
+    () => _saveTaskRowsImpl(taskRows, yearNumber),
+    () => _saveTaskRowsImpl(taskRows, yearNumber),
+  );
+  return _taskRowsSaveQueue;
+};
+
+async function _saveTaskRowsImpl(taskRows, yearNumber) {
   try {
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
@@ -1040,7 +1061,7 @@ export const saveTaskRows = async (
   } catch (error) {
     console.error('Failed to save task rows', error);
   }
-};
+}
 
 // ============================================================
 // Legacy storage key helper (kept for any one-off consumer)

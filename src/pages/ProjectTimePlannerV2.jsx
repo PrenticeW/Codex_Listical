@@ -413,11 +413,19 @@ export default function ProjectTimePlannerV2() {
   }, [storageLoaded, taskRows, setData]);
 
   // Save data to storage when it changes (debounced).
+  // Tracks when the last debounced save was initiated. The unmount flush
+  // checks this to avoid firing a stale save concurrently with an in-progress
+  // one (the serialized queue in saveTaskRows prevents duplicate rows, but the
+  // flush would still overwrite the correct save with pre-hydration data if it
+  // runs after the debounced save completes).
+  const lastSaveInitiatedRef = useRef(0);
+
   // Only after dataHydrated, so the initial blank skeleton doesn't get
   // pushed back to Supabase and wipe the loaded rows.
   useEffect(() => {
     if (!dataHydrated.current) return;
     const timeoutId = setTimeout(() => {
+      lastSaveInitiatedRef.current = Date.now();
       // TEMPORARY DEBUG — remove before launch
       const inboxCount = data.filter(r => r._isInboxRow).length;
       const chipHeaderCount = data.filter(r => r._rowType === 'subprojectHeader' && r._chipId).length;
@@ -434,9 +442,13 @@ export default function ProjectTimePlannerV2() {
   // Flush unsaved data to storage on unmount (bypasses debounce so navigation away doesn't lose edits).
   // Guarded by dataHydrated so React strict-mode's dev double-mount can't
   // wipe loaded data with the initial blank skeleton on first mount.
+  // Also skipped if a save was initiated within the last 2 seconds — the
+  // useAutoPersist call from setTaskRows is in flight and will commit the
+  // correct (hydrated) data; firing a concurrent flush would race it.
   useEffect(() => {
     return () => {
       if (!dataHydrated.current) return;
+      if (Date.now() - lastSaveInitiatedRef.current < 2000) return;
       // saveTaskRows is now async (Supabase). Fire-and-forget on unmount —
       // the user is navigating away so there's no caller to await.
       saveTaskRows(latestDataRef.current, DEFAULT_PROJECT_ID, currentYear).catch((err) => {
