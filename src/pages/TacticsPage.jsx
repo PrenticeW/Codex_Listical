@@ -1994,7 +1994,18 @@ export default function TacticsPage() {
       chipsLoadedForYear.current = currentYear;
       return;
     }
-    saveTacticsChipsState({ projectChips, customProjects, chipTimeOverrides }, currentYear);
+    // Debounce: chip resize fires setProjectChips on every mousemove pixel,
+    // queuing dozens of Supabase writes per drag (each a delete-then-insert).
+    // The cleanup cancels the pending save on each new change, so only the
+    // final resting state after 600ms of no further updates is written.
+    // The mouseup handler also issues two quick setState calls (chipTimeOverrides
+    // then projectChips) — the debounce collapses those into one save too.
+    const payload = { projectChips, customProjects, chipTimeOverrides };
+    const yearToSave = currentYear;
+    const timer = setTimeout(() => {
+      saveTacticsChipsState(payload, yearToSave);
+    }, 600);
+    return () => clearTimeout(timer);
   }, [projectChips, customProjects, chipTimeOverrides, currentYear]);
   const restoreCanonicalScheduleChip = useCallback((chip, filtered) => {
     const isScheduleChip =
