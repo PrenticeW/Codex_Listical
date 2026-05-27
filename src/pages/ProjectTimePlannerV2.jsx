@@ -418,6 +418,11 @@ export default function ProjectTimePlannerV2() {
   useEffect(() => {
     if (!dataHydrated.current) return;
     const timeoutId = setTimeout(() => {
+      // TEMPORARY DEBUG — remove before launch
+      const inboxCount = data.filter(r => r._isInboxRow).length;
+      const chipHeaderCount = data.filter(r => r._rowType === 'subprojectHeader' && r._chipId).length;
+      // eslint-disable-next-line no-console
+      console.warn(`[planner-save] totalRows=${data.length} inboxRows=${inboxCount} chipHeaders=${chipHeaderCount}`);
       setTaskRows(data);
     }, 500); // Debounce saves by 500ms to avoid too many writes
 
@@ -883,6 +888,12 @@ export default function ProjectTimePlannerV2() {
       // THEN: Check what we need to create
       const currentHasArchiveHeader = newData.some(row => row._rowType === 'archiveHeader');
       const currentHasInboxRow = newData.some(row => row._isInboxRow);
+
+      // TEMPORARY DEBUG — remove before launch
+      if (!currentHasInboxRow || !currentHasArchiveHeader) {
+        // eslint-disable-next-line no-console
+        console.warn(`[structural] inserting missing rows: hasInbox=${currentHasInboxRow} hasArchive=${currentHasArchiveHeader} totalRows=${newData.length}`);
+      }
 
       // If both exist, nothing more to do
       if (currentHasInboxRow && currentHasArchiveHeader) return newData;
