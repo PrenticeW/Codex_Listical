@@ -2527,6 +2527,7 @@ export default function ProjectTimePlannerV2() {
       },
       columnVisibility: {
         recurring: showRecurring,
+        subproject: showSubprojects,
         ...visibleDayColumns,
       },
     },
