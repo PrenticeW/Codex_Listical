@@ -2025,16 +2025,19 @@ export default function TacticsPage() {
     // the previous year's chips from being written to the new year's storage
     // key during a year switch (the state updates from the load effect haven't
     // applied yet when this effect fires in the same render cycle).
-    if (chipsLoadedForYear.current == null) {
-      // The load effect set this to null — the next render (with correct chips
-      // in state) will re-fire this effect and land here with the guard passing.
-      chipsLoadedForYear.current = currentYear;
-      return;
-    }
-    // If the chip load itself failed (auth/network error), never save.
-    // chipLoadFailed is reset to false at the start of every new load, so this
-    // only blocks autosaves for the specific year + load cycle that errored.
-    if (chipLoadFailed.current) {
+    // Only save after the load effect has explicitly opened the gate for THIS
+    // year by setting chipsLoadedForYear.current = currentYear in its success
+    // branch. Returning early here blocks:
+    //   - The sleep-blocks-ADD effect (fires on every mount before async load
+    //     completes, calls setProjectChips([sleep-0..6]) → would trigger this
+    //     autosave and wipe real chips from Supabase within 600ms).
+    //   - Year-switch races where the previous year's chips are in state but
+    //     currentYear has already changed.
+    //   - The error path (chipState === null): load never sets the ref, so
+    //     the gate stays closed and no save fires.
+    // The old design (arm on first run, skip once) let any subsequent state
+    // change pass the gate before load completed — this was the wipe bug.
+    if (chipsLoadedForYear.current !== currentYear) {
       return;
     }
     // Debounce: chip resize fires setProjectChips on every mousemove pixel,
