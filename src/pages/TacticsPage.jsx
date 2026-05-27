@@ -552,12 +552,22 @@ export default function TacticsPage() {
   // Save column widths to storage when they change. Gated like the year
   // settings autosave so the default array above doesn't clobber a
   // previously saved width set during the initial async load window.
+  // Debounced: setColumnWidths fires on every mousemove pixel during a
+  // drag, so without debouncing dozens of concurrent Supabase writes race
+  // each other and the one that resolves last (not the final position)
+  // wins. The effect cleanup cancels the pending timer on each new value,
+  // so only the final resting width is written.
   useEffect(() => {
     if (columnWidthsLoadedForYear.current == null) {
       columnWidthsLoadedForYear.current = currentYear;
       return;
     }
-    saveTacticsColumnWidths(columnWidths, currentYear);
+    const widthsToSave = columnWidths;
+    const yearToSave = currentYear;
+    const timer = setTimeout(() => {
+      saveTacticsColumnWidths(widthsToSave, yearToSave);
+    }, 600);
+    return () => clearTimeout(timer);
   }, [columnWidths, currentYear]);
 
 

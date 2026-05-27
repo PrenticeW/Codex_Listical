@@ -248,6 +248,10 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
   useAutoPersist(columnSizing, saveColumnSizing, {
     ...autoOpts,
     shouldSave: (value) => Object.keys(value).length > 0,
+    // Column sizing changes on every pixel during a drag. Debounce so only
+    // the final resting width is written, preventing concurrent Supabase
+    // writes from racing and persisting a mid-drag position instead.
+    debounceMs: 600,
   });
   useAutoPersist(sizeScale, saveSizeScale, autoOpts);
   useAutoPersist(startDate, saveStartDate, autoOpts);

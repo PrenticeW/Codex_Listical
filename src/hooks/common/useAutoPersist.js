@@ -30,6 +30,12 @@ import { useEffect, useRef } from 'react';
  *   has completed, then flip true.
  * @param {Function} options.shouldSave - Optional predicate to determine if
  *   value should be saved
+ * @param {number} options.debounceMs - Debounce delay in milliseconds
+ *   (default 0, meaning no debounce). Use for values that can change at
+ *   high frequency (e.g. column sizing during a mouse drag) to avoid
+ *   concurrent writes racing each other to the database. Each new value
+ *   cancels the pending save and restarts the timer; only the final
+ *   resting value is written.
  */
 export default function useAutoPersist(value, saveFunction, options = {}) {
   const {
@@ -38,6 +44,7 @@ export default function useAutoPersist(value, saveFunction, options = {}) {
     skipInitialSave = true,
     enabled = true,
     shouldSave,
+    debounceMs = 0,
   } = options;
 
   const isInitialMount = useRef(skipInitialSave);
@@ -55,6 +62,23 @@ export default function useAutoPersist(value, saveFunction, options = {}) {
     }
     const predicate = shouldSaveRef.current;
     if (predicate && !predicate(value)) return;
+
+    if (debounceMs > 0) {
+      // Capture everything needed for the delayed call so the timeout
+      // callback holds stable values even if the component re-renders.
+      const capturedValue = value;
+      const capturedProjectId = projectId;
+      const capturedYearNumber = yearNumber;
+      const capturedSave = saveFunction;
+      const timer = setTimeout(() => {
+        capturedSave(capturedValue, capturedProjectId, capturedYearNumber);
+      }, debounceMs);
+      // Cleanup cancels the timer when value changes again (next drag
+      // pixel) or when the component unmounts, so only the last value
+      // in a burst actually writes.
+      return () => clearTimeout(timer);
+    }
+
     saveFunction(value, projectId, yearNumber);
-  }, [value, saveFunction, projectId, yearNumber, enabled]);
+  }, [value, saveFunction, projectId, yearNumber, enabled, debounceMs]);
 }
