@@ -90,8 +90,10 @@ export default function useComputedDataV2({
             status = 'Scheduled';
           }
         } else {
-          // No scheduled time - reset to 'Not Scheduled' only if no manual status has been set
-          if (!manualStatuses.includes(status) && status !== 'Scheduled') {
+          // No scheduled time - reset to 'Not Scheduled' only if no manual status has been set.
+          // 'Scheduled' is system-assigned (never user-set), so it is intentionally NOT in
+          // manualStatuses and must revert here when all time values are cleared.
+          if (!manualStatuses.includes(status)) {
             status = 'Not Scheduled';
           }
         }
