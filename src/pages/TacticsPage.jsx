@@ -964,9 +964,15 @@ export default function TacticsPage() {
           // Leaving projectChips as [] means no chip-related effect can
           // trigger a save. The user sees an empty Plan page; navigating away
           // and back retries the load.
-          console.error('Chip load failed for year', currentYear, '— autosave disabled. Refresh to retry.');
+          console.error('Chip load failed for year', currentYear, '— chips served from cache. Autosave gate opened from cache.');
           chipLoadFailed.current = true;
-          // chipsLoadedForYear.current intentionally NOT set here.
+          // Open the gate anyway: chips in state come from peekTacticsCache
+          // (the useState initializer ran before this effect). The sleep-blocks-ADD
+          // effect fired synchronously before this async branch resolved, so it was
+          // already blocked by the closed gate — no sleep-only save is pending.
+          // Without opening the gate here, ALL user-placed chips are silently
+          // discarded because saveTacticsChipsState never fires.
+          chipsLoadedForYear.current = currentYear;
         } else if (chipState.projectChips && chipState.projectChips.length > 0) {
           const dedupedChips = dedupeChipsById(chipState.projectChips);
           updateChipSequenceFromList(dedupedChips);
@@ -2033,8 +2039,9 @@ export default function TacticsPage() {
     //     autosave and wipe real chips from Supabase within 600ms).
     //   - Year-switch races where the previous year's chips are in state but
     //     currentYear has already changed.
-    //   - The error path (chipState === null): load never sets the ref, so
-    //     the gate stays closed and no save fires.
+    //   - The error path (chipState === null): load opens the gate from cache
+    //     so user edits still persist, but no sleep-block save fires because
+    //     no state changes are pending by the time the async branch runs.
     // The old design (arm on first run, skip once) let any subsequent state
     // change pass the gate before load completed — this was the wipe bug.
     if (chipsLoadedForYear.current !== currentYear) {
