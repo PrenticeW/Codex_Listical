@@ -66,7 +66,7 @@ async function findYearId(userId, yearNumber) {
  * Same wrap-and-tag shape used by the localStorage version: arrays become
  * `{ cells: [...], _rowType?, _pairId?, _sectionType?, _isTotalRow? }`.
  */
-const serializeRow = (row) => {
+export const serializeRow = (row) => {
   if (!Array.isArray(row)) return row;
   const serialized = { cells: [...row] };
   if (row.__rowType) serialized._rowType = row.__rowType;
@@ -76,7 +76,7 @@ const serializeRow = (row) => {
   return serialized;
 };
 
-const deserializeRow = (row) => {
+export const deserializeRow = (row) => {
   if (row && typeof row === 'object' && Array.isArray(row.cells)) {
     const deserialized = [...row.cells];
     return defineRowMetadata(deserialized, {
@@ -149,6 +149,33 @@ function itemToDbRow({ userId, yearId, item, isArchived, displayOrder }) {
   };
 }
 
+/**
+ * Prepare an item for the cache by serialising its planTableEntries into the
+ * same `{ cells, _rowType, … }` form used for Supabase JSONB. This makes the
+ * cached value safe to JSON.stringify (storageCache mirrors to localStorage),
+ * which otherwise silently strips non-enumerable metadata properties like
+ * __rowType, __pairId, and __sectionType.
+ */
+const serializeItemForCache = (item) => ({
+  ...item,
+  planTableEntries: Array.isArray(item.planTableEntries)
+    ? item.planTableEntries.map(serializeRow)
+    : [],
+});
+
+/**
+ * Restore an item read from the cache by deserialising its planTableEntries
+ * back into row arrays with non-enumerable metadata. Needed on every cache
+ * read because the value may have come from a JSON.parse round-trip (page
+ * refresh rehydrates the in-memory cache from localStorage).
+ */
+const deserializeItemFromCache = (item) => ({
+  ...item,
+  planTableEntries: Array.isArray(item.planTableEntries)
+    ? item.planTableEntries.map(deserializeRow)
+    : [],
+});
+
 function dispatchStagingEvent(payload, yearNumber) {
   if (typeof window === 'undefined') return;
   const detail = { ...(payload || {}), __eventYear: yearNumber };
@@ -171,7 +198,17 @@ export async function loadStagingState(yearNumber) {
   try {
     const userId = await requireUserId();
     const cacheKey = stagingKey(yearNumber);
-    if (hasCached(CACHE_NS, cacheKey)) return getCached(CACHE_NS, cacheKey);
+    if (hasCached(CACHE_NS, cacheKey)) {
+      // Always deserialize on cache read: the in-memory cache is populated
+      // with the serialised form (see serializeItemForCache below) so that
+      // the localStorage mirror round-trip (JSON.stringify → JSON.parse) does
+      // not strip non-enumerable row metadata (__rowType, __pairId, etc.).
+      const cached = getCached(CACHE_NS, cacheKey);
+      return {
+        shortlist: (cached.shortlist ?? []).map(deserializeItemFromCache),
+        archived: (cached.archived ?? []).map(deserializeItemFromCache),
+      };
+    }
 
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) {
@@ -287,11 +324,14 @@ export async function saveStagingState(payload, yearNumber) {
       if (upsertErr) throw upsertErr;
     }
 
-    // Refresh the cache with the just-saved shape so the next read returns
-    // it instantly without a round-trip.
+    // Refresh the cache with the serialised form of each item so the value
+    // is safe to JSON.stringify (storageCache mirrors to localStorage on every
+    // setCached call). Storing live JS objects with non-enumerable metadata
+    // looks fine in-memory but silently loses __rowType / __pairId / etc. the
+    // moment the cache is persisted and then JSON.parse'd back on page refresh.
     setCached(CACHE_NS, stagingKey(yearNumber), {
-      shortlist,
-      archived,
+      shortlist: shortlist.map(serializeItemForCache),
+      archived: archived.map(serializeItemForCache),
     });
 
     dispatchStagingEvent(payload, yearNumber);
