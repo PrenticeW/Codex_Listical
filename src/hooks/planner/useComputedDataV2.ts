@@ -129,7 +129,6 @@ export default function useComputedDataV2({
     });
 
     if (hasChanges) {
-      console.log('[debug-cascade] useComputedDataV2: write-back triggered'); // [debug-cascade] — delete after fix
       setData(prevData =>
         prevData.map(row => {
           const computed = row.id ? computedById.get(row.id) : undefined;

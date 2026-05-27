@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { UseCollapsibleGroupsReturn } from '../../types/planner';
-import { readCollapsedGroups, saveCollapsedGroups } from '../../utils/planner/storage';
+import { readCollapsedGroups, saveCollapsedGroups, peekPlannerCache } from '../../utils/planner/storage';
 import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
 
 interface UseCollapsibleGroupsOptions {
@@ -10,14 +10,27 @@ interface UseCollapsibleGroupsOptions {
 
 /**
  * Hook to manage collapsed groups (archive weeks and project groups).
- * Post-Supabase-port: starts empty, then loads the saved set asynchronously.
- * A `loadedForYear` ref gates saves until the load completes so an early
+ * Post-Supabase-port: seeds from the synchronous cache on first render to
+ * avoid a flash where collapsed rows appear briefly before the async load
+ * completes. Falls back to an empty Set when the cache is cold. A
+ * `loadedForYear` ref gates saves until the async load completes so an early
  * toggle cannot be overwritten when the Supabase round-trip resolves.
  */
 export default function useCollapsibleGroups(
   { projectId = DEFAULT_PROJECT_ID, yearNumber = null }: UseCollapsibleGroupsOptions = {}
 ): UseCollapsibleGroupsReturn {
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
+    // Synchronous cache peek: if the planner_settings row is already in memory
+    // (populated by an earlier async load this session), use it so the first
+    // render has the correct collapsed state and archived rows don't flash open.
+    if (yearNumber != null) {
+      const { plannerSettings } = peekPlannerCache(yearNumber);
+      if (plannerSettings && Array.isArray(plannerSettings.collapsed_groups)) {
+        return new Set(plannerSettings.collapsed_groups as string[]);
+      }
+    }
+    return new Set();
+  });
   const loadedForYear = useRef<number | null | symbol>(null);
 
   useEffect(() => {

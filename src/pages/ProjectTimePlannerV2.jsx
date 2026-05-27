@@ -393,35 +393,9 @@ export default function ProjectTimePlannerV2() {
     setDataRaw(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       latestDataRef.current = next;
-      // [debug-cascade] — temporary logging to diagnose mount render cascade. Grep-delete after fix.
-      if (next !== prev) {
-        const prevIds = new Set(prev.map(r => r.id));
-        const nextIds = new Set(next.map(r => r.id));
-        const added = [...nextIds].filter(id => !prevIds.has(id));
-        const removed = [...prevIds].filter(id => !nextIds.has(id));
-        let fieldsChanged = 0;
-        if (added.length === 0 && removed.length === 0) {
-          for (let i = 0; i < Math.min(prev.length, next.length); i++) {
-            if (prev[i] !== next[i]) fieldsChanged++;
-          }
-        }
-        console.log(
-          `[debug-cascade] ${performance.now().toFixed(1)}ms | ` +
-          `${prev.length} → ${next.length} rows | ` +
-          `+${added.length} -${removed.length} rows | ` +
-          `fieldsChanged=${fieldsChanged}` +
-          (added.length > 0 ? ` | added: ${JSON.stringify(added.slice(0, 8))}` : '') +
-          (removed.length > 0 ? ` | removed: ${JSON.stringify(removed.slice(0, 8))}` : '')
-        );
-      }
       return next;
     });
   }, []);
-
-  // [debug-cascade] — temporary render counter. Delete after fix.
-  const debugRenderCount = useRef(0);
-  debugRenderCount.current++;
-  console.log(`[debug-cascade] RENDER #${debugRenderCount.current} | data.length=${data.length}`);
 
   // Hydrate `data` from taskRows once the async storage load completes.
   // On a sync cache hit dataHydrated starts true (initialiser above already
@@ -443,7 +417,6 @@ export default function ProjectTimePlannerV2() {
   useEffect(() => {
     if (!dataHydrated.current) return;
     const timeoutId = setTimeout(() => {
-      console.log(`[debug-cascade] AUTOSAVE | data.length=${data.length}`); // [debug-cascade] — delete after fix
       setTaskRows(data);
     }, 500); // Debounce saves by 500ms to avoid too many writes
 
