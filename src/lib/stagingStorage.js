@@ -19,7 +19,7 @@
 
 import { supabase } from './supabase';
 import { defineRowMetadata } from '../utils/staging/planTableHelpers';
-import { getCached, hasCached, setCached } from './storageCache';
+import { getCached, hasCached, setCached, invalidate } from './storageCache';
 
 export const STAGING_STORAGE_EVENT = 'staging-state-update';
 
@@ -176,6 +176,27 @@ const deserializeItemFromCache = (item) => ({
     : [],
 });
 
+/**
+ * Returns true only if every item's planTableEntries are in the current
+ * serialised form — i.e. objects like `{ cells: [...], _rowType: '...' }`
+ * rather than plain arrays. Plain arrays mean the entry was written before
+ * the serialisation fix and JSON.stringify stripped the non-enumerable
+ * metadata. Stale caches must be invalidated so loadStagingState falls
+ * through to Supabase and gets properly tagged data.
+ */
+function isCachedFormatValid(cached) {
+  if (!cached) return false;
+  const items = [...(cached.shortlist ?? []), ...(cached.archived ?? [])];
+  return items.every((item) => {
+    const entries = item?.planTableEntries;
+    if (!Array.isArray(entries) || entries.length === 0) return true;
+    const first = entries[0];
+    // New format: { cells: [...], _rowType?: '...' }
+    // Old format: plain array like ['header text', '', ...]
+    return first != null && typeof first === 'object' && !Array.isArray(first) && Array.isArray(first.cells);
+  });
+}
+
 function dispatchStagingEvent(payload, yearNumber) {
   if (typeof window === 'undefined') return;
   const detail = { ...(payload || {}), __eventYear: yearNumber };
@@ -199,15 +220,22 @@ export async function loadStagingState(yearNumber) {
     const userId = await requireUserId();
     const cacheKey = stagingKey(yearNumber);
     if (hasCached(CACHE_NS, cacheKey)) {
-      // Always deserialize on cache read: the in-memory cache is populated
-      // with the serialised form (see serializeItemForCache below) so that
-      // the localStorage mirror round-trip (JSON.stringify → JSON.parse) does
-      // not strip non-enumerable row metadata (__rowType, __pairId, etc.).
       const cached = getCached(CACHE_NS, cacheKey);
-      return {
-        shortlist: (cached.shortlist ?? []).map(deserializeItemFromCache),
-        archived: (cached.archived ?? []).map(deserializeItemFromCache),
-      };
+      if (isCachedFormatValid(cached)) {
+        // Cache entries are in the serialised { cells, _rowType, … } form —
+        // safe to deserialise directly without a Supabase round-trip.
+        return {
+          shortlist: (cached.shortlist ?? []).map(deserializeItemFromCache),
+          archived: (cached.archived ?? []).map(deserializeItemFromCache),
+        };
+      }
+      // Cache contains plain-array entries (pre-serialisation format written
+      // before the fix). JSON.stringify already stripped __rowType etc., so
+      // we cannot recover the metadata from this data. Invalidate so the
+      // fetch below goes to Supabase and returns properly tagged rows.
+      // After the subsequent saveStagingState the cache will be in the new
+      // format and this branch will never fire again for this year.
+      invalidate(CACHE_NS, cacheKey);
     }
 
     const yearId = await findYearId(userId, yearNumber);
