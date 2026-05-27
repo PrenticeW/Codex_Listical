@@ -41,14 +41,19 @@ export default function useStorageSync({
   initialValue = null,
 }) {
   const [data, setData] = useState(initialValue);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   // Reload when dependency changes (or on mount).
   useEffect(() => {
     let cancelled = false;
+    setIsLoaded(false);
     Promise.resolve()
       .then(() => loadData())
       .then((result) => {
-        if (!cancelled) setData(result);
+        if (!cancelled) {
+          setData(result);
+          setIsLoaded(true);
+        }
       })
       .catch((error) => {
         console.error('useStorageSync loadData failed:', error);
@@ -97,5 +102,5 @@ export default function useStorageSync({
     }
   }, [customEventName, storageKeys, loadData, extractDataCallback, currentYearNumber]);
 
-  return [data, setData];
+  return [data, setData, isLoaded];
 }

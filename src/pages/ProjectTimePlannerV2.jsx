@@ -522,7 +522,7 @@ export default function ProjectTimePlannerV2() {
   const [addTasksCount, setAddTasksCount] = useState('');
 
   // Load projects and subprojects from Staging
-  const { projects, subprojects, projectSubprojectsMap, projectNamesMap, projectTaglinesMap, projectIdByNickname } = useProjectsData();
+  const { projects, subprojects, projectSubprojectsMap, projectNamesMap, projectTaglinesMap, projectIdByNickname, isProjectsLoaded } = useProjectsData();
 
   // Import tasks from active year into draft (single action, no wizard)
   const handleImportTasks = useCallback(async () => {
@@ -1022,10 +1022,14 @@ export default function ProjectTimePlannerV2() {
 
         const activeProjectKeys = new Set(projects.filter(k => k !== '-'));
 
-        // Remove rows belonging to projects no longer in the plan
+        // Remove rows belonging to projects no longer in the plan.
+        // Gate on isProjectsLoaded: until the async staging load completes,
+        // the projects list may be incomplete (just ['-']). Removing rows
+        // based on an incomplete list strips valid project data and the
+        // debounced autosave persists the damage to Supabase.
         const removedProjects = [...existingHeaderIds].filter(k => !activeProjectKeys.has(k));
         let filteredData = prevData;
-        if (removedProjects.length > 0) {
+        if (removedProjects.length > 0 && isProjectsLoaded) {
           const removedSet = new Set(removedProjects);
           const removedGroupIds = new Set(removedProjects.map(k => `project-${k}`));
           // Also collect subproject/chip groupIds whose parent is a removed project group —
@@ -1151,7 +1155,7 @@ export default function ProjectTimePlannerV2() {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [projects, projectNamesMap, projectTaglinesMap, totalDays, isCurrentYearDraft, sentToSystem]);
+  }, [projects, projectNamesMap, projectTaglinesMap, totalDays, isCurrentYearDraft, sentToSystem, isProjectsLoaded]);
 
   // Repair rows whose parentGroupId points to a groupId that no longer exists in data.
   // This happens when a subprojectHeader is deleted — its child task rows keep a stale

@@ -5,7 +5,7 @@
 
 import { useCallback } from 'react';
 import { useYear } from '../../contexts/YearContext';
-import { loadStagingState, STAGING_STORAGE_EVENT } from '../../lib/stagingStorage';
+import { loadStagingState, peekStagingCache, STAGING_STORAGE_EVENT } from '../../lib/stagingStorage';
 import { SECTION_CONFIG } from '../../utils/staging/sectionConfig';
 import useStorageSync from '../common/useStorageSync';
 
@@ -34,17 +34,28 @@ export default function useProjectsData() {
     return extractProjectsData(shortlist);
   }, [currentYear]);
 
-  const [projectsData] = useStorageSync({
+  // Peek the in-memory staging cache for a synchronous initial value so the
+  // first render already has the full projects list when the cache is warm.
+  // Prevents the project-rows-inserter effect on System from stripping rows
+  // for projects that "aren't in the plan" during the async load window.
+  const cachedShortlist = peekStagingCache(currentYear)?.shortlist;
+
+  const [projectsData, , isLoaded] = useStorageSync({
     loadData,
     customEventName: STAGING_STORAGE_EVENT,
     storageKeys: [`staging-year-${currentYear}-state`, 'staging-state'],
     extractData,
     dependency: currentYear,
     currentYearNumber: currentYear, // H3: ignore staging events from other years
-    initialValue: extractProjectsData([]),
+    initialValue: extractProjectsData(cachedShortlist || []),
   });
 
-  return projectsData ?? extractProjectsData([]);
+  const result = projectsData ?? extractProjectsData([]);
+  // isProjectsLoaded: true once the async staging load has completed OR the
+  // cache provided a full shortlist on the first render. Consumers that make
+  // destructive decisions (e.g. removing rows for projects "not in the plan")
+  // should gate on this to avoid acting on the default empty list.
+  return { ...result, isProjectsLoaded: isLoaded || !!cachedShortlist };
 }
 
 /**
