@@ -942,10 +942,23 @@ export default function TacticsPage() {
         const startIndex = Math.max(0, DAYS_OF_WEEK.indexOf(settings.startDay));
         const weekDays = DAYS_OF_WEEK.slice(startIndex).concat(DAYS_OF_WEEK.slice(0, startIndex));
         if (chipState === null) {
-          // Read failed. Show sleep blocks as a safe visual default but do NOT
-          // open the chip autosave gate — that would wipe the real chips from
-          // Supabase 600ms after auth settles. The user can refresh to retry.
-          setProjectChips(buildInitialSleepBlocks(weekDays));
+          // Read failed. Do NOT call setProjectChips at all.
+          //
+          // Calling setProjectChips here (even with sleep blocks as a visual
+          // placeholder) starts a chain that wipes real chips:
+          //   1. Re-render → autosave fires its first run → arms the gate
+          //      (sets chipsLoadedForYear.current = currentYear), returns early.
+          //   2. Settings load succeeds → setIncrementMinutes called →
+          //      timelineRowIds changes → sleep-blocks-update effect fires →
+          //      setProjectChips again (mapping positions) → re-render.
+          //   3. Autosave fires → gate is now open → writeChipsLayerInner runs
+          //      delete-then-insert with sleep blocks, permanently wiping real
+          //      chips from Supabase.
+          //
+          // Leaving projectChips as [] means no chip-related effect can
+          // trigger a save. The user sees an empty Plan page; navigating away
+          // and back retries the load.
+          console.error('Chip load failed for year', currentYear, '— autosave disabled. Refresh to retry.');
           // chipsLoadedForYear.current intentionally NOT set here.
         } else if (chipState.projectChips && chipState.projectChips.length > 0) {
           const dedupedChips = dedupeChipsById(chipState.projectChips);
