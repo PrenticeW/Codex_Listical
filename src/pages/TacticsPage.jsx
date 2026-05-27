@@ -886,15 +886,30 @@ export default function TacticsPage() {
       cachedTactics.liveChips != null ||
       cachedTactics.columnWidths != null;
     if (hasCachedTacticsState && cachedStaging) {
-      // Cache hit: skip the load AND leave the autosave gates alone. Each
-      // autosave effect's own first-run bail (`if ref.current == null`)
-      // handles the on-mount skip, then user interactions flow through
-      // normally. Pre-setting the gates here used to cause the autosave to
-      // fire on mount with the cached state, which raced against itself
-      // across React's dev double-mount and triggered 409 conflicts on
-      // tactics_chips inserts.
       hasLoadedInitialState.current = true;
-      return () => {};
+      if (cachedTactics.liveChips != null) {
+        // Full cache hit including chips. The chip autosave uses a
+        // "must be explicitly opened" gate (chipsLoadedForYear.current
+        // must equal currentYear before any save fires). The old "arm on
+        // first run" skip that settings/widths gates use does NOT apply
+        // here — if we return without opening the gate, no chip saves
+        // will fire for the entire session.
+        //
+        // This code path is hit most often after a YearContext reload
+        // (SIGNED_IN fires → isLoading = true → TacticsPage unmounts
+        // mid-load → Supabase calls complete in the background, populate
+        // the cache → TacticsPage remounts → sees cache hit here).
+        // The useState initialisers already populated projectChips from
+        // this same cache, so opening the gate is safe — there are no
+        // sleep-block-only chips pending in state.
+        chipsLoadedForYear.current = currentYear;
+        return () => {};
+      }
+      // liveChips missing from cache (unusual — settings or widths hit but
+      // chips didn't). Fall through to the full async load so chips are
+      // fetched from Supabase. Settings/widths helpers will return from
+      // their own cache entries immediately, so there's no extra round-trip
+      // for those two.
     }
 
     // Reset gates so the autosave effects don't write defaults to the new
