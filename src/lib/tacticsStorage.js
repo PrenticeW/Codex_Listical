@@ -279,7 +279,7 @@ export async function saveTacticsYearSettings(payload, yearNumber) {
       return;
     }
     const columns = payloadToYearSettingsColumns(payload);
-    await writeYearSettingsRow({ userId, yearId, columns });
+    await writeYearSettingsRow({ userId, yearId, yearNumber, columns });
     dispatchEvent(TACTICS_SETTINGS_STORAGE_EVENT, payload, yearNumber);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('tacticsStorage:')) throw error;
