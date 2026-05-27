@@ -2079,6 +2079,9 @@ export default function TacticsPage() {
     const payload = { projectChips, customProjects, chipTimeOverrides };
     const yearToSave = currentYear;
     const timer = setTimeout(() => {
+      // TEMPORARY DEBUG — remove before launch
+      // eslint-disable-next-line no-console
+      console.warn(`[autosave-fire] year=${yearToSave} chips=${projectChips.length}`);
       saveTacticsChipsState(payload, yearToSave);
     }, 600);
     return () => clearTimeout(timer);

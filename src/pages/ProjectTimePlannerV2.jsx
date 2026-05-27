@@ -278,8 +278,6 @@ function peekEnrichedChips(yearNumber) {
  */
 
 export default function ProjectTimePlannerV2() {
-  // RENDER PROBE — remove before launch (tracks render count in console)
-  if (typeof window !== 'undefined') console.count('[Probe] render: ProjectTimePlannerV2');
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -410,7 +408,6 @@ export default function ProjectTimePlannerV2() {
     if (dataHydrated.current) return;
     dataHydrated.current = true;
     if (Array.isArray(taskRows) && taskRows.length > 0) {
-      console.count('[Probe] setData: hydration'); // RENDER PROBE
       setData(taskRows);
     }
   }, [storageLoaded, taskRows, setData]);
@@ -604,7 +601,6 @@ export default function ProjectTimePlannerV2() {
 
   // Update month/week spans and day row when totalDays changes
   useEffect(() => {
-    console.count('[Probe] setData: month/week/day spans'); // RENDER PROBE
     setData(prevData => {
       const monthRowIndex = prevData.findIndex(row => row._isMonthRow);
       const weekRowIndex = prevData.findIndex(row => row._isWeekRow);
@@ -740,7 +736,6 @@ export default function ProjectTimePlannerV2() {
   // in a single setData call. Previously three separate effects, each triggering its own
   // render + write-back chain. Combined deps union covers all three.
   useEffect(() => {
-    console.count('[Probe] setData: derived-totals (filter+archive+min/max)'); // RENDER PROBE
     setData(prevData => {
       let result = prevData;
       let changed = false;
@@ -841,7 +836,6 @@ export default function ProjectTimePlannerV2() {
   // On-mount structural setup: (1) repair stale parentGroupIds, (2) ensure Inbox and Archive header rows exist.
   // Coalesced into one setData so both passes share a single render instead of two cascaded ones.
   useEffect(() => {
-    console.count('[Probe] setData: on-mount structural (parentGroupId repair + inbox/archive headers)'); // RENDER PROBE
     setData(prevData => {
       // --- Step 1: parentGroupId repair ---
       // Repair rows whose parentGroupId points to a groupId that no longer exists.
@@ -965,7 +959,6 @@ export default function ProjectTimePlannerV2() {
     // No setTimeout needed: useEffect already fires after commit, and functional updaters
     // applied in the same flush are sequenced — chip sync's updater sees this effect's
     // inserted headers even when both effects fire in the same passive-effects phase.
-    console.count('[Probe] setData: project header injection'); // RENDER PROBE
     setData(prevData => {
         // Find the filter row index to insert projects after it
         const filterRowIndex = prevData.findIndex(row => row._isFilterRow);
@@ -1116,7 +1109,9 @@ export default function ProjectTimePlannerV2() {
 
     // No setTimeout: functional updater form means React applies this after project injection's
     // updater in the same flush, so chip rows see project headers already inserted.
-    console.count('[Probe] setData: chip sync'); // RENDER PROBE
+    // TEMPORARY DEBUG — remove before launch
+    // eslint-disable-next-line no-console
+    console.warn(`[chip-sync] firing: tacticsChips=${tacticsChips.length}`);
     setData(prevData => {
         const currentChipIds = new Set(tacticsChips.map(c => c.id));
 
@@ -1237,6 +1232,12 @@ export default function ProjectTimePlannerV2() {
         );
 
         if (newChips.length === 0 && chipsNeedingTaskRow.length === 0 && !changed) return prevData;
+
+        // TEMPORARY DEBUG — remove before launch
+        if (newChips.length > 0 || chipsNeedingTaskRow.length > 0) {
+          // eslint-disable-next-line no-console
+          console.warn(`[chip-sync] inserting rows: newChips=${newChips.length} needsTask=${chipsNeedingTaskRow.length} existingHeaders=${existingChipHeaderIds.size}`);
+        }
 
         const newData = [...reordered];
 
