@@ -903,6 +903,9 @@ export default function TacticsPage() {
         // this same cache, so opening the gate is safe — there are no
         // sleep-block-only chips pending in state.
         chipsLoadedForYear.current = currentYear;
+        // TEMPORARY DEBUG — remove before launch
+        // eslint-disable-next-line no-console
+        console.warn(`[chip-gate] cache-hit path: gate opened for year=${currentYear}, chips in cache=${cachedTactics.liveChips.projectChips?.length ?? 0}`);
         return () => {};
       }
       // liveChips missing from cache (unusual — settings or widths hit but
@@ -979,9 +982,6 @@ export default function TacticsPage() {
           // Leaving projectChips as [] means no chip-related effect can
           // trigger a save. The user sees an empty Plan page; navigating away
           // and back retries the load.
-          // TEMPORARY DEBUG — remove before launch
-          // eslint-disable-next-line no-console
-          console.warn(`[chip-load-null] year=${currentYear} — opening gate from cache. chips in state=${projectChips.length}`);
           chipLoadFailed.current = true;
           // Open the gate anyway: chips in state come from peekTacticsCache
           // (the useState initializer ran before this effect). The sleep-blocks-ADD
@@ -993,7 +993,7 @@ export default function TacticsPage() {
         } else if (chipState.projectChips && chipState.projectChips.length > 0) {
           // TEMPORARY DEBUG — remove before launch
           // eslint-disable-next-line no-console
-          console.warn(`[chip-load-ok] year=${currentYear} chips=${chipState.projectChips.length}`);
+          console.warn(`[chip-gate] load-ok: year=${currentYear} chips=${chipState.projectChips.length}`);
           const dedupedChips = dedupeChipsById(chipState.projectChips);
           updateChipSequenceFromList(dedupedChips);
           setProjectChips(dedupedChips.map((chip) => {
@@ -1009,6 +1009,9 @@ export default function TacticsPage() {
           chipsLoadedForYear.current = currentYear;
         } else {
           // Confirmed empty DB (first-time user for this year).
+          // TEMPORARY DEBUG — remove before launch
+          // eslint-disable-next-line no-console
+          console.warn(`[chip-gate] load-empty: year=${currentYear} — no chips in DB`);
           setProjectChips(buildInitialSleepBlocks(weekDays));
           setCustomProjects([]);
           setChipTimeOverrides({});
@@ -2064,9 +2067,6 @@ export default function TacticsPage() {
     //     no state changes are pending by the time the async branch runs.
     // The old design (arm on first run, skip once) let any subsequent state
     // change pass the gate before load completed — this was the wipe bug.
-    // TEMPORARY DEBUG — remove before launch
-    // eslint-disable-next-line no-console
-    console.warn(`[autosave-gate] chipsLoadedForYear=${chipsLoadedForYear.current} currentYear=${currentYear} chips=${projectChips.length}`);
     if (chipsLoadedForYear.current !== currentYear) {
       return;
     }
