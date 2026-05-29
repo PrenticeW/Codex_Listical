@@ -2172,52 +2172,30 @@ export default function ProjectTimePlannerV2() {
   const handleShowWeek = useCallback(() => {
     setIsListicalMenuOpen(false);
 
-    // Show the next hidden week using index-based scanning (not Object.entries
-    // filtering) so days absent from the object are treated as visible, matching
-    // TanStack's behaviour.
-    //
-    // Two cases:
-    //  1. The first visible day is > 0 — hidden weeks are at the start of the
-    //     timeline. Show the 7 days immediately before the current view (undo
-    //     the most recent hide).
-    //  2. The first visible day is 0 — week 1 is visible but a later week may
-    //     be stranded as hidden (e.g. week 2 hidden while weeks 1 and 3+ are
-    //     visible). Scan forward to find the first hidden day and show those 7.
+    // Undo the most recent Hide Week by restoring the hidden group with the
+    // highest day indices. Because Hide Week always takes the leftmost visible
+    // week, the last-hidden week is always the one furthest to the right among
+    // hidden days — regardless of whether it sits before, after, or between
+    // currently visible weeks.
     setVisibleDayColumns(prev => {
       const newVisible = { ...prev };
 
-      // Find the first visible day
-      let firstVisibleDay = -1;
+      // Collect all explicitly-hidden day indices
+      let maxHiddenDay = -1;
       for (let i = 0; i < totalDays; i++) {
-        if (newVisible[`day-${i}`] !== false) {
-          firstVisibleDay = i;
-          break;
-        }
+        if (newVisible[`day-${i}`] === false) maxHiddenDay = i;
       }
 
-      if (firstVisibleDay < 0) return newVisible; // Everything hidden, nothing to restore
+      if (maxHiddenDay < 0) return newVisible; // Nothing hidden
 
-      if (firstVisibleDay > 0) {
-        // Normal case: show the week immediately preceding the current view
-        const startDay = firstVisibleDay - 7;
-        for (let i = Math.max(0, startDay); i < firstVisibleDay; i++) {
-          newVisible[`day-${i}`] = true;
-        }
-        return newVisible;
+      // Weeks are always hidden in aligned groups of 7, so the group start is
+      // the nearest lower multiple of 7.
+      const groupStart = maxHiddenDay - (maxHiddenDay % 7);
+      for (let i = groupStart; i < Math.min(groupStart + 7, totalDays); i++) {
+        newVisible[`day-${i}`] = true;
       }
 
-      // Week 1 is already visible — scan forward for the first hidden day
-      // (handles stranded hidden weeks in the middle of the timeline)
-      for (let i = 0; i < totalDays; i++) {
-        if (newVisible[`day-${i}`] === false) {
-          for (let j = i; j < Math.min(i + 7, totalDays); j++) {
-            newVisible[`day-${j}`] = true;
-          }
-          return newVisible;
-        }
-      }
-
-      return newVisible; // No hidden days at all
+      return newVisible;
     });
   }, [totalDays]);
 
