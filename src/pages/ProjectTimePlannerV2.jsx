@@ -460,6 +460,13 @@ export default function ProjectTimePlannerV2() {
   const [isDragging, setIsDragging] = useState(false); // Track if user is dragging to select
   const [dragStartCell, setDragStartCell] = useState(null); // { rowId, columnId }
   const tableBodyRef = useRef(null);
+  // Tracks the first day-index of the active week at the moment "Send to System"
+  // fires. Days before this index are treated as "past" and their min/max values
+  // are never overwritten by a later send.
+  const lastSendWeekStartRef = useRef(0);
+  // Always-current mirror of visibleDayColumns so the event handler (which has a
+  // stale closure) can read the current pole-position without being in the dep array.
+  const latestVisibleDayColumnsRef = useRef(null);
 
   // Use the planner filters hook for project, status, recurring, and estimate filters
   const filters = usePlannerFilters();
@@ -600,6 +607,12 @@ export default function ProjectTimePlannerV2() {
     collapsedGroups,
     coerceNumber,
   });
+
+  // Keep latestVisibleDayColumnsRef in sync so the event handler can always read
+  // the current pole-position without needing to be in its dep array.
+  useEffect(() => {
+    latestVisibleDayColumnsRef.current = visibleDayColumns;
+  }, [visibleDayColumns]);
 
   // Calculate dates array from startDate
   const dates = useMemo(() => {
@@ -815,29 +828,10 @@ export default function ProjectTimePlannerV2() {
               result = newData; changed = true;
             }
           } else {
-            // Determine which cycle-week we're currently in using UTC date
-            // arithmetic so the result is timezone-safe. "Past" days are those
-            // that belong to weeks earlier than the current cycle-week — their
-            // stored values must not be overwritten by a Send to System that
-            // was triggered for a later week.
-            const todayUTC = Date.UTC(
-              new Date().getFullYear(),
-              new Date().getMonth(),
-              new Date().getDate(),
-            );
-            let currentCycleWeekFirstDay = 0;
-            if (startDate) {
-              const [sy, sm, sd] = String(startDate).split('-').map(Number);
-              if (sy && sm && sd) {
-                const cycleStartUTC = Date.UTC(sy, sm - 1, sd);
-                const daysSinceStart = Math.round((todayUTC - cycleStartUTC) / 86400000);
-                if (daysSinceStart > 0) {
-                  currentCycleWeekFirstDay = Math.floor(daysSinceStart / 7) * 7;
-                }
-              }
-            }
-
-            const isPastDay = (i) => i < currentCycleWeekFirstDay;
+            // Days before the week that was in pole position when Send to System
+            // last fired are treated as "past" — their stored min/max values must
+            // not be overwritten by a later send.
+            const isPastDay = (i) => i < lastSendWeekStartRef.current;
 
             let minMaxChanged = false;
             const withMinMax = result.map(row => {
@@ -872,7 +866,7 @@ export default function ProjectTimePlannerV2() {
 
       return changed ? result : prevData;
     });
-  }, [dailyTotals, archiveTotals, dailyMinValues, dailyMaxValues, showMaxMinRows, totalDays, dates, startDate]);
+  }, [dailyTotals, archiveTotals, dailyMinValues, dailyMaxValues, showMaxMinRows, totalDays]);
 
   // On-mount structural setup: (1) repair stale parentGroupIds, (2) ensure Inbox and Archive header rows exist.
   // Coalesced into one setData so both passes share a single render instead of two cascaded ones.
@@ -1567,6 +1561,16 @@ export default function ProjectTimePlannerV2() {
       // awaited by their dispatchers anyway, and the lastResetTsRef
       // update + setSentToSystem just need to happen before the user
       // notices anything missing.
+      // Record which week is currently in pole position (first visible week).
+      // Days before this index are "past" and their min/max values must not be
+      // overwritten when this send is applied.
+      {
+        const vis = latestVisibleDayColumnsRef.current ?? {};
+        const firstVisible = Array.from({ length: 84 }, (_, i) => i)
+          .find(i => vis[`day-${i}`] !== false) ?? 0;
+        // Align to week boundary (groups of 7)
+        lastSendWeekStartRef.current = firstVisible - (firstVisible % 7);
+      }
       setSentToSystem(true);
       getSendToSystemTimestamp(currentYear).then((ts) => {
         lastResetTsRef.current = ts;
