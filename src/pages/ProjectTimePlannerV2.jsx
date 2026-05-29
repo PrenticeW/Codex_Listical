@@ -204,7 +204,7 @@ async function loadEnrichedChips(yearNumber) {
 }
 
 async function loadMetricsData(yearNumber) {
-  const metrics = await loadSentMetricsSnapshot(yearNumber);
+  const metrics = await loadSentMetricsSnapshot(yearNumber, { bypassCache: true });
   return {
     dailyBounds: metrics?.dailyBounds || [],
     projectWeeklyQuotas: buildQuotasMap(metrics?.projectWeeklyQuotas),
@@ -463,6 +463,10 @@ export default function ProjectTimePlannerV2() {
   // Always-current mirror of visibleDayColumns used inside the min/max effect and
   // event handler. A ref (not dep-array value) so reading it never triggers rerenders.
   const latestVisibleDayColumnsRef = useRef(null);
+  // Always-current mirrors of dailyMinValues/dailyMaxValues so handleArchiveWeek
+  // always reads the latest computed bounds even if its useCallback closure is stale.
+  const latestDailyMinValuesRef = useRef([]);
+  const latestDailyMaxValuesRef = useRef([]);
 
   // Use the planner filters hook for project, status, recurring, and estimate filters
   const filters = usePlannerFilters();
@@ -743,6 +747,13 @@ export default function ProjectTimePlannerV2() {
   const { dailyMinValues, dailyMaxValues } = useMemo(() => {
     return mapDailyBoundsToTimeline(draftHasNoImportedTasks ? null : dailyBounds, dates);
   }, [dailyBounds, dates, draftHasNoImportedTasks]);
+
+  // Keep dailyMin/MaxValues refs in sync so handleArchiveWeek always reads the
+  // latest bounds regardless of when its useCallback closure was last recreated.
+  useEffect(() => {
+    latestDailyMinValuesRef.current = dailyMinValues;
+    latestDailyMaxValuesRef.current = dailyMaxValues;
+  }, [dailyMinValues, dailyMaxValues]);
 
   // Calculate project totals (sum of Scheduled and Done task timeValues per project)
   const projectTotals = useProjectTotals(computedData);
@@ -2090,12 +2101,15 @@ export default function ProjectTimePlannerV2() {
 
     const weekNumber = calculateWeekNumber(startDate, new Date(), displayedWeekNumber, currentYear);
 
-    // Step 2: Create archive week row with grouping
+    // Step 2: Create archive week row with grouping.
+    // Read from refs instead of closure values so we always get the latest
+    // dailyMinValues/dailyMaxValues even if the useCallback closure is stale
+    // (e.g. the mount-effect async load settled after this callback was created).
     const archiveWeekRow = createArchiveWeekRow({
       weekRange,
       weekNumber,
-      dailyMinValues,
-      dailyMaxValues,
+      dailyMinValues: latestDailyMinValuesRef.current,
+      dailyMaxValues: latestDailyMaxValuesRef.current,
       totalDays,
       startDayIndex: firstVisibleDayIndex,
     });
