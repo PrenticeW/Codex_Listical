@@ -539,16 +539,16 @@ export default function ProjectTimePlannerV2() {
     () => peekEnrichedChips(currentYear) || [],
   );
 
-  // Async load of metrics + enriched chips. Skipped on cache hit so the
-  // page doesn't re-render with freshly-allocated wrapper objects after
-  // the initial paint (that was the "page builds in front of me" flash).
+  // Async load of metrics + enriched chips. Metrics always re-fetches from
+  // Supabase so the System page reflects the latest Send to System even when
+  // the in-memory cache is stale (e.g. a Send that happened while this page
+  // was unmounted). Chips are still skipped on cache hit to avoid the
+  // "page builds in front of me" flash (chip data is larger and slower).
   useEffect(() => {
     let cancelled = false;
-    if (!peekMetricsData(currentYear)) {
-      loadMetricsData(currentYear).then((data) => {
-        if (!cancelled) setMetricsData(data);
-      });
-    }
+    loadMetricsData(currentYear).then((data) => {
+      if (!cancelled) setMetricsData(data);
+    });
     if (!peekEnrichedChips(currentYear)) {
       loadEnrichedChips(currentYear).then((chips) => {
         if (!cancelled) setTacticsChips(chips);

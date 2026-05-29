@@ -2851,7 +2851,7 @@ export default function TacticsPage() {
     // Load the existing sent snapshot to build the historical record for
     // past weeks. Past weeks need their bounds locked in so they don't
     // change when future sends update the active bounds.
-    const existingSnapshot = await loadSentMetricsSnapshot(currentYear);
+    const existingSnapshot = await loadSentMetricsSnapshot(currentYear, { bypassCache: true });
     const existingBounds = existingSnapshot?.dailyBounds ?? [];
 
     // Entries with a weekNumber are already-locked historical bounds.

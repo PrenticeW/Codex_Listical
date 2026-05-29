@@ -161,8 +161,8 @@ function dbRowToPayload(row) {
   };
 }
 
-async function readMetricsRow({ userId, yearId, yearNumber, isSent }) {
-  if (yearNumber != null) {
+async function readMetricsRow({ userId, yearId, yearNumber, isSent, bypassCache = false }) {
+  if (yearNumber != null && !bypassCache) {
     const key = metricsKey(yearNumber, isSent);
     if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
   }
@@ -292,14 +292,18 @@ export async function saveSentMetricsSnapshot(payload, yearNumber) {
 /**
  * Load the "sent to System" snapshot. System page reads from this layer.
  * @param {number} yearNumber
+ * @param {object} [options]
+ * @param {boolean} [options.bypassCache=false] - Skip the in-memory/localStorage
+ *   cache and fetch directly from Supabase. Use this when building the historical
+ *   record inside handleSendToSystem so stale cache can't corrupt week locking.
  * @returns {Promise<object|null>}
  */
-export async function loadSentMetricsSnapshot(yearNumber) {
+export async function loadSentMetricsSnapshot(yearNumber, { bypassCache = false } = {}) {
   try {
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return null;
-    const row = await readMetricsRow({ userId, yearId, yearNumber, isSent: true });
+    const row = await readMetricsRow({ userId, yearId, yearNumber, isSent: true, bypassCache });
     return dbRowToPayload(row);
   } catch (error) {
     console.error('Failed to read sent metrics snapshot', error);
