@@ -5,6 +5,7 @@ import {
   setCurrentYear as setCurrentYearStorage,
 } from '../lib/yearMetadataStorage';
 import { supabase } from '../lib/supabase';
+import { maybeSnapshotOnSessionStart } from '../lib/snapshotStorage';
 
 /**
  * YearContext provides year-level state management across the application.
@@ -46,6 +47,12 @@ export function YearProvider({ children }) {
         next = await initializeYearMetadata(today);
       }
       setMetadata(next);
+      // Fire a session-start snapshot (if 4+ hours have passed) once we know
+      // the current year. Best-effort — a failure here must never block the load.
+      const activeYearNumber = next?.currentYear ?? null;
+      if (activeYearNumber != null) {
+        maybeSnapshotOnSessionStart(activeYearNumber).catch(() => {});
+      }
     } catch (error) {
       console.error('Failed to load year metadata', error);
       setMetadata(null);

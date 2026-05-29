@@ -42,6 +42,7 @@
 import { supabase } from '../../lib/supabase';
 import { createInitialData } from './dataCreators';
 import { loadTacticsMetrics } from '../../lib/tacticsMetricsStorage';
+import { saveSiteSnapshot } from '../../lib/snapshotStorage';
 import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
 import {
   getCached,
@@ -1009,6 +1010,10 @@ export const saveTaskRows = (
 
 async function _saveTaskRowsImpl(taskRows, yearNumber) {
   try {
+    // Fire a snapshot before each save (internally throttled to one every
+    // 2 minutes). Best-effort — a snapshot failure must never block the save.
+    saveSiteSnapshot(yearNumber).catch(() => {});
+
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return;

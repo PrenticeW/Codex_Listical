@@ -6,6 +6,7 @@ import YearSelector from '../YearSelector';
 import { useAuth } from '../../contexts/AuthContext';
 import { useYear } from '../../contexts/YearContext';
 import usePageSize from '../../hooks/usePageSize';
+import VersionHistoryPanel from './VersionHistoryPanel';
 
 // Map routes to page identifiers and display names
 const PAGE_CONFIG = {
@@ -41,6 +42,7 @@ export default function NavigationBar({
   const { sizeScale, setSizeScale, resetSize, minScale, maxScale } = usePageSize(currentPageConfig.id);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const settingsButtonRef = useRef(null);
   const settingsMenuRef = useRef(null);
   const [menuStyle, setMenuStyle] = useState({});
@@ -243,8 +245,17 @@ export default function NavigationBar({
                     </button>
                   </div>
 
-                  {/* Account Settings Link */}
-                  <div className="pt-2 border-t border-[#e2e8f0]">
+                  {/* Version History + Account Settings */}
+                  <div className="pt-2 border-t border-[#e2e8f0] flex flex-col gap-0.5">
+                    <button
+                      onClick={() => {
+                        setSettingsOpen(false);
+                        setHistoryOpen(true);
+                      }}
+                      className="w-full px-3 py-1.5 rounded text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors text-left"
+                    >
+                      Version History
+                    </button>
                     <button
                       onClick={() => {
                         setSettingsOpen(false);
@@ -266,6 +277,9 @@ export default function NavigationBar({
             >
               <LogOut className="w-4 h-4" />
             </button>
+            {historyOpen && (
+              <VersionHistoryPanel onClose={() => setHistoryOpen(false)} />
+            )}
           </>
         )}
       </div>
