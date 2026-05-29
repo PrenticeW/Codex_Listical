@@ -14,9 +14,18 @@ const formatHoursValue = (value) => {
 };
 
 /**
- * Maps daily bounds (by day of week) to specific timeline dates
- * @param {Array} dailyBounds - Array of {day, dailyMaxHours, dailyMinHours}
- * @param {Array} dates - Array of Date objects for the timeline
+ * Maps daily bounds to specific timeline dates.
+ *
+ * Supports two formats:
+ *   Legacy: { day, dailyMaxHours, dailyMinHours }
+ *   Per-week: { weekNumber, day, dailyMaxHours, dailyMinHours }
+ *
+ * When per-week entries are present, each date is matched by its cycle week
+ * number (Math.floor(dateIndex / 7) + 1) AND day name. Entries without a
+ * weekNumber act as a global fallback (backwards compatibility).
+ *
+ * @param {Array} dailyBounds - Array of bound objects
+ * @param {Array} dates - Array of Date objects for the timeline (index 0 = cycle day 0)
  * @returns {Object} { dailyMinValues: [], dailyMaxValues: [] }
  */
 export const mapDailyBoundsToTimeline = (dailyBounds, dates) => {
@@ -27,30 +36,45 @@ export const mapDailyBoundsToTimeline = (dailyBounds, dates) => {
     };
   }
 
-  // Create a map from day name to bounds
-  const boundsMap = new Map();
+  // perWeekMap: weekNumber -> Map(dayName -> bounds)
+  // globalMap:  dayName -> bounds  (for legacy entries with no weekNumber)
+  const perWeekMap = new Map();
+  const globalMap = new Map();
+
   dailyBounds.forEach((bound) => {
-    boundsMap.set(bound.day, {
+    const val = {
       minHours: bound.dailyMinHours,
       maxHours: bound.dailyMaxHours,
-    });
+    };
+    if (bound.weekNumber != null) {
+      if (!perWeekMap.has(bound.weekNumber)) {
+        perWeekMap.set(bound.weekNumber, new Map());
+      }
+      perWeekMap.get(bound.weekNumber).set(bound.day, val);
+    } else {
+      globalMap.set(bound.day, val);
+    }
   });
 
-  // Map each timeline date to its day-of-week bounds
+  const hasPerWeekData = perWeekMap.size > 0;
+
   const dailyMinValues = [];
   const dailyMaxValues = [];
 
-  dates.forEach((date) => {
+  dates.forEach((date, i) => {
     const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
-    const bounds = boundsMap.get(dayName);
+    let bounds;
 
-    if (bounds) {
-      dailyMinValues.push(formatHoursValue(bounds.minHours));
-      dailyMaxValues.push(formatHoursValue(bounds.maxHours));
+    if (hasPerWeekData) {
+      const weekNum = Math.floor(i / 7) + 1;
+      // Prefer the exact week entry; fall back to global for weeks not yet sent.
+      bounds = perWeekMap.get(weekNum)?.get(dayName) ?? globalMap.get(dayName);
     } else {
-      dailyMinValues.push('0.00');
-      dailyMaxValues.push('0.00');
+      bounds = globalMap.get(dayName);
     }
+
+    dailyMinValues.push(formatHoursValue(bounds?.minHours ?? 0));
+    dailyMaxValues.push(formatHoursValue(bounds?.maxHours ?? 0));
   });
 
   return { dailyMinValues, dailyMaxValues };

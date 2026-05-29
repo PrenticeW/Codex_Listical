@@ -118,6 +118,7 @@ function payloadToDbColumns(payload) {
   const bounds = Array.isArray(payload?.dailyBounds)
     ? payload.dailyBounds.map((b) => ({
         day: b.day ?? null,
+        week_number: b.weekNumber ?? null,
         daily_max_minutes: hmmToMinutes(b.dailyMaxHours),
         daily_min_minutes: hmmToMinutes(b.dailyMinHours),
       }))
@@ -144,6 +145,7 @@ function dbRowToPayload(row) {
   const bounds = Array.isArray(row.daily_bounds)
     ? row.daily_bounds.map((b) => ({
         day: b.day ?? null,
+        weekNumber: b.week_number ?? null,
         dailyMaxHours: minutesToHmm(b.daily_max_minutes),
         dailyMinHours: minutesToHmm(b.daily_min_minutes),
       }))

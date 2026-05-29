@@ -20,7 +20,7 @@ import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '..
 import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm, buildProjectPlanSummary } from '../utils/staging/planTableHelpers';
 import { pickCustomChipColour } from '../utils/staging/projectColour';
-import { saveTacticsMetrics, saveSentMetricsSnapshot } from '../lib/tacticsMetricsStorage';
+import { saveTacticsMetrics, saveSentMetricsSnapshot, loadSentMetricsSnapshot } from '../lib/tacticsMetricsStorage';
 import { saveStartDate } from '../utils/planner/storage';
 import {
   loadTacticsYearSettings,
@@ -2805,18 +2805,55 @@ export default function TacticsPage() {
       label: summary.label,
       weeklyHours: minutesToHourMinuteDecimal(summary.totalMinutes),
     }));
-    const dailyBounds = displayedWeekDays.map((day, idx) => ({
+
+    // Determine which week of the cycle we're currently in so bounds are
+    // stored per-week rather than overwriting all weeks globally.
+    const cycleStartDate = yearInfo?.startDate;
+    let currentWeekNumber = 1;
+    if (cycleStartDate) {
+      const cycleStart = new Date(cycleStartDate);
+      cycleStart.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const daysDiff = Math.floor((today - cycleStart) / (1000 * 60 * 60 * 24));
+      currentWeekNumber = Math.max(1, Math.floor(daysDiff / 7) + 1);
+    }
+
+    // Load the existing sent snapshot so we can preserve bounds from other
+    // weeks. Only the current week's entries are replaced.
+    const existingSnapshot = await loadSentMetricsSnapshot(currentYear);
+    const existingBounds = existingSnapshot?.dailyBounds ?? [];
+
+    const currentWeekBounds = displayedWeekDays.map((day, idx) => ({
+      weekNumber: currentWeekNumber,
       day,
       dailyMaxHours: minutesToHourMinuteDecimal(availableColumnTotals[idx] ?? 0),
       dailyMinHours: minutesToHourMinuteDecimal(workingColumnTotals[idx] ?? 0),
     }));
-    const metricsPayload = {
+
+    // Merge: drop any prior entries for this week, then append the new ones.
+    const mergedDailyBounds = [
+      ...existingBounds.filter((b) => b.weekNumber !== currentWeekNumber),
+      ...currentWeekBounds,
+    ];
+
+    const weeklyTotals = {
+      availableHours: minutesToHourMinuteDecimal(totalAvailableMinutes),
+      workingHours: minutesToHourMinuteDecimal(totalWorkingMinutes),
+    };
+
+    // Live metrics keep only the current week (used for Plan-page preview).
+    const liveMetricsPayload = {
       projectWeeklyQuotas,
-      dailyBounds,
-      weeklyTotals: {
-        availableHours: minutesToHourMinuteDecimal(totalAvailableMinutes),
-        workingHours: minutesToHourMinuteDecimal(totalWorkingMinutes),
-      },
+      dailyBounds: currentWeekBounds,
+      weeklyTotals,
+    };
+    // Sent snapshot carries all weeks so the System calendar can render each
+    // week column with its own max/min values.
+    const sentMetricsPayload = {
+      projectWeeklyQuotas,
+      dailyBounds: mergedDailyBounds,
+      weeklyTotals,
     };
 
     // Save the chip state (live + sent snapshot), the send-to-system
@@ -2830,8 +2867,8 @@ export default function TacticsPage() {
       saveTacticsChipsState({ projectChips, customProjects, chipTimeOverrides }, currentYear),
       saveSentChipsSnapshot({ projectChips, customProjects, chipTimeOverrides }, currentYear),
       setSendToSystemTimestamp(currentYear),
-      saveTacticsMetrics(metricsPayload, currentYear),
-      saveSentMetricsSnapshot(metricsPayload, currentYear),
+      saveTacticsMetrics(liveMetricsPayload, currentYear),
+      saveSentMetricsSnapshot(sentMetricsPayload, currentYear),
     ]);
 
     // Signal System (and any other listeners) that the Send is committed.
