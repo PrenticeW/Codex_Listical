@@ -113,8 +113,24 @@ async function enforceSnapshotCap(userId, yearNumber) {
 
 async function captureGoal(yearNumber) {
   try {
-    const { loadStagingState } = await import('./stagingStorage');
-    return await loadStagingState(yearNumber);
+    const { loadStagingState, serializeRow } = await import('./stagingStorage');
+    const state = await loadStagingState(yearNumber);
+    // planTableEntries come back from loadStagingState as arrays with
+    // non-enumerable metadata (__rowType, __pairId, __sectionType, __isTotalRow).
+    // JSON.stringify strips non-enumerable properties, so we must convert each
+    // entry to the explicit { cells, _rowType, _pairId, ... } object form
+    // before the data lands in Supabase JSONB — otherwise the table structure
+    // is lost when the snapshot is restored.
+    const serializeItem = (item) => ({
+      ...item,
+      planTableEntries: Array.isArray(item.planTableEntries)
+        ? item.planTableEntries.map(serializeRow)
+        : [],
+    });
+    return {
+      shortlist: (state.shortlist ?? []).map(serializeItem),
+      archived: (state.archived ?? []).map(serializeItem),
+    };
   } catch {
     return null;
   }
