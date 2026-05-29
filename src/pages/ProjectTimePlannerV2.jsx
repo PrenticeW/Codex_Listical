@@ -460,12 +460,8 @@ export default function ProjectTimePlannerV2() {
   const [isDragging, setIsDragging] = useState(false); // Track if user is dragging to select
   const [dragStartCell, setDragStartCell] = useState(null); // { rowId, columnId }
   const tableBodyRef = useRef(null);
-  // Tracks the first day-index of the active week at the moment "Send to System"
-  // fires. Days before this index are treated as "past" and their min/max values
-  // are never overwritten by a later send.
-  const lastSendWeekStartRef = useRef(0);
-  // Always-current mirror of visibleDayColumns so the event handler (which has a
-  // stale closure) can read the current pole-position without being in the dep array.
+  // Always-current mirror of visibleDayColumns used inside the min/max effect and
+  // event handler. A ref (not dep-array value) so reading it never triggers rerenders.
   const latestVisibleDayColumnsRef = useRef(null);
 
   // Use the planner filters hook for project, status, recurring, and estimate filters
@@ -828,10 +824,15 @@ export default function ProjectTimePlannerV2() {
               result = newData; changed = true;
             }
           } else {
-            // Days before the week that was in pole position when Send to System
-            // last fired are treated as "past" — their stored min/max values must
-            // not be overwritten by a later send.
-            const isPastDay = (i) => i < lastSendWeekStartRef.current;
+            // "Past" weeks are hidden weeks — visibleDayColumns is persisted to
+            // storage, so this boundary survives page loads. Find the first
+            // non-hidden day, align to its week boundary, and protect everything
+            // before it from being overwritten by the new dailyMinValues/Max.
+            const vis = latestVisibleDayColumnsRef.current ?? {};
+            const firstVisible = Array.from({ length: totalDays }, (_, i) => i)
+              .find(i => vis[`day-${i}`] !== false) ?? 0;
+            const poleWeekStart = firstVisible - (firstVisible % 7);
+            const isPastDay = (i) => i < poleWeekStart;
 
             let minMaxChanged = false;
             const withMinMax = result.map(row => {
@@ -1561,16 +1562,6 @@ export default function ProjectTimePlannerV2() {
       // awaited by their dispatchers anyway, and the lastResetTsRef
       // update + setSentToSystem just need to happen before the user
       // notices anything missing.
-      // Record which week is currently in pole position (first visible week).
-      // Days before this index are "past" and their min/max values must not be
-      // overwritten when this send is applied.
-      {
-        const vis = latestVisibleDayColumnsRef.current ?? {};
-        const firstVisible = Array.from({ length: 84 }, (_, i) => i)
-          .find(i => vis[`day-${i}`] !== false) ?? 0;
-        // Align to week boundary (groups of 7)
-        lastSendWeekStartRef.current = firstVisible - (firstVisible % 7);
-      }
       setSentToSystem(true);
       getSendToSystemTimestamp(currentYear).then((ts) => {
         lastResetTsRef.current = ts;
