@@ -815,20 +815,29 @@ export default function ProjectTimePlannerV2() {
               result = newData; changed = true;
             }
           } else {
-            // Compute the start of the current calendar week (Monday 00:00:00).
-            // Days before this boundary belong to already-completed weeks and
-            // must not be overwritten when the user sends new bounds from the
-            // Plan page — only current-week and future days should update.
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const daysToMonday = today.getDay() === 0 ? 6 : today.getDay() - 1;
-            const currentWeekStart = new Date(today);
-            currentWeekStart.setDate(today.getDate() - daysToMonday);
+            // Determine which cycle-week we're currently in using UTC date
+            // arithmetic so the result is timezone-safe. "Past" days are those
+            // that belong to weeks earlier than the current cycle-week — their
+            // stored values must not be overwritten by a Send to System that
+            // was triggered for a later week.
+            const todayUTC = Date.UTC(
+              new Date().getFullYear(),
+              new Date().getMonth(),
+              new Date().getDate(),
+            );
+            let currentCycleWeekFirstDay = 0;
+            if (startDate) {
+              const [sy, sm, sd] = String(startDate).split('-').map(Number);
+              if (sy && sm && sd) {
+                const cycleStartUTC = Date.UTC(sy, sm - 1, sd);
+                const daysSinceStart = Math.round((todayUTC - cycleStartUTC) / 86400000);
+                if (daysSinceStart > 0) {
+                  currentCycleWeekFirstDay = Math.floor(daysSinceStart / 7) * 7;
+                }
+              }
+            }
 
-            const isPastDay = (i) => {
-              const d = dates[i];
-              return d instanceof Date && d < currentWeekStart;
-            };
+            const isPastDay = (i) => i < currentCycleWeekFirstDay;
 
             let minMaxChanged = false;
             const withMinMax = result.map(row => {
@@ -863,7 +872,7 @@ export default function ProjectTimePlannerV2() {
 
       return changed ? result : prevData;
     });
-  }, [dailyTotals, archiveTotals, dailyMinValues, dailyMaxValues, showMaxMinRows, totalDays, dates]);
+  }, [dailyTotals, archiveTotals, dailyMinValues, dailyMaxValues, showMaxMinRows, totalDays, dates, startDate]);
 
   // On-mount structural setup: (1) repair stale parentGroupIds, (2) ensure Inbox and Archive header rows exist.
   // Coalesced into one setData so both passes share a single render instead of two cascaded ones.
