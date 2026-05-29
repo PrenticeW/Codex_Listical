@@ -2840,22 +2840,42 @@ export default function TacticsPage() {
 
     const currentWeekNumber = Math.max(weekFromCalendar, weekFromVisible);
 
-    // Load the existing sent snapshot so we can preserve bounds from other
-    // weeks. Only the current week's entries are replaced.
-    const existingSnapshot = await loadSentMetricsSnapshot(currentYear);
-    const existingBounds = existingSnapshot?.dailyBounds ?? [];
-
-    const currentWeekBounds = displayedWeekDays.map((day, idx) => ({
-      weekNumber: currentWeekNumber,
+    // Build the new active bounds (no weekNumber = applies to current week
+    // AND all future weeks via the mapper's globalMap fallback).
+    const newActiveBounds = displayedWeekDays.map((day, idx) => ({
       day,
       dailyMaxHours: minutesToHourMinuteDecimal(availableColumnTotals[idx] ?? 0),
       dailyMinHours: minutesToHourMinuteDecimal(workingColumnTotals[idx] ?? 0),
     }));
 
-    // Merge: drop any prior entries for this week, then append the new ones.
+    // Load the existing sent snapshot to build the historical record for
+    // past weeks. Past weeks need their bounds locked in so they don't
+    // change when future sends update the active bounds.
+    const existingSnapshot = await loadSentMetricsSnapshot(currentYear);
+    const existingBounds = existingSnapshot?.dailyBounds ?? [];
+
+    // Entries with a weekNumber are already-locked historical bounds.
+    // Entries without a weekNumber are the previously active (global) bounds.
+    const existingHistorical = existingBounds.filter((b) => b.weekNumber != null);
+    const existingActive = existingBounds.filter((b) => b.weekNumber == null);
+
+    // For every past week (1 … currentWeekNumber-1) that doesn't already have
+    // a locked historical entry, archive the previous active bounds now.
+    // This is what preserves week N-1's values when the user sends from week N.
+    const lockedWeeks = new Set(existingHistorical.map((b) => b.weekNumber));
+    const archivedBounds = [];
+    for (let w = 1; w < currentWeekNumber; w++) {
+      if (!lockedWeeks.has(w) && existingActive.length > 0) {
+        existingActive.forEach((b) => archivedBounds.push({ ...b, weekNumber: w }));
+      }
+    }
+
+    // Final merged payload:
+    //   historical (locked past weeks) + newly archived + new active (no weekNumber)
     const mergedDailyBounds = [
-      ...existingBounds.filter((b) => b.weekNumber !== currentWeekNumber),
-      ...currentWeekBounds,
+      ...existingHistorical,
+      ...archivedBounds,
+      ...newActiveBounds,
     ];
 
     const weeklyTotals = {
@@ -2863,14 +2883,11 @@ export default function TacticsPage() {
       workingHours: minutesToHourMinuteDecimal(totalWorkingMinutes),
     };
 
-    // Live metrics keep only the current week (used for Plan-page preview).
     const liveMetricsPayload = {
       projectWeeklyQuotas,
-      dailyBounds: currentWeekBounds,
+      dailyBounds: newActiveBounds,
       weeklyTotals,
     };
-    // Sent snapshot carries all weeks so the System calendar can render each
-    // week column with its own max/min values.
     const sentMetricsPayload = {
       projectWeeklyQuotas,
       dailyBounds: mergedDailyBounds,
