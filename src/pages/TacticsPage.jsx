@@ -21,7 +21,7 @@ import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm, buildProjectPlanSummary } from '../utils/staging/planTableHelpers';
 import { pickCustomChipColour } from '../utils/staging/projectColour';
 import { saveTacticsMetrics, saveSentMetricsSnapshot, loadSentMetricsSnapshot } from '../lib/tacticsMetricsStorage';
-import { saveStartDate } from '../utils/planner/storage';
+import { saveStartDate, readVisibleDayColumns } from '../utils/planner/storage';
 import {
   loadTacticsYearSettings,
   saveTacticsYearSettings,
@@ -2806,18 +2806,39 @@ export default function TacticsPage() {
       weeklyHours: minutesToHourMinuteDecimal(summary.totalMinutes),
     }));
 
-    // Determine which week of the cycle we're currently in so bounds are
-    // stored per-week rather than overwriting all weeks globally.
+    // Determine which week of the cycle to target for this Send. We take the
+    // LATER of two signals so both common scenarios work:
+    //   A) Calendar week: user is physically in week N of the cycle by date.
+    //   B) Visible week: user hid week N-1 early on the System page to plan
+    //      ahead — the first visible day tells us the intended target week.
+    // max(A, B) handles both without the caller having to pick one.
+
+    // Signal A — calendar position
     const cycleStartDate = yearInfo?.startDate;
-    let currentWeekNumber = 1;
+    let weekFromCalendar = 1;
     if (cycleStartDate) {
       const cycleStart = new Date(cycleStartDate);
       cycleStart.setHours(0, 0, 0, 0);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const daysDiff = Math.floor((today - cycleStart) / (1000 * 60 * 60 * 24));
-      currentWeekNumber = Math.max(1, Math.floor(daysDiff / 7) + 1);
+      weekFromCalendar = Math.max(1, Math.floor(daysDiff / 7) + 1);
     }
+
+    // Signal B — first visible day on the System page (hidden weeks = past)
+    let weekFromVisible = 1;
+    try {
+      const visibleCols = await readVisibleDayColumns(undefined, 84, currentYear);
+      const firstVisible = Object.entries(visibleCols)
+        .filter(([, v]) => v !== false)
+        .map(([k]) => parseInt(k.replace('day-', ''), 10))
+        .sort((a, b) => a - b)[0] ?? 0;
+      weekFromVisible = Math.floor(firstVisible / 7) + 1;
+    } catch (_) {
+      // Fall through — weekFromVisible stays 1
+    }
+
+    const currentWeekNumber = Math.max(weekFromCalendar, weekFromVisible);
 
     // Load the existing sent snapshot so we can preserve bounds from other
     // weeks. Only the current week's entries are replaced.
