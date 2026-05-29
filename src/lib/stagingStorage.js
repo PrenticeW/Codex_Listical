@@ -20,6 +20,7 @@
 import { supabase } from './supabase';
 import { defineRowMetadata } from '../utils/staging/planTableHelpers';
 import { getCached, hasCached, setCached, invalidate } from './storageCache';
+import { saveSiteSnapshot } from './snapshotStorage';
 
 export const STAGING_STORAGE_EVENT = 'staging-state-update';
 
@@ -304,6 +305,8 @@ export async function getStagingShortlist(yearNumber) {
 export async function saveStagingState(payload, yearNumber) {
   try {
     if (!payload || typeof payload !== 'object') return;
+
+    saveSiteSnapshot(yearNumber).catch(() => {});
 
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);

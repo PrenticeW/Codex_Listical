@@ -41,6 +41,7 @@
 
 import { supabase } from './supabase';
 import { getCached, hasCached, setCached } from './storageCache';
+import { saveSiteSnapshot } from './snapshotStorage';
 
 // --- cache namespacing -------------------------------------------------
 
@@ -584,6 +585,8 @@ export async function loadTacticsChipsState(yearNumber) {
  */
 export async function saveTacticsChipsState(payload, yearNumber) {
   try {
+    saveSiteSnapshot(yearNumber).catch(() => {});
+
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) {

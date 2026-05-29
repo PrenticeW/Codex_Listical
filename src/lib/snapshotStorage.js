@@ -53,7 +53,7 @@ const DEFAULT_PROJECT_ID = 'project-1';
 // ---------------------------------------------------------------------------
 
 const SNAPSHOT_CAP = 50;
-const MIN_INTERVAL_MS = 2 * 60 * 1000;      // 2 minutes
+const MIN_INTERVAL_MS = 1 * 60 * 1000;      // 1 minute
 const SESSION_GAP_MS  = 4 * 60 * 60 * 1000; // 4 hours
 
 // ---------------------------------------------------------------------------
