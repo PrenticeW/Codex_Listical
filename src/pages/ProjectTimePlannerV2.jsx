@@ -2172,26 +2172,21 @@ export default function ProjectTimePlannerV2() {
   const handleShowWeek = useCallback(() => {
     setIsListicalMenuOpen(false);
 
-    // Undo the most recent Hide Week by restoring the hidden group with the
-    // highest day indices. Because Hide Week always takes the leftmost visible
-    // week, the last-hidden week is always the one furthest to the right among
-    // hidden days — regardless of whether it sits before, after, or between
-    // currently visible weeks.
+    // Reveal the week immediately before the current visible window.
+    // This is the exact inverse of handleHideWeek, which always hides the
+    // leftmost visible 7 days — so show week finds the first visible day and
+    // restores the 7 days just before it.
     setVisibleDayColumns(prev => {
       const newVisible = { ...prev };
 
-      // Collect all explicitly-hidden day indices
-      let maxHiddenDay = -1;
-      for (let i = 0; i < totalDays; i++) {
-        if (newVisible[`day-${i}`] === false) maxHiddenDay = i;
-      }
+      const firstVisibleDay = Array.from({ length: totalDays }, (_, i) => i)
+        .find(i => newVisible[`day-${i}`] !== false);
 
-      if (maxHiddenDay < 0) return newVisible; // Nothing hidden
+      if (firstVisibleDay == null || firstVisibleDay === 0) return newVisible; // Nothing to reveal
 
-      // Weeks are always hidden in aligned groups of 7, so the group start is
-      // the nearest lower multiple of 7.
-      const groupStart = maxHiddenDay - (maxHiddenDay % 7);
-      for (let i = groupStart; i < Math.min(groupStart + 7, totalDays); i++) {
+      const groupEnd = firstVisibleDay - 1;
+      const groupStart = groupEnd - (groupEnd % 7);
+      for (let i = groupStart; i <= groupEnd; i++) {
         newVisible[`day-${i}`] = true;
       }
 
