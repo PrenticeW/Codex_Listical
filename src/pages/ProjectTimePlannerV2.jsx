@@ -2148,69 +2148,57 @@ export default function ProjectTimePlannerV2() {
   const handleHideWeek = useCallback(() => {
     setIsListicalMenuOpen(false);
 
-    // Hide the leftmost 7 visible day columns (closest to columns A-H)
+    // Hide the leftmost 7 visible day columns (closest to columns A-H).
+    // Uses index-based scanning so that days absent from the object are
+    // treated as visible (consistent with TanStack column visibility).
     setVisibleDayColumns(prev => {
       const newVisible = { ...prev };
-      const visibleDays = Object.entries(newVisible)
-        .filter(([_, isVisible]) => isVisible)
-        .map(([colId]) => parseInt(colId.replace('day-', '')))
-        .sort((a, b) => a - b); // Sort ascending to get leftmost first
 
-      // Hide up to 7 days, but ensure at least 7 days remain visible
+      const visibleDays = [];
+      for (let i = 0; i < totalDays; i++) {
+        if (newVisible[`day-${i}`] !== false) visibleDays.push(i);
+      }
+
+      // Ensure at least 7 days remain visible
       const daysToHide = Math.min(7, visibleDays.length - 7);
-      if (daysToHide > 0) {
-        for (let i = 0; i < daysToHide; i++) {
-          newVisible[`day-${visibleDays[i]}`] = false;
-        }
+      for (let i = 0; i < daysToHide; i++) {
+        newVisible[`day-${visibleDays[i]}`] = false;
       }
 
       return newVisible;
     });
-  }, []);
+  }, [totalDays]);
 
   const handleShowWeek = useCallback(() => {
     setIsListicalMenuOpen(false);
 
-    // Primary: show the 7 days immediately before the first currently visible day
-    // (inverse of handleHideWeek). Fallback: if nothing is hidden before the current
-    // view (e.g. week 2 is hidden while week 1 is still visible), show the first
-    // contiguous hidden block found anywhere in the timeline.
+    // Show the 7 days immediately before the first currently visible day.
+    // Uses index-based scanning (not Object.entries filtering) so that days
+    // absent from the object — which TanStack treats as visible — are handled
+    // correctly alongside explicitly-stored false/true values.
     setVisibleDayColumns(prev => {
       const newVisible = { ...prev };
 
-      const visibleDayIndices = Object.entries(newVisible)
-        .filter(([_, isVisible]) => isVisible)
-        .map(([colId]) => parseInt(colId.replace('day-', '')))
-        .sort((a, b) => a - b);
-
-      const hiddenDays = Object.entries(newVisible)
-        .filter(([_, isVisible]) => !isVisible)
-        .map(([colId]) => parseInt(colId.replace('day-', '')))
-        .sort((a, b) => a - b);
-
-      if (hiddenDays.length === 0) return newVisible;
-
-      const firstVisibleDay = visibleDayIndices.length > 0 ? visibleDayIndices[0] : null;
-
-      // Primary path: hidden days exist before the first visible day
-      if (firstVisibleDay != null && firstVisibleDay > 0) {
-        const startDay = firstVisibleDay - 7;
-        for (let i = Math.max(0, startDay); i < firstVisibleDay; i++) {
-          newVisible[`day-${i}`] = true;
+      // Find the first visible day by scanning from index 0
+      let firstVisibleDay = -1;
+      for (let i = 0; i < totalDays; i++) {
+        if (newVisible[`day-${i}`] !== false) {
+          firstVisibleDay = i;
+          break;
         }
-        return newVisible;
       }
 
-      // Fallback: hidden days are sandwiched between visible weeks —
-      // show the first contiguous hidden block found.
-      const daysToShow = Math.min(7, hiddenDays.length);
-      for (let i = 0; i < daysToShow; i++) {
-        newVisible[`day-${hiddenDays[i]}`] = true;
+      // Nothing hidden before the current view — nothing to restore
+      if (firstVisibleDay <= 0) return newVisible;
+
+      const startDay = firstVisibleDay - 7;
+      for (let i = Math.max(0, startDay); i < firstVisibleDay; i++) {
+        newVisible[`day-${i}`] = true;
       }
 
       return newVisible;
     });
-  }, []);
+  }, [totalDays]);
 
   const handleNewSubproject = useCallback(() => {
     setIsListicalMenuOpen(false);
