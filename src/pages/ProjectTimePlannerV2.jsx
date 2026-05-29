@@ -2097,6 +2097,7 @@ export default function ProjectTimePlannerV2() {
       dailyMinValues,
       dailyMaxValues,
       totalDays,
+      startDayIndex: firstVisibleDayIndex,
     });
 
     // Step 3: Copy project structure as archived (including subproject sections)

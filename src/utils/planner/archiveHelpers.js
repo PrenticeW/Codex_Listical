@@ -77,14 +77,17 @@ export const createArchiveWeekRow = ({
   dailyMinValues = {},
   dailyMaxValues = {},
   totalDays = 84,
+  startDayIndex = 0,
 }) => {
   const archiveWeekId = generateUniqueId(ARCHIVE_WEEK_ID_PREFIX);
 
-  // Calculate min and max from first 7 days
+  // Calculate min and max from the 7 days belonging to the week being archived.
+  // startDayIndex is the first visible day (pole-position day 0 of that week),
+  // so we read dailyMinValues[startDayIndex .. startDayIndex+6].
   let weeklyMin = 0;
   let weeklyMax = 0;
 
-  for (let i = 0; i < Math.min(7, totalDays); i++) {
+  for (let i = startDayIndex; i < Math.min(startDayIndex + 7, totalDays); i++) {
     const minValue = parseFloat(dailyMinValues[i]) || 0;
     const maxValue = parseFloat(dailyMaxValues[i]) || 0;
     weeklyMin += minValue;
