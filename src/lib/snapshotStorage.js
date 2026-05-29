@@ -30,22 +30,18 @@
  */
 
 import { supabase } from './supabase';
-import { loadStagingState, saveStagingState } from './stagingStorage';
-import {
-  loadTacticsChipsState,
-  saveTacticsChipsState,
-  loadTacticsYearSettings,
-  saveTacticsYearSettings,
-} from './tacticsStorage';
 import {
   loadTacticsMetrics,
   saveTacticsMetrics,
 } from './tacticsMetricsStorage';
-// plannerStorage is imported dynamically inside captureSystem / restoreSystem
-// to break the circular dependency:
-//   snapshotStorage → plannerStorage → snapshotStorage
-// Static imports would cause one module to see the other as {} at load time,
-// making saveSiteSnapshot undefined when _saveTaskRowsImpl first tries to call it.
+
+// stagingStorage, tacticsStorage, and plannerStorage are all imported
+// dynamically inside their respective capture/restore helpers to avoid
+// circular dependencies. Each of those modules imports saveSiteSnapshot
+// from this file; a static import here would leave saveSiteSnapshot as
+// undefined at load time in all three, silently breaking snapshot triggers.
+// tacticsMetricsStorage does NOT import snapshotStorage so it is safe to
+// import statically above.
 const DEFAULT_PROJECT_ID = 'project-1';
 
 // ---------------------------------------------------------------------------
@@ -117,6 +113,7 @@ async function enforceSnapshotCap(userId, yearNumber) {
 
 async function captureGoal(yearNumber) {
   try {
+    const { loadStagingState } = await import('./stagingStorage');
     return await loadStagingState(yearNumber);
   } catch {
     return null;
@@ -125,6 +122,7 @@ async function captureGoal(yearNumber) {
 
 async function capturePlan(yearNumber) {
   try {
+    const { loadTacticsChipsState, loadTacticsYearSettings } = await import('./tacticsStorage');
     const [chips, settings, metrics] = await Promise.all([
       loadTacticsChipsState(yearNumber).catch(() => null),
       loadTacticsYearSettings(yearNumber).catch(() => null),
@@ -152,11 +150,13 @@ async function captureSystem(yearNumber) {
 
 async function restoreGoal(goalData, yearNumber) {
   if (!goalData) return;
+  const { saveStagingState } = await import('./stagingStorage');
   await saveStagingState(goalData, yearNumber);
 }
 
 async function restorePlan(planData, yearNumber) {
   if (!planData) return;
+  const { saveTacticsChipsState, saveTacticsYearSettings } = await import('./tacticsStorage');
   const { chips, settings, metrics } = planData;
   const ops = [];
   if (chips) ops.push(saveTacticsChipsState(chips, yearNumber).catch(() => {}));
