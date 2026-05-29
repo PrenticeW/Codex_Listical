@@ -2171,15 +2171,38 @@ export default function ProjectTimePlannerV2() {
   const handleShowWeek = useCallback(() => {
     setIsListicalMenuOpen(false);
 
-    // Show the leftmost 7 hidden day columns
+    // Primary: show the 7 days immediately before the first currently visible day
+    // (inverse of handleHideWeek). Fallback: if nothing is hidden before the current
+    // view (e.g. week 2 is hidden while week 1 is still visible), show the first
+    // contiguous hidden block found anywhere in the timeline.
     setVisibleDayColumns(prev => {
       const newVisible = { ...prev };
+
+      const visibleDayIndices = Object.entries(newVisible)
+        .filter(([_, isVisible]) => isVisible)
+        .map(([colId]) => parseInt(colId.replace('day-', '')))
+        .sort((a, b) => a - b);
+
       const hiddenDays = Object.entries(newVisible)
         .filter(([_, isVisible]) => !isVisible)
         .map(([colId]) => parseInt(colId.replace('day-', '')))
-        .sort((a, b) => a - b); // Sort ascending to get leftmost first
+        .sort((a, b) => a - b);
 
-      // Show up to 7 hidden days
+      if (hiddenDays.length === 0) return newVisible;
+
+      const firstVisibleDay = visibleDayIndices.length > 0 ? visibleDayIndices[0] : null;
+
+      // Primary path: hidden days exist before the first visible day
+      if (firstVisibleDay != null && firstVisibleDay > 0) {
+        const startDay = firstVisibleDay - 7;
+        for (let i = Math.max(0, startDay); i < firstVisibleDay; i++) {
+          newVisible[`day-${i}`] = true;
+        }
+        return newVisible;
+      }
+
+      // Fallback: hidden days are sandwiched between visible weeks —
+      // show the first contiguous hidden block found.
       const daysToShow = Math.min(7, hiddenDays.length);
       for (let i = 0; i < daysToShow; i++) {
         newVisible[`day-${hiddenDays[i]}`] = true;
