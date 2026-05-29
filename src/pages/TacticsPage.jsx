@@ -2855,8 +2855,12 @@ export default function TacticsPage() {
     const existingBounds = existingSnapshot?.dailyBounds ?? [];
 
     // Entries with a weekNumber are already-locked historical bounds.
+    // Only keep locks for weeks strictly before the current week — future-week
+    // locks must be cleared so the new active bounds apply to all upcoming weeks.
     // Entries without a weekNumber are the previously active (global) bounds.
-    const existingHistorical = existingBounds.filter((b) => b.weekNumber != null);
+    const existingHistorical = existingBounds.filter(
+      (b) => b.weekNumber != null && b.weekNumber < currentWeekNumber,
+    );
     const existingActive = existingBounds.filter((b) => b.weekNumber == null);
 
     // For every past week (1 … currentWeekNumber-1) that doesn't already have
