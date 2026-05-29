@@ -2172,14 +2172,21 @@ export default function ProjectTimePlannerV2() {
   const handleShowWeek = useCallback(() => {
     setIsListicalMenuOpen(false);
 
-    // Show the 7 days immediately before the first currently visible day.
-    // Uses index-based scanning (not Object.entries filtering) so that days
-    // absent from the object — which TanStack treats as visible — are handled
-    // correctly alongside explicitly-stored false/true values.
+    // Show the next hidden week using index-based scanning (not Object.entries
+    // filtering) so days absent from the object are treated as visible, matching
+    // TanStack's behaviour.
+    //
+    // Two cases:
+    //  1. The first visible day is > 0 — hidden weeks are at the start of the
+    //     timeline. Show the 7 days immediately before the current view (undo
+    //     the most recent hide).
+    //  2. The first visible day is 0 — week 1 is visible but a later week may
+    //     be stranded as hidden (e.g. week 2 hidden while weeks 1 and 3+ are
+    //     visible). Scan forward to find the first hidden day and show those 7.
     setVisibleDayColumns(prev => {
       const newVisible = { ...prev };
 
-      // Find the first visible day by scanning from index 0
+      // Find the first visible day
       let firstVisibleDay = -1;
       for (let i = 0; i < totalDays; i++) {
         if (newVisible[`day-${i}`] !== false) {
@@ -2188,15 +2195,29 @@ export default function ProjectTimePlannerV2() {
         }
       }
 
-      // Nothing hidden before the current view — nothing to restore
-      if (firstVisibleDay <= 0) return newVisible;
+      if (firstVisibleDay < 0) return newVisible; // Everything hidden, nothing to restore
 
-      const startDay = firstVisibleDay - 7;
-      for (let i = Math.max(0, startDay); i < firstVisibleDay; i++) {
-        newVisible[`day-${i}`] = true;
+      if (firstVisibleDay > 0) {
+        // Normal case: show the week immediately preceding the current view
+        const startDay = firstVisibleDay - 7;
+        for (let i = Math.max(0, startDay); i < firstVisibleDay; i++) {
+          newVisible[`day-${i}`] = true;
+        }
+        return newVisible;
       }
 
-      return newVisible;
+      // Week 1 is already visible — scan forward for the first hidden day
+      // (handles stranded hidden weeks in the middle of the timeline)
+      for (let i = 0; i < totalDays; i++) {
+        if (newVisible[`day-${i}`] === false) {
+          for (let j = i; j < Math.min(i + 7, totalDays); j++) {
+            newVisible[`day-${j}`] = true;
+          }
+          return newVisible;
+        }
+      }
+
+      return newVisible; // No hidden days at all
     });
   }, [totalDays]);
 
