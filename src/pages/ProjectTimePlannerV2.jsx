@@ -815,15 +815,27 @@ export default function ProjectTimePlannerV2() {
               result = newData; changed = true;
             }
           } else {
+            // Compute the start of the current calendar week (Monday 00:00:00).
+            // Days before this boundary belong to already-completed weeks and
+            // must not be overwritten when the user sends new bounds from the
+            // Plan page — only current-week and future days should update.
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const daysToMonday = today.getDay() === 0 ? 6 : today.getDay() - 1;
+            const currentWeekStart = new Date(today);
+            currentWeekStart.setDate(today.getDate() - daysToMonday);
+
+            const isPastDay = (i) => {
+              const d = dates[i];
+              return d instanceof Date && d < currentWeekStart;
+            };
+
             let minMaxChanged = false;
             const withMinMax = result.map(row => {
               if (row._isDailyMinRow) {
-                // Only update visible (non-archived) day columns so that
-                // hidden/archived week columns retain the values they had when
-                // those weeks were active. This prevents a Send to System with
-                // new bounds from retroactively rewriting past weeks.
+                // Preserve past-week values; update current week and future only.
                 const updates = createDayColumnUpdates(totalDays, (i) =>
-                  visibleDayColumns[`day-${i}`] !== false ? dailyMinValues[i] : row[`day-${i}`]
+                  isPastDay(i) ? row[`day-${i}`] : dailyMinValues[i]
                 );
                 // Compare actual values — spread always creates a new reference so
                 // `next !== row` would be unconditionally true and trigger an
@@ -835,7 +847,7 @@ export default function ProjectTimePlannerV2() {
               }
               if (row._isDailyMaxRow) {
                 const updates = createDayColumnUpdates(totalDays, (i) =>
-                  visibleDayColumns[`day-${i}`] !== false ? dailyMaxValues[i] : row[`day-${i}`]
+                  isPastDay(i) ? row[`day-${i}`] : dailyMaxValues[i]
                 );
                 const hasChange = Object.keys(updates).some(k => row[k] !== updates[k]);
                 if (!hasChange) return row;
@@ -851,7 +863,7 @@ export default function ProjectTimePlannerV2() {
 
       return changed ? result : prevData;
     });
-  }, [dailyTotals, archiveTotals, dailyMinValues, dailyMaxValues, showMaxMinRows, totalDays, visibleDayColumns]);
+  }, [dailyTotals, archiveTotals, dailyMinValues, dailyMaxValues, showMaxMinRows, totalDays, dates]);
 
   // On-mount structural setup: (1) repair stale parentGroupIds, (2) ensure Inbox and Archive header rows exist.
   // Coalesced into one setData so both passes share a single render instead of two cascaded ones.
