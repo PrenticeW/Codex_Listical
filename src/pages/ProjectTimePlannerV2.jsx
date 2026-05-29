@@ -426,11 +426,6 @@ export default function ProjectTimePlannerV2() {
     if (!dataHydrated.current) return;
     const timeoutId = setTimeout(() => {
       lastSaveInitiatedRef.current = Date.now();
-      // TEMPORARY DEBUG — remove before launch
-      const inboxCount = data.filter(r => r._isInboxRow).length;
-      const chipHeaderCount = data.filter(r => r._rowType === 'subprojectHeader' && r._chipId).length;
-      // eslint-disable-next-line no-console
-      console.warn(`[planner-save] totalRows=${data.length} inboxRows=${inboxCount} chipHeaders=${chipHeaderCount}`);
       setTaskRows(data);
     }, 500); // Debounce saves by 500ms to avoid too many writes
 

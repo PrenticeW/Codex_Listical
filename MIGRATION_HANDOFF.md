@@ -1,8 +1,24 @@
 # Supabase Migration Handoff
 
-**Author:** Claude (session ending 2026-05-23, after helper #5 port). Lint and `vite build` pass cleanly; user verification of the new behaviour still pending.
-**For:** Whoever picks this up next (likely a fresh Claude session for step 6 cache layer or step 7 end-to-end testing)
+**Author:** Claude (session ending 2026-05-27). Last session fixed the double-row bug on rapid logout/login and removed the temporary debug log from `ProjectTimePlannerV2.jsx`.
+**For:** Whoever picks this up next (step 7 end-to-end testing, then step 8 history triggers)
 **Read first:** `SUPABASE_MIGRATION_PLAN.md`, `STORAGE_AUDIT.md`, `CLAUDE.md`. Git history holds prior handoff iterations if you want the long view.
+
+## What was done 2026-05-27
+
+### Double-row bug on rapid logout/login — fixed
+
+**Root cause:** The `saveTaskRows` DELETE+INSERT pattern was documented as a potential concurrent-save race (see storage.js comment before `_taskRowsSaveQueue`). The queue serialises saves correctly, but a second gap existed: an in-flight save from the old session could complete *after* `clearAll()` ran on logout and call `setCached(...)`, repopulating the cache with old data. The new session's component would then read that stale cache via `peekPlannerCache`, skip the async Supabase load entirely, and save incorrect state on top of what was in the DB — producing duplicate rows that persisted across future sessions.
+
+**Three targeted fixes:**
+
+1. **`setCached` guard in `_saveTaskRowsImpl` (`storage.js`)** — after a save completes, checks that the user who initiated the save is still the signed-in user before writing back to cache. An in-flight save from a logged-out session can no longer repopulate the cache.
+
+2. **`userId` as a dep in `usePlannerStorage`'s load effect** — the hook now tracks the authenticated user ID via `supabase.auth.onAuthStateChange` and adds it to the load effect's dependency array (`[projectId, yearNumber, userId]`). A rapid logout/login with the same year number now always triggers a fresh Supabase read. Also tightened the cache-skip guard to `cachedHadData && userId != null` so a null userId (not yet resolved on mount) doesn't mistakenly skip the load.
+
+3. **Deduplication in `readTaskRows` (`storage.js`)** — filters duplicate row IDs before returning and caching. Acts as a safety net for any races that slip through, and cleans up rows that were already doubled in Supabase before the other two fixes landed.
+
+**Debug log removed:** The `[planner-save]` `console.warn` (added 2026-05-23 to diagnose the row-count cycling issue in item 1c below) was removed from `ProjectTimePlannerV2.jsx`.
 
 ## Where we are
 

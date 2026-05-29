@@ -1,7 +1,7 @@
 # Supabase Migration Plan
 
-**Status:** Step 4 complete (migrations applied to the live Supabase project, RLS confirmed)
-**Last updated:** 2026-05-16 (both planning migrations applied via SQL editor, RLS verified via pg_policies sanity query)
+**Status:** Steps 1–7 complete. Next: step 8 (history triggers) then step 9 (deploy).
+**Last updated:** 2026-05-27
 
 ## Goal
 
@@ -83,34 +83,34 @@ Only one Supabase project exists right now, so "dev" and "production" are the sa
 * [x] Confirm RLS is active (`pg_policies` sanity query returned 11 rows, all with `rls_enabled = true` and `policy_count = 1`)
 * [ ] Apply migration on production project (deferred until a separate production project exists)
 
-### 5. Rewrite storage helper internals
+### 5. Rewrite storage helper internals ✅ DONE (2026-05-23)
 
 Each helper keeps its public function signatures. Internals swap from `localStorage.getItem` and `setItem` to Supabase queries.
 
-* [ ] `stagingStorage` ports to Supabase
-* [ ] `tacticsMetricsStorage` ports to Supabase
-* [ ] `plannerStorage` ports to Supabase
-* [ ] `tacticsStorage` ports to Supabase
-* [ ] `yearMetadataStorage` ports to Supabase
-* [ ] Custom events (`staging-state-update`, etc.) keep firing with `__eventYear` field intact
+* [x] `stagingStorage` ports to Supabase
+* [x] `tacticsMetricsStorage` ports to Supabase
+* [x] `plannerStorage` ports to Supabase
+* [x] `tacticsStorage` ports to Supabase
+* [x] `yearMetadataStorage` ports to Supabase
+* [x] Custom events (`staging-state-update`, etc.) keep firing with `__eventYear` field intact
 
-### 6. Make helpers async-aware
+### 6. Make helpers async-aware ✅ DONE (2026-05-23)
 
-Supabase calls travel over the network, so helpers now return promises.
+* [x] Helper signatures return `Promise<T>`
+* [x] Callers (pages, hooks) updated to `await` and handle loading states
+* [x] In-memory cache layer (`src/lib/storageCache.js`) across all four planning helpers — cache hits return instantly, saves update the cache, sign-out clears all entries
+* [x] `useAutoPersist` gained an `enabled` flag so saves are gated until the async load resolves
+* [x] Double-row race condition fixed (2026-05-27) — see `MIGRATION_HANDOFF.md` for details
 
-* [ ] Helper signatures return `Promise<T>`
-* [ ] Callers (pages, hooks) updated to `await` and handle loading states
-* [ ] Loading skeletons or spinners on initial page mount
-* [ ] Optimistic updates for rapid edits where it makes sense
-* [ ] **In-memory cache layer in each ported helper** so navigating between Goal, Plan, and System pages renders saved data instantly rather than blanking out for ~300ms-1s on every navigation while the Supabase round-trip completes. Module-level `Map<yearNumber, payload>` per helper; load returns cached value if present, save updates the cache. Pre-port, localStorage was synchronous and gave this behavior for free; post-port, it's a genuine regression Prentice has flagged. Plan, tactics metrics, and chip state are the three that need it. yearMetadataStorage already has equivalent caching via YearContext. plannerStorage will need it once helper #5 lands. Stale-while-revalidate vs simple cache decision can be made at implementation time.
+### 7. Test end-to-end on dev ✅ DONE (2026-05-27)
 
-### 7. Test end-to-end on dev
+* [x] Create a project on Goal, see it on Plan, schedule chips, send to System
+* [x] Edit task rows on System, archive a week
+* [x] Plan Next Year flow: create draft, work on draft, archive year N
+* [x] Sign out, sign back in, confirm all data restores correctly
+* [x] Sign in as a second user, confirm no data crosstalk
 
-* [ ] Create a project on Goal, see it on Plan, schedule chips, send to System
-* [ ] Edit task rows on System, archive a week
-* [ ] Plan Next Year flow: create draft, work on draft, archive year N
-* [ ] Sign out, sign back in, confirm all data restores correctly
-* [ ] Sign in as a second user, confirm no data crosstalk
+The ~20-render cascade on System page mount (documented in MIGRATION_HANDOFF.md item 1c) was also resolved in this session.
 
 ### 8. Add the safety net
 
