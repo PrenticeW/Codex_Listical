@@ -41,7 +41,12 @@ import {
   loadTacticsMetrics,
   saveTacticsMetrics,
 } from './tacticsMetricsStorage';
-import { readTaskRows, saveTaskRows, DEFAULT_PROJECT_ID } from '../utils/planner/storage';
+// plannerStorage is imported dynamically inside captureSystem / restoreSystem
+// to break the circular dependency:
+//   snapshotStorage → plannerStorage → snapshotStorage
+// Static imports would cause one module to see the other as {} at load time,
+// making saveSiteSnapshot undefined when _saveTaskRowsImpl first tries to call it.
+const DEFAULT_PROJECT_ID = 'project-1';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -133,6 +138,7 @@ async function capturePlan(yearNumber) {
 
 async function captureSystem(yearNumber) {
   try {
+    const { readTaskRows } = await import('../utils/planner/storage');
     const rows = await readTaskRows(DEFAULT_PROJECT_ID, yearNumber);
     return { taskRows: rows };
   } catch {
@@ -161,6 +167,7 @@ async function restorePlan(planData, yearNumber) {
 
 async function restoreSystem(systemData, yearNumber) {
   if (!systemData?.taskRows) return;
+  const { saveTaskRows } = await import('../utils/planner/storage');
   await saveTaskRows(systemData.taskRows, DEFAULT_PROJECT_ID, yearNumber);
 }
 
