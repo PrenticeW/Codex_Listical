@@ -120,9 +120,11 @@ export const createArchiveWeekRow = ({
  * @param {object[]} subprojectRows - Array of subproject section rows (subprojectGeneral, subprojectUnscheduled)
  * @param {string} archiveWeekId - Archive week ID for grouping
  * @param {number} totalDays - Total number of days
+ * @param {Map} projectWeeklyQuotas - Map of projectId → weeklyHours (snapshot from sent metrics)
+ * @param {Map} projectIdByNickname - Map of projectNickname → projectId
  * @returns {object[]} Array of archived project rows (including subproject sections)
  */
-export const createArchivedProjectStructure = (projectRows, subprojectRows, archiveWeekId, totalDays = 84) => {
+export const createArchivedProjectStructure = (projectRows, subprojectRows, archiveWeekId, totalDays = 84, projectWeeklyQuotas = new Map(), projectIdByNickname = new Map()) => {
   const archivedRows = [];
 
   // Group rows by project
@@ -146,6 +148,13 @@ export const createArchivedProjectStructure = (projectRows, subprojectRows, arch
 
     const groupId = generateUniqueId(`${ARCHIVED_ROW_ID_PREFIX}${projectKey}-group-`);
 
+    // Snapshot the weekly quota for this project at archive time so it
+    // stays frozen even after future "Send to System" presses.
+    const projectId = projectIdByNickname.get(headerRow.projectNickname);
+    const archivedWeeklyQuota = projectId != null
+      ? (projectWeeklyQuotas.get(projectId) ?? 0)
+      : 0;
+
     // Create archived project header
     const archivedHeader = {
       ...headerRow,
@@ -154,6 +163,7 @@ export const createArchivedProjectStructure = (projectRows, subprojectRows, arch
       parentGroupId: archiveWeekId,
       groupId: groupId,
       isGroupHeader: false,
+      archivedWeeklyQuota,
     };
     archivedRows.push(archivedHeader);
 

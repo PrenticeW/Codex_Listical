@@ -818,7 +818,13 @@ export default function ProjectTimePlannerV2() {
             let minMaxChanged = false;
             const withMinMax = result.map(row => {
               if (row._isDailyMinRow) {
-                const updates = createDayColumnUpdates(totalDays, (i) => dailyMinValues[i]);
+                // Only update visible (non-archived) day columns so that
+                // hidden/archived week columns retain the values they had when
+                // those weeks were active. This prevents a Send to System with
+                // new bounds from retroactively rewriting past weeks.
+                const updates = createDayColumnUpdates(totalDays, (i) =>
+                  visibleDayColumns[`day-${i}`] !== false ? dailyMinValues[i] : row[`day-${i}`]
+                );
                 // Compare actual values — spread always creates a new reference so
                 // `next !== row` would be unconditionally true and trigger an
                 // infinite setData → recompute → effect loop.
@@ -828,7 +834,9 @@ export default function ProjectTimePlannerV2() {
                 return { ...row, project: 'Daily Min', ...updates };
               }
               if (row._isDailyMaxRow) {
-                const updates = createDayColumnUpdates(totalDays, (i) => dailyMaxValues[i]);
+                const updates = createDayColumnUpdates(totalDays, (i) =>
+                  visibleDayColumns[`day-${i}`] !== false ? dailyMaxValues[i] : row[`day-${i}`]
+                );
                 const hasChange = Object.keys(updates).some(k => row[k] !== updates[k]);
                 if (!hasChange) return row;
                 minMaxChanged = true;
@@ -843,7 +851,7 @@ export default function ProjectTimePlannerV2() {
 
       return changed ? result : prevData;
     });
-  }, [dailyTotals, archiveTotals, dailyMinValues, dailyMaxValues, showMaxMinRows, totalDays]);
+  }, [dailyTotals, archiveTotals, dailyMinValues, dailyMaxValues, showMaxMinRows, totalDays, visibleDayColumns]);
 
   // On-mount structural setup: (1) repair stale parentGroupIds, (2) ensure Inbox and Archive header rows exist.
   // Coalesced into one setData so both passes share a single render instead of two cascaded ones.
@@ -2085,7 +2093,7 @@ export default function ProjectTimePlannerV2() {
       row._rowType === 'subprojectGeneral' ||
       row._rowType === 'subprojectUnscheduled'
     );
-    const archivedProjects = createArchivedProjectStructure(projectRows, subprojectRows, archiveWeekRow.id, totalDays);
+    const archivedProjects = createArchivedProjectStructure(projectRows, subprojectRows, archiveWeekRow.id, totalDays, projectWeeklyQuotas, projectIdByNickname);
 
     // Step 4: Collect non-recurring Done/Abandoned tasks
     const nonRecurringTasks = collectTasksForArchive(data, task =>
@@ -2135,7 +2143,7 @@ export default function ProjectTimePlannerV2() {
     };
 
     executeCommand(archiveCommand);
-  }, [data, dates, startDate, dailyMinValues, dailyMaxValues, totalDays, executeCommand, collapsedGroups, visibleDayColumns]);
+  }, [data, dates, startDate, dailyMinValues, dailyMaxValues, totalDays, executeCommand, collapsedGroups, visibleDayColumns, projectWeeklyQuotas, projectIdByNickname]);
 
   const handleHideWeek = useCallback(() => {
     setIsListicalMenuOpen(false);

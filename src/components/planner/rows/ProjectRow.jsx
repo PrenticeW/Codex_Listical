@@ -83,13 +83,17 @@ export default function ProjectRow({
   const displayLabel = isSubprojectHeader ? subprojectName : (projectNickname || projectName);
 
   // Get weekly quota for this project (only for header rows).
-  // Quotas are keyed by the project's stable id, not by nickname, so that a
-  // Goal-side rename does not silently zero out the hours shown here. We
-  // translate the row's nickname into an id via projectIdByNickname (built
-  // from current staging). If the row predates the id-based join (or the
-  // project has been deleted), the lookup returns 0.
-  const projectIdForQuota = isHeader ? projectIdByNickname.get(projectNickname) : null;
-  const rawQuota = isHeader ? (projectWeeklyQuotas.get(projectIdForQuota) ?? 0) : null;
+  // Archived headers carry a frozen snapshot of the quota from the moment they
+  // were archived (archivedWeeklyQuota). Active headers look up the current
+  // sent-metrics value via the project's stable id so that Goal-side renames
+  // don't silently zero out the hours shown here.
+  const archivedWeeklyQuota = row.original.archivedWeeklyQuota;
+  const projectIdForQuota = (isHeader && rowType !== 'archivedProjectHeader') ? projectIdByNickname.get(projectNickname) : null;
+  const rawQuota = isHeader
+    ? (rowType === 'archivedProjectHeader' && archivedWeeklyQuota != null
+        ? archivedWeeklyQuota
+        : (projectWeeklyQuotas.get(projectIdForQuota) ?? 0))
+    : null;
   const formattedQuota = rawQuota !== null
     ? (typeof rawQuota === 'number' ? rawQuota.toFixed(2) : parseFloat(rawQuota).toFixed(2))
     : '0.00';

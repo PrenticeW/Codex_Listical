@@ -298,9 +298,7 @@ export async function maybeSnapshotOnSessionStart(yearNumber) {
   if (yearNumber == null) return;
 
   try {
-    console.log('[snapshotStorage] maybeSnapshotOnSessionStart called, year:', yearNumber);
     const userId = await requireUserId();
-    console.log('[snapshotStorage] userId:', userId);
     const latestTime = await getLatestSnapshotTime(userId, yearNumber);
 
     if (latestTime) {
@@ -326,7 +324,6 @@ export async function maybeSnapshotOnSessionStart(yearNumber) {
       });
 
     if (insertError) throw insertError;
-    console.log('[snapshotStorage] session-start snapshot saved');
 
     enforceSnapshotCap(userId, yearNumber).catch(() => {});
   } catch (err) {
