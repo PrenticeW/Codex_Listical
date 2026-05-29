@@ -51,7 +51,9 @@ export function YearProvider({ children }) {
       // the current year. Best-effort — a failure here must never block the load.
       const activeYearNumber = next?.currentYear ?? null;
       if (activeYearNumber != null) {
-        maybeSnapshotOnSessionStart(activeYearNumber).catch(() => {});
+        maybeSnapshotOnSessionStart(activeYearNumber).catch((err) => {
+          console.error('[snapshotStorage] session-start snapshot failed', err);
+        });
       }
     } catch (error) {
       console.error('Failed to load year metadata', error);
