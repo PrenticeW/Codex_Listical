@@ -403,6 +403,9 @@ export default function usePlannerInteractions({
 
   const handleCellMouseDown = useCallback(
     (event, rowId, cellId, options = {}) => {
+      // Right-click: don't change selection — the context menu will handle it
+      if (event.button === 2) return;
+
       const isInteractive =
         event.target instanceof Element &&
         Boolean(event.target.closest('input, select, textarea, button, a'));

@@ -1,16 +1,11 @@
 import React from 'react';
-import {
-  Copy,
-  Trash2,
-  Plus,
-  CornerDownRight,
-  FolderPlus,
-  PlusCircle,
-} from 'lucide-react';
+import { Copy, Clipboard, Trash2, Plus, CornerDownRight, FolderPlus, PlusCircle } from 'lucide-react';
 
 /**
- * Context menu for spreadsheet cells and rows
- * Shows different actions based on what's selected
+ * Context menu for spreadsheet cells and rows.
+ *
+ * contextType === 'cell'  → copy / paste actions only
+ * contextType === 'row'   → full row actions (duplicate, delete, insert, etc.)
  */
 export default function ContextMenu({
   contextMenu,
@@ -21,38 +16,53 @@ export default function ContextMenu({
   onInsertRowBelow,
   onAddTasks,
   onAddSubproject,
+  onCopy,
+  onPaste,
 }) {
   if (!contextMenu.isOpen) return null;
 
-  const {
-    x,
-    y,
-    hasSelectedRows,
-    selectedRowsCount,
-    rowId,
-  } = contextMenu;
+  const { x, y, hasSelectedRows, selectedRowsCount, rowId, contextType } = contextMenu;
 
-  // Estimated menu dimensions for boundary checking
   const MENU_WIDTH = 200;
-  const MENU_HEIGHT = 280;
-
-  // Clamp horizontally, flip vertically if needed so menu stays on screen
+  const MENU_HEIGHT = contextType === 'cell' ? 90 : 280;
   const clampedLeft = Math.min(x, window.innerWidth - MENU_WIDTH - 8);
   const fitsBelow = y + MENU_HEIGHT < window.innerHeight - 8;
   const clampedTop = fitsBelow ? y : Math.max(8, y - MENU_HEIGHT);
 
-  const menuStyle = {
-    position: 'fixed',
-    left: `${clampedLeft}px`,
-    top: `${clampedTop}px`,
-    zIndex: 9999,
-  };
+  const menuStyle = { position: 'fixed', left: `${clampedLeft}px`, top: `${clampedTop}px`, zIndex: 9999 };
 
-  const handleAction = (action) => {
-    action();
-    onClose();
-  };
+  const handleAction = (action) => { action(); onClose(); };
 
+  // ── Cell context: copy / paste only ──────────────────────────────────────
+  if (contextType === 'cell') {
+    return (
+      <div
+        className="bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[160px]"
+        style={menuStyle}
+        onClick={(e) => e.stopPropagation()}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        <button
+          onClick={() => handleAction(onCopy)}
+          className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
+        >
+          <Copy className="w-4 h-4" />
+          Copy
+          <span className="ml-auto text-xs text-gray-400">⌘C</span>
+        </button>
+        <button
+          onClick={() => handleAction(onPaste)}
+          className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
+        >
+          <Clipboard className="w-4 h-4" />
+          Paste
+          <span className="ml-auto text-xs text-gray-400">⌘V</span>
+        </button>
+      </div>
+    );
+  }
+
+  // ── Row context: full row actions ─────────────────────────────────────────
   return (
     <div
       className="bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[200px]"
@@ -60,7 +70,6 @@ export default function ContextMenu({
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* Row actions */}
       {hasSelectedRows && (
         <>
           <div className="px-3 py-1.5 text-xs text-gray-500 font-medium border-b border-gray-100">
@@ -84,8 +93,6 @@ export default function ContextMenu({
           <div className="border-t border-gray-100 my-1" />
         </>
       )}
-
-      {/* Insert actions (available when right-clicking on a row) */}
       {rowId && (
         <>
           <button
@@ -105,8 +112,6 @@ export default function ContextMenu({
           <div className="border-t border-gray-100 my-1" />
         </>
       )}
-
-      {/* Additional actions */}
       <button
         onClick={() => handleAction(onAddTasks)}
         className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
@@ -128,13 +133,6 @@ export default function ContextMenu({
         <Copy className="w-4 h-4" />
         Duplicate
       </button>
-
-      {/* No selection fallback */}
-      {!hasSelectedRows && !rowId && (
-        <div className="px-3 py-1.5 text-xs text-gray-400 italic border-t border-gray-100 mt-1">
-          Right-click on a row for more options
-        </div>
-      )}
     </div>
   );
 }

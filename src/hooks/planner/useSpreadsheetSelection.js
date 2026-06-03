@@ -124,6 +124,8 @@ export const useSpreadsheetSelection = ({
 
   // Cell interaction handlers
   const handleCellMouseDown = useCallback((e, rowId, columnId) => {
+    // Right-click or Mac Ctrl+click — don't touch selection
+    if (e.button === 2 || (e.button === 0 && e.ctrlKey)) return;
     if (columnId === 'rowNum') return; // Don't select row number column
 
     // If this cell is currently being edited, let the event through

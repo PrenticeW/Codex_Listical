@@ -1744,6 +1744,8 @@ export default function ProjectTimePlannerV2() {
     handleCellDoubleClick,
   } = selection;
 
+  const ROW_SELECTOR_COLUMNS = new Set(['rowNum', 'checkbox']);
+
   // Wrap cell mouse down to handle right-click for context menu
   const handleCellMouseDownWithContext = useCallback((e, rowId, columnId) => {
     if (e.button === 2) { // Right-click
@@ -1754,6 +1756,7 @@ export default function ProjectTimePlannerV2() {
         cellKey: getCellKey(rowId, columnId),
         selectedCells,
         selectedRows,
+        contextType: ROW_SELECTOR_COLUMNS.has(columnId) ? 'row' : 'cell',
       });
       return;
     }
@@ -1773,6 +1776,7 @@ export default function ProjectTimePlannerV2() {
       cellKey: getCellKey(rowId, columnId),
       selectedCells,
       selectedRows,
+      contextType: ROW_SELECTOR_COLUMNS.has(columnId) ? 'row' : 'cell',
     });
   }, [handleContextMenu, getCellKey, selectedCells, selectedRows]);
 
@@ -2949,6 +2953,8 @@ export default function ProjectTimePlannerV2() {
         onInsertRowBelow={handleInsertRowBelow}
         onAddTasks={handleContextMenuAddTasks}
         onAddSubproject={handleNewSubproject}
+        onCopy={handleCopy}
+        onPaste={handlePaste}
       />
     </div>
   );

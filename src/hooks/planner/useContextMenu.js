@@ -29,6 +29,7 @@ export default function useContextMenu() {
       cellKey = null,
       selectedCells = new Set(),
       selectedRows = new Set(),
+      contextType = 'row',
     } = options;
 
     setContextMenu({
@@ -38,6 +39,7 @@ export default function useContextMenu() {
       rowId,
       columnId,
       cellKey,
+      contextType,
       hasSelectedCells: selectedCells.size > 0,
       hasSelectedRows: selectedRows.size > 0,
       selectedCellsCount: selectedCells.size,
