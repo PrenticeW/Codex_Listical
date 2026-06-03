@@ -2,6 +2,8 @@ import { Outlet } from 'react-router-dom';
 import { YearProvider, useYear } from '../contexts/YearContext';
 import { useUser } from '../contexts/UserContext';
 import { useEffect, useState } from 'react';
+import { GearPanelProvider } from '../contexts/GearPanelContext';
+import GearPanel from './GearPanel';
 
 function YearKeyedOutlet() {
   const { currentYear } = useYear();
@@ -59,8 +61,11 @@ export default function Layout() {
   }
 
   return (
-    <YearProvider>
-      <YearKeyedOutlet />
-    </YearProvider>
+    <GearPanelProvider>
+      <YearProvider>
+        <YearKeyedOutlet />
+        <GearPanel />
+      </YearProvider>
+    </GearPanelProvider>
   );
 }

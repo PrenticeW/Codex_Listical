@@ -34,6 +34,7 @@ import {
   saveSentChipsSnapshot,
   peekTacticsCache,
 } from '../lib/tacticsStorage';
+import { GEAR_TACTICS_SETTINGS_EVENT } from '../components/GearPanel';
 import { peekStagingCache } from '../lib/stagingStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
 import usePageSize from '../hooks/usePageSize';
@@ -418,6 +419,10 @@ export default function TacticsPage() {
       settingsLoadedForYear.current = currentYear;
       return;
     }
+    if (suppressNextSaveRef.current) {
+      suppressNextSaveRef.current = false;
+      return;
+    }
     saveTacticsYearSettings(
       { startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay, chipDisplayModes, summaryRowOrder },
       currentYear
@@ -712,6 +717,25 @@ export default function TacticsPage() {
   const chipLoadFailed = useRef(false);
   const settingsLoadedForYear = useRef(null);
   const columnWidthsLoadedForYear = useRef(null);
+  // Suppresses the autosave useEffect for one cycle when GearPanel pushes a
+  // settings change so we don't write back the same data a second time.
+  const suppressNextSaveRef = useRef(false);
+
+  // Sync Plan page settings changed via GearPanel
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.__eventYear !== currentYear) return;
+      suppressNextSaveRef.current = true;
+      if ('startHour'        in e.detail) setStartHour(e.detail.startHour);
+      if ('startMinute'      in e.detail) setStartMinute(e.detail.startMinute);
+      if ('incrementMinutes' in e.detail) setIncrementMinutes(e.detail.incrementMinutes);
+      if ('use24Hour'        in e.detail) setUse24Hour(e.detail.use24Hour);
+      if ('showAmPm'         in e.detail) setShowAmPm(e.detail.showAmPm);
+    };
+    window.addEventListener(GEAR_TACTICS_SETTINGS_EVENT, handler);
+    return () => window.removeEventListener(GEAR_TACTICS_SETTINGS_EVENT, handler);
+  }, [currentYear]);
+
   const [tableRect, setTableRect] = useState(null);
   useEffect(() => {
     // Ensure we always have a transparent drag image to avoid browser-specific cancellations

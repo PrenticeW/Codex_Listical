@@ -133,7 +133,10 @@ export function YearProvider({ children }) {
   // Gate rendering on the first load so callers can rely on currentYear
   // being a real number (every page does loadStagingState(currentYear) and
   // similar; passing null would force a wide rewrite).
-  if (isLoading || !metadata) {
+  // Only gate on !metadata (true first-time load when nothing is cached yet).
+  // Mid-session refreshes (isLoading=true but metadata exists) keep children
+  // mounted so persistent components like GearPanel aren't torn down.
+  if (!metadata) {
     return (
       <div className="flex items-center justify-center min-h-screen text-stone-500">
         Loading…

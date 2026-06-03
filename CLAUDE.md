@@ -17,7 +17,7 @@ Pre-launch. Working through `CODE_REVIEW_April2026.md` before public launch.
 | Routing | React Router |
 | Table | TanStack Table (`@tanstack/react-table`) |
 | Virtualisation | `@tanstack/react-virtual` via `useVirtualizer` in `ProjectTimePlannerV2.jsx` |
-| Auth + profiles | Supabase (auth + `profiles` table active; planning schema exists but unused — see `docs/migration.md`) |
+| Auth + profiles | Supabase (auth, `profiles`, and all planning tables active) |
 | Styling | Tailwind CSS |
 | Icons | Lucide React |
 | Deployment | Vercel |
@@ -28,13 +28,13 @@ Pre-launch. Working through `CODE_REVIEW_April2026.md` before public launch.
 
 ### Storage modules — always use them
 
-All planning data lives in localStorage via three named modules:
+All planning data is stored in Supabase via three named modules:
 
 - `stagingStorage` — Goal page (`src/lib/stagingStorage.js`)
 - `tacticsMetricsStorage` — Plan page metrics (`src/lib/tacticsMetricsStorage.js`)
 - `plannerStorage` — System page task rows (`src/utils/planner/storage.js`)
 
-**Never call `localStorage` directly in page or component code.** The storage service prefixes keys with `user:{userId}:` when authenticated — bypassing it breaks per-user isolation.
+**Never call Supabase or `localStorage` directly in page or component code.** Always go through these modules.
 
 ### Cross-page communication — custom events only
 
@@ -53,9 +53,7 @@ Pages communicate via custom browser events. **Do not add direct imports between
 
 ### Storage key scoping
 
-Pattern: `{domain}-year-{N}-{descriptor}`. Authenticated users get an additional `user:{userId}:` prefix via storageService.
-
-All eight tactics settings are year-scoped under `tactics-year-{N}-settings`. The legacy global `tactics-page-settings` key is wiped on module load. Do not reintroduce a global tactics settings blob.
+Pattern: `{domain}-year-{N}-{descriptor}`. All eight tactics settings are year-scoped under `tactics-year-{N}-settings`. Do not reintroduce a global tactics settings blob.
 
 ### `projectNickname` as join key — do not extend
 
@@ -63,7 +61,7 @@ All eight tactics settings are year-scoped under `tactics-year-{N}-settings`. Th
 
 ### Draft year / Plan Next Year flow
 
-See `docs/year-flow.md` for the full spec. Key rule: only one draft year may exist at a time. The **Undo Draft** nav button must be removed before launch (tracked as B4 in code review).
+See `docs/year-flow.md` for the full spec. Key rule: only one draft year may exist at a time. The **Undo Draft** nav button (`NavigationBar.jsx` line 179) still needs to be removed before launch.
 
 ---
 
@@ -79,7 +77,6 @@ See `docs/year-flow.md` for the full spec. Key rule: only one draft year may exi
 
 ## Reference docs
 
-- `docs/migration.md` — Supabase migration status and schema blockers
 - `docs/known-issues.md` — bug list, dead code, do-not-touch notes
 - `docs/compliance.md` — GDPR, age requirements, RLS rules
 - `docs/year-flow.md` — draft year lifecycle and archive flow

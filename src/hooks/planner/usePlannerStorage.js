@@ -276,6 +276,18 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
   useAutoPersist(showRecurring, saveShowRecurring, autoOpts);
   useAutoPersist(showSubprojects, saveShowSubprojects, autoOpts);
   useAutoPersist(showMaxMinRows, saveShowMaxMinRows, autoOpts);
+
+  // Sync toggle changes dispatched from GearPanel
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.__eventYear !== yearNumber) return;
+      if ('showRecurring'   in e.detail) setShowRecurring(e.detail.showRecurring);
+      if ('showSubprojects' in e.detail) setShowSubprojects(e.detail.showSubprojects);
+      if ('showMaxMinRows'  in e.detail) setShowMaxMinRows(e.detail.showMaxMinRows);
+    };
+    window.addEventListener('planner-settings-update', handler);
+    return () => window.removeEventListener('planner-settings-update', handler);
+  }, [yearNumber]);
   useAutoPersist(selectedSortStatuses, saveSortStatuses, autoOpts);
   useAutoPersist(selectedSortPlannerStatuses, saveSortPlannerStatuses, autoOpts);
   useAutoPersist(taskRows, saveTaskRows, autoOpts);

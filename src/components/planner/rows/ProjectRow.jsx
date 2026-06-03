@@ -194,10 +194,14 @@ export default function ProjectRow({
             if (!mergedCellRendered) {
               mergedCellRendered = true;
 
-              // Calculate total width of columns to merge
+              // Calculate total width of columns to merge.
+              // Use getAllCells so hidden columns are found, but only add their
+              // width when they are actually visible — keeps this row's width
+              // consistent with TaskRow, which iterates getVisibleCells().
               const totalWidth = columnsToMerge.reduce((sum, colId) => {
                 const column = row.getAllCells().find(c => c.column.id === colId)?.column;
-                return sum + (column ? column.getSize() : 0);
+                if (!column || !column.getIsVisible()) return sum;
+                return sum + column.getSize();
               }, 0);
 
               // For subproject headers: chevron sits at the right edge of the merged A–D cell (left of column E).
