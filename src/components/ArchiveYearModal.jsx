@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Archive, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { useYear } from '../contexts/YearContext';
 import {
@@ -23,10 +24,16 @@ export function ArchiveYearModal({ isOpen, onClose, yearNumber }) {
       // Validate when modal opens (async since the Supabase port)
       let cancelled = false;
       (async () => {
-        const validationResult = await validateYearReadyForArchive(yearNumber);
-        if (!cancelled) {
-          setValidation(validationResult);
-          setResult(null);
+        try {
+          const validationResult = await validateYearReadyForArchive(yearNumber);
+          if (!cancelled) {
+            setValidation(validationResult);
+            setResult(null);
+          }
+        } catch (err) {
+          if (!cancelled) {
+            setValidation({ ready: false, reason: `Validation error: ${err.message}` });
+          }
         }
       })();
       return () => { cancelled = true; };
@@ -75,14 +82,14 @@ export function ArchiveYearModal({ isOpen, onClose, yearNumber }) {
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black backdrop-blur-sm"
         style={{
           backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          zIndex: 9998
+          zIndex: 1000020
         }}
         onClick={handleCancel}
       />
@@ -90,7 +97,7 @@ export function ArchiveYearModal({ isOpen, onClose, yearNumber }) {
       {/* Modal Container */}
       <div
         className="fixed inset-0 flex items-center justify-center p-4 pointer-events-none"
-        style={{ zIndex: 9999 }}
+        style={{ zIndex: 1000021 }}
       >
         {/* Modal */}
         <div className="relative bg-white rounded-lg shadow-2xl max-w-md w-full p-6 pointer-events-auto">
@@ -195,7 +202,8 @@ export function ArchiveYearModal({ isOpen, onClose, yearNumber }) {
         </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

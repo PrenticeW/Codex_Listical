@@ -204,18 +204,24 @@ export async function performYearArchive(yearNumber) {
     }
 
     // 2. Read all data from current year
-    const taskRows = readTaskRows(DEFAULT_PROJECT_ID, yearNumber);
-    const startDate = readStartDate(DEFAULT_PROJECT_ID, yearNumber);
-    const columnSizing = readColumnSizing(DEFAULT_PROJECT_ID, yearNumber);
-    const sizeScale = readSizeScale(DEFAULT_PROJECT_ID, yearNumber);
-    const showRecurring = readShowRecurring(DEFAULT_PROJECT_ID, yearNumber);
-    const showSubprojects = readShowSubprojects(DEFAULT_PROJECT_ID, yearNumber);
-    const showMaxMinRows = readShowMaxMinRows(DEFAULT_PROJECT_ID, yearNumber);
-    const sortStatuses = readSortStatuses(DEFAULT_PROJECT_ID, yearNumber);
-    const totalDays = readTotalDays(DEFAULT_PROJECT_ID, yearNumber);
-    const visibleDayColumns = readVisibleDayColumns(DEFAULT_PROJECT_ID, totalDays, yearNumber);
-    const stagingState = await loadStagingState(yearNumber);
-    const tacticsMetrics = await loadTacticsMetrics(yearNumber);
+    const [
+      taskRows, startDate, columnSizing, sizeScale,
+      showRecurring, showSubprojects, showMaxMinRows,
+      sortStatuses, totalDays, stagingState, tacticsMetrics,
+    ] = await Promise.all([
+      readTaskRows(DEFAULT_PROJECT_ID, yearNumber),
+      readStartDate(DEFAULT_PROJECT_ID, yearNumber),
+      readColumnSizing(DEFAULT_PROJECT_ID, yearNumber),
+      readSizeScale(DEFAULT_PROJECT_ID, yearNumber),
+      readShowRecurring(DEFAULT_PROJECT_ID, yearNumber),
+      readShowSubprojects(DEFAULT_PROJECT_ID, yearNumber),
+      readShowMaxMinRows(DEFAULT_PROJECT_ID, yearNumber),
+      readSortStatuses(DEFAULT_PROJECT_ID, yearNumber),
+      readTotalDays(DEFAULT_PROJECT_ID, yearNumber),
+      loadStagingState(yearNumber),
+      loadTacticsMetrics(yearNumber),
+    ]);
+    const visibleDayColumns = await readVisibleDayColumns(DEFAULT_PROJECT_ID, totalDays, yearNumber);
 
     console.log(`[Archive Year] Data loaded from Year ${yearNumber}`);
 
@@ -384,7 +390,7 @@ export async function validateYearReadyForArchive(yearNumber) {
     }
   }
 
-  const taskRows = readTaskRows(DEFAULT_PROJECT_ID, yearNumber);
+  const taskRows = await readTaskRows(DEFAULT_PROJECT_ID, yearNumber);
   const weeksCompleted = calculateWeeksCompleted(taskRows);
 
   // Optional: Check if user has completed at least some weeks

@@ -354,7 +354,7 @@ function YourYearSection() {
   const [isUndoing, setIsUndoing]       = useState(false);
   const [actionError, setActionError]   = useState(null);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
-  const { isOpen } = useGearPanel();
+  const { isOpen, close: closePanel } = useGearPanel();
 
   // Reset all button state when the panel closes so stale in-flight
   // state never bleeds into the next open cycle.
@@ -379,6 +379,7 @@ function YourYearSection() {
     const result = await createDraftYearFromActive(activeYear.yearNumber);
     if (result.success) {
       await refreshMetadata();
+      closePanel();
       navigate('/staging');
     } else {
       setActionError(result.error || 'Something went wrong.');

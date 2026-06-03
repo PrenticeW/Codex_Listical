@@ -17,6 +17,8 @@
 | Bug | Detail |
 |---|---|
 | Settings panel closes when "Undo Draft Year" is pressed | Root cause traced to a DOM-position swap race: `undoDraftYear()` fires `yearMetadataStorage` events mid-click which change `draftYear` to null, causing React to replace the "Undo Draft Year" button with "Plan next year" at the same screen coordinates before the click is processed. The browser fires `click` on the newly-appeared button, triggering `handlePlanNextYear → close()`. Attempted fixes (pinning the button with `isUndoing`, calling `open()` after success) did not fully resolve it. Deeper fix likely requires either debouncing the metadata event dispatch inside `undoDraftYear` or decoupling `GearPanel` from the `YearProvider` re-render cycle. |
+| **Revert Archive does not work — must fix before testing archive in production** | After archiving Year N and promoting the draft to active, the "Revert Archive" nav button silently fails. Root cause not yet confirmed; error feedback added to `handleRevertArchive` in all three pages so the alert will now surface the actual Supabase error on next test. Do not ship the archive flow to production until revert is verified working. |
+| Projects do not carry over into the next year's Goal page | When "Plan Next Year" runs, `createDraftYearFromActive` resets each staging item via `resetItemForDraft` — this preserves identity and subprojects but does carry the shortlisted projects across to the draft year. The shortlist is copied at `draftStagingState.shortlist = (stagingState.shortlist || []).map(resetItemForDraft)`. Investigate whether the Goal page is reading stale data after year switch, or whether `saveStagingState` for the draft year is failing silently. |
 
 ---
 

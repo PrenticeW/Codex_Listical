@@ -114,6 +114,9 @@ export default function StagingPageV2() {
     const result = await revertArchive();
     if (result.success) {
       refreshMetadata();
+    } else {
+      // eslint-disable-next-line no-alert
+      alert(`Could not revert archive: ${result.error}`);
     }
   }, [refreshMetadata]);
 
