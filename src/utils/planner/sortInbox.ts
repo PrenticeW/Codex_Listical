@@ -16,6 +16,8 @@ export const SORT_INBOX_TARGET_MAP: Record<string, 'general' | 'unscheduled'> = 
   'Blocked': 'unscheduled',
   'On Hold': 'unscheduled',
   'Skipped': 'unscheduled',
+  'Accounted': 'general',
+  'Special': 'general',
 };
 
 /**

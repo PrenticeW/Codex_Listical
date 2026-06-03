@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, X, AlertTriangle, Loader2 } from 'lucide-react';
 import { requestAccountDeletion } from '../lib/api/accountDeletion';
@@ -66,9 +67,10 @@ export function DeleteAccountModal({ isOpen, onClose }) {
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      style={{ zIndex: 1000022 }}
       onClick={isLoading ? undefined : onClose}
     >
       <div
@@ -184,6 +186,7 @@ export function DeleteAccountModal({ isOpen, onClose }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

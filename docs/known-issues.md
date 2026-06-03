@@ -12,6 +12,15 @@
 
 ---
 
+## Needs testing before launch
+
+| Item | Detail |
+|---|---|
+| GearPanel logout | Calls `logout()` from AuthContext then navigates to `/login`. Needs end-to-end test to confirm session is fully cleared and redirect lands correctly. |
+| GearPanel delete account | Now opens `DeleteAccountModal` directly from the panel (previously navigated to `/settings`). Test the full flow: password entry, success redirect to `/account-deleted`, and error states (wrong password, too many attempts). |
+
+---
+
 ## Open bugs
 
 | Bug | Detail |

@@ -734,10 +734,11 @@ export default function TacticsPage() {
       if ('incrementMinutes' in e.detail) setIncrementMinutes(e.detail.incrementMinutes);
       if ('use24Hour'        in e.detail) setUse24Hour(e.detail.use24Hour);
       if ('showAmPm'         in e.detail) setShowAmPm(e.detail.showAmPm);
+      if ('startDay'         in e.detail) handleStartDayChange(e.detail.startDay);
     };
     window.addEventListener(GEAR_TACTICS_SETTINGS_EVENT, handler);
     return () => window.removeEventListener(GEAR_TACTICS_SETTINGS_EVENT, handler);
-  }, [currentYear]);
+  }, [currentYear, handleStartDayChange]);
 
   const [tableRect, setTableRect] = useState(null);
   useEffect(() => {

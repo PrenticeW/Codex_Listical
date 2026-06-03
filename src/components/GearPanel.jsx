@@ -20,11 +20,13 @@ import { loadSiteSnapshots, restoreSiteSnapshot } from '../lib/snapshotStorage';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import { ArchiveYearModal } from './ArchiveYearModal';
+import { DeleteAccountModal } from './DeleteAccountModal';
 import {
   peekPlannerCache,
   readShowRecurring,
   readShowSubprojects,
   readShowMaxMinRows,
+  saveStartDate,
 } from '../utils/planner/storage';
 import {
   peekTacticsCache,
@@ -347,7 +349,7 @@ function TimeCarousel({ value, onChange, incrementMinutes = 60 }) {
 // ─── Sections ─────────────────────────────────────────────────────────────────
 
 function YourYearSection() {
-  const { activeYear, draftYear, refreshMetadata } = useYear();
+  const { activeYear, draftYear, refreshMetadata, currentYear, currentYearInfo, allYears, switchToYear } = useYear();
   const navigate = useNavigate();
 
   const [isCreating, setIsCreating]     = useState(false);
@@ -365,6 +367,8 @@ function YourYearSection() {
       setIsUndoing(false);
       setActionError(null);
       setShowArchiveModal(false);
+      setPendingDate(dateVal);
+      setIsSavingDate(false);
     }
   }, [isOpen]);
 
@@ -415,7 +419,41 @@ function YourYearSection() {
   };
 
   const dateInputRef = useRef(null);
-  const [dateVal, setDateVal] = useState('2026-04-24'); // TODO: wire to yearMetadataStorage
+  // Derive saved date from YearContext; fall back to today if metadata hasn't loaded yet
+  const dateVal = currentYearInfo?.startDate ?? new Date().toISOString().split('T')[0];
+
+  // Pending state — tracks what the user has picked but not yet confirmed
+  const [pendingDate, setPendingDate] = useState(dateVal);
+  const [isSavingDate, setIsSavingDate] = useState(false);
+  const isDateDirty = pendingDate !== dateVal;
+
+  // Keep pending in sync when the saved date changes (e.g. year switch)
+  useEffect(() => {
+    setPendingDate(dateVal);
+  }, [dateVal]);
+
+  const handleConfirmDate = async () => {
+    if (!isDateDirty || isSavingDate) return;
+    setIsSavingDate(true);
+
+    // Derive the day of week from the new date (UTC to avoid timezone offset issues)
+    const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const [y, mo, d] = pendingDate.split('-');
+    const startDay = DAYS[new Date(Date.UTC(+y, +mo - 1, +d)).getUTCDay()];
+
+    // Persist start date to years table + notify System page live
+    await saveStartDate(pendingDate, undefined, currentYear);
+
+    // Persist startDay into tactics settings + notify Plan page live
+    const existingSettings = peekTacticsCache(currentYear).yearSettings ?? {};
+    saveTacticsYearSettings({ ...existingSettings, startDay }, currentYear);
+    window.dispatchEvent(new CustomEvent(GEAR_TACTICS_SETTINGS_EVENT, {
+      detail: { startDay, __eventYear: currentYear },
+    }));
+
+    await refreshMetadata();
+    setIsSavingDate(false);
+  };
 
   const blockStyle = {
     background: C.bgBlock, border: `1px solid ${C.border}`,
@@ -428,11 +466,12 @@ function YourYearSection() {
     <div style={SECTION}>
       <SectionLabel>Your Year</SectionLabel>
 
-      {/* Viewing year selector — TODO: wire to YearContext */}
+      {/* Viewing year selector — WIRED to YearContext */}
       <div style={blockStyle}>
         <div style={metaStyle}>Viewing</div>
         <select
-          defaultValue="1"
+          value={currentYear}
+          onChange={e => switchToYear(Number(e.target.value))}
           style={{
             appearance: 'none', WebkitAppearance: 'none', background: 'transparent',
             border: 'none', fontSize: 14, fontWeight: 500, color: C.text,
@@ -441,26 +480,51 @@ function YourYearSection() {
             backgroundRepeat: 'no-repeat', backgroundPosition: 'right 2px center',
           }}
         >
-          <option value="1">Year 1 (Active)</option>
-          {/* TODO: render available years from YearContext */}
+          {allYears.map(y => {
+            const label = y.status === 'active' ? 'Active' : y.status === 'draft' ? 'Draft' : 'Archived';
+            return (
+              <option key={y.yearNumber} value={y.yearNumber}>
+                Year {y.yearNumber} ({label})
+              </option>
+            );
+          })}
         </select>
       </div>
 
-      {/* Cycle start date — TODO: wire to yearMetadataStorage */}
+      {/* Cycle start date — WIRED */}
       <label
         style={{ ...blockStyle, cursor: 'pointer', display: 'block' }}
         onClick={() => dateInputRef.current?.showPicker?.()}
       >
         <div style={metaStyle}>Cycle start</div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={valueStyle}>{formatDate(dateVal)}</span>
+          <span style={{ ...valueStyle, color: isDateDirty ? C.green : C.text }}>
+            {formatDate(pendingDate)}
+          </span>
           <input
             ref={dateInputRef}
             type="date"
-            value={dateVal}
-            onChange={e => setDateVal(e.target.value)}
+            value={pendingDate}
+            onChange={e => setPendingDate(e.target.value)}
             style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
           />
+          {isDateDirty && (
+            <button
+              onClick={e => { e.preventDefault(); e.stopPropagation(); handleConfirmDate(); }}
+              disabled={isSavingDate}
+              style={{
+                height: 24, padding: '0 10px',
+                background: isSavingDate ? C.textLight : C.greenDark,
+                border: 'none', borderRadius: 6,
+                fontSize: 11, fontWeight: 500, color: '#fff',
+                cursor: isSavingDate ? 'default' : 'pointer', flexShrink: 0,
+              }}
+              onMouseEnter={e => { if (!isSavingDate) e.currentTarget.style.background = C.green; }}
+              onMouseLeave={e => { if (!isSavingDate) e.currentTarget.style.background = C.greenDark; }}
+            >
+              {isSavingDate ? 'Saving…' : 'Set'}
+            </button>
+          )}
         </div>
       </label>
 
@@ -717,10 +781,9 @@ function PlanSettingsSection() {
 }
 
 function AccountSection({ onClose }) {
-  // WIRED: user email, logout
-  // TODO: delete account — currently navigates to /settings (existing AccountSettingsPage)
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const handleLogout = async () => {
     onClose();
@@ -729,8 +792,7 @@ function AccountSection({ onClose }) {
   };
 
   const handleDeleteAccount = () => {
-    onClose();
-    navigate('/settings');
+    setIsDeleteModalOpen(true);
   };
 
   const baseBtn = {
@@ -769,6 +831,11 @@ function AccountSection({ onClose }) {
           Delete account
         </button>
       </div>
+
+      <DeleteAccountModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+      />
     </div>
   );
 }

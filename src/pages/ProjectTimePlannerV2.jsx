@@ -14,6 +14,8 @@ import usePlannerColumns from '../hooks/planner/usePlannerColumns';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
 import { TACTICS_SEND_TO_SYSTEM_EVENT, getSendToSystemTimestamp, loadSentChipsSnapshot, loadTacticsYearSettings } from '../lib/tacticsStorage';
+import { SYSTEM_PANEL_ACTION_EVENT, SYSTEM_PANEL_SELECTION_EVENT, SYSTEM_PANEL_SCALE_EVENT } from '../components/SystemPanel';
+import { useSystemPanel } from '../contexts/SystemPanelContext';
 import { loadSentMetricsSnapshot, peekTacticsMetricsCache } from '../lib/tacticsMetricsStorage';
 import { peekTacticsCache } from '../lib/tacticsStorage';
 import { peekStagingCache } from '../lib/stagingStorage';
@@ -376,7 +378,8 @@ export default function ProjectTimePlannerV2() {
   } = usePlannerStorage({ yearNumber: currentYear });
 
   // Page-specific size setting
-  const { sizeScale } = usePageSize('system');
+  const { sizeScale, increaseSize, decreaseSize } = usePageSize('system');
+  const { isOpen: isSystemPanelOpen } = useSystemPanel();
 
   // Initialise data from cached taskRows when available, otherwise a blank
   // skeleton. On a sync cache hit (the common case after the first visit)
@@ -463,6 +466,8 @@ export default function ProjectTimePlannerV2() {
   const [isDragging, setIsDragging] = useState(false); // Track if user is dragging to select
   const [dragStartCell, setDragStartCell] = useState(null); // { rowId, columnId }
   const tableBodyRef = useRef(null);
+  // Set to true by the panel archive action so the post-archive effect expands + scrolls
+  const expandNextArchiveRef = useRef(false);
   // Always-current mirror of visibleDayColumns used inside the min/max effect and
   // event handler. A ref (not dep-array value) so reading it never triggers rerenders.
   const latestVisibleDayColumnsRef = useRef(null);
@@ -2312,6 +2317,156 @@ export default function ProjectTimePlannerV2() {
     executeCommand(command);
   }, [selectedRows, data, totalDays, executeCommand]);
 
+  // Insert N label (subprojectGeneral) rows — used by SystemPanel
+  const addLabelsWithCount = useCallback((count) => {
+    // Determine insertion position and project context from selected row
+    let insertIndex = data.length;
+    let projectGroupId = null;
+    let projectNickname = null;
+    let fullProjectName = null;
+
+    if (selectedRows.size > 0) {
+      const selectedRowIds = Array.from(selectedRows);
+      const selectedIndices = selectedRowIds
+        .map(rowId => data.findIndex(r => r.id === rowId))
+        .filter(idx => idx !== -1)
+        .sort((a, b) => b - a);
+
+      if (selectedIndices.length > 0) {
+        insertIndex = selectedIndices[0] + 1;
+        const selectedRow = data[selectedIndices[selectedIndices.length - 1]]; // first selected row
+        if (selectedRow._rowType === 'projectHeader') {
+          projectGroupId = selectedRow.groupId;
+          projectNickname = selectedRow.projectNickname;
+          fullProjectName = selectedRow.projectName;
+        } else if (selectedRow.parentGroupId) {
+          projectGroupId = selectedRow.parentGroupId;
+          projectNickname = selectedRow.parentGroupId.replace('project-', '');
+          const projectHeader = data.find(r => r.groupId === projectGroupId && r._rowType === 'projectHeader');
+          fullProjectName = projectHeader?.projectName || projectNickname;
+        }
+      }
+    }
+
+    const newRows = Array.from({ length: count }, (_, i) => ({
+      id: `subproject-${Date.now()}-${i}`,
+      _rowType: 'subprojectGeneral',
+      parentGroupId: projectGroupId,
+      projectNickname: projectNickname || '',
+      projectName: fullProjectName || '',
+      subprojectLabel: 'New',
+      rowNum: '',
+      checkbox: '',
+      project: '',
+      subproject: '',
+      status: '',
+      task: '',
+      recurring: '',
+      estimate: '',
+      timeValue: '',
+      ...createEmptyDayColumns(totalDays),
+    }));
+
+    const command = {
+      execute: () => {
+        setData(prev => {
+          const newData = [...prev];
+          newData.splice(insertIndex, 0, ...newRows);
+          return newData;
+        });
+      },
+      undo: () => {
+        setData(prev => {
+          const newData = [...prev];
+          newData.splice(insertIndex, count);
+          return newData;
+        });
+      },
+    };
+
+    executeCommand(command);
+    setSelectedRows(new Set(newRows.map(r => r.id)));
+  }, [selectedRows, data, totalDays, executeCommand, setSelectedRows]);
+
+  // Duplicate all currently selected rows, inserting copies after the last selected row
+  const duplicateSelectedRows = useCallback(() => {
+    if (selectedRows.size === 0) return;
+
+    // Get selected rows sorted by their position in data
+    const selectedEntries = Array.from(selectedRows)
+      .map(rowId => ({ rowId, index: data.findIndex(r => r.id === rowId) }))
+      .filter(e => e.index !== -1)
+      .sort((a, b) => a.index - b.index);
+
+    if (selectedEntries.length === 0) return;
+
+    const SKIP_TYPES = new Set([
+      '_isMonthRow', '_isWeekRow', '_isDayRow', '_isDayOfWeekRow',
+      '_isDailyMinRow', '_isDailyMaxRow', '_isFilterRow', '_isInboxRow', '_isArchiveRow',
+    ]);
+
+    const duplicatedRows = selectedEntries
+      .map(({ index }) => {
+        const row = data[index];
+        // Skip structural rows
+        if (Object.keys(row).some(k => SKIP_TYPES.has(k) && row[k]) || row._rowType === 'archiveHeader') return null;
+
+        const nameField =
+          row._rowType === 'projectHeader' ? 'projectName' :
+          row._rowType === 'subprojectHeader' ? 'subprojectName' :
+          (row._rowType === 'subprojectGeneral' || row._rowType === 'subprojectUnscheduled') ? 'subprojectLabel' :
+          (row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled') ? 'sectionLabel' :
+          'task';
+
+        const fallbackLabel =
+          row._rowType === 'projectGeneral' || row._rowType === 'subprojectGeneral' ? 'General' :
+          row._rowType === 'projectUnscheduled' || row._rowType === 'subprojectUnscheduled' ? 'Unscheduled' : '';
+
+        const currentName = row[nameField] || fallbackLabel;
+        const trailingNumber = currentName.match(/\s(\d+)$/);
+        const nextName = trailingNumber
+          ? `${currentName.slice(0, -trailingNumber[0].length)} ${parseInt(trailingNumber[1], 10) + 1}`
+          : `${currentName} 1`.trimStart();
+
+        return {
+          ...row,
+          id: `row-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+          _chipId: undefined,
+          groupId: row._rowType === 'subprojectHeader'
+            ? `group-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+            : row.groupId,
+          [nameField]: nextName,
+        };
+      })
+      .filter(Boolean);
+
+    if (duplicatedRows.length === 0) return;
+
+    // Insert after the last selected row
+    const insertIndex = selectedEntries[selectedEntries.length - 1].index + 1;
+    const count = duplicatedRows.length;
+
+    const command = {
+      execute: () => {
+        setData(prev => {
+          const newData = [...prev];
+          newData.splice(insertIndex, 0, ...duplicatedRows);
+          return newData;
+        });
+      },
+      undo: () => {
+        setData(prev => {
+          const newData = [...prev];
+          newData.splice(insertIndex, count);
+          return newData;
+        });
+      },
+    };
+
+    executeCommand(command);
+    setSelectedRows(new Set(duplicatedRows.map(r => r.id)));
+  }, [selectedRows, data, executeCommand, setSelectedRows]);
+
   const handleDuplicateRow = useCallback(() => {
     setIsListicalMenuOpen(false);
 
@@ -2398,6 +2553,22 @@ export default function ProjectTimePlannerV2() {
     setTotalDays(prev => prev + 7);
   }, [setTotalDays]);
 
+  const addWeeksWithCount = useCallback((count) => {
+    setTotalDays(prev => prev + 7 * count);
+    // Scroll to reveal the newly added week after the DOM updates
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (tableBodyRef.current) {
+          tableBodyRef.current.scrollTo({ left: tableBodyRef.current.scrollWidth, behavior: 'smooth' });
+        }
+      });
+    });
+  }, [setTotalDays, tableBodyRef]);
+
+  const removeWeek = useCallback(() => {
+    setTotalDays(prev => Math.max(7, prev - 7));
+  }, [setTotalDays]);
+
   // Add tasks logic (separated from UI)
   const addTasksWithCount = useCallback((count) => {
     // Determine insertion position
@@ -2443,7 +2614,81 @@ export default function ProjectTimePlannerV2() {
     };
 
     executeCommand(command);
-  }, [selectedRows, contextMenu.rowId, data, totalDays, executeCommand]);
+    setSelectedRows(new Set(newRows.map(r => r.id)));
+  }, [selectedRows, contextMenu.rowId, data, totalDays, executeCommand, setSelectedRows]);
+
+  // System panel action events
+  useEffect(() => {
+    const handler = (e) => {
+      const { action, count } = e.detail ?? {};
+      if (action === 'removeWeek') { removeWeek(); return; }
+      if (action === 'duplicateRow') { duplicateSelectedRows(); return; }
+      if (action === 'hideWeek') { handleHideWeek(); return; }
+      if (action === 'showWeek') { handleShowWeek(); return; }
+      if (action === 'archiveWeek') { expandNextArchiveRef.current = true; handleArchiveWeek(); return; }
+      if (action === 'undo') { undo(); return; }
+      if (action === 'redo') { redo(); return; }
+      if (action === 'zoomIn') { increaseSize(); return; }
+      if (action === 'zoomOut') { decreaseSize(); return; }
+      if (action === 'sortInbox' && e.detail.statuses?.length > 0) {
+        const command = createSortInboxCommand({
+          data,
+          selectedSortStatuses: new Set(e.detail.statuses),
+          setData,
+        });
+        if (command) executeCommand(command);
+        return;
+      }
+      if (!count || count < 1) return;
+      if (action === 'insertTasks') addTasksWithCount(count);
+      if (action === 'insertLabels') addLabelsWithCount(count);
+      if (action === 'addWeeks') addWeeksWithCount(count);
+    };
+    window.addEventListener(SYSTEM_PANEL_ACTION_EVENT, handler);
+    return () => window.removeEventListener(SYSTEM_PANEL_ACTION_EVENT, handler);
+  }, [addTasksWithCount, addLabelsWithCount, addWeeksWithCount, removeWeek, duplicateSelectedRows, handleHideWeek, handleShowWeek, handleArchiveWeek, undo, redo, increaseSize, decreaseSize, data, setData, executeCommand]);
+
+  // After a panel-triggered archive, expand the archive row, collapse its project
+  // headers, then scroll to the bottom
+  useEffect(() => {
+    if (!expandNextArchiveRef.current) return;
+    const latestArchive = [...data].reverse().find(r => r.archiveWeekLabel);
+    if (!latestArchive) return;
+    expandNextArchiveRef.current = false;
+
+    // Find the groupIds of all archivedProjectHeader rows inside this archive week
+    const archivedProjectGroupIds = data
+      .filter(r => r._rowType === 'archivedProjectHeader' && r.parentGroupId === latestArchive.id)
+      .map(r => r.groupId)
+      .filter(Boolean);
+
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      next.delete(latestArchive.id);                    // expand the archive week
+      archivedProjectGroupIds.forEach(id => next.add(id)); // collapse project headers inside
+      return next;
+    });
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (tableBodyRef.current) {
+          tableBodyRef.current.scrollTo({ top: tableBodyRef.current.scrollHeight, behavior: 'smooth' });
+        }
+      });
+    });
+  }, [data, setCollapsedGroups]);
+
+  // Broadcast row selection state to SystemPanel
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_SELECTION_EVENT, {
+      detail: { hasSelection: selectedRows.size > 0 },
+    }));
+  }, [selectedRows]);
+
+  // Broadcast page scale to SystemPanel
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_SCALE_EVENT, { detail: { scale: sizeScale } }));
+  }, [sizeScale]);
 
   // Context menu action handlers
   const handleContextMenuAddTasks = useCallback(() => {
@@ -2643,7 +2888,7 @@ export default function ProjectTimePlannerV2() {
         </div>
       )}
 
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-4 pb-4">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-4 pb-4" style={{ paddingRight: isSystemPanelOpen ? 336 : undefined }}>
         <PlannerTable
           tableBodyRef={tableBodyRef}
         timelineHeaderRows={timelineHeaderRows}

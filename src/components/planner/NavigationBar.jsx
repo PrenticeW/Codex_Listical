@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Settings, RotateCcw, Undo2 } from 'lucide-react';
+import { LogOut, Settings, RotateCcw } from 'lucide-react';
 import YearSelector from '../YearSelector';
 import { useAuth } from '../../contexts/AuthContext';
 import { useYear } from '../../contexts/YearContext';
 import { useGearPanel } from '../../contexts/GearPanelContext';
+import { useSystemPanel } from '../../contexts/SystemPanelContext';
 
 // Map routes to page identifiers and display names
 const PAGE_CONFIG = {
@@ -24,7 +25,6 @@ export default function NavigationBar({
   yearSelector = null,
   actionButton = null,
   onUndoDraft = null,
-  onRevertArchive = null,
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,6 +38,8 @@ export default function NavigationBar({
   }, [currentPath]);
 
   const { toggle: toggleGearPanel } = useGearPanel();
+  const { isOpen: systemPanelOpen, toggle: toggleSystemPanel } = useSystemPanel();
+  const isSystemPage = currentPath === '/';
 
   const navItems = [
     { label: 'Goal', path: '/staging' },
@@ -136,20 +138,22 @@ export default function NavigationBar({
           </button>
         )}
 
-        {/* Dev revert archive button — remove before launch */}
-        {onRevertArchive && (
+{yearSelector || <YearSelector />}
+        {user && isSystemPage && (
           <button
-            type="button"
-            onClick={onRevertArchive}
-            className="px-3 py-2 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-300 rounded-lg hover:bg-amber-100 transition-all duration-200 flex items-center gap-1.5"
-            title="Revert last archive — demote active back to draft, un-archive previous year (dev only)"
+            onClick={toggleSystemPanel}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center gap-2 ${
+              systemPanelOpen
+                ? 'bg-slate-900 text-white'
+                : 'text-slate-600 bg-transparent hover:bg-slate-100 hover:text-slate-900'
+            }`}
+            title="System actions"
           >
-            <Undo2 className="w-3.5 h-3.5" />
-            Revert Archive
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <path d="M2 4h11M2 7.5h11M2 11h11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
           </button>
         )}
-
-        {yearSelector || <YearSelector />}
         {user && (
           <>
             <button
