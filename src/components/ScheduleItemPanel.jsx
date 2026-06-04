@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useLayoutEffect } from 'react';
+import React, { useMemo, useRef, useState, useLayoutEffect, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { parseEstimateLabelToMinutes } from '../utils/staging/planTableHelpers';
 
@@ -59,6 +59,24 @@ export default function ScheduleItemPanel({
   onDragStart,
   onClose,
 }) {
+  const [navBottom, setNavBottom] = useState(0);
+
+  useEffect(() => {
+    const measure = () => {
+      const el = document.querySelector('[data-nav]');
+      if (el) setNavBottom(el.getBoundingClientRect().bottom);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    const ro = new ResizeObserver(measure);
+    const el = document.querySelector('[data-nav]');
+    if (el) ro.observe(el);
+    return () => {
+      window.removeEventListener('resize', measure);
+      ro.disconnect();
+    };
+  }, []);
+
   const incrementRowHeightPx = useMemo(() => {
     if (!rowMetrics) return DEFAULT_ROW_HEIGHT_PX;
     for (let h = 0; h < 24; h++) {
@@ -105,8 +123,8 @@ export default function ScheduleItemPanel({
 
   const panel = (
     <div
-      className="fixed top-0 right-0 h-full z-60 flex flex-col bg-[#f8fafc] border-l border-[#94a3b8] shadow-2xl"
-      style={{ width: '260px' }}
+      className="flex flex-col bg-[#f8fafc] border-l border-[#94a3b8] shadow-2xl"
+      style={{ position: 'fixed', right: 0, top: navBottom, bottom: 0, width: '320px', zIndex: 99990 }}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-[#e5e7eb] shrink-0 bg-white">

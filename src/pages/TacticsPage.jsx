@@ -15,7 +15,6 @@ import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import { revertArchive } from '../utils/planner/revertArchive';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { ArchiveYearModal } from '../components/ArchiveYearModal';
-import YearSelector from '../components/YearSelector';
 import { loadStagingState, STAGING_STORAGE_EVENT, STAGING_STORAGE_KEY } from '../lib/stagingStorage';
 import { SECTION_CONFIG } from '../utils/staging/sectionConfig';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm, buildProjectPlanSummary } from '../utils/staging/planTableHelpers';
@@ -40,7 +39,8 @@ import { buildScheduleLayout } from '../ScheduleChips';
 import usePageSize from '../hooks/usePageSize';
 import ColourPicker from '../components/ColourPicker';
 import ScheduleItemPanel from '../components/ScheduleItemPanel';
-import { Pencil, CalendarPlus, Archive } from 'lucide-react';
+import { Pencil } from 'lucide-react';
+import { PLAN_PANEL_ACTION_EVENT, PLAN_PANEL_STATE_EVENT } from '../components/PlanPanel';
 import { getContrastTextColor } from '../utils/colorUtils';
 
 const DAYS_OF_WEEK = [
@@ -3124,30 +3124,6 @@ export default function TacticsPage() {
     hasInitializedScheduleChips.current = true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const resetChips = useCallback((forIncrement) => {
-    const baseChips = buildInitialSleepBlocks(displayedWeekDays);
-    setProjectChips(baseChips);
-    hasInitializedScheduleChips.current = true;
-    setSelectedBlockId(null);
-    setSelectedCell(null);
-    setCellMenu(null);
-  }, [displayedWeekDays]);
-
-  const handleClearAllChips = useCallback(() => {
-    if (typeof window !== 'undefined') {
-      const confirmed = window.confirm(
-        'Clear all chips? This will reset to default sleep blocks. Custom projects will stay in the dropdown.'
-      );
-      if (!confirmed) return;
-    }
-    const baseChips = buildInitialSleepBlocks(displayedWeekDays);
-    setProjectChips(baseChips);
-    hasInitializedScheduleChips.current = true;
-    setSelectedBlockId(null);
-    setSelectedCell(null);
-    setCellMenu(null);
-  }, [displayedWeekDays]);
-
   // Keyboard shortcuts: Cmd/Ctrl+Z to undo, Cmd/Ctrl+Shift+Z to redo
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -3166,6 +3142,26 @@ export default function TacticsPage() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
+
+  // Broadcast undo/redo availability to PlanPanel whenever stacks change
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(PLAN_PANEL_STATE_EVENT, {
+      detail: {
+        undoAvailable: undoStack.length > 0,
+        redoAvailable: redoStack.length > 0,
+      },
+    }));
+  }, [undoStack.length, redoStack.length]);
+
+  // Listen for actions fired by PlanPanel
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.action === 'undo') undo();
+      else if (e.detail?.action === 'redo') redo();
+    };
+    window.addEventListener(PLAN_PANEL_ACTION_EVENT, handler);
+    return () => window.removeEventListener(PLAN_PANEL_ACTION_EVENT, handler);
   }, [undo, redo]);
 
   // Keyboard shortcut: Delete/Backspace to remove the selected chip
@@ -4201,33 +4197,7 @@ export default function TacticsPage() {
         <div ref={navBarRef} className="sticky top-0 z-20 bg-gray-100 px-4 pt-4 pb-4">
         <NavigationBar
           listicalButton={
-            <ListicalMenu
-              incrementMinutes={incrementMinutes}
-              onIncrementChange={setIncrementMinutes}
-              onResetChips={resetChips}
-              onClearAllChips={handleClearAllChips}
-              startDay={startDay}
-              onStartDayChange={handleStartDayChange}
-              startHour={startHour}
-              onStartHourChange={setStartHour}
-              startMinute={startMinute}
-              onStartMinuteChange={setStartMinute}
-              hourOptions={hourOptions}
-              minuteOptions={minuteOptions}
-              showAmPm={showAmPm}
-              onShowAmPmChange={setShowAmPm}
-              use24Hour={use24Hour}
-              onUse24HourChange={setUse24Hour}
-              undoStack={undoStack}
-              redoStack={redoStack}
-              undo={undo}
-              redo={redo}
-              isCurrentYearArchived={isCurrentYearArchived}
-              draftYear={draftYear}
-              activeYear={activeYear}
-              onPlanNextYear={handlePlanNextYear}
-              onOpenArchiveModal={() => setIsArchiveModalOpen(true)}
-            />
+            <span className="font-serif text-sm font-medium text-slate-900 select-none">Listical</span>
           }
           actionButton={
             <button
@@ -5041,325 +5011,3 @@ export default function TacticsPage() {
   );
 }
 
-
-function ListicalMenu({
-  incrementMinutes,
-  onIncrementChange,
-  onResetChips,
-  onClearAllChips,
-  startDay,
-  onStartDayChange,
-  startHour,
-  onStartHourChange,
-  startMinute,
-  onStartMinuteChange,
-  hourOptions,
-  minuteOptions,
-  showAmPm,
-  onShowAmPmChange,
-  use24Hour,
-  onUse24HourChange,
-  undoStack,
-  redoStack,
-  undo,
-  redo,
-  isCurrentYearArchived,
-  draftYear,
-  activeYear,
-  onPlanNextYear,
-  onOpenArchiveModal,
-}) {
-  const [open, setOpen] = useState(false);
-  const buttonRef = useRef(null);
-  const menuRef = useRef(null);
-  const [menuStyle, setMenuStyle] = useState({});
-  const [pendingIncrement, setPendingIncrement] = useState(null);
-
-  const tryClose = () => {
-    if (pendingIncrement === null) setOpen(false);
-  };
-
-  useEffect(() => {
-    if (!open) {
-      setMenuStyle({});
-      return undefined;
-    }
-
-    const updatePosition = () => {
-      if (buttonRef.current) {
-        const rect = buttonRef.current.getBoundingClientRect();
-        const calculatedLeft = Math.max(16, rect.left);
-        setMenuStyle({
-          width: '360px',
-          top: rect.bottom + 8,
-          left: calculatedLeft,
-        });
-      }
-    };
-
-    updatePosition();
-    const timer = setTimeout(updatePosition, 10);
-
-    const handleClickOutside = (event) => {
-      if (menuRef.current?.contains(event.target)) return;
-      if (buttonRef.current?.contains(event.target)) return;
-      tryClose();
-    };
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        tryClose();
-      }
-    };
-    window.addEventListener('mousedown', handleClickOutside, true);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('mousedown', handleClickOutside, true);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open, pendingIncrement]);
-
-  const handleBedTimeChange = (event) => {
-    onStartHourChange(event.target.value);
-  };
-
-  const handleIncrementChange = (event) => {
-    const next = parseInt(event.target.value, 10) || 60;
-    if (next !== incrementMinutes) {
-      setPendingIncrement(next);
-    }
-  };
-
-  const confirmIncrementChange = () => {
-    onIncrementChange(pendingIncrement);
-    onResetChips(pendingIncrement);
-    setPendingIncrement(null);
-  };
-
-  const cancelIncrementChange = () => {
-    setPendingIncrement(null);
-  };
-
-  return (
-    <div>
-      <button
-        type="button"
-        ref={buttonRef}
-        className="inline-flex items-center gap-2 rounded border border-[#ced3d0] bg-white px-3 py-2 font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6] hover:shadow-md"
-        onClick={() => { if (open) { tryClose(); } else { setOpen(true); } }}
-        aria-expanded={open}
-      >
-        <span>Listical</span>
-      </button>
-      {open && createPortal(
-        <div
-          ref={menuRef}
-          className="fixed rounded-lg border border-[#94a3b8] p-4 shadow-2xl"
-          style={{ ...menuStyle, backgroundColor: 'rgba(255, 255, 255, 0.97)', zIndex: 999999 }}
-        >
-          {/* Schedule section */}
-          <div className="flex flex-col" style={{ gap: '10px' }}>
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Schedule</span>
-            {/* Start Day pills */}
-            <div className="flex flex-col" style={{ gap: '4px' }}>
-              <span className="text-xs font-semibold text-slate-700">Start Day</span>
-              <div className="flex flex-wrap" style={{ gap: '4px' }}>
-                {DAYS_OF_WEEK.map((day) => (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => onStartDayChange(day)}
-                    className={`rounded px-2 py-1 text-[11px] font-semibold transition ${
-                      startDay === day
-                        ? 'bg-[#065f46] text-white border border-[#065f46]'
-                        : 'bg-white text-slate-700 border border-[#ced3d0] hover:bg-[#f2fdf6]'
-                    }`}
-                  >
-                    {day.slice(0, 3)}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* Bed Time / Rise Time */}
-            <div className="flex" style={{ gap: '12px' }}>
-              <div className="flex flex-col flex-1" style={{ gap: '4px' }}>
-                <label htmlFor="bed-time-select" className="text-xs font-semibold text-slate-700">
-                  Bed Time
-                </label>
-                <select
-                  id="bed-time-select"
-                  className="rounded border border-[#ced3d0] bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
-                  value={startHour}
-                  onChange={handleBedTimeChange}
-                >
-                  <option value="">—</option>
-                  {hourOptions.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-col flex-1" style={{ gap: '4px' }}>
-                <label htmlFor="rise-time-select" className="text-xs font-semibold text-slate-700">
-                  Rise Time
-                </label>
-                <select
-                  id="rise-time-select"
-                  className="rounded border border-[#ced3d0] bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
-                  value={startMinute}
-                  onChange={(e) => onStartMinuteChange(e.target.value)}
-                  disabled={!startHour}
-                >
-                  <option value="">—</option>
-                  {minuteOptions.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Increment */}
-          <div className="mt-3 pt-3 border-t border-[#e2e8f0] flex items-center" style={{ gap: '10px' }}>
-            <label
-              className="text-xs font-semibold text-slate-700 whitespace-nowrap"
-              htmlFor="increment-select"
-            >
-              Increment
-            </label>
-            <select
-              id="increment-select"
-              className="flex-1 rounded border border-[#ced3d0] bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
-              value={pendingIncrement ?? incrementMinutes}
-              onChange={handleIncrementChange}
-            >
-              <option value={15}>15 minutes</option>
-              <option value={30}>30 minutes</option>
-              <option value={60}>1 hour</option>
-            </select>
-          </div>
-
-          {/* Increment change confirmation */}
-          {pendingIncrement !== null && (
-            <div className="mt-3 pt-3 border-t border-[#e2e8f0]">
-              <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-300 rounded px-3 py-2 mb-2">
-                Changing the increment will clear all placed chips. This cannot be undone.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={confirmIncrementChange}
-                  className="flex-1 px-3 py-1.5 rounded text-[12px] font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors"
-                >
-                  Confirm
-                </button>
-                <button
-                  type="button"
-                  onClick={cancelIncrementChange}
-                  className="flex-1 px-3 py-1.5 rounded text-[12px] font-semibold bg-white text-slate-700 border border-[#ced3d0] hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Clock format */}
-          <div className="mt-3 pt-3 border-t border-[#e2e8f0] flex flex-col" style={{ gap: '6px' }}>
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Clock Format</span>
-            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={showAmPm}
-                onChange={(e) => onShowAmPmChange(e.target.checked)}
-                disabled={use24Hour}
-              />
-              Show AM / PM
-            </label>
-            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={use24Hour}
-                onChange={(e) => onUse24HourChange(e.target.checked)}
-              />
-              24-hour clock
-            </label>
-          </div>
-
-          {/* History */}
-          <div className="mt-3 pt-3 border-t border-[#e2e8f0]">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">History</span>
-            <div className="flex gap-2 mt-2">
-              <button
-                type="button"
-                onClick={undo}
-                disabled={undoStack.length === 0}
-                className={`flex-1 px-3 py-1.5 rounded text-[12px] font-semibold transition-colors ${
-                  undoStack.length === 0
-                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
-                    : 'bg-white text-[#065f46] hover:bg-[#e6f7ed] border border-[#ced3d0]'
-                }`}
-                title={`Undo (⌘Z) — ${undoStack.length === 0 ? 'nothing to undo' : `${undoStack.length} action${undoStack.length > 1 ? 's' : ''}`}`}
-              >
-                ↶ Undo
-              </button>
-              <button
-                type="button"
-                onClick={redo}
-                disabled={redoStack.length === 0}
-                className={`flex-1 px-3 py-1.5 rounded text-[12px] font-semibold transition-colors ${
-                  redoStack.length === 0
-                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
-                    : 'bg-white text-[#065f46] hover:bg-[#e6f7ed] border border-[#ced3d0]'
-                }`}
-                title={`Redo (⌘⇧Z) — ${redoStack.length === 0 ? 'nothing to redo' : `${redoStack.length} action${redoStack.length > 1 ? 's' : ''}`}`}
-              >
-                ↷ Redo
-              </button>
-            </div>
-          </div>
-
-          {/* Clear chips */}
-          <div className="mt-3 pt-3 border-t border-[#e2e8f0]">
-            <button
-              type="button"
-              className="w-full rounded border border-[#ef4444] bg-white px-3 py-2 text-xs font-semibold text-[#b91c1c] shadow-sm transition hover:bg-[#fef2f2] hover:shadow-md"
-              onClick={onClearAllChips}
-            >
-              Clear all chips
-            </button>
-          </div>
-
-          {/* Manage Year */}
-          <div className="mt-3 pt-3 border-t border-[#e2e8f0] flex flex-col" style={{ gap: '8px' }}>
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Manage Year</span>
-            {!isCurrentYearArchived && !draftYear && (
-              <button
-                type="button"
-                className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left flex items-center gap-2"
-                onClick={onPlanNextYear}
-              >
-                <CalendarPlus className="w-4 h-4" />
-                Plan Next Year
-              </button>
-            )}
-            {!isCurrentYearArchived && draftYear && activeYear && (
-              <button
-                type="button"
-                className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left flex items-center gap-2"
-                onClick={onOpenArchiveModal}
-              >
-                <Archive className="w-4 h-4" />
-                Archive Year {activeYear.yearNumber}?
-              </button>
-            )}
-            <div>
-              <label className="text-[11px] font-semibold text-slate-600 mb-2 block">Year Selector</label>
-              <YearSelector />
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-    </div>
-  );
-}
