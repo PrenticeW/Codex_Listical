@@ -5,9 +5,11 @@ import { useEffect, useState } from 'react';
 import { GearPanelProvider } from '../contexts/GearPanelContext';
 import { SystemPanelProvider } from '../contexts/SystemPanelContext';
 import { PlanPanelProvider } from '../contexts/PlanPanelContext';
+import { GoalPanelProvider } from '../contexts/GoalPanelContext';
 import GearPanel from './GearPanel';
 import SystemPanel from './SystemPanel';
 import PlanPanel from './PlanPanel';
+import GoalPanel from './GoalPanel';
 
 function YearKeyedOutlet() {
   const { currentYear } = useYear();
@@ -68,12 +70,15 @@ export default function Layout() {
     <GearPanelProvider>
       <SystemPanelProvider>
         <PlanPanelProvider>
-          <YearProvider>
-            <YearKeyedOutlet />
-            <GearPanel />
-            <SystemPanel />
-            <PlanPanel />
-          </YearProvider>
+          <GoalPanelProvider>
+            <YearProvider>
+              <YearKeyedOutlet />
+              <GearPanel />
+              <SystemPanel />
+              <PlanPanel />
+              <GoalPanel />
+            </YearProvider>
+          </GoalPanelProvider>
         </PlanPanelProvider>
       </SystemPanelProvider>
     </GearPanelProvider>

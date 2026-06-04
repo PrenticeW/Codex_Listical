@@ -6,6 +6,7 @@ import { useYear } from '../../contexts/YearContext';
 import { useGearPanel } from '../../contexts/GearPanelContext';
 import { useSystemPanel } from '../../contexts/SystemPanelContext';
 import { usePlanPanel } from '../../contexts/PlanPanelContext';
+import { useGoalPanel } from '../../contexts/GoalPanelContext';
 
 // Map routes to page identifiers and display names
 const PAGE_CONFIG = {
@@ -39,8 +40,10 @@ export default function NavigationBar({
   const { toggle: toggleGearPanel } = useGearPanel();
   const { isOpen: systemPanelOpen, toggle: toggleSystemPanel } = useSystemPanel();
   const { isOpen: planPanelOpen, toggle: togglePlanPanel } = usePlanPanel();
+  const { isOpen: goalPanelOpen, toggle: toggleGoalPanel } = useGoalPanel();
   const isSystemPage = currentPath === '/';
   const isPlanPage = currentPath === '/tactics';
+  const isGoalPage = currentPath === '/staging';
 
   const navItems = [
     { label: 'Goal', path: '/staging' },
@@ -139,6 +142,21 @@ export default function NavigationBar({
           </button>
         )}
 
+        {user && isGoalPage && (
+          <button
+            onClick={toggleGoalPanel}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center gap-2 ${
+              goalPanelOpen
+                ? 'bg-slate-900 text-white'
+                : 'text-slate-600 bg-transparent hover:bg-slate-100 hover:text-slate-900'
+            }`}
+            title="Goal actions"
+          >
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <path d="M2 4h11M2 7.5h11M2 11h11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+          </button>
+        )}
         {user && isPlanPage && (
           <button
             onClick={togglePlanPanel}

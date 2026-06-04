@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { getContrastTextColor } from '../utils/colorUtils';
-import { SquarePlus, Pencil, CalendarCheck, CalendarPlus, Archive, CheckCircle2 } from 'lucide-react';
+import { SquarePlus, Pencil, CalendarCheck, Archive, CheckCircle2 } from 'lucide-react';
+import { GOAL_PANEL_ACTION_EVENT, GOAL_PANEL_STATE_EVENT } from '../components/GoalPanel';
 import { useYear } from '../contexts/YearContext';
 import { useAuth } from '../contexts/AuthContext';
 import NavigationBar from '../components/planner/NavigationBar';
@@ -10,7 +11,6 @@ import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import { revertArchive } from '../utils/planner/revertArchive';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { ArchiveYearModal } from '../components/ArchiveYearModal';
-import YearSelector from '../components/YearSelector';
 import usePageSize from '../hooks/usePageSize';
 import {
   useShortlistState,
@@ -138,6 +138,23 @@ export default function StagingPageV2() {
 
   // Command pattern for undo/redo
   const { canUndo, canRedo, executeCommand, undo, redo } = useCommandPattern();
+
+  // Broadcast undo/redo availability to GoalPanel whenever it changes
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(GOAL_PANEL_STATE_EVENT, {
+      detail: { undoAvailable: canUndo, redoAvailable: canRedo },
+    }));
+  }, [canUndo, canRedo]);
+
+  // Listen for actions fired by GoalPanel
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.action === 'undo') undo();
+      else if (e.detail?.action === 'redo') redo();
+    };
+    window.addEventListener(GOAL_PANEL_ACTION_EVENT, handler);
+    return () => window.removeEventListener(GOAL_PANEL_ACTION_EVENT, handler);
+  }, [undo, redo]);
 
   // Shortlist state management
   const {
@@ -607,13 +624,7 @@ export default function StagingPageV2() {
         >
           <NavigationBar
             listicalButton={
-              <GoalListicalMenu
-                isCurrentYearArchived={isCurrentYearArchived}
-                draftYear={draftYear}
-                activeYear={activeYear}
-                onPlanNextYear={handlePlanNextYear}
-                onOpenArchiveModal={() => setIsArchiveModalOpen(true)}
-              />
+              <span className="font-serif text-sm font-medium text-slate-900 select-none">Listical</span>
             }
             onUndoDraft={draftYear ? handleUndoDraft : null}
             onRevertArchive={!draftYear && allYears.some(y => y.status === 'archived') ? handleRevertArchive : null}
@@ -800,100 +811,3 @@ export default function StagingPageV2() {
   );
 }
 
-function GoalListicalMenu({
-  isCurrentYearArchived,
-  draftYear,
-  activeYear,
-  onPlanNextYear,
-  onOpenArchiveModal,
-}) {
-  const [open, setOpen] = useState(false);
-  const buttonRef = useRef(null);
-  const menuRef = useRef(null);
-  const [menuStyle, setMenuStyle] = useState({});
-
-  useEffect(() => {
-    if (!open) {
-      setMenuStyle({});
-      return undefined;
-    }
-
-    const updatePosition = () => {
-      if (buttonRef.current) {
-        const rect = buttonRef.current.getBoundingClientRect();
-        setMenuStyle({
-          width: '280px',
-          top: rect.bottom + 8,
-          left: Math.max(16, rect.left),
-        });
-      }
-    };
-
-    updatePosition();
-    const timer = setTimeout(updatePosition, 10);
-
-    const handleClickOutside = (event) => {
-      if (menuRef.current?.contains(event.target)) return;
-      if (buttonRef.current?.contains(event.target)) return;
-      setOpen(false);
-    };
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('mousedown', handleClickOutside, true);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('mousedown', handleClickOutside, true);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open]);
-
-  return (
-    <div>
-      <button
-        type="button"
-        ref={buttonRef}
-        className="inline-flex items-center gap-2 rounded border border-[#ced3d0] bg-white px-3 py-2 font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6] hover:shadow-md"
-        onClick={() => setOpen((prev) => !prev)}
-        aria-expanded={open}
-      >
-        <span>Listical</span>
-      </button>
-      {open && createPortal(
-        <div
-          ref={menuRef}
-          className="fixed rounded-lg border border-[#94a3b8] p-4 shadow-2xl flex flex-col"
-          style={{ ...menuStyle, backgroundColor: 'rgba(255, 255, 255, 0.97)', zIndex: 999999, gap: '8px' }}
-        >
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Manage Year</span>
-          {!isCurrentYearArchived && !draftYear && (
-            <button
-              type="button"
-              className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left flex items-center gap-2"
-              onClick={() => { onPlanNextYear(); setOpen(false); }}
-            >
-              <CalendarPlus className="w-4 h-4" />
-              Plan Next Year
-            </button>
-          )}
-          {!isCurrentYearArchived && draftYear && activeYear && (
-            <button
-              type="button"
-              className="rounded border border-[#ced3d0] bg-white px-3 py-2 text-[12px] font-semibold text-[#065f46] transition hover:bg-[#e6f7ed] text-left flex items-center gap-2"
-              onClick={() => { onOpenArchiveModal(); setOpen(false); }}
-            >
-              <Archive className="w-4 h-4" />
-              Archive Year {activeYear.yearNumber}?
-            </button>
-          )}
-          <div>
-            <label className="text-[11px] font-semibold text-slate-600 mb-2 block">Year Selector</label>
-            <YearSelector />
-          </div>
-        </div>,
-        document.body
-      )}
-    </div>
-  );
-}
