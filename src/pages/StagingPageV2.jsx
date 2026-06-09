@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { getContrastTextColor } from '../utils/colorUtils';
 import { SquarePlus, Pencil, CalendarCheck, Archive, CheckCircle2 } from 'lucide-react';
-import { GOAL_PANEL_ACTION_EVENT, GOAL_PANEL_STATE_EVENT } from '../components/GoalPanel';
+import { GOAL_PANEL_ACTION_EVENT, GOAL_PANEL_STATE_EVENT, GOAL_PANEL_SELECTION_EVENT } from '../components/GoalPanel';
+import { useGoalPanel } from '../contexts/GoalPanelContext';
 import { useYear } from '../contexts/YearContext';
 import { useAuth } from '../contexts/AuthContext';
 import NavigationBar from '../components/planner/NavigationBar';
@@ -99,6 +100,7 @@ const calculateTimeTotals = (planEntries) => {
 export default function StagingPageV2() {
   const navigate = useNavigate();
   const { currentYear, draftYear, activeYear, allYears, isCurrentYearArchived, refreshMetadata, switchToYear } = useYear();
+  const { isOpen: goalPanelOpen, open: openGoalPanel } = useGoalPanel();
 
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
@@ -155,6 +157,41 @@ export default function StagingPageV2() {
     window.addEventListener(GOAL_PANEL_ACTION_EVENT, handler);
     return () => window.removeEventListener(GOAL_PANEL_ACTION_EVENT, handler);
   }, [undo, redo]);
+
+  // Selected goal — drives GoalPanel Goal section
+  const [selectedGoalId, setSelectedGoalId] = useState(null);
+
+  const fireGoalSelection = useCallback((item) => {
+    if (!item) {
+      window.dispatchEvent(new CustomEvent(GOAL_PANEL_SELECTION_EVENT, { detail: { goal: null } }));
+      return;
+    }
+    // Extract subproject names from plan entries
+    const entries = item.planTableEntries || [];
+    let inSubprojects = false;
+    const subprojects = [];
+    for (const row of entries) {
+      if (row?.__rowType === 'header') {
+        inSubprojects = row.__sectionType === 'Subprojects';
+      } else if (inSubprojects && row?.__rowType !== 'prompt') {
+        const name = (row[COL.CONTENT] ?? '').trim();
+        if (name && name !== 'Subproject') subprojects.push(name);
+      }
+    }
+    window.dispatchEvent(new CustomEvent(GOAL_PANEL_SELECTION_EVENT, {
+      detail: {
+        goal: {
+          id: item.id,
+          name: item.projectName || item.text || '',
+          tagline: item.projectTagline ?? '',
+          color: item.color ?? '',
+          projectNickname: item.projectNickname ?? '',
+          addedToPlan: !!item.addedToPlan,
+          subprojects,
+        },
+      },
+    }));
+  }, []);
 
   // Shortlist state management
   const {
@@ -695,6 +732,14 @@ export default function StagingPageV2() {
                             gridTemplateColumns: `1fr auto 140px 24px 80px ${isDraftYearView ? 'auto' : '32px'}`,
                             alignItems: 'center',
                             gap: '12px',
+                            cursor: 'pointer',
+                            outline: selectedGoalId === item.id ? '2px solid rgba(0,0,0,0.25)' : 'none',
+                            outlineOffset: '-2px',
+                          }}
+                          onClick={() => {
+                            setSelectedGoalId(item.id);
+                            fireGoalSelection(item);
+                            if (!goalPanelOpen) openGoalPanel();
                           }}
                         >
                           <div className="w-full flex items-center gap-2 font-semibold min-w-0 overflow-hidden" style={{ maskImage: 'linear-gradient(to right, black 97%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to right, black 97%, transparent 100%)' }}>
