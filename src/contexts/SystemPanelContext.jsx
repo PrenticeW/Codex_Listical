@@ -1,32 +1,15 @@
-import { createContext, useContext, useState, useRef } from 'react';
+/**
+ * System page panel context — delegates to the shared PagePanelContext so the
+ * panel's open state persists across page navigation. Kept as a separate
+ * module so existing imports keep working.
+ */
+import { usePagePanel } from './PagePanelContext';
 
-const SystemPanelContext = createContext(null);
-
+// Pass-through: state now lives in PagePanelProvider (see Layout.jsx)
 export function SystemPanelProvider({ children }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const closedAt = useRef(0);
-
-  return (
-    <SystemPanelContext.Provider value={{
-      isOpen,
-      open: () => setIsOpen(true),
-      close: () => {
-        closedAt.current = Date.now();
-        setIsOpen(false);
-      },
-      toggle: () => {
-        const msSinceClose = Date.now() - closedAt.current;
-        if (msSinceClose < 500) return;
-        setIsOpen(v => !v);
-      },
-    }}>
-      {children}
-    </SystemPanelContext.Provider>
-  );
+  return children;
 }
 
 export function useSystemPanel() {
-  const ctx = useContext(SystemPanelContext);
-  if (!ctx) throw new Error('useSystemPanel must be used inside SystemPanelProvider');
-  return ctx;
+  return usePagePanel();
 }

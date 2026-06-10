@@ -36,7 +36,24 @@ const stagingKey = (yearNumber) => `staging_state:${yearNumber}`;
 export function peekStagingCache(yearNumber) {
   if (yearNumber == null) return null;
   const k = stagingKey(yearNumber);
-  return hasCached(CACHE_NS, k) ? getCached(CACHE_NS, k) : null;
+  if (!hasCached(CACHE_NS, k)) return null;
+  const cached = getCached(CACHE_NS, k);
+  if (!cached) return cached;
+  // The cache stores rows in serialised form ({ cells, _rowType, ... }) so
+  // localStorage round-trips keep the metadata. Deserialise here — same as
+  // loadStagingState's cache hit — so consumers (TacticsPage stagingProjects,
+  // useProjectsData) always see tagged row arrays. Returning the raw cache
+  // made every row look like an empty object to buildProjectPlanSummary,
+  // which silently dropped schedule items and subprojects on cache-hit loads.
+  return {
+    ...cached,
+    shortlist: Array.isArray(cached.shortlist)
+      ? cached.shortlist.map(deserializeItemFromCache)
+      : [],
+    archived: Array.isArray(cached.archived)
+      ? cached.archived.map(deserializeItemFromCache)
+      : [],
+  };
 }
 // Legacy export kept so existing event-key consumers do not break.
 export const STAGING_STORAGE_KEY = 'staging-shortlist';

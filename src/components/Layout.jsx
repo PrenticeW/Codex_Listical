@@ -3,6 +3,7 @@ import { YearProvider, useYear } from '../contexts/YearContext';
 import { useUser } from '../contexts/UserContext';
 import { useEffect, useState } from 'react';
 import { GearPanelProvider } from '../contexts/GearPanelContext';
+import { PagePanelProvider } from '../contexts/PagePanelContext';
 import { SystemPanelProvider } from '../contexts/SystemPanelContext';
 import { PlanPanelProvider } from '../contexts/PlanPanelContext';
 import { GoalPanelProvider } from '../contexts/GoalPanelContext';
@@ -68,6 +69,9 @@ export default function Layout() {
 
   return (
     <GearPanelProvider>
+      {/* Single shared open state for the three page panels — the panel
+          stays open across page navigation; each panel route-gates itself */}
+      <PagePanelProvider>
       <SystemPanelProvider>
         <PlanPanelProvider>
           <GoalPanelProvider>
@@ -81,6 +85,7 @@ export default function Layout() {
           </GoalPanelProvider>
         </PlanPanelProvider>
       </SystemPanelProvider>
+      </PagePanelProvider>
     </GearPanelProvider>
   );
 }

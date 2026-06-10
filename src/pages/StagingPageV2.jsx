@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { getContrastTextColor } from '../utils/colorUtils';
-import { SquarePlus, Pencil, CalendarCheck, Archive, CheckCircle2 } from 'lucide-react';
-import { GOAL_PANEL_ACTION_EVENT, GOAL_PANEL_STATE_EVENT, GOAL_PANEL_SELECTION_EVENT } from '../components/GoalPanel';
+import { SquarePlus, CalendarCheck, Archive, CheckCircle2 } from 'lucide-react';
+import { GOAL_PANEL_ACTION_EVENT, GOAL_PANEL_STATE_EVENT, GOAL_PANEL_SELECTION_EVENT, GOAL_PANEL_ROW_SELECTION_EVENT } from '../components/GoalPanel';
 import { useGoalPanel } from '../contexts/GoalPanelContext';
 import { useYear } from '../contexts/YearContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,8 +15,6 @@ import { ArchiveYearModal } from '../components/ArchiveYearModal';
 import usePageSize from '../hooks/usePageSize';
 import {
   useShortlistState,
-  usePlanModal,
-  usePlanModalActions,
   usePlanTableState,
   usePlanTableFocus,
   useCommandPattern,
@@ -28,7 +26,6 @@ import {
 } from '../hooks/staging';
 import ContextMenu from '../components/staging/ContextMenu';
 import TableRow from '../components/staging/TableRow';
-import ProjectEditModal from '../components/staging/ProjectEditModal';
 import InlineEditableText from '../components/staging/InlineEditableText';
 import {
   clonePlanTableEntries,
@@ -39,6 +36,8 @@ import {
   formatMinutesToHHmm,
   calculateOutcomeTotals,
   calculateOutcomeSectionTotal,
+  defineRowMetadata,
+  cloneRowWithMetadata,
 } from '../utils/staging/planTableHelpers';
 import {
   handleCopyOperation,
@@ -148,7 +147,7 @@ export default function StagingPageV2() {
     }));
   }, [canUndo, canRedo]);
 
-  // Listen for actions fired by GoalPanel
+  // Listen for actions fired by GoalPanel (undo/redo — no shortlist dependency)
   useEffect(() => {
     const handler = (e) => {
       if (e.detail?.action === 'undo') undo();
@@ -161,21 +160,25 @@ export default function StagingPageV2() {
   // Selected goal — drives GoalPanel Goal section
   const [selectedGoalId, setSelectedGoalId] = useState(null);
 
-  const fireGoalSelection = useCallback((item) => {
+  const fireGoalSelection = useCallback((item, subprojectsOverride) => {
     if (!item) {
       window.dispatchEvent(new CustomEvent(GOAL_PANEL_SELECTION_EVENT, { detail: { goal: null } }));
       return;
     }
-    // Extract subproject names from plan entries
-    const entries = item.planTableEntries || [];
-    let inSubprojects = false;
-    const subprojects = [];
-    for (const row of entries) {
-      if (row?.__rowType === 'header') {
-        inSubprojects = row.__sectionType === 'Subprojects';
-      } else if (inSubprojects && row?.__rowType !== 'prompt') {
-        const name = (row[COL.CONTENT] ?? '').trim();
-        if (name && name !== 'Subproject') subprojects.push(name);
+    // Extract subproject names from plan entries (unless caller supplies override)
+    let subprojects = subprojectsOverride;
+    if (!subprojects) {
+      const entries = item.planTableEntries || [];
+      let inSubprojects = false;
+      subprojects = [];
+      for (const row of entries) {
+        if (row?.__rowType === 'header') {
+          inSubprojects = row.__sectionType === 'Subprojects';
+        } else if (inSubprojects && row?.__rowType === 'prompt') {
+          // Prompt rows: name at col 1 (matches useProjectsData format)
+          const name = (row[COL.LABEL] ?? '').trim();
+          if (name && name !== 'Subproject') subprojects.push(name);
+        }
       }
     }
     window.dispatchEvent(new CustomEvent(GOAL_PANEL_SELECTION_EVENT, {
@@ -241,17 +244,6 @@ export default function StagingPageV2() {
     }
   }, [handleArchiveWithStatus, currentYear]);
 
-  // Plan modal state
-  const { planModal, openPlanModal, closePlanModal, updatePlanModal } = usePlanModal();
-
-  // Plan modal actions
-  const { handlePlanNext } = usePlanModalActions({
-    planModal,
-    setState,
-    closePlanModal,
-    executeCommand,
-  });
-
   // Plan table operations
   const {
     pendingFocusRequestRef,
@@ -314,6 +306,48 @@ export default function StagingPageV2() {
     pendingFocusRequestRef,
     setSelectedCells,
   });
+
+  // Row/cell selection → GoalPanel Row section. Fires the first selected
+  // row's context (section + row type); null when nothing is selected.
+  useEffect(() => {
+    const firstKey = selectedRows.size > 0
+      ? selectedRows.values().next().value
+      : (selectedCells.size > 0 ? selectedCells.values().next().value : null);
+
+    const fireNull = () => window.dispatchEvent(
+      new CustomEvent(GOAL_PANEL_ROW_SELECTION_EVENT, { detail: { row: null } })
+    );
+
+    if (!firstKey) { fireNull(); return; }
+    const [itemIdStr, rowIdxStr] = firstKey.split('|');
+    const rowIdx = parseInt(rowIdxStr, 10);
+    const item = shortlist.find((i) => String(i.id) === itemIdStr);
+    const entries = item?.planTableEntries || [];
+    const entry = entries[rowIdx];
+    if (!item || !entry) { fireNull(); return; }
+
+    // Section type: from row metadata, else walk back to the owning header
+    let sectionType = entry.__sectionType || '';
+    if (!sectionType) {
+      for (let i = rowIdx; i >= 0; i--) {
+        if (entries[i]?.__rowType === 'header') {
+          sectionType = entries[i].__sectionType || '';
+          break;
+        }
+      }
+    }
+
+    window.dispatchEvent(new CustomEvent(GOAL_PANEL_ROW_SELECTION_EVENT, {
+      detail: {
+        row: {
+          goalId: item.id,
+          rowIdx,
+          sectionType,
+          rowType: entry.__rowType || 'row',
+        },
+      },
+    }));
+  }, [selectedRows, selectedCells, shortlist]);
 
   // Global mouseup listener for drag selection
   useEffect(() => {
@@ -413,11 +447,6 @@ export default function StagingPageV2() {
       let capturedState = null;
       let capturedChipState = null;
       let capturedTaskRows = null;
-      const modalMetadata = {
-        projectName: planModal.projectName,
-        projectNickname: planModal.projectNickname,
-        color: planModal.color,
-      };
       const command = {
         execute: () => {
           setState((prev) => {
@@ -431,7 +460,6 @@ export default function StagingPageV2() {
                   ? {
                       ...item,
                       addedToPlan: addToPlan,
-                      ...(addToPlan ? modalMetadata : {}),
                     }
                   : item
               ),
@@ -537,9 +565,154 @@ export default function StagingPageV2() {
         },
       };
       executeCommand(command);
-      closePlanModal();
     },
-    [setState, closePlanModal, executeCommand, planModal, currentYear, shortlist]
+    [setState, executeCommand, currentYear, shortlist]
+  );
+
+  // ── Per-row inline button handlers (TableRow action buttons) ──────────────
+
+  // Shared: index after the last prompt/response row of the clicked row's
+  // section (keeps the blank 'data' separator row at the section bottom)
+  const findSectionEndInsertIdx = (entries, fromRowIdx) => {
+    let headerIdx = -1;
+    for (let i = fromRowIdx; i >= 0; i--) {
+      if (entries[i]?.__rowType === 'header') { headerIdx = i; break; }
+    }
+    if (headerIdx === -1) return -1;
+    let insertAt = headerIdx + 1;
+    for (let i = headerIdx + 1; i < entries.length; i++) {
+      const t = entries[i]?.__rowType;
+      if (t === 'header') break;
+      if (t === 'prompt' || t === 'response') insertAt = i + 1;
+    }
+    return insertAt;
+  };
+
+  // Add a row of the same type. In paired sections (Outcomes, Actions) the
+  // new row is appended at the bottom of the section — same as the pair
+  // button. Elsewhere it inserts directly below the clicked row.
+  const handleAddRowBelow = useCallback(
+    (itemId, rowIdx, rowType, sectionType) => {
+      const isPairedSection = sectionType === 'Outcomes' || sectionType === 'Actions';
+      if (!isPairedSection) {
+        insertRowType(itemId, rowIdx, sectionType, rowType);
+        return;
+      }
+      let capturedState = null;
+      const command = {
+        execute: () => {
+          setState((prev) => {
+            if (capturedState === null) capturedState = cloneStagingState(prev);
+            return {
+              ...prev,
+              shortlist: prev.shortlist.map((item) => {
+                if (item.id !== itemId) return item;
+                const entries = item.planTableEntries.map(cloneRowWithMetadata);
+                const insertAt = findSectionEndInsertIdx(entries, rowIdx);
+                if (insertAt === -1) return item;
+                const newRow = Array.from({ length: PLAN_TABLE_COLS }, () => '');
+                defineRowMetadata(newRow, { rowType });
+                entries.splice(insertAt, 0, newRow);
+                return { ...item, planTableEntries: entries };
+              }),
+            };
+          });
+        },
+        undo: () => { if (capturedState) setState(capturedState); },
+      };
+      executeCommand(command);
+    },
+    [insertRowType, setState, executeCommand]
+  );
+
+  // Add a prompt + response pair at the END of the clicked row's section
+  // (e.g. add-pair on any Outcomes row appends an outcome + action pair
+  // beneath the section's last row, not below the clicked row).
+  const handleAddPairBelow = useCallback(
+    (itemId, rowIdx) => {
+      let capturedState = null;
+      const command = {
+        execute: () => {
+          setState((prev) => {
+            if (capturedState === null) capturedState = cloneStagingState(prev);
+            return {
+              ...prev,
+              shortlist: prev.shortlist.map((item) => {
+                if (item.id !== itemId) return item;
+                const entries = item.planTableEntries.map(cloneRowWithMetadata);
+
+                const insertAt = findSectionEndInsertIdx(entries, rowIdx);
+                if (insertAt === -1) return item;
+
+                const promptRow = Array.from({ length: PLAN_TABLE_COLS }, () => '');
+                defineRowMetadata(promptRow, { rowType: 'prompt' });
+                const responseRow = Array.from({ length: PLAN_TABLE_COLS }, () => '');
+                defineRowMetadata(responseRow, { rowType: 'response' });
+                entries.splice(insertAt, 0, promptRow, responseRow);
+                return { ...item, planTableEntries: entries };
+              }),
+            };
+          });
+        },
+        undo: () => { if (capturedState) setState(capturedState); },
+      };
+      executeCommand(command);
+    },
+    [setState, executeCommand]
+  );
+
+  // Send an Outcomes row to the Actions section: appends a Measurable
+  // Outcome prompt (pre-filled with the outcome text) + an empty response
+  // row at the end of the Actions section.
+  const handleSendToActions = useCallback(
+    (itemId, rowIdx) => {
+      let capturedState = null;
+      const command = {
+        execute: () => {
+          setState((prev) => {
+            if (capturedState === null) capturedState = cloneStagingState(prev);
+            return {
+              ...prev,
+              shortlist: prev.shortlist.map((item) => {
+                if (item.id !== itemId) return item;
+                const entries = item.planTableEntries.map(cloneRowWithMetadata);
+                const source = entries[rowIdx];
+                if (!source) return item;
+                // Outcome text: prompt rows keep it at col 1, responses at col 2
+                const text = ((source.__rowType === 'prompt' ? source[1] : source[2]) ?? '').trim();
+
+                // Find the Actions section's last prompt/response row — NOT
+                // the blank 'data' row that visually separates sections
+                let inActions = false;
+                let insertAt = -1;
+                for (let i = 0; i < entries.length; i++) {
+                  const t = entries[i]?.__rowType;
+                  if (t === 'header') {
+                    if (inActions) break;
+                    inActions = entries[i].__sectionType === 'Actions';
+                    if (inActions) insertAt = i + 1;
+                  } else if (inActions && (t === 'prompt' || t === 'response')) {
+                    insertAt = i + 1;
+                  }
+                }
+                if (insertAt === -1) return item; // no Actions section
+
+                const promptRow = Array.from({ length: PLAN_TABLE_COLS }, () => '');
+                promptRow[1] = text;
+                defineRowMetadata(promptRow, { rowType: 'prompt' });
+                const responseRow = Array.from({ length: PLAN_TABLE_COLS }, () => '');
+                defineRowMetadata(responseRow, { rowType: 'response' });
+                entries.splice(insertAt, 0, promptRow, responseRow);
+                return { ...item, planTableEntries: entries };
+              }),
+            };
+          });
+        },
+        undo: () => { if (capturedState) setState(capturedState); },
+      };
+      executeCommand(command);
+    },
+    [setState, executeCommand]
   );
 
   // Handle click on drag handle to select row
@@ -584,6 +757,224 @@ export default function StagingPageV2() {
     [setState, executeCommand]
   );
 
+  // GoalPanel action handler — goal-level mutations
+  useEffect(() => {
+    const handler = (e) => {
+      const { action, goalId, color, nickname, name, index, rowIdx } = e.detail ?? {};
+
+      if (action === 'deleteRow' && goalId != null && rowIdx != null) {
+        deleteRows(selectedRows, goalId, rowIdx);
+        clearSelection(); // reverts panel to the Goal section
+      }
+
+      if (action === 'toggleTotals' && goalId != null) {
+        toggleItemOutcomeTotals(goalId);
+      }
+
+      if (action === 'setColor' && goalId && color) {
+        handleInlineProjectUpdate(goalId, 'color', color);
+        const item = shortlist.find((i) => i.id === goalId);
+        if (item) fireGoalSelection({ ...item, color });
+      }
+
+      if (action === 'setNickname' && goalId && nickname !== undefined) {
+        handleInlineProjectUpdate(goalId, 'projectNickname', nickname);
+        const item = shortlist.find((i) => i.id === goalId);
+        if (item) fireGoalSelection({ ...item, projectNickname: nickname });
+      }
+
+      if (action === 'deleteGoal' && goalId) {
+        const item = shortlist.find((i) => i.id === goalId);
+        if (!item) return;
+        // If the goal is on the plan, run the same cleanup as removing it
+        // (Plan chips + System task rows) before deleting the project itself.
+        if (item.addedToPlan) {
+          handleTogglePlanStatus(goalId, false, false);
+        }
+        handleRemove(goalId);
+        fireGoalSelection(null);
+      }
+
+      if (action === 'archiveGoal' && goalId) {
+        // Same path as the goal table's archive button — moves the goal to
+        // archived and cleans up its Plan chips. Selection is cleared since
+        // the goal no longer exists on the page.
+        handleArchiveAndCleanup(goalId, 'archived');
+        fireGoalSelection(null);
+      }
+
+      if ((action === 'addToPlan' || action === 'removeFromPlan') && goalId) {
+        const item = shortlist.find((i) => i.id === goalId);
+        if (!item) return;
+        const adding = action === 'addToPlan';
+        handleTogglePlanStatus(goalId, adding);
+        fireGoalSelection({ ...item, addedToPlan: adding });
+      }
+
+      // Shared helper: extract real (non-blank, non-placeholder) subproject rows
+      // Returns { names: string[], entryIndices: number[] } — both arrays are
+      // index-aligned so names[i] always corresponds to entryIndices[i].
+      const extractRealSubprojects = (entries) => {
+        let inSubs = false;
+        const names = [];
+        const entryIndices = [];
+        for (let i = 0; i < entries.length; i++) {
+          const row = entries[i];
+          if (row?.__rowType === 'header') {
+            inSubs = row.__sectionType === 'Subprojects';
+          } else if (inSubs && row?.__rowType === 'prompt') {
+            // Prompt rows: name at col 1 (matches useProjectsData format)
+            const n = (row[COL.LABEL] ?? '').trim();
+            if (n && n !== 'Subproject') {
+              names.push(n);
+              entryIndices.push(i);
+            }
+          }
+        }
+        return { names, entryIndices };
+      };
+
+      if (action === 'addSubproject' && goalId && name) {
+        const item = shortlist.find((i) => i.id === goalId);
+        if (!item) return;
+        const { names: currentSubs } = extractRealSubprojects(item.planTableEntries || []);
+        const newSubs = [...currentSubs, name];
+
+        let capturedState = null;
+        const command = {
+          execute: () => {
+            setState((prev) => {
+              if (capturedState === null) capturedState = cloneStagingState(prev);
+              return {
+                ...prev,
+                shortlist: prev.shortlist.map((it) => {
+                  if (it.id !== goalId) return it;
+                  const entries = it.planTableEntries.map(cloneRowWithMetadata);
+                  // Insert after the last real subproject row, or after the prompt row
+                  // if there are none yet. `insertAt` tracks the position after every
+                  // non-prompt, non-header Subprojects row (including blank placeholders)
+                  // so the new row always lands at the end of the section.
+                  let inSubs = false;
+                  let insertAt = entries.length;
+                  for (let i = 0; i < entries.length; i++) {
+                    const row = entries[i];
+                    if (row?.__rowType === 'header') {
+                      inSubs = row.__sectionType === 'Subprojects';
+                    } else if (inSubs) {
+                      // Advance past every row in the section (blank placeholders,
+                      // section prompt, and added prompt rows) so new entries
+                      // always land at the end in the order they were added.
+                      insertAt = i + 1;
+                    }
+                  }
+                  const newRow = Array.from({ length: PLAN_TABLE_COLS }, () => '');
+                  newRow[COL.LABEL] = name;
+                  defineRowMetadata(newRow, { rowType: 'prompt', sectionType: 'Subprojects' });
+                  entries.splice(insertAt, 0, newRow);
+                  return {
+                    ...it,
+                    planTableEntries: entries,
+                    planSubprojectRowCount: (it.planSubprojectRowCount ?? 1) + 1,
+                  };
+                }),
+              };
+            });
+            fireGoalSelection(item, newSubs);
+          },
+          undo: () => { if (capturedState) setState(capturedState); },
+        };
+        executeCommand(command);
+      }
+
+      if (action === 'reorderSubprojects' && goalId) {
+        const { fromIndex, toIndex } = e.detail ?? {};
+        if (fromIndex === undefined || toIndex === undefined) return;
+        const item = shortlist.find((i) => i.id === goalId);
+        if (!item) return;
+        const { names: currentSubs, entryIndices } = extractRealSubprojects(item.planTableEntries || []);
+
+        // toIndex may equal currentSubs.length (drop at end) — that's valid
+        if (fromIndex < 0 || fromIndex >= currentSubs.length || toIndex < 0 || toIndex > currentSubs.length) return;
+
+        const insertAt = fromIndex < toIndex ? toIndex - 1 : toIndex;
+        if (insertAt === fromIndex) return;
+
+        const newSubs = [...currentSubs];
+        const [moved] = newSubs.splice(fromIndex, 1);
+        newSubs.splice(insertAt, 0, moved);
+
+        let capturedState = null;
+        const command = {
+          execute: () => {
+            setState((prev) => {
+              if (capturedState === null) capturedState = cloneStagingState(prev);
+              return {
+                ...prev,
+                shortlist: prev.shortlist.map((it) => {
+                  if (it.id !== goalId) return it;
+                  const entries = it.planTableEntries.map(cloneRowWithMetadata);
+                  const fromEntryIdx = entryIndices[fromIndex];
+                  // End-drop: insert just after the last real subproject row,
+                  // NOT at entries.length (that lands past the Subprojects
+                  // section and creates a phantom row in the next section).
+                  const toEntryIdx = entryIndices[toIndex] ?? (entryIndices[entryIndices.length - 1] + 1);
+                  if (fromEntryIdx === undefined) return it;
+                  const [movedRow] = entries.splice(fromEntryIdx, 1);
+                  const adjustedEntry = fromIndex < toIndex ? toEntryIdx - 1 : toEntryIdx;
+                  entries.splice(adjustedEntry, 0, movedRow);
+                  return { ...it, planTableEntries: entries };
+                }),
+              };
+            });
+            fireGoalSelection(item, newSubs);
+          },
+          undo: () => { if (capturedState) setState(capturedState); },
+        };
+        executeCommand(command);
+      }
+
+      if (action === 'removeSubproject' && goalId && index !== undefined) {
+        const item = shortlist.find((i) => i.id === goalId);
+        if (!item) return;
+        // Use only real rows so chip index === entry index — blank placeholders excluded
+        const { names: currentSubs, entryIndices } = extractRealSubprojects(item.planTableEntries || []);
+        const newSubs = currentSubs.filter((_, i) => i !== index);
+        const targetEntryIdx = entryIndices[index];
+        if (targetEntryIdx === undefined) return;
+
+        let capturedState = null;
+        const command = {
+          execute: () => {
+            setState((prev) => {
+              if (capturedState === null) capturedState = cloneStagingState(prev);
+              return {
+                ...prev,
+                shortlist: prev.shortlist.map((it) => {
+                  if (it.id !== goalId) return it;
+                  const entries = it.planTableEntries.map(cloneRowWithMetadata);
+                  const count = it.planSubprojectRowCount ?? 1;
+                  if (count <= 1) {
+                    // Clear rather than remove to keep section structure intact
+                    entries[targetEntryIdx] = Array.from({ length: PLAN_TABLE_COLS }, () => '');
+                    defineRowMetadata(entries[targetEntryIdx], { rowType: 'response', sectionType: 'Subprojects' });
+                    return { ...it, planTableEntries: entries };
+                  }
+                  entries.splice(targetEntryIdx, 1);
+                  return { ...it, planTableEntries: entries, planSubprojectRowCount: count - 1 };
+                }),
+              };
+            });
+            fireGoalSelection(item, newSubs);
+          },
+          undo: () => { if (capturedState) setState(capturedState); },
+        };
+        executeCommand(command);
+      }
+    };
+    window.addEventListener(GOAL_PANEL_ACTION_EVENT, handler);
+    return () => window.removeEventListener(GOAL_PANEL_ACTION_EVENT, handler);
+  }, [handleInlineProjectUpdate, handleTogglePlanStatus, handleArchiveAndCleanup, handleRemove, deleteRows, selectedRows, clearSelection, toggleItemOutcomeTotals, shortlist, fireGoalSelection, setState, executeCommand]);
+
   // Wait for auth to complete before rendering content that depends on user-scoped data
   if (isAuthLoading) {
     return (
@@ -615,6 +1006,9 @@ export default function StagingPageV2() {
               const rowType = rowValues.__rowType || 'data';
               const sectionType = getSectionTypeForRow(entries, rowIdx);
 
+              // Subprojects are managed via the side panel — skip table rendering
+              if (sectionType === 'Subprojects') return null;
+
               return (
                 <TableRow
                   key={`${item.id}-row-${rowIdx}`}
@@ -635,6 +1029,9 @@ export default function StagingPageV2() {
                   onInputFocus={handleInputFocus}
                   onEnterKeyAddRow={addRowOnEnter}
                   onContextMenu={handleContextMenu}
+                  onAddRowBelow={handleAddRowBelow}
+                  onAddPairBelow={handleAddPairBelow}
+                  onSendToActions={handleSendToActions}
                   onDragStart={handleDragStart}
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
@@ -694,10 +1091,8 @@ export default function StagingPageV2() {
                 const planEntries = clonePlanTableEntries(item.planTableEntries);
                 const { projectTotal } = calculateTimeTotals(planEntries);
 
-                const isEditing = planModal.open && planModal.itemId === item.id;
-                const activeColor = isEditing ? planModal.color ?? item.color : item.color;
-                const headerBackground = activeColor || '#f3f4f6';
-                const headerTextColor = activeColor ? getContrastTextColor(activeColor) : '#0f172a';
+                const headerBackground = item.color || '#f3f4f6';
+                const headerTextColor = item.color ? getContrastTextColor(item.color) : '#0f172a';
 
                 return (
                   <div key={item.id}>
@@ -729,7 +1124,10 @@ export default function StagingPageV2() {
                             color: headerTextColor,
                             paddingLeft: '12px',
                             fontWeight: 600,
-                            gridTemplateColumns: `1fr auto 140px 24px 80px ${isDraftYearView ? 'auto' : '32px'}`,
+                            // Trailing column only exists in draft view (archive /
+                            // complete buttons); otherwise the total is the last
+                            // column so it aligns with the table's time column
+                            gridTemplateColumns: `1fr auto 140px 24px 80px${isDraftYearView ? ' auto' : ''}`,
                             alignItems: 'center',
                             gap: '12px',
                             cursor: 'pointer',
@@ -738,6 +1136,9 @@ export default function StagingPageV2() {
                           }}
                           onClick={() => {
                             setSelectedGoalId(item.id);
+                            // Clear any row/cell selection so the panel shows
+                            // the Goal section instead of the Row section
+                            clearSelection();
                             fireGoalSelection(item);
                             if (!goalPanelOpen) openGoalPanel();
                           }}
@@ -773,13 +1174,16 @@ export default function StagingPageV2() {
                             )}
                           </div>
                           <div
-                            className="text-right font-semibold pr-2"
-                            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+                            className="text-right font-semibold"
+                            // 13px + the header's pr-3 (12px) ≈ the table's
+                            // p-3 container + px-3 cell padding, so the total
+                            // lines up with the numbers in the time column
+                            style={{ fontSize: `${Math.round(14 * textSizeScale)}px`, paddingRight: '13px' }}
                           >
                             {projectTotal}
                           </div>
-                          <div className="flex items-center justify-end gap-1.5">
-                            {isDraftYearView && (
+                          {isDraftYearView && (
+                            <div className="flex items-center justify-end gap-1.5">
                               <>
                                 <button
                                   type="button"
@@ -802,26 +1206,7 @@ export default function StagingPageV2() {
                                   <Archive size={14} />
                                 </button>
                               </>
-                            )}
-                            <button
-                              type="button"
-                              className="rounded-full p-1 text-slate-700 hover:text-slate-900 focus:outline-none"
-                              style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: 'none' }}
-                              onClick={(e) => openPlanModal(item, e)}
-                              aria-label="Edit project"
-                            >
-                              <Pencil size={14} />
-                            </button>
-                          </div>
-                          {planModal.open && planModal.itemId === item.id && (
-                            <ProjectEditModal
-                              item={item}
-                              planModal={planModal}
-                              updatePlanModal={updatePlanModal}
-                              handlePlanNext={handlePlanNext}
-                              handleRemove={handleRemove}
-                              handleTogglePlanStatus={handleTogglePlanStatus}
-                            />
+                            </div>
                           )}
                         </div>
                         {item.planTableVisible && !item.planTableCollapsed

@@ -361,7 +361,6 @@ function YourYearSection() {
   // Reset all button state when the panel closes so stale in-flight
   // state never bleeds into the next open cycle.
   useEffect(() => {
-    console.log('[GearPanel] isOpen changed ->', isOpen);
     if (!isOpen) {
       setIsCreating(false);
       setIsUndoing(false);
@@ -371,10 +370,6 @@ function YourYearSection() {
       setIsSavingDate(false);
     }
   }, [isOpen]);
-
-  useEffect(() => {
-    console.log('[GearPanel] showArchiveModal changed ->', showArchiveModal);
-  }, [showArchiveModal]);
 
   const handlePlanNextYear = async () => {
     if (!activeYear || isCreating) return;
@@ -595,7 +590,7 @@ function YourYearSection() {
       {draftYear && !isUndoing && (
         <button
           key="archive-year"
-          onClick={(e) => { console.log('[GearPanel] Archive Year button clicked, isOpen:', isOpen); e.stopPropagation(); setShowArchiveModal(true); }}
+          onClick={(e) => { e.stopPropagation(); setShowArchiveModal(true); }}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
@@ -629,7 +624,7 @@ function YourYearSection() {
       {showArchiveModal && (
         <ArchiveYearModal
           isOpen={showArchiveModal}
-          onClose={() => { console.log('[GearPanel] ArchiveYearModal onClose fired, isOpen:', isOpen); setShowArchiveModal(false); }}
+          onClose={() => setShowArchiveModal(false)}
           yearNumber={activeYear?.yearNumber}
         />
       )}
@@ -1097,7 +1092,7 @@ export default function GearPanel() {
           width: 320,
           background: C.bg,
           borderLeft: `1px solid ${C.border}`,
-          zIndex: 99995,
+          zIndex: 99996, // above page panels (99994) and ScheduleItemPanel (99995)
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',

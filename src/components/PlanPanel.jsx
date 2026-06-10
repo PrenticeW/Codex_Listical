@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useLocation } from 'react-router-dom';
 import { usePlanPanel } from '../contexts/PlanPanelContext';
 import usePageSize from '../hooks/usePageSize';
 
@@ -213,6 +214,7 @@ function PageSection() {
 export default function PlanPanel() {
   const { isOpen, close } = usePlanPanel();
   const [navBottom, setNavBottom] = useState(0);
+  const { pathname } = useLocation();
 
   useEffect(() => {
     const measure = () => {
@@ -237,6 +239,11 @@ export default function PlanPanel() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [isOpen, close]);
+
+  // Page panels are mounted globally in Layout; render only on the Plan
+  // page so panels never stack across page switches. Open state is kept,
+  // so the panel is still there when the user returns.
+  if (pathname !== '/tactics') return null;
 
   return createPortal(
     <div

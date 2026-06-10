@@ -1,32 +1,15 @@
-import { createContext, useContext, useState, useRef } from 'react';
+/**
+ * Plan page panel context — delegates to the shared PagePanelContext so the
+ * panel's open state persists across page navigation. Kept as a separate
+ * module so existing imports keep working.
+ */
+import { usePagePanel } from './PagePanelContext';
 
-const PlanPanelContext = createContext(null);
-
+// Pass-through: state now lives in PagePanelProvider (see Layout.jsx)
 export function PlanPanelProvider({ children }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const closedAt = useRef(0);
-
-  return (
-    <PlanPanelContext.Provider value={{
-      isOpen,
-      open: () => setIsOpen(true),
-      close: () => {
-        closedAt.current = Date.now();
-        setIsOpen(false);
-      },
-      toggle: () => {
-        const msSinceClose = Date.now() - closedAt.current;
-        if (msSinceClose < 500) return;
-        setIsOpen(v => !v);
-      },
-    }}>
-      {children}
-    </PlanPanelContext.Provider>
-  );
+  return children;
 }
 
 export function usePlanPanel() {
-  const ctx = useContext(PlanPanelContext);
-  if (!ctx) throw new Error('usePlanPanel must be used inside PlanPanelProvider');
-  return ctx;
+  return usePagePanel();
 }

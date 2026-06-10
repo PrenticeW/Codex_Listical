@@ -1,32 +1,15 @@
-import { createContext, useContext, useState, useRef } from 'react';
+/**
+ * Goal page panel context — delegates to the shared PagePanelContext so the
+ * panel's open state persists across page navigation. Kept as a separate
+ * module so existing imports keep working.
+ */
+import { usePagePanel } from './PagePanelContext';
 
-const GoalPanelContext = createContext(null);
-
+// Pass-through: state now lives in PagePanelProvider (see Layout.jsx)
 export function GoalPanelProvider({ children }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const closedAt = useRef(0);
-
-  return (
-    <GoalPanelContext.Provider value={{
-      isOpen,
-      open: () => setIsOpen(true),
-      close: () => {
-        closedAt.current = Date.now();
-        setIsOpen(false);
-      },
-      toggle: () => {
-        const msSinceClose = Date.now() - closedAt.current;
-        if (msSinceClose < 500) return;
-        setIsOpen(v => !v);
-      },
-    }}>
-      {children}
-    </GoalPanelContext.Provider>
-  );
+  return children;
 }
 
 export function useGoalPanel() {
-  const ctx = useContext(GoalPanelContext);
-  if (!ctx) throw new Error('useGoalPanel must be used inside GoalPanelProvider');
-  return ctx;
+  return usePagePanel();
 }

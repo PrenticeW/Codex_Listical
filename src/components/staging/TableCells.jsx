@@ -97,6 +97,9 @@ export function TextInputCell({
   paddingLeft,
   paddingRight,
   dataAttributes,
+  // Optional right-aligned content (e.g. row action buttons) rendered
+  // after the input inside the same cell
+  trailing,
 }) {
   const style = {
     backgroundColor: getCellBackground({ isDropTarget, rowType }),
@@ -109,7 +112,7 @@ export function TextInputCell({
   if (paddingLeft) style.paddingLeft = paddingLeft;
   if (paddingRight) style.paddingRight = paddingRight;
 
-  const inputClassName = `w-full bg-transparent focus:outline-none border-none ${
+  const inputClassName = `w-full bg-transparent focus:outline-none border-none placeholder:italic placeholder:text-[#aaa] ${
     fontWeight === 'semibold' ? 'font-semibold' : ''
   } ${textColor || 'text-slate-800'}`;
 
@@ -121,18 +124,41 @@ export function TextInputCell({
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
     >
-      <input
-        type="text"
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={onKeyDown}
-        onFocus={onFocus}
-        onMouseDown={onMouseDown}
-        placeholder={placeholder}
-        className={inputClassName}
-        style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-        {...dataAttributes}
-      />
+      {trailing ? (
+        <div className="flex items-center gap-1">
+          <input
+            type="text"
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={onKeyDown}
+            onFocus={onFocus}
+            onMouseDown={onMouseDown}
+            placeholder={placeholder}
+            className={`${inputClassName} min-w-0 flex-1`}
+            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+            {...dataAttributes}
+          />
+          <div
+            className="flex flex-shrink-0 items-center"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {trailing}
+          </div>
+        </div>
+      ) : (
+        <input
+          type="text"
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
+          onFocus={onFocus}
+          onMouseDown={onMouseDown}
+          placeholder={placeholder}
+          className={inputClassName}
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+          {...dataAttributes}
+        />
+      )}
     </td>
   );
 }

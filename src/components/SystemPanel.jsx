@@ -15,6 +15,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { useLocation } from 'react-router-dom';
 import { useSystemPanel } from '../contexts/SystemPanelContext';
 
 // Cross-component action event — consumed by ProjectTimePlannerV2
@@ -574,6 +575,7 @@ function PageSection() {
 export default function SystemPanel() {
   const { isOpen, close } = useSystemPanel();
   const [navBottom, setNavBottom] = useState(0);
+  const { pathname } = useLocation();
 
   // Measure NavigationBar bottom edge (same as GearPanel)
   useEffect(() => {
@@ -599,6 +601,11 @@ export default function SystemPanel() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [isOpen, close]);
+
+  // Page panels are mounted globally in Layout; render only on the System
+  // page so panels never stack across page switches. Open state is kept,
+  // so the panel is still there when the user returns.
+  if (pathname !== '/') return null;
 
   return createPortal(
     <div

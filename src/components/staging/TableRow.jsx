@@ -8,7 +8,84 @@ import {
   EmptyCell,
 } from './TableCells';
 import { PLAN_TABLE_COLS, formatMinutesToHHmm } from '../../utils/staging/planTableHelpers';
-import { SECTION_CONFIG } from '../../utils/staging/sectionConfig';
+import { SECTION_CONFIG, getSectionGhost } from '../../utils/staging/sectionConfig';
+
+// ─── Row action buttons (shells — not yet wired to commands) ──────────────────
+
+function RowBtn({ title, onClick, children }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      className="inline-flex cursor-pointer items-center border-none bg-transparent p-0 text-slate-900 hover:text-emerald-900"
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (onClick) onClick(e);
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function BtnSep() {
+  return <span className="inline-block h-3.5 w-px bg-slate-400" />;
+}
+
+const AddRowIcon = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/>
+  </svg>
+);
+
+const AddPairIcon = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="15" y1="12" x2="15" y2="18"/><line x1="12" y1="15" x2="18" y2="15"/>
+    <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+  </svg>
+);
+
+const SendToActionsIcon = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 8v8"/><path d="m8 12 4 4 4-4"/>
+  </svg>
+);
+
+/**
+ * Per-row inline action buttons, per the goals_table.html mockup:
+ *   - Outcomes prompt:   send to actions · add pair · add row
+ *   - Actions prompt:    add pair · add row
+ *   - Outcomes response: send to actions · add row
+ *   - all other prompt/response rows: add row
+ */
+function RowShellButtons({ rowType, sectionType, onAddRow, onAddPair, onSendToActions }) {
+  const send = sectionType === 'Outcomes';
+  const pair = rowType === 'prompt' && (sectionType === 'Outcomes' || sectionType === 'Actions');
+
+  return (
+    <span className="flex items-center gap-1.5">
+      {send && (
+        <>
+          <RowBtn title="Send to Actions: copy this outcome into the Actions section" onClick={onSendToActions}>
+            {SendToActionsIcon}
+          </RowBtn>
+          <BtnSep />
+        </>
+      )}
+      {pair && (
+        <>
+          <RowBtn title="Add a prompt and response pair below" onClick={onAddPair}>
+            {AddPairIcon}
+          </RowBtn>
+          <BtnSep />
+        </>
+      )}
+      <RowBtn title="Add a row below" onClick={onAddRow}>{AddRowIcon}</RowBtn>
+    </span>
+  );
+}
 
 /**
  * Unified table row component that handles all row types:
@@ -37,6 +114,10 @@ export default function TableRow({
   onInputFocus,
   onEnterKeyAddRow,
   onContextMenu,
+  // Row action button handlers
+  onAddRowBelow,
+  onAddPairBelow,
+  onSendToActions,
   // Drag handlers
   onDragStart,
   onDragOver,
@@ -170,11 +251,21 @@ export default function TableRow({
           width="120px"
           minWidth="120px"
           dataAttributes={dataAttrs(0)}
+          trailing={(
+            <RowShellButtons
+              rowType="prompt"
+              sectionType={sectionType}
+              onAddRow={() => onAddRowBelow?.(item.id, rowIdx, 'prompt', sectionType)}
+              onAddPair={() => onAddPairBelow?.(item.id, rowIdx)}
+              onSendToActions={() => onSendToActions?.(item.id, rowIdx)}
+            />
+          )}
         />
         <TextInputCell
           value={rowValues[2]}
           onChange={(val) => onCellChange(item.id, rowIdx, 2, val)}
           onKeyDown={(e) => onEnterKeyAddRow(e, item.id, rowIdx, 'prompt', sectionType)}
+          placeholder={getSectionGhost('Schedule')}
           onMouseDown={(e) => cellMouseDown(e, 2)}
           onMouseEnter={() => cellMouseEnter(2)}
           onFocus={onInputFocus}
@@ -242,11 +333,21 @@ export default function TableRow({
           width="120px"
           minWidth="120px"
           dataAttributes={dataAttrs(0)}
+          trailing={(
+            <RowShellButtons
+              rowType="prompt"
+              sectionType={sectionType}
+              onAddRow={() => onAddRowBelow?.(item.id, rowIdx, 'prompt', sectionType)}
+              onAddPair={() => onAddPairBelow?.(item.id, rowIdx)}
+              onSendToActions={() => onSendToActions?.(item.id, rowIdx)}
+            />
+          )}
         />
         <TextInputCell
           value={rowValues[1]}
           onChange={(val) => onCellChange(item.id, rowIdx, 1, val)}
           onKeyDown={(e) => onEnterKeyAddRow(e, item.id, rowIdx, 'prompt', sectionType)}
+          placeholder={getSectionGhost(sectionType)}
           onMouseDown={(e) => cellMouseDown(e, 1)}
           onMouseEnter={() => cellMouseEnter(1)}
           onFocus={onInputFocus}
@@ -314,6 +415,14 @@ export default function TableRow({
           width="120px"
           minWidth="120px"
           dataAttributes={dataAttrs(1)}
+          trailing={(
+            <RowShellButtons
+              rowType="response"
+              sectionType={sectionType}
+              onAddRow={() => onAddRowBelow?.(item.id, rowIdx, 'response', sectionType)}
+              onSendToActions={() => onSendToActions?.(item.id, rowIdx)}
+            />
+          )}
         />
         <TextInputCell
           value={rowValues[2]}
@@ -328,6 +437,7 @@ export default function TableRow({
           textSizeScale={textSizeScale}
           colSpan={2}
           dataAttributes={dataAttrs(2)}
+          placeholder={getSectionGhost(sectionType, 'response')}
         />
         <EstimateSelectCell
           value={estimateValue}
@@ -394,6 +504,14 @@ export default function TableRow({
           width="120px"
           minWidth="120px"
           dataAttributes={dataAttrs(1)}
+          trailing={(
+            <RowShellButtons
+              rowType="response"
+              sectionType={sectionType}
+              onAddRow={() => onAddRowBelow?.(item.id, rowIdx, 'response', sectionType)}
+              onSendToActions={() => onSendToActions?.(item.id, rowIdx)}
+            />
+          )}
         />
         <TextInputCell
           value={rowValues[2]}
@@ -408,6 +526,7 @@ export default function TableRow({
           textSizeScale={textSizeScale}
           colSpan={PLAN_TABLE_COLS - 2}
           dataAttributes={dataAttrs(2)}
+          placeholder={getSectionGhost(sectionType, 'response')}
         />
       </tr>
     );

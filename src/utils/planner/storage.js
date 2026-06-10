@@ -115,6 +115,10 @@ async function requireUserId() {
 }
 
 async function findYearRow(userId, yearNumber) {
+  // Callers can race ahead of YearContext and pass null (e.g. GearPanel
+  // settings reads on first mount). year_number is an integer column, so
+  // querying eq.null is a guaranteed 400 — short-circuit instead.
+  if (yearNumber == null) return null;
   const key = yearKey(yearNumber);
   if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
   const { data, error } = await supabase

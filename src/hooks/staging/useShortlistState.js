@@ -7,7 +7,7 @@ import {
   PLAN_TABLE_COLS,
 } from '../../utils/staging/planTableHelpers';
 import { ensurePlanPairingMetadata } from '../../utils/staging/rowPairing';
-import { SECTION_CONFIG } from '../../utils/staging/sectionConfig';
+import { SECTION_CONFIG, LEGACY_SEED_VALUES, LEGACY_HEADERS } from '../../utils/staging/sectionConfig';
 import { createStateMutationExecutor } from '../../utils/staging/commandHelpers';
 import { pickProjectColour } from '../../utils/staging/projectColour';
 
@@ -95,6 +95,41 @@ const createSimpleTable = () => {
 };
 
 /**
+ * One-time cleanup of legacy seeded text. Older tables stored the prompt
+ * labels ("Reason", "Measurable Outcome", ...) and old header questions as
+ * real cell values. Ghost copy now lives in input placeholders instead, so
+ * legacy seed values are blanked and old headers upgraded to the current
+ * wording. Only the columns the seeds were written to are touched
+ * (prompt: cols 1-2, response: col 2) so user content elsewhere is safe.
+ */
+const normalizeLegacySeedText = (shortlist) =>
+  shortlist.map((item) => {
+    const entries = item.planTableEntries;
+    if (!Array.isArray(entries) || entries.length === 0) return item;
+    let changed = false;
+    const next = clonePlanTableEntries(entries, entries.length);
+    for (const row of next) {
+      const rowType = row?.__rowType;
+      if (rowType === 'header') {
+        const upgraded = LEGACY_HEADERS[(row[0] ?? '').trim()];
+        if (upgraded) {
+          row[0] = upgraded;
+          changed = true;
+        }
+      } else if (rowType === 'prompt' || rowType === 'response') {
+        const cols = rowType === 'prompt' ? [1, 2] : [2];
+        for (const c of cols) {
+          if (LEGACY_SEED_VALUES.has((row[c] ?? '').trim())) {
+            row[c] = '';
+            changed = true;
+          }
+        }
+      }
+    }
+    return changed ? { ...item, planTableEntries: next } : item;
+  });
+
+/**
  * Hook to manage shortlist and archived items state
  * Handles loading, saving, and updating shortlist items
  *
@@ -118,7 +153,9 @@ export default function useShortlistState({ currentYear, executeCommand }) {
       const data = await loadStagingState(currentYear);
       if (!cancelled) {
         setState({
-          shortlist: Array.isArray(data?.shortlist) ? data.shortlist : [],
+          shortlist: normalizeLegacySeedText(
+            Array.isArray(data?.shortlist) ? data.shortlist : []
+          ),
           archived: Array.isArray(data?.archived) ? data.archived : [],
         });
         setHasInitialLoaded(true);

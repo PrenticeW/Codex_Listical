@@ -124,7 +124,13 @@ export default function ScheduleItemPanel({
   const panel = (
     <div
       className="flex flex-col bg-[#f8fafc] border-l border-[#94a3b8] shadow-2xl"
-      style={{ position: 'fixed', right: 0, top: navBottom, bottom: 0, width: '320px', zIndex: 99990 }}
+      style={{
+        position: 'fixed', right: 0, top: navBottom, bottom: 0, width: '320px',
+        // Above the page panels (99994) so the Plan panel can't hide it,
+        // below GearPanel (99996) so settings always win. Auto-closes on
+        // navigation since TacticsPage owns its open state.
+        zIndex: 99995,
+      }}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-[#e5e7eb] shrink-0 bg-white">
