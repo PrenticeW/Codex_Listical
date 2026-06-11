@@ -344,6 +344,7 @@ export default function StagingPageV2() {
           rowIdx,
           sectionType,
           rowType: entry.__rowType || 'row',
+          showOutcomeTotals: item.showOutcomeTotals || false,
         },
       },
     }));
