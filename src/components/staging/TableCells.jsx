@@ -223,7 +223,9 @@ export function EstimateSelectCell({
 }) {
   const style = {
     width: '140px',
-    minWidth: '140px',
+    // Floor sized so the longest option ("55 Minutes") plus the dropdown
+    // chevron always fits — scales with the text size setting.
+    minWidth: `${Math.round(118 * textSizeScale)}px`,
     backgroundColor: getCellBackground({ isDropTarget, rowType }),
     borderTop: isDropTarget ? '2px solid #000000' : undefined,
   };
@@ -237,7 +239,7 @@ export function EstimateSelectCell({
     >
       <select
         className="w-full bg-transparent focus:outline-none border-none"
-        style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+        style={{ fontSize: `${Math.round(14 * textSizeScale)}px`, paddingRight: '16px' }}
         value={value || '-'}
         onMouseDown={onMouseDown}
         onChange={(e) => onChange(e.target.value)}
@@ -271,7 +273,7 @@ export function TimeValueCell({
 }) {
   const style = {
     width: '120px',
-    minWidth: '120px',
+    minWidth: '60px',
     textAlign: 'right',
     paddingRight: '10px',
     backgroundColor: getCellBackground({ isDropTarget, rowType }),

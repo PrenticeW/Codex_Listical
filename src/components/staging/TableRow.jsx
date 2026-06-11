@@ -14,18 +14,27 @@ import { SECTION_CONFIG, getSectionGhost } from '../../utils/staging/sectionConf
 
 function RowBtn({ title, onClick, children }) {
   return (
-    <button
-      type="button"
-      title={title}
-      className="inline-flex cursor-pointer items-center border-none bg-transparent p-0 text-slate-900 hover:text-emerald-900"
-      onMouseDown={(e) => e.stopPropagation()}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (onClick) onClick(e);
-      }}
-    >
-      {children}
-    </button>
+    <span className="group relative inline-flex">
+      <button
+        type="button"
+        aria-label={title}
+        className="inline-flex cursor-pointer items-center border-none bg-transparent p-0 text-slate-900 hover:text-emerald-900"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (onClick) onClick(e);
+        }}
+      >
+        {children}
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded bg-slate-800 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-opacity duration-100 group-hover:opacity-100"
+      >
+        {title}
+        <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+      </span>
+    </span>
   );
 }
 
@@ -68,7 +77,7 @@ function RowShellButtons({ rowType, sectionType, onAddRow, onAddPair, onSendToAc
     <span className="flex items-center gap-1.5">
       {send && (
         <>
-          <RowBtn title="Send to Actions: copy this outcome into the Actions section" onClick={onSendToActions}>
+          <RowBtn title="Send to Actions" onClick={onSendToActions}>
             {SendToActionsIcon}
           </RowBtn>
           <BtnSep />
@@ -76,13 +85,13 @@ function RowShellButtons({ rowType, sectionType, onAddRow, onAddPair, onSendToAc
       )}
       {pair && (
         <>
-          <RowBtn title="Add a prompt and response pair below" onClick={onAddPair}>
+          <RowBtn title="Add pair below" onClick={onAddPair}>
             {AddPairIcon}
           </RowBtn>
           <BtnSep />
         </>
       )}
-      <RowBtn title="Add a row below" onClick={onAddRow}>{AddRowIcon}</RowBtn>
+      <RowBtn title="Add row below" onClick={onAddRow}>{AddRowIcon}</RowBtn>
     </span>
   );
 }
@@ -213,7 +222,7 @@ export default function TableRow({
             style={{
               backgroundColor: '#b7b7b7',
               width: '70px',
-              minWidth: '70px',
+              minWidth: '60px',
               fontSize: `${Math.round(14 * textSizeScale)}px`,
             }}
           >
@@ -249,7 +258,7 @@ export default function TableRow({
           rowType="prompt"
           textSizeScale={textSizeScale}
           width="120px"
-          minWidth="120px"
+          minWidth="80px"
           dataAttributes={dataAttrs(0)}
           trailing={(
             <RowShellButtons
@@ -274,6 +283,7 @@ export default function TableRow({
           rowType="prompt"
           textSizeScale={textSizeScale}
           colSpan={3}
+          minWidth={`${Math.round(380 * textSizeScale)}px`}
           dataAttributes={dataAttrs(2)}
         />
         <EstimateSelectCell
@@ -331,7 +341,7 @@ export default function TableRow({
           rowType="prompt"
           textSizeScale={textSizeScale}
           width="120px"
-          minWidth="120px"
+          minWidth="80px"
           dataAttributes={dataAttrs(0)}
           trailing={(
             <RowShellButtons
@@ -356,6 +366,7 @@ export default function TableRow({
           rowType="prompt"
           textSizeScale={textSizeScale}
           colSpan={showTotal ? PLAN_TABLE_COLS - 2 : PLAN_TABLE_COLS - 1}
+          minWidth={`${Math.round(380 * textSizeScale)}px`}
           dataAttributes={dataAttrs(1)}
         />
         {showTotal && (
@@ -364,7 +375,7 @@ export default function TableRow({
             style={{
               backgroundColor: '#d4d4d4',
               width: '70px',
-              minWidth: '70px',
+              minWidth: '60px',
               fontSize: `${Math.round(14 * textSizeScale)}px`,
             }}
           >
@@ -399,7 +410,7 @@ export default function TableRow({
           rowType="response"
           textSizeScale={textSizeScale}
           width="120px"
-          minWidth="120px"
+          minWidth="80px"
           dataAttributes={dataAttrs(0)}
         />
         <TextInputCell
@@ -413,7 +424,7 @@ export default function TableRow({
           rowType="response"
           textSizeScale={textSizeScale}
           width="120px"
-          minWidth="120px"
+          minWidth="80px"
           dataAttributes={dataAttrs(1)}
           trailing={(
             <RowShellButtons
@@ -436,6 +447,7 @@ export default function TableRow({
           rowType="response"
           textSizeScale={textSizeScale}
           colSpan={2}
+          minWidth={`${Math.round(380 * textSizeScale)}px`}
           dataAttributes={dataAttrs(2)}
           placeholder={getSectionGhost(sectionType, 'response')}
         />
@@ -488,7 +500,7 @@ export default function TableRow({
           rowType="response"
           textSizeScale={textSizeScale}
           width="120px"
-          minWidth="120px"
+          minWidth="80px"
           dataAttributes={dataAttrs(0)}
         />
         <TextInputCell
@@ -502,7 +514,7 @@ export default function TableRow({
           rowType="response"
           textSizeScale={textSizeScale}
           width="120px"
-          minWidth="120px"
+          minWidth="80px"
           dataAttributes={dataAttrs(1)}
           trailing={(
             <RowShellButtons
@@ -525,6 +537,7 @@ export default function TableRow({
           rowType="response"
           textSizeScale={textSizeScale}
           colSpan={PLAN_TABLE_COLS - 2}
+          minWidth={`${Math.round(380 * textSizeScale)}px`}
           dataAttributes={dataAttrs(2)}
           placeholder={getSectionGhost(sectionType, 'response')}
         />

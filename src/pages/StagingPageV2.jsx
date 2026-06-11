@@ -1065,6 +1065,7 @@ export default function StagingPageV2() {
           />
           <div
             className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm mt-2"
+            style={{ maxWidth: 'calc(100% - 336px)' }}
           >
             <input
               id="staging-input"
@@ -1085,7 +1086,10 @@ export default function StagingPageV2() {
         </div>
 
         <div className="px-4 pb-4" style={{ isolation: 'isolate' }}>
-          <div className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm">
+          <div
+            className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm"
+            style={{ maxWidth: 'calc(100% - 336px)' }}
+          >
             <div className="grid gap-[5px]">
               {shortlist.map((item) => {
                 const planEntries = clonePlanTableEntries(item.planTableEntries);
@@ -1175,10 +1179,11 @@ export default function StagingPageV2() {
                           </div>
                           <div
                             className="text-right font-semibold"
-                            // 13px + the header's pr-3 (12px) ≈ the table's
-                            // p-3 container + px-3 cell padding, so the total
-                            // lines up with the numbers in the time column
-                            style={{ fontSize: `${Math.round(14 * textSizeScale)}px`, paddingRight: '13px' }}
+                            // Right inset matched to the table's time column:
+                            // container border (1) + p-3 (12) + cell border (1)
+                            // + cell paddingRight (10) = 24px; header card is
+                            // border (1) + pr-3 (12) + 11px = 24px
+                            style={{ fontSize: `${Math.round(14 * textSizeScale)}px`, paddingRight: '11px' }}
                           >
                             {projectTotal}
                           </div>
