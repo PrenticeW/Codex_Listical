@@ -25,6 +25,7 @@ import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import { revertArchive } from '../utils/planner/revertArchive';
 import { importTasksForDraftYear } from '../utils/planner/importTasksFromYear';
 import { placeImportedTasks } from '../utils/planner/placeImportedTasks';
+import { isEditableRow } from '../utils/planner/rowTypeChecks';
 import usePlannerFilters from '../hooks/planner/usePlannerFilters';
 import { useFilteredData, useFilterValues } from '../hooks/planner/useFilteredData';
 import { useProjectTotals, useDailyTotals } from '../hooks/planner/useTotalsCalculation';
@@ -1396,6 +1397,39 @@ export default function ProjectTimePlannerV2() {
   // (Previously guarded by a 50 ms setTimeout; no longer needed because the functional updater
   // form guarantees project injection's setData is applied before this one in the same flush.)
   }, [tacticsChips, totalDays, isCurrentYearDraft, sentToSystem, projects]);
+
+  // Reconcile task-row subproject values against the current Goal page subproject
+  // lists. When a subproject is deleted on the Goal page, live task rows that still
+  // reference it get their `subproject` cleared so TaskRow's red warning indicator
+  // shows and the user reassigns manually — instead of the row silently regrouping
+  // under the next subproject section. Mirrors the import-time validation in
+  // importTasksFromYear.js. Archived rows are never touched (archives are a frozen
+  // record of what existed at the time).
+  useEffect(() => {
+    if (!isProjectsLoaded) return;
+    if (!projectSubprojectsMap || Object.keys(projectSubprojectsMap).length === 0) return;
+    setData(prevData => {
+      let changed = false;
+      const next = prevData.map(row => {
+        // Editable rows = plain task rows (no _rowType) and chip task rows
+        // ('projectTask'); excludes structure, timeline, and archive structure rows.
+        if (!isEditableRow(row)) return row;
+        // Archived task rows keep their task _rowType but carry _isArchivedTask
+        // (set in archiveHelpers.moveTasksToArchive). Never touch archived rows.
+        if (row._isArchivedTask || row.archiveWeekLabel) return row;
+        const sub = row.subproject;
+        if (!sub || sub === '-') return row;
+        const projectKey = row.project || row.projectNickname;
+        // Only reconcile rows whose project still exists on the Goal page;
+        // removed projects are handled by the project-removal cleanup above.
+        const subs = projectKey ? projectSubprojectsMap[projectKey] : undefined;
+        if (!subs || subs.includes(sub)) return row;
+        changed = true;
+        return { ...row, subproject: '' };
+      });
+      return changed ? next : prevData;
+    });
+  }, [projectSubprojectsMap, isProjectsLoaded, setData]);
 
   // Track the last send-to-system timestamp we've already acted on
   const lastResetTsRef = useRef(null);
