@@ -128,6 +128,7 @@ export function TextInputCell({
         <div className="flex items-center gap-1">
           <input
             type="text"
+            size={1}
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={onKeyDown}
@@ -148,6 +149,7 @@ export function TextInputCell({
       ) : (
         <input
           type="text"
+          size={1}
           value={value || ''}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
@@ -289,6 +291,7 @@ export function TimeValueCell({
     >
       <input
         type="text"
+        size={1}
         value={value || '0.00'}
         onChange={(e) => {
           if (!readOnly) onChange(e.target.value);

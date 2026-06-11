@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { getContrastTextColor } from '../utils/colorUtils';
@@ -989,6 +989,30 @@ export default function StagingPageV2() {
   }
 
   // Render the simple table (unified row rendering)
+  // Shared width floor so the prompt box and the white table card stop
+  // shrinking exactly where the table does. The table's intrinsic floor (its
+  // fixed columns + padding) is measured at runtime rather than hard-coded:
+  // when the card's content overflows (scrollWidth > clientWidth) the table
+  // has hit its floor, and that overflow width becomes the min-width for both
+  // boxes. ResizeObserver re-checks on every card resize (i.e. window resize).
+  const tableCardRef = useRef(null);
+  const [boxMinWidth, setBoxMinWidth] = useState(null);
+  useLayoutEffect(() => {
+    const el = tableCardRef.current;
+    if (!el) return undefined;
+    const measure = () => {
+      if (el.scrollWidth > el.clientWidth) {
+        // scrollWidth = overflowing content width; add back the card's right
+        // padding (p-4, 16px) the overflow swallows, plus 1px border per side.
+        setBoxMinWidth(el.scrollWidth + 18);
+      }
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [shortlist.length]);
+
   const renderTable = (item) => {
     const entries = item.planTableEntries || [];
 
@@ -1066,7 +1090,7 @@ export default function StagingPageV2() {
           />
           <div
             className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm mt-2"
-            style={{ maxWidth: 'calc(100% - 336px)' }}
+            style={{ maxWidth: 'calc(100% - 336px)', minWidth: boxMinWidth ?? undefined }}
           >
             <input
               id="staging-input"
@@ -1088,8 +1112,9 @@ export default function StagingPageV2() {
 
         <div className="px-4 pb-4" style={{ isolation: 'isolate' }}>
           <div
+            ref={tableCardRef}
             className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm"
-            style={{ maxWidth: 'calc(100% - 336px)' }}
+            style={{ maxWidth: 'calc(100% - 336px)', minWidth: boxMinWidth ?? undefined }}
           >
             <div className="grid gap-[5px]">
               {shortlist.map((item) => {
