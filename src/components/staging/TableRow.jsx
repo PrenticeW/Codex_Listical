@@ -74,7 +74,7 @@ function RowShellButtons({ rowType, sectionType, onAddRow, onAddPair, onSendToAc
   const pair = rowType === 'prompt' && (sectionType === 'Outcomes' || sectionType === 'Actions');
 
   return (
-    <span className="flex items-center gap-1.5">
+    <span className="flex items-center gap-1.5 opacity-0 pointer-events-none transition-opacity duration-100 group-focus-within/row:opacity-100 group-focus-within/row:pointer-events-auto">
       {send && (
         <>
           <RowBtn title="Send to Actions" onClick={onSendToActions}>
@@ -141,13 +141,16 @@ export default function TableRow({
   outcomeTotals,
   outcomeSectionTotal,
 }) {
-  const hasTimeElements = sectionType === 'Actions' || sectionType === 'Schedule';
+  // Actions rows can show their time cells via the per-goal showActionTimes
+  // flag (undefined = hidden, default off). Schedule rows always show times.
+  const showActionTimes = item.showActionTimes === true;
+  const hasTimeElements = (sectionType === 'Actions' && showActionTimes) || sectionType === 'Schedule';
   const isSchedulePrompt = rowType === 'prompt' && sectionType === 'Schedule';
 
   // Common row props for drag and drop
   const rowProps = {
     draggable: true,
-    className: isRowSelected ? 'selected-row' : '',
+    className: `group/row${isRowSelected ? ' selected-row' : ''}`,
     onDragStart: (e) => onDragStart(e, item.id, rowIdx),
     onDragOver: (e) => onDragOver(e, item.id, rowIdx),
     onDrop: (e) => onDrop(e, item.id, rowIdx),

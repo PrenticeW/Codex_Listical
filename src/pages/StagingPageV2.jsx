@@ -299,6 +299,7 @@ export default function StagingPageV2() {
     insertRowType,
     addRowOnEnter,
     toggleItemOutcomeTotals,
+    toggleItemActionTimes,
   } = useRowCommands({
     setState,
     executeCommand,
@@ -345,6 +346,7 @@ export default function StagingPageV2() {
           sectionType,
           rowType: entry.__rowType || 'row',
           showOutcomeTotals: item.showOutcomeTotals || false,
+          showActionTimes: item.showActionTimes === true,
         },
       },
     }));
@@ -772,6 +774,10 @@ export default function StagingPageV2() {
         toggleItemOutcomeTotals(goalId);
       }
 
+      if (action === 'toggleActionTimes' && goalId != null) {
+        toggleItemActionTimes(goalId);
+      }
+
       if (action === 'setColor' && goalId && color) {
         handleInlineProjectUpdate(goalId, 'color', color);
         const item = shortlist.find((i) => i.id === goalId);
@@ -974,7 +980,7 @@ export default function StagingPageV2() {
     };
     window.addEventListener(GOAL_PANEL_ACTION_EVENT, handler);
     return () => window.removeEventListener(GOAL_PANEL_ACTION_EVENT, handler);
-  }, [handleInlineProjectUpdate, handleTogglePlanStatus, handleArchiveAndCleanup, handleRemove, deleteRows, selectedRows, clearSelection, toggleItemOutcomeTotals, shortlist, fireGoalSelection, setState, executeCommand]);
+  }, [handleInlineProjectUpdate, handleTogglePlanStatus, handleArchiveAndCleanup, handleRemove, deleteRows, selectedRows, clearSelection, toggleItemOutcomeTotals, toggleItemActionTimes, shortlist, fireGoalSelection, setState, executeCommand]);
 
   // Wait for auth to complete before rendering content that depends on user-scoped data
   if (isAuthLoading) {

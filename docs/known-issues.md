@@ -33,6 +33,16 @@
 
 ---
 
+## Pending Supabase migrations — run together before testing
+
+Migrations written but not yet applied to the database. Apply as a batch.
+
+| Migration file | What it does | Blocked features until applied |
+|---|---|---|
+| `supabase/migrations/20260612000001_add_show_action_times.sql` | Adds `projects.show_action_times` (boolean, default FALSE) | Goal page side-panel "Hide Times" toggle on action rows — saves will fail on the unknown column until applied |
+
+---
+
 ## Remove before launch
 
 | Item | Location |

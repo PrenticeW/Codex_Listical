@@ -454,6 +454,40 @@ export default function useRowCommands({
     [setState, executeCommand]
   );
 
+  /**
+   * Toggle showActionTimes on the item level.
+   * When off, Actions rows hide their estimate/time cells.
+   * Undefined is treated as hidden (default off).
+   */
+  const toggleItemActionTimes = useCallback(
+    (itemId) => {
+      if (itemId == null) return;
+
+      let capturedState = null;
+      const command = {
+        execute: () => {
+          setState((prev) => {
+            if (capturedState === null) {
+              capturedState = cloneStagingState(prev);
+            }
+            return {
+              ...prev,
+              shortlist: prev.shortlist.map((item) => {
+                if (item.id !== itemId) return item;
+                return { ...item, showActionTimes: !item.showActionTimes };
+              }),
+            };
+          });
+        },
+        undo: () => {
+          if (capturedState) setState(capturedState);
+        },
+      };
+      executeCommand(command);
+    },
+    [setState, executeCommand]
+  );
+
   return {
     insertRowAbove,
     insertRowBelow,
@@ -463,5 +497,6 @@ export default function useRowCommands({
     insertRowType,
     addRowOnEnter,
     toggleItemOutcomeTotals,
+    toggleItemActionTimes,
   };
 }

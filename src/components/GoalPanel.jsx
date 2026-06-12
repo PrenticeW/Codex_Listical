@@ -578,6 +578,23 @@ function RowSection({ row }) {
         onClick={() => dispatchGoalAction('toggleTotals', { goalId: row.goalId })}
         style={{ marginBottom: 0 }}
       />
+
+      {/* Times toggle only applies to Actions rows — kept below its own divider */}
+      {row.sectionType === 'Actions' && (
+        <>
+          <div style={{ borderTop: `1px solid ${C.borderLight}`, margin: '12px 0 12px' }} />
+          <ActionBtn
+            icon={
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+            }
+            label={row.showActionTimes ? 'Hide Times' : 'Show Times'}
+            onClick={() => dispatchGoalAction('toggleActionTimes', { goalId: row.goalId })}
+            style={{ marginBottom: 0 }}
+          />
+        </>
+      )}
     </div>
   );
 }
