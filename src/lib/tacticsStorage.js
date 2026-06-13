@@ -109,6 +109,7 @@ const DEFAULT_YEAR_SETTINGS = {
   startDay: 'Sunday',
   chipDisplayModes: { __default__: { duration: false, clock: false } },
   summaryRowOrder: null,
+  defaultChipOverrides: {},
 };
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -219,6 +220,12 @@ function yearSettingsRowToPayload(row) {
         ? row.chip_display_modes
         : { __default__: { duration: false, clock: false } },
     summaryRowOrder: Array.isArray(row.summary_row_order) ? row.summary_row_order : null,
+    defaultChipOverrides:
+      row.default_chip_overrides &&
+      typeof row.default_chip_overrides === 'object' &&
+      !Array.isArray(row.default_chip_overrides)
+        ? row.default_chip_overrides
+        : {},
   };
 }
 
@@ -240,6 +247,12 @@ function payloadToYearSettingsColumns(payload) {
         ? payload.chipDisplayModes
         : { __default__: { duration: false, clock: false } },
     summary_row_order: Array.isArray(payload?.summaryRowOrder) ? payload.summaryRowOrder : null,
+    default_chip_overrides:
+      payload?.defaultChipOverrides &&
+      typeof payload.defaultChipOverrides === 'object' &&
+      !Array.isArray(payload.defaultChipOverrides)
+        ? payload.defaultChipOverrides
+        : {},
   };
 }
 
