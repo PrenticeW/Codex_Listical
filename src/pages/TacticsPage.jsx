@@ -345,6 +345,11 @@ function FitText({ text, maxFontSize, minFontSize = maxFontSize * 0.5, style, wr
   );
 }
 
+// Module-level: persists across TacticsPage mounts within the same SPA session.
+// Stores the JSON fingerprint of chip state at the last successful send so
+// we can compare after navigation (re-mount creates fresh object refs).
+let _sessionSentFingerprint = null;
+
 export default function TacticsPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -2942,6 +2947,11 @@ export default function TacticsPage() {
     workingColumnTotals,
   ]);
   const [sendToSystemDone, setSendToSystemDone] = useState(false);
+  // Snapshot of chip state at last successful send — used to detect whether
+  // the plan has changed since the last send (all three are compared by ref).
+  // Bumped after each send so the isUpToDate memo re-runs against the
+  // updated _sessionSentFingerprint module variable.
+  const [sentFingerprintTick, setSentFingerprintTick] = useState(0);
   const handleSendToSystem = useCallback(async () => {
     const yearInfo = getYearInfo(currentYear);
     if (yearInfo?.startDate) {
@@ -3069,6 +3079,10 @@ export default function TacticsPage() {
       detail: { __eventYear: currentYear },
     }));
 
+    // Record the fingerprint of what was just sent so we can detect changes
+    // across re-mounts (module-level survives navigation; tick triggers re-render).
+    _sessionSentFingerprint = JSON.stringify({ projectChips, customProjects, chipTimeOverrides });
+    setSentFingerprintTick((t) => t + 1);
     setSendToSystemDone(true);
     setTimeout(() => setSendToSystemDone(false), 2000);
   }, [
@@ -3275,15 +3289,53 @@ export default function TacticsPage() {
     }));
   }, [undoStack.length, redoStack.length]);
 
+  // Broadcast display toggle state to PlanPanel whenever chipDisplayModes changes
+  useEffect(() => {
+    const flags = chipDisplayModes['__default__'] ?? { clock: false, duration: false };
+    window.dispatchEvent(new CustomEvent(PLAN_PANEL_STATE_EVENT, {
+      detail: {
+        showClock: Boolean(flags.clock),
+        showDuration: Boolean(flags.duration),
+      },
+    }));
+  }, [chipDisplayModes]);
+
+  // JSON fingerprint of the current chip state — recomputes only when chips
+  // actually change (not on every render).
+  const chipsFingerprint = useMemo(
+    () => JSON.stringify({ projectChips, customProjects, chipTimeOverrides }),
+    [projectChips, customProjects, chipTimeOverrides],
+  );
+
+  // True when the current fingerprint matches what was last sent.
+  // sentFingerprintTick forces a recheck immediately after a send (because
+  // mutating _sessionSentFingerprint alone doesn't trigger React re-renders).
+  const isUpToDate = useMemo(
+    () => _sessionSentFingerprint !== null && chipsFingerprint === _sessionSentFingerprint,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chipsFingerprint, sentFingerprintTick],
+  );
+
+  // Broadcast sync state to PlanPanel
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(PLAN_PANEL_STATE_EVENT, {
+      detail: { isUpToDate },
+    }));
+  }, [isUpToDate]);
+
   // Listen for actions fired by PlanPanel
   useEffect(() => {
     const handler = (e) => {
-      if (e.detail?.action === 'undo') undo();
-      else if (e.detail?.action === 'redo') redo();
+      const { action } = e.detail ?? {};
+      if (action === 'undo') undo();
+      else if (action === 'redo') redo();
+      else if (action === 'toggleGlobalClock') handleToggleChipDisplayFlag('__default__', 'clock');
+      else if (action === 'toggleGlobalDuration') handleToggleChipDisplayFlag('__default__', 'duration');
+      else if (action === 'sendToSystem') handleSendToSystem();
     };
     window.addEventListener(PLAN_PANEL_ACTION_EVENT, handler);
     return () => window.removeEventListener(PLAN_PANEL_ACTION_EVENT, handler);
-  }, [undo, redo]);
+  }, [undo, redo, handleToggleChipDisplayFlag, handleSendToSystem]);
 
   // Broadcast selected chip data to PlanPanel whenever selection changes.
   // Fires with chip: null on deselect so the panel reverts to the default view.
@@ -4355,15 +4407,6 @@ export default function TacticsPage() {
         <NavigationBar
           listicalButton={
             <span className="font-serif text-sm font-medium text-slate-900 select-none">Listical</span>
-          }
-          actionButton={
-            <button
-              type="button"
-              onClick={handleSendToSystem}
-              className="px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 border border-slate-200 bg-white text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900"
-            >
-              {sendToSystemDone ? 'Sent ✓' : 'Send to System →'}
-            </button>
           }
           onUndoDraft={draftYear ? handleUndoDraft : null}
           onRevertArchive={!draftYear && allYears.some(y => y.status === 'archived') ? handleRevertArchive : null}

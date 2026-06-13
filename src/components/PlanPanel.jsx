@@ -410,6 +410,19 @@ const ICON = {
       <path d="M1 1l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/>
     </svg>
   ),
+  sync: (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <polyline points="23 4 23 10 17 10"/>
+      <polyline points="1 20 1 14 7 14"/>
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+    </svg>
+  ),
+  checkCircle: (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+      <polyline points="22 4 12 14.01 9 11.01"/>
+    </svg>
+  ),
 };
 
 // ─── Palette data ─────────────────────────────────────────────────────────────
@@ -804,6 +817,35 @@ function ScheduleView({ scheduleData, onDragStartRef, onBack }) {
   );
 }
 
+// ─── Update section (always visible in main view) ─────────────────────────────
+
+function UpdateSection({ isUpToDate, onSendToSystem }) {
+  return (
+    <div style={SECTION}>
+      <SectionLabel>Update</SectionLabel>
+      {isUpToDate ? (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          border: `1px solid ${C.greenBorder}`,
+          borderRadius: 10, padding: '11px 14px',
+          background: C.greenBg,
+          fontFamily: FONT, fontSize: 13, fontWeight: 500,
+          color: C.greenDark,
+        }}>
+          {ICON.checkCircle}
+          System up to date
+        </div>
+      ) : (
+        <ActionBtn
+          icon={ICON.sync}
+          label="Send to system"
+          onClick={onSendToSystem}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Display section (no chip selected) ──────────────────────────────────────
 
 function DisplaySection({ showClock, showDuration, onToggleClock, onToggleDuration }) {
@@ -1086,8 +1128,10 @@ function MainView({
   selectedChip,
   showClock,
   showDuration,
+  isUpToDate,
   onToggleClock,
   onToggleDuration,
+  onSendToSystem,
   onViewSchedule,
   onOpenColour,
   onNameChange,
@@ -1106,6 +1150,7 @@ function MainView({
     <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Scrollable body */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
+        <UpdateSection isUpToDate={isUpToDate} onSendToSystem={onSendToSystem} />
         {!hasChip ? (
           <>
             <DisplaySection
@@ -1166,6 +1211,9 @@ export default function PlanPanel() {
 
   // Colour pending during colour-picker editing
   const [pendingColour, setPendingColour] = useState(null);
+
+  // Sync state — pushed in via PLAN_PANEL_STATE_EVENT from TacticsPage
+  const [isUpToDate, setIsUpToDate] = useState(false);
 
   // Schedule view data — pushed in via PLAN_PANEL_SCHEDULE_DATA_EVENT
   const [scheduleData, setScheduleData] = useState({
@@ -1268,12 +1316,14 @@ export default function PlanPanel() {
   const handleRemoveChip    = useCallback(() => dispatchPlanAction('removeChip', { chipId: selectedChip?.id }), [selectedChip]);
   const handleToggleClock    = useCallback(() => dispatchPlanAction('toggleGlobalClock'), []);
   const handleToggleDuration = useCallback(() => dispatchPlanAction('toggleGlobalDuration'), []);
+  const handleSendToSystem   = useCallback(() => dispatchPlanAction('sendToSystem'), []);
 
-  // Keep local showClock/showDuration in sync when TacticsPage pushes state
+  // Keep local display state in sync when TacticsPage pushes state
   useEffect(() => {
     const handler = (e) => {
-      if (e.detail?.showClock   != null) setShowClock(e.detail.showClock);
+      if (e.detail?.showClock    != null) setShowClock(e.detail.showClock);
       if (e.detail?.showDuration != null) setShowDuration(e.detail.showDuration);
+      if (e.detail?.isUpToDate   != null) setIsUpToDate(e.detail.isUpToDate);
     };
     window.addEventListener(PLAN_PANEL_STATE_EVENT, handler);
     return () => window.removeEventListener(PLAN_PANEL_STATE_EVENT, handler);
@@ -1346,8 +1396,10 @@ export default function PlanPanel() {
           selectedChip={selectedChip}
           showClock={showClock}
           showDuration={showDuration}
+          isUpToDate={isUpToDate}
           onToggleClock={handleToggleClock}
           onToggleDuration={handleToggleDuration}
+          onSendToSystem={handleSendToSystem}
           onViewSchedule={openScheduleView}
           onOpenColour={openColourView}
           onNameChange={handleNameChange}
