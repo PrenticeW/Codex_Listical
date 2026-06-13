@@ -37,8 +37,7 @@ import { GEAR_TACTICS_SETTINGS_EVENT } from '../components/GearPanel';
 import { peekStagingCache } from '../lib/stagingStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
 import usePageSize from '../hooks/usePageSize';
-import ScheduleItemPanel from '../components/ScheduleItemPanel';
-import { PLAN_PANEL_ACTION_EVENT, PLAN_PANEL_STATE_EVENT } from '../components/PlanPanel';
+import { PLAN_PANEL_ACTION_EVENT, PLAN_PANEL_STATE_EVENT, PLAN_PANEL_CHIP_EVENT, PLAN_PANEL_SCHEDULE_DATA_EVENT, PLAN_PANEL_NAV_EVENT } from '../components/PlanPanel';
 import { getContrastTextColor } from '../utils/colorUtils';
 
 const DAYS_OF_WEEK = [
@@ -586,7 +585,6 @@ export default function TacticsPage() {
   }, []);
   const [selectedCell, setSelectedCell] = useState(null);
   const [cellMenu, setCellMenu] = useState(null);
-  const [scheduleItemPanelOpen, setScheduleItemPanelOpen] = useState(false);
 
   // Column widths for resizing (index 0 is the time column, rest are day/project columns).
   // On cache hit (peek above), starts with the user's saved widths so the
@@ -3287,6 +3285,106 @@ export default function TacticsPage() {
     return () => window.removeEventListener(PLAN_PANEL_ACTION_EVENT, handler);
   }, [undo, redo]);
 
+  // Broadcast selected chip data to PlanPanel whenever selection changes.
+  // Fires with chip: null on deselect so the panel reverts to the default view.
+  useEffect(() => {
+    let chip = null;
+
+    if (selectedBlockId) {
+      const block = getProjectChipById(selectedBlockId);
+      if (block) {
+        const projectId = block.projectId ?? 'sleep';
+        const metadata = projectMetadata.get(projectId);
+
+        // Chip type
+        const isDefault = projectId === 'sleep' || projectId === 'rest' || projectId === 'buffer';
+        const isCustom = typeof projectId === 'string' && projectId.startsWith('custom-');
+        const chipType = isDefault ? 'default' : isCustom ? 'custom' : 'project';
+
+        // Display name
+        const name = block.displayLabel ?? metadata?.label ?? 'Project';
+
+        // Colour
+        const colour = metadata?.color ?? '#d9d9d9';
+
+        // Goal info (project chips only)
+        const goalName = isDefault || isCustom ? undefined : (metadata?.label ?? undefined);
+        const goalColour = isDefault || isCustom ? undefined : (metadata?.color ?? undefined);
+
+        // Clock times from row IDs
+        const startMinutes = rowIdToClockMinutes(block.startRowId, trailingMinuteRows);
+        const endRowId = block.endRowId ?? block.startRowId;
+        const endRowMinutes = rowIdToClockMinutes(endRowId, trailingMinuteRows);
+        const endMinutes = endRowMinutes != null ? (endRowMinutes + incrementMinutes) % (24 * 60) : null;
+
+        // Duration
+        const overrideMins = chipTimeOverrides[selectedBlockId];
+        const durationMinutes = overrideMins ?? block.durationMinutes ?? null;
+
+        // Display flags (global __default__ bucket)
+        const displayFlags = chipDisplayModes['__default__'] && typeof chipDisplayModes['__default__'] === 'object'
+          ? chipDisplayModes['__default__']
+          : { duration: false, clock: false };
+
+        chip = {
+          id: block.id,
+          type: chipType,
+          name,
+          colour,
+          projectId,
+          goalName,
+          goalColour,
+          startMinutes,
+          endMinutes,
+          durationMinutes,
+          showClock: Boolean(displayFlags.clock),
+          showDuration: Boolean(displayFlags.duration),
+        };
+      }
+    }
+
+    window.dispatchEvent(new CustomEvent(PLAN_PANEL_CHIP_EVENT, { detail: { chip } }));
+  }, [
+    selectedBlockId,
+    getProjectChipById,
+    projectMetadata,
+    trailingMinuteRows,
+    incrementMinutes,
+    chipTimeOverrides,
+    chipDisplayModes,
+  ]);
+
+  // Broadcast schedule data to PlanPanel's ScheduleView whenever relevant data changes
+  useEffect(() => {
+    const enrichedProjects = highlightedProjects.map((p) => {
+      const meta = projectMetadata.get(p.id);
+      const color = meta?.color ?? p.color;
+      return { ...p, color, textColor: meta?.textColor ?? getContrastTextColor(color) };
+    });
+    window.dispatchEvent(new CustomEvent(PLAN_PANEL_SCHEDULE_DATA_EVENT, {
+      detail: {
+        projects: enrichedProjects,
+        scheduleLayout,
+        projectChips,
+        chipTimeOverrides,
+        incrementMinutes,
+        rowMetrics,
+        onDragStart: handlePanelDragStart,
+        onAddChip: handleAddScheduleItemChip,
+      },
+    }));
+  }, [
+    highlightedProjects,
+    projectMetadata,
+    scheduleLayout,
+    projectChips,
+    chipTimeOverrides,
+    incrementMinutes,
+    rowMetrics,
+    handlePanelDragStart,
+    handleAddScheduleItemChip,
+  ]);
+
   // Keyboard shortcut: Delete/Backspace to remove the selected chip
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -4158,7 +4256,7 @@ export default function TacticsPage() {
           type="button"
           className="mt-1 flex w-full items-center justify-between px-3 py-2.5 text-[11px] font-semibold text-[#33558a] hover:bg-[#dce6f4]"
           style={{ backgroundColor: '#e8eef7' }}
-          onClick={(e) => { e.stopPropagation(); setScheduleItemPanelOpen(true); }}
+          onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent(PLAN_PANEL_NAV_EVENT, { detail: { view: 'schedule' } })); }}
         >
           <span>View Schedule Items</span>
           <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/></svg>
@@ -4182,7 +4280,6 @@ export default function TacticsPage() {
     handleMenuRenameConfirm,
     setMenuRenamingChipId,
     setMenuRenamingLabel,
-    setScheduleItemPanelOpen,
     scheduleLayout,
     projectMetadata,
     chipEditor,
@@ -5045,23 +5142,6 @@ export default function TacticsPage() {
         {cellMenu ? createPortal(renderCellProjectMenu(), document.body) : null}
         </div>
       </div>
-      {scheduleItemPanelOpen && (
-        <ScheduleItemPanel
-          projects={highlightedProjects.map((p) => {
-            const meta = projectMetadata.get(p.id);
-            const color = meta?.color ?? p.color;
-            return { ...p, color, textColor: meta?.textColor ?? getContrastTextColor(color) };
-          })}
-          scheduleLayout={scheduleLayout}
-          projectChips={projectChips}
-          chipTimeOverrides={chipTimeOverrides}
-          incrementMinutes={incrementMinutes}
-          rowMetrics={rowMetrics}
-          onAddChip={handleAddScheduleItemChip}
-          onDragStart={handlePanelDragStart}
-          onClose={() => setScheduleItemPanelOpen(false)}
-        />
-      )}
       <ArchiveYearModal
         isOpen={isArchiveModalOpen}
         onClose={() => setIsArchiveModalOpen(false)}
