@@ -637,6 +637,164 @@ function BackBtn({ onClick }) {
   );
 }
 
+// ─── Goal picker sub-view ─────────────────────────────────────────────────────
+
+function GoalPickerView({ goals, currentProjectId, onBack, onSelect }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', width: 320, flexShrink: 0 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '12px 22px 10px', borderBottom: `1px solid ${C.borderLight}`,
+        flexShrink: 0, background: C.bg,
+      }}>
+        <BackBtn onClick={onBack} />
+        <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: C.text }}>Goal</span>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px' }}>
+        {(!goals || goals.length === 0) ? (
+          <p style={{ fontFamily: FONT, fontSize: 13, color: C.textFaint, fontStyle: 'italic', padding: '8px' }}>
+            No goals defined. Add highlighted projects on the Goal page.
+          </p>
+        ) : goals.map((goal) => {
+          const isActive = goal.id === currentProjectId;
+          return (
+            <button
+              key={goal.id}
+              onClick={() => onSelect(goal.id)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                marginBottom: 6, padding: '8px 12px',
+                border: `1px solid ${isActive ? C.greenBorder : C.border}`,
+                borderRadius: 8, background: isActive ? C.greenBg : 'none',
+                cursor: 'pointer', textAlign: 'left',
+                fontFamily: FONT, fontSize: 13,
+                color: isActive ? C.greenDark : C.text,
+                transition: 'border-color 0.15s, background 0.15s',
+              }}
+            >
+              <div style={{
+                width: 16, height: 16, borderRadius: 3, flexShrink: 0,
+                background: goal.colour ?? C.border,
+                border: '1px solid rgba(0,0,0,0.08)',
+              }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                {goal.name}
+              </span>
+              {isActive && (
+                <span style={{ color: C.green, flexShrink: 0 }}>{ICON.check}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Time picker sub-view ─────────────────────────────────────────────────────
+
+function TimePickerView({ label, initialMinutes, incrementMinutes, onBack, onConfirm }) {
+  const inc = incrementMinutes > 0 ? incrementMinutes : 30;
+
+  const snap = (mins) => {
+    const m = ((mins ?? 0) + 1440) % 1440;
+    return Math.round(m / inc) * inc % 1440;
+  };
+
+  const [selectedMins, setSelectedMins] = useState(() => snap(initialMinutes ?? 0));
+
+  useEffect(() => {
+    setSelectedMins(snap(initialMinutes ?? 0));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMinutes, inc]);
+
+  const fmt12 = (mins) => {
+    const m = ((mins % 1440) + 1440) % 1440;
+    const h24 = Math.floor(m / 60);
+    const min = m % 60;
+    const ap = h24 < 12 ? 'AM' : 'PM';
+    const h = h24 % 12 === 0 ? 12 : h24 % 12;
+    return `${h}:${String(min).padStart(2, '0')} ${ap}`;
+  };
+
+  const step = useCallback((dir) => {
+    setSelectedMins((prev) => ((prev + dir * inc) + 1440) % 1440);
+  }, [inc]);
+
+  const handleWheel = useCallback((e) => {
+    e.preventDefault();
+    step(e.deltaY > 0 ? 1 : -1);
+  }, [step]);
+
+  const handleConfirm = useCallback(() => onConfirm(selectedMins), [selectedMins, onConfirm]);
+
+  const stepBtnStyle = {
+    background: 'none', border: `1px solid ${C.border}`, borderRadius: 8,
+    width: 44, height: 44, cursor: 'pointer', display: 'flex', alignItems: 'center',
+    justifyContent: 'center', color: C.textDim, fontSize: 18, fontFamily: FONT,
+    transition: 'border-color 0.15s, color 0.15s',
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', width: 320, flexShrink: 0 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '12px 22px 10px', borderBottom: `1px solid ${C.borderLight}`,
+        flexShrink: 0, background: C.bg,
+      }}>
+        <BackBtn onClick={onBack} />
+        <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: C.text }}>{label}</span>
+        <button
+          onClick={handleConfirm}
+          style={{
+            marginLeft: 'auto', width: 44, height: 26,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: C.bgBlock, border: `1px solid ${C.border}`, borderRadius: 7,
+            cursor: 'pointer', color: C.green, padding: 0,
+            transition: 'border-color 0.15s, background 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = C.green; e.currentTarget.style.background = C.greenBg; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.bgBlock; }}
+        >
+          {ICON.check}
+        </button>
+      </div>
+      <div style={{
+        flex: 1, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', padding: '24px 22px',
+      }}>
+        <div
+          onWheel={handleWheel}
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, userSelect: 'none' }}
+        >
+          <button
+            onClick={() => step(-1)}
+            style={stepBtnStyle}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = C.green; e.currentTarget.style.color = C.green; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; }}
+          >▲</button>
+          <div style={{
+            fontFamily: FONT, fontSize: 28, fontWeight: 700, color: C.text,
+            background: C.bgBlock, border: `1px solid ${C.border}`,
+            borderRadius: 12, padding: '14px 28px', minWidth: 140, textAlign: 'center',
+          }}>
+            {fmt12(selectedMins)}
+          </div>
+          <button
+            onClick={() => step(1)}
+            style={stepBtnStyle}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = C.green; e.currentTarget.style.color = C.green; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; }}
+          >▼</button>
+        </div>
+        <p style={{ fontFamily: FONT, fontSize: 11, color: C.textFaint, marginTop: 20, textAlign: 'center' }}>
+          Scroll or use arrows · {inc} min steps
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Schedule items sub-view ──────────────────────────────────────────────────
 
 function ScheduleView({ scheduleData, onDragStartRef, onBack }) {
@@ -992,6 +1150,33 @@ function TimeSection({ chip, onStartChange, onEndChange, onDurationChange, onTog
     return `${h}:${String(m).padStart(2, '0')}`;
   };
 
+  // Local draft so the user can type freely; dispatches only on commit (blur/Enter)
+  const [draftDuration, setDraftDuration] = useState(() => fmtDur(chip.durationMinutes));
+  const editingDurationRef = useRef(false);
+
+  // Sync from chip whenever we're not actively editing
+  useEffect(() => {
+    if (!editingDurationRef.current) {
+      setDraftDuration(fmtDur(chip.durationMinutes));
+    }
+  }, [chip.durationMinutes]);
+
+  const commitDuration = useCallback(() => {
+    editingDurationRef.current = false;
+    onDurationChange?.(draftDuration);
+    // Don't reset here — the useEffect will sync once TacticsPage pushes
+    // updated chip data back via PLAN_PANEL_CHIP_EVENT.
+  }, [draftDuration, onDurationChange]);
+
+  const handleDurationKeyDown = useCallback((e) => {
+    if (e.key === 'Enter') { e.currentTarget.blur(); }
+    if (e.key === 'Escape') {
+      editingDurationRef.current = false;
+      setDraftDuration(fmtDur(chip.durationMinutes));
+      e.currentTarget.blur();
+    }
+  }, [chip.durationMinutes]);
+
   const startMins = chip.startMinutes;
   const endMins = chip.endMinutes ?? (chip.startMinutes != null && chip.durationMinutes != null ? chip.startMinutes + chip.durationMinutes : null);
 
@@ -1022,8 +1207,11 @@ function TimeSection({ chip, onStartChange, onEndChange, onDurationChange, onTog
         label="Duration"
         control={
           <FieldInput
-            value={fmtDur(chip.durationMinutes)}
-            onChange={e => onDurationChange?.(e.target.value)}
+            value={draftDuration}
+            onChange={e => { editingDurationRef.current = true; setDraftDuration(e.target.value); }}
+            onBlur={commitDuration}
+            onKeyDown={handleDurationKeyDown}
+            placeholder="H:MM"
             style={{ textTransform: 'none', fontWeight: 400, fontSize: 13 }}
           />
         }
@@ -1196,10 +1384,11 @@ export default function PlanPanel() {
   const [navBottom, setNavBottom] = useState(0);
   const { pathname } = useLocation();
 
-  // Panel view: 'main' | 'colour' | 'schedule'
+  // Panel view: 'main' | 'colour' | 'schedule' | 'goal' | 'timePicker'
   const [panelView, setPanelView] = useState('main');
   // Delay hiding the second-slot view until the slide-out animation finishes
-  const [secondSlotView, setSecondSlotView] = useState('colour'); // 'colour' | 'schedule'
+  const [secondSlotView, setSecondSlotView] = useState('colour'); // 'colour' | 'schedule' | 'goal' | 'timePicker'
+  const [timePickerMode, setTimePickerMode] = useState('start'); // 'start' | 'end'
   const slideBackTimerRef = useRef(null);
 
   // Page-level display toggles (no chip selected)
@@ -1255,7 +1444,7 @@ export default function PlanPanel() {
       setSelectedChip(chip);
       if (chip) {
         open();
-      } else if (panelView === 'colour') {
+      } else if (panelView !== 'main' && panelView !== 'schedule') {
         goToMain();
       }
     };
@@ -1265,26 +1454,33 @@ export default function PlanPanel() {
   }, [open, panelView]);
 
   // View transitions
-  const openColourView = useCallback(() => {
+  const openView = useCallback((view, setup) => {
     if (slideBackTimerRef.current) {
       clearTimeout(slideBackTimerRef.current);
       slideBackTimerRef.current = null;
     }
-    setSecondSlotView('colour');
-    setPendingColour(selectedChip?.colour ?? '#c9daf8');
-    setPanelView('colour');
-  }, [selectedChip?.colour]);
+    setup?.();
+    setSecondSlotView(view);
+    setPanelView(view);
+  }, []);
+
+  const openColourView = useCallback(() => {
+    openView('colour', () => setPendingColour(selectedChip?.colour ?? '#c9daf8'));
+  }, [openView, selectedChip?.colour]);
+
+  const openGoalView = useCallback(() => {
+    openView('goal');
+  }, [openView]);
+
+  const openTimePickerView = useCallback((mode) => {
+    openView('timePicker', () => setTimePickerMode(mode));
+  }, [openView]);
 
   const openScheduleViewRef = useRef(null);
 
   const openScheduleView = useCallback(() => {
-    if (slideBackTimerRef.current) {
-      clearTimeout(slideBackTimerRef.current);
-      slideBackTimerRef.current = null;
-    }
-    setSecondSlotView('schedule');
-    setPanelView('schedule');
-  }, []);
+    openView('schedule');
+  }, [openView]);
 
   // Keep ref in sync so event handlers always call the latest version
   openScheduleViewRef.current = openScheduleView;
@@ -1305,12 +1501,28 @@ export default function PlanPanel() {
     goToMain();
   }, [selectedChip, goToMain]);
 
+  // Goal confirm
+  const handleGoalSelect = useCallback((projectId) => {
+    dispatchPlanAction('setChipGoal', { chipId: selectedChip?.id, projectId });
+    goToMain();
+  }, [selectedChip, goToMain]);
+
+  // Time confirm
+  const handleTimeConfirm = useCallback((minutes) => {
+    if (timePickerMode === 'start') {
+      dispatchPlanAction('setChipStartMinutes', { chipId: selectedChip?.id, minutes });
+    } else {
+      dispatchPlanAction('setChipEndMinutes', { chipId: selectedChip?.id, minutes });
+    }
+    goToMain();
+  }, [timePickerMode, selectedChip, goToMain]);
+
   // Chip field actions — dispatch events for TacticsPage to handle
-  const handleNameChange    = useCallback((value) => dispatchPlanAction('setChipName', { chipId: selectedChip?.id, value }), [selectedChip]);
-  const handleGoalChange    = useCallback((e) => dispatchPlanAction('openGoalPicker', { chipId: selectedChip?.id, event: e }), [selectedChip]);
-  const handleStartChange   = useCallback((e) => dispatchPlanAction('openStartTimePicker', { chipId: selectedChip?.id, event: e }), [selectedChip]);
-  const handleEndChange     = useCallback((e) => dispatchPlanAction('openEndTimePicker', { chipId: selectedChip?.id, event: e }), [selectedChip]);
-  const handleDurationChange= useCallback((value) => dispatchPlanAction('setChipDuration', { chipId: selectedChip?.id, value }), [selectedChip]);
+  const handleNameChange     = useCallback((value) => dispatchPlanAction('setChipName', { chipId: selectedChip?.id, value }), [selectedChip]);
+  const handleGoalChange     = useCallback(() => openGoalView(), [openGoalView]);
+  const handleStartChange    = useCallback(() => openTimePickerView('start'), [openTimePickerView]);
+  const handleEndChange      = useCallback(() => openTimePickerView('end'), [openTimePickerView]);
+  const handleDurationChange = useCallback((value) => dispatchPlanAction('setChipDuration', { chipId: selectedChip?.id, value }), [selectedChip]);
   const handleToggleChipClock    = useCallback(() => dispatchPlanAction('toggleChipClock', { chipId: selectedChip?.id }), [selectedChip]);
   const handleToggleChipDuration = useCallback(() => dispatchPlanAction('toggleChipDuration', { chipId: selectedChip?.id }), [selectedChip]);
   const handleRemoveChip    = useCallback(() => dispatchPlanAction('removeChip', { chipId: selectedChip?.id }), [selectedChip]);
@@ -1410,14 +1622,30 @@ export default function PlanPanel() {
           onToggleChipClock={handleToggleChipClock}
           onToggleChipDuration={handleToggleChipDuration}
           onRemoveChip={handleRemoveChip}
+          goals={selectedChip?.goals ?? []}
         />
 
-        {/* View 2 — Colour or Schedule */}
+        {/* View 2 — Colour, Schedule, Goal, or Time picker */}
         {secondSlotView === 'schedule' ? (
           <ScheduleView
             scheduleData={scheduleData}
             onDragStartRef={onDragStartRef}
             onBack={goToMain}
+          />
+        ) : secondSlotView === 'goal' ? (
+          <GoalPickerView
+            goals={selectedChip?.goals ?? []}
+            currentProjectId={selectedChip?.projectId}
+            onBack={goToMain}
+            onSelect={handleGoalSelect}
+          />
+        ) : secondSlotView === 'timePicker' ? (
+          <TimePickerView
+            label={timePickerMode === 'start' ? 'Start time' : 'End time'}
+            initialMinutes={timePickerMode === 'start' ? selectedChip?.startMinutes : selectedChip?.endMinutes}
+            incrementMinutes={selectedChip?.incrementMinutes ?? 30}
+            onBack={goToMain}
+            onConfirm={handleTimeConfirm}
           />
         ) : (
           <ColourView

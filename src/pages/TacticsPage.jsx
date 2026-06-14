@@ -668,6 +668,13 @@ export default function TacticsPage() {
   const displayedWeekDaysRef = useRef(displayedWeekDays);
   useEffect(() => { displayedWeekDaysRef.current = displayedWeekDays; }, [displayedWeekDays]);
 
+  // Refs for timeline state — used by plan-panel chip action handlers to avoid
+  // stale closures without re-registering the event listener on every change.
+  const timelineRowIdsRef = useRef([]);
+  const trailingMinuteRowsRef = useRef([]);
+  const rowIndexMapRef = useRef(new Map());
+  const incrementMinutesRef = useRef(60);
+
   // Remap day-column chips to their correct columnIndex when the start day changes
   const handleStartDayChange = useCallback((newStartDay) => {
     const newStartIndex = DAYS_OF_WEEK.indexOf(newStartDay);
@@ -1215,6 +1222,12 @@ export default function TacticsPage() {
     () => new Map(timelineRowIds.map((rowId, index) => [rowId, index])),
     [timelineRowIds]
   );
+
+  // Keep timeline refs current for chip action handlers
+  useEffect(() => { timelineRowIdsRef.current = timelineRowIds; }, [timelineRowIds]);
+  useEffect(() => { trailingMinuteRowsRef.current = trailingMinuteRows; }, [trailingMinuteRows]);
+  useEffect(() => { rowIndexMapRef.current = rowIndexMap; }, [rowIndexMap]);
+  useEffect(() => { incrementMinutesRef.current = incrementMinutes; }, [incrementMinutes]);
 
   // One-time backfill: set durationMinutes on day-column chips that are missing it.
   // This handles chips saved before durationMinutes was introduced.
@@ -2534,6 +2547,22 @@ export default function TacticsPage() {
     () => pickCustomChipColour(customProjects, stagingProjects),
     [customProjects, stagingProjects]
   );
+
+  // Given a clock time in minutes (0–1439), find the nearest row ID in the
+  // current timeline. Used by the panel's start/end time pickers.
+  const minutesToNearestRowId = useCallback((targetMins) => {
+    const rows = timelineRowIdsRef.current;
+    const trailing = trailingMinuteRowsRef.current;
+    let bestRowId = null;
+    let bestDiff = Infinity;
+    for (const rowId of rows) {
+      const mins = rowIdToClockMinutes(rowId, trailing);
+      if (mins == null) continue;
+      const diff = Math.abs(mins - targetMins);
+      if (diff < bestDiff) { bestDiff = diff; bestRowId = rowId; }
+    }
+    return bestRowId;
+  }, []);
   const projectMetadata = useMemo(() => {
     const map = new Map();
     const ov = (id) => (defaultChipOverrides && typeof defaultChipOverrides === 'object' ? defaultChipOverrides[id] : null) || {};
@@ -3326,16 +3355,147 @@ export default function TacticsPage() {
   // Listen for actions fired by PlanPanel
   useEffect(() => {
     const handler = (e) => {
-      const { action } = e.detail ?? {};
-      if (action === 'undo') undo();
-      else if (action === 'redo') redo();
-      else if (action === 'toggleGlobalClock') handleToggleChipDisplayFlag('__default__', 'clock');
-      else if (action === 'toggleGlobalDuration') handleToggleChipDisplayFlag('__default__', 'duration');
-      else if (action === 'sendToSystem') handleSendToSystem();
+      const { action, chipId, value, colour, projectId, minutes } = e.detail ?? {};
+
+      if (action === 'undo') { undo(); return; }
+      if (action === 'redo') { redo(); return; }
+      if (action === 'toggleGlobalClock') { handleToggleChipDisplayFlag('__default__', 'clock'); return; }
+      if (action === 'toggleGlobalDuration') { handleToggleChipDisplayFlag('__default__', 'duration'); return; }
+      if (action === 'sendToSystem') { handleSendToSystem(); return; }
+
+      // ── Chip-specific actions ──────────────────────────────────────────────
+
+      if (action === 'setChipName') {
+        if (!chipId) return;
+        const label = typeof value === 'string' ? value.trim() || null : null;
+        const prevChips = projectChipsRef.current;
+        const nextChips = prevChips.map((c) => c.id === chipId ? { ...c, displayLabel: label } : c);
+        executeCommand({
+          execute: () => setProjectChips(nextChips),
+          undo: () => setProjectChips(prevChips),
+        });
+        return;
+      }
+
+      if (action === 'setChipColour') {
+        if (!chipId || !colour) return;
+        const chip = projectChipsRef.current.find((c) => c.id === chipId);
+        if (!chip?.projectId?.startsWith('custom-')) return;
+        const pid = chip.projectId;
+        const prevCustom = customProjectsRef.current;
+        const nextCustom = prevCustom.map((p) => p.id === pid ? { ...p, color: colour } : p);
+        executeCommand({
+          execute: () => setCustomProjects(nextCustom),
+          undo: () => setCustomProjects(prevCustom),
+        });
+        return;
+      }
+
+      if (action === 'setChipGoal') {
+        if (!chipId || !projectId) return;
+        const prevChips = projectChipsRef.current;
+        const nextChips = prevChips.map((c) =>
+          c.id === chipId ? { ...c, projectId, displayLabel: null } : c
+        );
+        executeCommand({
+          execute: () => setProjectChips(nextChips),
+          undo: () => setProjectChips(prevChips),
+        });
+        return;
+      }
+
+      if (action === 'setChipStartMinutes') {
+        if (!chipId || minutes == null) return;
+        const newStartRowId = minutesToNearestRowId(minutes);
+        if (!newStartRowId) return;
+        const prevChips = projectChipsRef.current;
+        const nextChips = prevChips.map((c) => {
+          if (c.id !== chipId) return c;
+          // Preserve duration span
+          const idxMap = rowIndexMapRef.current;
+          const rows = timelineRowIdsRef.current;
+          const oldStartIdx = idxMap.get(c.startRowId) ?? 0;
+          const oldEndIdx = idxMap.get(c.endRowId ?? c.startRowId) ?? oldStartIdx;
+          const span = Math.max(0, oldEndIdx - oldStartIdx);
+          const newStartIdx = idxMap.get(newStartRowId) ?? 0;
+          const newEndIdx = Math.min(newStartIdx + span, rows.length - 1);
+          return { ...c, startRowId: newStartRowId, endRowId: rows[newEndIdx] ?? newStartRowId };
+        });
+        executeCommand({
+          execute: () => setProjectChips(nextChips),
+          undo: () => setProjectChips(prevChips),
+        });
+        return;
+      }
+
+      if (action === 'setChipEndMinutes') {
+        if (!chipId || minutes == null) return;
+        // End time displayed = last row covered + incrementMinutes.
+        // The rowId we want is the one whose clock time = endMinutes - incrementMinutes.
+        const rowMins = ((minutes - incrementMinutesRef.current) + 1440) % 1440;
+        const newEndRowId = minutesToNearestRowId(rowMins);
+        if (!newEndRowId) return;
+        const prevChips = projectChipsRef.current;
+        const nextChips = prevChips.map((c) => {
+          if (c.id !== chipId) return c;
+          // Don't allow end before start
+          const idxMap = rowIndexMapRef.current;
+          const startIdx = idxMap.get(c.startRowId) ?? 0;
+          const newEndIdx = idxMap.get(newEndRowId) ?? startIdx;
+          if (newEndIdx < startIdx) return c;
+          return { ...c, endRowId: newEndRowId };
+        });
+        executeCommand({
+          execute: () => setProjectChips(nextChips),
+          undo: () => setProjectChips(prevChips),
+        });
+        return;
+      }
+
+      if (action === 'setChipDuration') {
+        if (!chipId || !value) return;
+        const parts = String(value).match(/^(\d+):(\d{2})$/);
+        if (!parts) return;
+        const newDuration = parseInt(parts[1], 10) * 60 + parseInt(parts[2], 10);
+        if (newDuration <= 0) return;
+        const inc = incrementMinutesRef.current;
+        const idxMap = rowIndexMapRef.current;
+        const rows = timelineRowIdsRef.current;
+        const prevChips = projectChipsRef.current;
+        const prevOverrides = chipTimeOverridesRef.current;
+        const nextChips = prevChips.map((c) => {
+          if (c.id !== chipId) return c;
+          // Resize chip to match new duration: compute the endRowId that spans
+          // exactly ceil(newDuration / inc) rows from startRowId.
+          const startIdx = idxMap.get(c.startRowId);
+          if (startIdx == null) return c;
+          const rowSpan = inc > 0 ? Math.max(1, Math.round(newDuration / inc)) : 1;
+          const newEndIdx = Math.min(startIdx + rowSpan - 1, rows.length - 1);
+          const newEndRowId = rows[newEndIdx] ?? c.startRowId;
+          return { ...c, endRowId: newEndRowId };
+        });
+        // Store the user-specified duration as a chipTimeOverride — same as the
+        // inline double-click editor. This is what the label and totaling code
+        // read first, and it works for both single-cell and multi-row chips.
+        const nextOverrides = { ...prevOverrides, [chipId]: newDuration };
+        executeCommand({
+          execute: () => { setProjectChips(nextChips); setChipTimeOverrides(nextOverrides); },
+          undo: () => { setProjectChips(prevChips); setChipTimeOverrides(prevOverrides); },
+        });
+        return;
+      }
+
+      if (action === 'toggleChipClock') { handleToggleChipDisplayFlag('__default__', 'clock'); return; }
+      if (action === 'toggleChipDuration') { handleToggleChipDisplayFlag('__default__', 'duration'); return; }
+
+      if (action === 'removeChip') {
+        handleRemoveSelectedChip();
+        return;
+      }
     };
     window.addEventListener(PLAN_PANEL_ACTION_EVENT, handler);
     return () => window.removeEventListener(PLAN_PANEL_ACTION_EVENT, handler);
-  }, [undo, redo, handleToggleChipDisplayFlag, handleSendToSystem]);
+  }, [undo, redo, handleToggleChipDisplayFlag, handleSendToSystem, executeCommand, minutesToNearestRowId, handleRemoveSelectedChip]);
 
   // Broadcast selected chip data to PlanPanel whenever selection changes.
   // Fires with chip: null on deselect so the panel reverts to the default view.
@@ -3378,6 +3538,12 @@ export default function TacticsPage() {
           ? chipDisplayModes['__default__']
           : { duration: false, clock: false };
 
+        // Goals list — highlighted projects only (for the goal picker in panel)
+        const goals = highlightedProjects.map((p) => {
+          const meta = projectMetadata.get(p.id);
+          return { id: p.id, name: meta?.label ?? p.label, colour: meta?.color ?? p.color ?? '#d9d9d9' };
+        });
+
         chip = {
           id: block.id,
           type: chipType,
@@ -3391,6 +3557,8 @@ export default function TacticsPage() {
           durationMinutes,
           showClock: Boolean(displayFlags.clock),
           showDuration: Boolean(displayFlags.duration),
+          goals,
+          incrementMinutes,
         };
       }
     }
@@ -3404,6 +3572,7 @@ export default function TacticsPage() {
     incrementMinutes,
     chipTimeOverrides,
     chipDisplayModes,
+    highlightedProjects,
   ]);
 
   // Broadcast schedule data to PlanPanel's ScheduleView whenever relevant data changes
