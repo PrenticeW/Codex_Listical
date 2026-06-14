@@ -244,7 +244,7 @@ const dedupeChipsById = (chips = []) => {
 };
 
 
-function ChipLabel({ normalizedLabel, baseFontSize, wrap, largeTimeStr, chipInlineDuration, isEditing, textSizeScale, chipHeight, clockStr, bottomOffset = '2px' }) {
+function ChipLabel({ normalizedLabel, baseFontSize, wrap, largeTimeStr, isEditing, textSizeScale, chipHeight, clockStr, bottomOffset = '2px' }) {
   const [hideNumber, setHideNumber] = useState(false);
 
   const handleTextHeight = useCallback((h) => {
@@ -255,15 +255,7 @@ function ChipLabel({ normalizedLabel, baseFontSize, wrap, largeTimeStr, chipInli
 
   return (
     <>
-      {chipInlineDuration ? (
-        <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', width: '100%', overflow: 'hidden' }}>
-          <FitText text={normalizedLabel} maxFontSize={baseFontSize} wrap={false} />
-          <span style={{ flexShrink: 0, opacity: 0.75 }}>:</span>
-          <span style={{ flexShrink: 0 }}>{chipInlineDuration}</span>
-        </span>
-      ) : (
-        <FitText text={normalizedLabel} maxFontSize={baseFontSize} wrap={wrap} onTextHeight={handleTextHeight} />
-      )}
+      <FitText text={normalizedLabel} maxFontSize={baseFontSize} wrap={wrap} onTextHeight={handleTextHeight} />
       {(largeTimeStr || clockStr) && !isEditing && !hideNumber ? (
         <span
           style={{
@@ -4024,7 +4016,6 @@ export default function TacticsPage() {
       const showClock = Boolean(displayFlags.clock);
       let rawLabel;
       let largeTimeStr = null;
-      let chipInlineDuration = null;
       if (isScheduleChip) {
         // Derive label directly from schedule data at render time so it's always fresh.
         // Extra-copy IDs: schedule-chip-{projectId}-{itemIdx}-extra-chip-{N}
@@ -4076,9 +4067,8 @@ export default function TacticsPage() {
           }
         }
         if (showDuration && !isMultiRow && largeTimeStr) {
-          chipInlineDuration = largeTimeStr;
+          rawLabel = `${baseName} : ${largeTimeStr}`;
           largeTimeStr = null;
-          rawLabel = baseName;
         } else {
           rawLabel = timeStr != null ? `${baseName}: ${timeStr}` : baseName;
         }
@@ -4108,9 +4098,8 @@ export default function TacticsPage() {
           }
         }
         if (showDuration && !isMultiRow && largeTimeStr) {
-          chipInlineDuration = largeTimeStr;
+          rawLabel = `${baseName} : ${largeTimeStr}`;
           largeTimeStr = null;
-          rawLabel = baseName;
         } else {
           const showTime = !isMultiRow && Number.isFinite(effectiveMins) && effectiveMins > 0 &&
             effectiveMins < incrementMinutes;
@@ -4308,7 +4297,6 @@ export default function TacticsPage() {
                 baseFontSize={baseFontSize}
                 wrap={isScheduleChip && chipIsMultiRow && blockHeight >= baseFontSize * 2.8}
                 largeTimeStr={largeTimeStr}
-                chipInlineDuration={chipInlineDuration}
                 isEditing={isEditing}
                 textSizeScale={textSizeScale}
                 chipHeight={blockHeight}
