@@ -531,7 +531,15 @@ async function writeChipsLayerInner({ userId, yearId, yearNumber, isSent, payloa
 
   const insertOps = [];
   if (chipRows.length > 0) {
-    insertOps.push(supabase.from('tactics_chips').insert(chipRows));
+    // Use upsert instead of insert so that if two saves race (e.g. after a
+    // Vite HMR module reload resets the chipSaveQueues lock), the second
+    // write updates rather than 409-conflicting on the unique constraint
+    // (user_id, year_id, chip_id, is_sent).
+    insertOps.push(
+      supabase
+        .from('tactics_chips')
+        .upsert(chipRows, { onConflict: 'user_id,year_id,chip_id,is_sent' })
+    );
   }
   if (customRows.length > 0) {
     insertOps.push(supabase.from('tactics_custom_projects').insert(customRows));

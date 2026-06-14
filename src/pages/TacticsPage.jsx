@@ -102,7 +102,9 @@ function chipContrastColour(colour) {
 }
 const createProjectChipId = () => {
   chipSequence += 1;
-  return `chip-${chipSequence}`;
+  // Include a timestamp so IDs remain unique even if chipSequence resets
+  // (e.g. after a Vite HMR module re-evaluation in development).
+  return `chip-${Date.now()}-${chipSequence}`;
 };
 const updateChipSequenceFromList = (chips = []) => {
   chips.forEach((chip) => {
@@ -1898,7 +1900,9 @@ export default function TacticsPage() {
     const { columnIndex, rowId } = target;
     if (columnIndex == null || !rowId) return null;
     const columnBlocks = getProjectChipsByColumnIndex(columnIndex);
-    const block = columnBlocks.find((entry) => entry.startRowId === rowId) ?? columnBlocks.find((entry) => isRowWithinBlock(rowId, entry));
+    const block =
+      columnBlocks.find((entry) => entry.startRowId === rowId) ??
+      columnBlocks.find((entry) => isRowWithinBlock(rowId, entry));
     return block?.id ?? null;
   }, [cellMenu, selectedCell, getProjectChipsByColumnIndex, isRowWithinBlock]);
 
@@ -1918,8 +1922,15 @@ export default function TacticsPage() {
       let assignedId = null;
       let nextChips;
       let updated = false;
+      // If the right-clicked cell is covered by an existing chip block (not
+      // necessarily its start row), update that chip instead of creating a new
+      // one hidden underneath it.
+      const coveringBlockId = cellMenuBlockId;
       const mapped = prevChips.map((entry) => {
-        if (entry.columnIndex === columnIndex && entry.startRowId === rowId) {
+        const isMatch = coveringBlockId
+          ? entry.id === coveringBlockId
+          : entry.columnIndex === columnIndex && entry.startRowId === rowId;
+        if (isMatch) {
           updated = true;
           // If this was a schedule chip, reset its ID so it's no longer
           // tracked as a placed schedule item for the old project.
@@ -1970,7 +1981,7 @@ export default function TacticsPage() {
       closeCellMenu();
       setSelectedCell(null);
     },
-    [cellMenu, closeCellMenu, executeCommand, selectedCell, setProjectChips, setSelectedBlockId, setSelectedCell]
+    [cellMenu, cellMenuBlockId, closeCellMenu, executeCommand, selectedCell, setProjectChips, setSelectedBlockId, setSelectedCell]
   );
   const handleCopySelectedBlock = useCallback(() => {
     if (selectedBlockIds.size === 0) return;

@@ -243,7 +243,7 @@ export function EstimateSelectCell({
         className="w-full bg-transparent focus:outline-none border-none"
         style={{ fontSize: `${Math.round(14 * textSizeScale)}px`, paddingRight: '16px' }}
         value={value || '-'}
-        onMouseDown={onMouseDown}
+        onMouseDown={(e) => { onMouseDown(e); e.stopPropagation(); }}
         onChange={(e) => onChange(e.target.value)}
         {...dataAttributes}
       >
