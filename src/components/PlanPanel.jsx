@@ -1317,14 +1317,14 @@ function GoalChip({ colour, name, onClick }) {
 
 function TimeReadout({ minutes }) {
   if (minutes == null || !Number.isFinite(minutes)) {
-    return <span style={{ width: 160, flexShrink: 0, fontFamily: FONT, fontSize: 13, color: C.textFaint, padding: '0 10px' }}>—</span>;
+    return <span style={{ width: 160, flexShrink: 0, fontFamily: FONT, fontSize: 13, color: C.textFaint, padding: '0 10px', textAlign: 'center' }}>—</span>;
   }
   const p = minsTo12(minutes);
   const label = `${p.h}:${String(p.min).padStart(2, '0')} ${p.ap}`;
   return (
     <span style={{
       width: 160, height: 28, boxSizing: 'border-box', flexShrink: 0,
-      display: 'flex', alignItems: 'center',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: C.bgBlock, border: `1px solid ${C.border}`,
       borderRadius: 8, padding: '0 11px',
       fontFamily: FONT, fontSize: 13, fontWeight: 500, color: C.textDim,
