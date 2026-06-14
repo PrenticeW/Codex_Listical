@@ -3305,8 +3305,88 @@ export default function TacticsPage() {
   );
 
   const handleAddScheduleItemChip = useCallback(
-    (projectId, itemIdx) => { buildAndAddScheduleItemChip(projectId, itemIdx); },
-    [buildAndAddScheduleItemChip]
+    (projectId, itemIdx) => {
+      // If the user has a cell selected, place the chip there rather than at the
+      // default project-column position.
+      if (selectedCell) {
+        const schedItems = scheduleLayout?.scheduleItemsByProject?.get(projectId) ?? [];
+        const scheduleItem = schedItems[itemIdx];
+        if (!scheduleItem) return;
+
+        const canonicalId = `schedule-chip-${projectId}-${itemIdx}`;
+        const minutes = parseEstimateLabelToMinutes(scheduleItem.timeValue);
+        const totalMinutes = Number.isFinite(minutes) ? minutes : incrementMinutes;
+        const alreadyPlaced = projectChips.reduce((sum, c) => {
+          if (!c.id.startsWith('schedule-chip-')) return sum;
+          if (c.columnIndex >= 8) return sum;
+          const extraIdx = c.id.indexOf('-extra-chip-');
+          if (extraIdx === -1) return sum;
+          const inner = c.id.slice('schedule-chip-'.length, extraIdx);
+          const lastDash = inner.lastIndexOf('-');
+          if (lastDash === -1) return sum;
+          if (inner.slice(0, lastDash) !== projectId) return sum;
+          if (parseInt(inner.slice(lastDash + 1), 10) !== itemIdx) return sum;
+          const chipMins = chipTimeOverrides[c.id] ?? chipTimeOverrides[canonicalId] ?? c.durationMinutes ?? 0;
+          return sum + chipMins;
+        }, 0);
+        const remainingMinutes = Math.max(incrementMinutes, totalMinutes - alreadyPlaced);
+        const durationMinutes = Math.max(1, totalMinutes - alreadyPlaced);
+        const span = Math.max(1, Math.ceil(remainingMinutes / Math.max(1, incrementMinutes)));
+
+        const startRowIdx = rowIndexMap.get(selectedCell.rowId) ?? 2;
+        const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
+        const startRowId = selectedCell.rowId;
+        const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
+        const startMinutes = rowIdToClockMinutes(startRowId, trailingMinuteRows);
+        const targetColumnIndex = selectedCell.columnIndex;
+
+        const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
+        const trimmedName = (scheduleItem.name ?? '').trim();
+        const hasScheduleName = Boolean(trimmedName && trimmedName !== scheduleDefaultText);
+
+        const newChip = {
+          id: `schedule-chip-${projectId}-${itemIdx}-extra-${createProjectChipId()}`,
+          columnIndex: targetColumnIndex,
+          dayName: targetColumnIndex < DAY_COLUMN_COUNT ? (displayedWeekDays[targetColumnIndex] ?? null) : null,
+          startRowId,
+          endRowId,
+          startMinutes,
+          projectId,
+          displayLabel: hasScheduleName ? trimmedName : null,
+          hasScheduleName,
+          durationMinutes,
+        };
+
+        const prevChips = projectChipsRef.current;
+        const nextChips = [...prevChips, newChip];
+        executeCommand({
+          execute: () => setProjectChips(nextChips),
+          undo: () => setProjectChips(prevChips),
+        });
+        setSelectedBlockId(newChip.id);
+        setSelectedCell(null);
+        return;
+      }
+
+      buildAndAddScheduleItemChip(projectId, itemIdx);
+    },
+    [
+      buildAndAddScheduleItemChip,
+      chipTimeOverrides,
+      displayedWeekDays,
+      executeCommand,
+      incrementMinutes,
+      projectChips,
+      projectChipsRef,
+      rowIndexMap,
+      scheduleLayout,
+      selectedCell,
+      setProjectChips,
+      setSelectedBlockId,
+      setSelectedCell,
+      timelineRowIds,
+      trailingMinuteRows,
+    ]
   );
 
   const handlePanelDragStart = useCallback(
