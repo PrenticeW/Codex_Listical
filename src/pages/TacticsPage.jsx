@@ -1330,6 +1330,10 @@ export default function TacticsPage() {
         });
     };
     const handleMouseUp = () => {
+      // Absorb the click event that fires after mouseup so it doesn't
+      // hit the grid cell's toggleCellSelection handler and deselect the chip.
+      window.addEventListener('click', (e) => e.stopPropagation(), { capture: true, once: true });
+
       setProjectChips((prev) => {
         const chip = prev.find((c) => c.id === resizingBlockId);
         if (
@@ -1921,8 +1925,8 @@ export default function TacticsPage() {
           return {
             ...entry,
             projectId,
-            endRowId: targetEndRowId,
-            startRowId: targetStartRowId,
+            startRowId: startRowIdOverride != null ? targetStartRowId : entry.startRowId,
+            endRowId: endRowIdOverride != null ? targetEndRowId : entry.endRowId,
             displayLabel:
               displayLabelOverride != null ? displayLabelOverride : null,
           };
@@ -3538,11 +3542,16 @@ export default function TacticsPage() {
           ? chipDisplayModes['__default__']
           : { duration: false, clock: false };
 
-        // Goals list — highlighted projects only (for the goal picker in panel)
-        const goals = highlightedProjects.map((p) => {
-          const meta = projectMetadata.get(p.id);
-          return { id: p.id, name: meta?.label ?? p.label, colour: meta?.color ?? p.color ?? '#d9d9d9' };
-        });
+        // All chip options grouped by type (for the goal picker in panel)
+        const toMeta = (id, p) => {
+          const meta = projectMetadata.get(id);
+          return { id, name: meta?.label ?? p?.label ?? id, colour: meta?.color ?? p?.color ?? '#d9d9d9' };
+        };
+        const allChips = {
+          defaults: ['sleep', 'rest', 'buffer'].map((id) => toMeta(id, null)),
+          projects: highlightedProjects.map((p) => toMeta(p.id, p)),
+          customs:  customProjects.map((p) => toMeta(p.id, p)),
+        };
 
         chip = {
           id: block.id,
@@ -3557,7 +3566,7 @@ export default function TacticsPage() {
           durationMinutes,
           showClock: Boolean(displayFlags.clock),
           showDuration: Boolean(displayFlags.duration),
-          goals,
+          allChips,
           incrementMinutes,
         };
       }
@@ -3573,6 +3582,7 @@ export default function TacticsPage() {
     chipTimeOverrides,
     chipDisplayModes,
     highlightedProjects,
+    customProjects,
   ]);
 
   // Broadcast schedule data to PlanPanel's ScheduleView whenever relevant data changes

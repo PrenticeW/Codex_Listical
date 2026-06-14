@@ -221,32 +221,185 @@ function FieldInput({ value, onChange, style, ...rest }) {
   );
 }
 
-/** Time trigger button — styled like a chip, opens time picker */
-function TimeTrigger({ value, onClick }) {
-  const [hovered, setHovered] = useState(false);
-  const chevron = (
-    <svg width="8" height="5" viewBox="0 0 8 5" fill="none">
-      <path d="M1 1l3 3 3-3" stroke="#999" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
+// ─── Time carousel (matches GearPanel behaviour exactly) ─────────────────────
+
+const HOUR_VALS = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+const TP_THRESHOLD = 30;
+
+function minsTo12(totalMins) {
+  const m = ((totalMins % 1440) + 1440) % 1440;
+  const h24 = Math.floor(m / 60);
+  return { h: h24 % 12 === 0 ? 12 : h24 % 12, min: m % 60, ap: h24 < 12 ? 'AM' : 'PM' };
+}
+function twelveToMins(h, min, ap) {
+  let h24 = h % 12;
+  if (ap === 'PM') h24 += 12;
+  return h24 * 60 + min;
+}
+
+function TimeCarousel({ valueMinutes, onChange, incrementMinutes = 30 }) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef(null);
+  const boxRef = useRef(null);
+
+  const minuteSteps = Array.from(
+    { length: Math.max(1, Math.round(60 / (incrementMinutes || 30))) },
+    (_, i) => i * (incrementMinutes || 30),
   );
+
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const parsed = minsTo12(valueMinutes ?? 0);
+  const [tH, setTH]   = useState(parsed.h);
+  const [tM, setTM]   = useState(parsed.min);
+  const [tAP, setTAP] = useState(parsed.ap);
+  const acc = useRef({ h: 0, m: 0, ap: 0 });
+
+  // Prevent page scroll while wheeling the carousel
+  useEffect(() => {
+    if (!open) return;
+    const el = boxRef.current;
+    if (!el) return;
+    const block = (e) => e.preventDefault();
+    el.addEventListener('wheel', block, { passive: false });
+    return () => el.removeEventListener('wheel', block);
+  }, [open]);
+
+  const openPicker = useCallback((e) => {
+    e.stopPropagation();
+    if (triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, left: Math.min(r.left, window.innerWidth - 210) });
+    }
+    const p = minsTo12(valueMinutes ?? 0);
+    const snapped = minuteSteps.includes(p.min)
+      ? p.min
+      : minuteSteps.reduce((best, s) => Math.abs(s - p.min) < Math.abs(best - p.min) ? s : best, minuteSteps[0]);
+    setTH(p.h); setTM(snapped); setTAP(p.ap);
+    acc.current = { h: 0, m: 0, ap: 0 };
+    setOpen(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valueMinutes]);
+
+  const spin = useCallback((e, col) => {
+    e.preventDefault();
+    acc.current[col] += e.deltaY;
+    const steps = Math.trunc(acc.current[col] / TP_THRESHOLD);
+    if (steps === 0) return;
+    acc.current[col] -= steps * TP_THRESHOLD;
+    const dir = steps > 0 ? 1 : -1;
+    if (col === 'h') {
+      setTH(prev => HOUR_VALS[(HOUR_VALS.indexOf(prev) + dir + 12) % 12]);
+    } else if (col === 'm') {
+      setTM(prev => {
+        const idx = minuteSteps.indexOf(prev);
+        const safe = idx === -1 ? 0 : idx;
+        const next = safe + dir;
+        if (next < 0 || next >= minuteSteps.length) return prev;
+        return minuteSteps[next];
+      });
+    } else {
+      setTAP(prev => prev === 'AM' ? 'PM' : 'AM');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minuteSteps.length]);
+
+  const confirm = useCallback(() => {
+    onChange(twelveToMins(tH, tM, tAP));
+    setOpen(false);
+  }, [tH, tM, tAP, onChange]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (!e.target.closest('[data-time-picker]')) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const hIdx = HOUR_VALS.indexOf(tH);
+  const mIdx  = minuteSteps.indexOf(tM);
+  const mSafe = mIdx === -1 ? 0 : mIdx;
+  const mPrev = mSafe > 0 ? String(minuteSteps[mSafe - 1]).padStart(2, '0') : '';
+  const mNext = mSafe < minuteSteps.length - 1 ? String(minuteSteps[mSafe + 1]).padStart(2, '0') : '';
+
+  const fmt12 = (m) => {
+    const p = minsTo12(m ?? 0);
+    return `${p.h}:${String(p.min).padStart(2, '0')} ${p.ap}`;
+  };
+
+  const ghost = { fontSize: 11, color: '#ccc', padding: '2px 0', textAlign: 'center', width: 32, height: 17, boxSizing: 'border-box' };
+  const main  = { fontSize: 14, fontWeight: 500, color: C.text, padding: '3px 0', width: 32, textAlign: 'center' };
+  const slotProps = (col) => ({ style: { display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'default', userSelect: 'none' }, onWheel: (e) => spin(e, col) });
+
   return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        width: 160, height: 28, boxSizing: 'border-box', flexShrink: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
-        background: hovered ? C.border : C.bgBlock,
-        border: `1px solid ${hovered ? '#d4d4ce' : C.border}`,
-        borderRadius: 8, padding: '0 11px',
-        fontFamily: FONT, fontSize: 13, fontWeight: 500, color: C.text,
-        cursor: 'pointer', userSelect: 'none', transition: 'border-color 0.15s, background 0.15s',
-      }}
-    >
-      <span>{value}</span>
-      {chevron}
-    </button>
+    <>
+      <div
+        ref={triggerRef}
+        onClick={openPicker}
+        style={{
+          width: 160, height: 28, boxSizing: 'border-box', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+          background: C.bgBlock, border: `1px solid ${C.border}`,
+          borderRadius: 8, padding: '0 11px',
+          fontFamily: FONT, fontSize: 13, fontWeight: 500, color: C.text,
+          cursor: 'pointer', userSelect: 'none',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = C.border; }}
+        onMouseLeave={e => { e.currentTarget.style.background = C.bgBlock; }}
+      >
+        <span>{fmt12(valueMinutes)}</span>
+        <svg width="8" height="5" viewBox="0 0 8 5" fill="none">
+          <path d="M1 1l3 3 3-3" stroke="#999" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
+
+      {open && createPortal(
+        <div
+          ref={boxRef}
+          data-time-picker=""
+          style={{
+            position: 'fixed', top: pos.top, left: pos.left, zIndex: 999999,
+            background: C.bg, borderRadius: 10, border: `1px solid ${C.border}`,
+            padding: '6px 10px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', background: C.bgBlock, border: `1px solid ${C.border}`, borderRadius: 6, overflow: 'hidden' }}>
+            <div {...slotProps('h')}>
+              <div style={ghost}>{HOUR_VALS[(hIdx - 1 + 12) % 12]}</div>
+              <div style={main}>{tH}</div>
+              <div style={ghost}>{HOUR_VALS[(hIdx + 1) % 12]}</div>
+            </div>
+            <span style={{ fontSize: 12, color: '#ccc', padding: '0 1px' }}>:</span>
+            <div {...slotProps('m')}>
+              <div style={ghost}>{mPrev}</div>
+              <div style={main}>{String(tM).padStart(2, '0')}</div>
+              <div style={ghost}>{mNext}</div>
+            </div>
+            <div style={{ width: 1, background: C.border, alignSelf: 'stretch' }} />
+            <div {...slotProps('ap')}>
+              <div style={ghost}>{tAP === 'PM' ? 'AM' : ''}</div>
+              <div style={main}>{tAP}</div>
+              <div style={ghost}>{tAP === 'AM' ? 'PM' : ''}</div>
+            </div>
+          </div>
+          <button
+            onClick={confirm}
+            style={{
+              height: 26, padding: '0 10px', background: C.greenDark, border: 'none',
+              borderRadius: 6, fontFamily: FONT, fontSize: 12, fontWeight: 500,
+              color: '#fff', cursor: 'pointer', transition: 'background 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = C.green; }}
+            onMouseLeave={e => { e.currentTarget.style.background = C.greenDark; }}
+          >
+            Set
+          </button>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 
@@ -637,57 +790,100 @@ function BackBtn({ onClick }) {
   );
 }
 
-// ─── Goal picker sub-view ─────────────────────────────────────────────────────
+// ─── Goal picker dropdown (floating popup, matches HTML prototype) ────────────
 
-function GoalPickerView({ goals, currentProjectId, onBack, onSelect }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: 320, flexShrink: 0 }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '12px 22px 10px', borderBottom: `1px solid ${C.borderLight}`,
-        flexShrink: 0, background: C.bg,
-      }}>
-        <BackBtn onClick={onBack} />
-        <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: C.text }}>Goal</span>
+function chipTextColour(hex) {
+  // Simple luminance check — returns '#000' for light colours, '#fff' for dark
+  const el = document.createElement('div');
+  el.style.color = hex;
+  document.body.appendChild(el);
+  const rgb = getComputedStyle(el).color.match(/\d+/g)?.map(Number) ?? [0, 0, 0];
+  document.body.removeChild(el);
+  return (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) > 170 ? '#000' : '#fff';
+}
+
+function GoalDropdown({ allChips, currentProjectId, anchorRect, onSelect, onClose }) {
+  useEffect(() => {
+    const handler = (e) => {
+      if (!e.target.closest('[data-goal-picker]')) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  if (!anchorRect) return null;
+
+  const { defaults = [], projects = [], customs = [] } = allChips ?? {};
+  const left = Math.min(anchorRect.left, window.innerWidth - 200);
+  const top = anchorRect.bottom + 4;
+
+  const ChipRow = ({ chip }) => {
+    const isActive = chip.id === currentProjectId;
+    const fg = chipTextColour(chip.colour);
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px' }}>
+        <button
+          onClick={() => { onSelect(chip.id); onClose(); }}
+          style={{
+            flex: 1, minWidth: 0, border: 'none', borderRadius: 3,
+            padding: '6px 9px', textAlign: 'left',
+            fontFamily: FONT, fontSize: 11, fontWeight: 700,
+            textTransform: 'uppercase',
+            background: chip.colour, color: fg,
+            cursor: 'pointer', whiteSpace: 'nowrap',
+            overflow: 'hidden', textOverflow: 'ellipsis',
+            outline: isActive ? `2px solid ${C.greenDark}` : 'none',
+            outlineOffset: 1,
+            opacity: 1, transition: 'opacity 0.12s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.opacity = '0.82'; }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+        >
+          {chip.name}
+        </button>
       </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px' }}>
-        {(!goals || goals.length === 0) ? (
-          <p style={{ fontFamily: FONT, fontSize: 13, color: C.textFaint, fontStyle: 'italic', padding: '8px' }}>
-            No goals defined. Add highlighted projects on the Goal page.
-          </p>
-        ) : goals.map((goal) => {
-          const isActive = goal.id === currentProjectId;
-          return (
-            <button
-              key={goal.id}
-              onClick={() => onSelect(goal.id)}
-              style={{
-                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                marginBottom: 6, padding: '8px 12px',
-                border: `1px solid ${isActive ? C.greenBorder : C.border}`,
-                borderRadius: 8, background: isActive ? C.greenBg : 'none',
-                cursor: 'pointer', textAlign: 'left',
-                fontFamily: FONT, fontSize: 13,
-                color: isActive ? C.greenDark : C.text,
-                transition: 'border-color 0.15s, background 0.15s',
-              }}
-            >
-              <div style={{
-                width: 16, height: 16, borderRadius: 3, flexShrink: 0,
-                background: goal.colour ?? C.border,
-                border: '1px solid rgba(0,0,0,0.08)',
-              }} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                {goal.name}
-              </span>
-              {isActive && (
-                <span style={{ color: C.green, flexShrink: 0 }}>{ICON.check}</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    );
+  };
+
+  const Section = ({ label, chips }) => {
+    if (!chips.length) return null;
+    return (
+      <>
+        <div style={{
+          padding: '6px 12px 2px', fontSize: 10, fontWeight: 600,
+          letterSpacing: '0.08em', textTransform: 'uppercase', color: '#94a3b8',
+        }}>
+          {label}
+        </div>
+        {chips.map(chip => <ChipRow key={chip.id} chip={chip} />)}
+      </>
+    );
+  };
+
+  return createPortal(
+    <div
+      data-goal-picker=""
+      style={{
+        position: 'fixed', zIndex: 999999,
+        top, left,
+        background: '#f8fafc', border: '1px solid #94a3b8', borderRadius: 6,
+        boxShadow: '0 16px 40px rgba(15,23,42,0.22)',
+        minWidth: 180, overflow: 'hidden',
+        fontFamily: FONT, fontSize: 11,
+        paddingBottom: 6,
+      }}
+    >
+      <Section label="Default chips" chips={defaults} />
+      {projects.length > 0 && defaults.length > 0 && (
+        <div style={{ margin: '4px 12px', borderTop: '1px solid #e5e7eb' }} />
+      )}
+      <Section label="Project chips" chips={projects} />
+      {customs.length > 0 && (
+        <div style={{ margin: '4px 12px', borderTop: '1px solid #e5e7eb' }} />
+      )}
+      <Section label="Custom chips" chips={customs} />
+    </div>,
+    document.body
   );
 }
 
@@ -1044,28 +1240,36 @@ function ScheduleLinkSection({ onViewSchedule }) {
 
 // ─── Chip detail sections (chip selected) ─────────────────────────────────────
 
-function ChipSection({ chip, onOpenColour, onNameChange, onGoalChange, goals }) {
-  const isProject = chip.type === 'project';
+function ChipSection({ chip, onOpenColour, onNameChange, onGoalChange }) {
   const isCustom = chip.type === 'custom';
+
+  // Resolve the template name/colour from allChips so the Goal button
+  // always shows the chip TYPE, independent of the editable display name.
+  const allOptions = [
+    ...(chip.allChips?.defaults ?? []),
+    ...(chip.allChips?.projects ?? []),
+    ...(chip.allChips?.customs  ?? []),
+  ];
+  const template = allOptions.find(c => c.id === chip.projectId);
+  const templateName   = template?.name   ?? chip.name;
+  const templateColour = template?.colour ?? chip.colour;
 
   return (
     <div style={SECTION}>
       <SectionLabel>Chip</SectionLabel>
 
-      {/* Goal row — project chips only */}
-      {isProject && (
-        <FieldRow
-          label="Goal"
-          control={
-            <GoalChip
-              colour={chip.goalColour ?? chip.colour}
-              name={chip.goalName ?? chip.name}
-              onClick={onGoalChange}
-            />
-          }
-          style={{ marginBottom: 8 }}
-        />
-      )}
+      {/* Goal row — always shown; lets user switch the chip type */}
+      <FieldRow
+        label="Goal"
+        control={
+          <GoalChip
+            colour={templateColour}
+            name={templateName}
+            onClick={onGoalChange}
+          />
+        }
+        style={{ marginBottom: 8 }}
+      />
 
       {/* Name */}
       <FieldRow
@@ -1076,7 +1280,7 @@ function ChipSection({ chip, onOpenColour, onNameChange, onGoalChange, goals }) 
             onChange={e => onNameChange(e.target.value)}
           />
         }
-        style={isProject || isCustom ? { marginBottom: isCustom ? 8 : 0 } : { marginBottom: 0 }}
+        style={{ marginBottom: isCustom ? 8 : 0 }}
       />
 
       {/* Colour — custom chips only */}
@@ -1105,9 +1309,14 @@ function ChipSection({ chip, onOpenColour, onNameChange, onGoalChange, goals }) 
 
 function GoalChip({ colour, name, onClick }) {
   const [hovered, setHovered] = useState(false);
+  const btnRef = useRef(null);
+  const handleClick = useCallback(() => {
+    onClick?.(btnRef.current?.getBoundingClientRect());
+  }, [onClick]);
   return (
     <button
-      onClick={onClick}
+      ref={btnRef}
+      onClick={handleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -1132,17 +1341,27 @@ function GoalChip({ colour, name, onClick }) {
   );
 }
 
-function TimeSection({ chip, onStartChange, onEndChange, onDurationChange, onToggleClock, onToggleDuration }) {
-  const fmt12 = (mins) => {
-    if (mins == null || !Number.isFinite(mins)) return '—';
-    const m = ((mins % 1440) + 1440) % 1440;
-    const h24 = Math.floor(m / 60);
-    const min = m % 60;
-    const ap = h24 < 12 ? 'AM' : 'PM';
-    const h = h24 % 12 === 0 ? 12 : h24 % 12;
-    return `${h}:${String(min).padStart(2, '0')} ${ap}`;
-  };
+function TimeReadout({ minutes }) {
+  if (minutes == null || !Number.isFinite(minutes)) {
+    return <span style={{ width: 160, flexShrink: 0, fontFamily: FONT, fontSize: 13, color: C.textFaint, padding: '0 10px' }}>—</span>;
+  }
+  const p = minsTo12(minutes);
+  const label = `${p.h}:${String(p.min).padStart(2, '0')} ${p.ap}`;
+  return (
+    <span style={{
+      width: 160, height: 28, boxSizing: 'border-box', flexShrink: 0,
+      display: 'flex', alignItems: 'center',
+      background: C.bgBlock, border: `1px solid ${C.border}`,
+      borderRadius: 8, padding: '0 11px',
+      fontFamily: FONT, fontSize: 13, fontWeight: 500, color: C.textDim,
+      userSelect: 'none',
+    }}>
+      {label}
+    </span>
+  );
+}
 
+function TimeSection({ chip, onStartMinutes, onEndMinutes, onDurationChange, onToggleClock, onToggleDuration }) {
   const fmtDur = (mins) => {
     if (mins == null || !Number.isFinite(mins) || mins <= 0) return '0:00';
     const h = Math.floor(mins / 60);
@@ -1186,11 +1405,11 @@ function TimeSection({ chip, onStartChange, onEndChange, onDurationChange, onTog
 
       <FieldRow
         label="Start time"
-        control={<TimeTrigger value={fmt12(startMins)} onClick={() => onStartChange?.()} />}
+        control={<TimeReadout minutes={startMins} />}
       />
       <FieldRow
         label="End time"
-        control={<TimeTrigger value={fmt12(endMins)} onClick={() => onEndChange?.()} />}
+        control={<TimeReadout minutes={endMins} />}
       />
 
       <ToggleBtn
@@ -1324,13 +1543,12 @@ function MainView({
   onOpenColour,
   onNameChange,
   onGoalChange,
-  onStartChange,
-  onEndChange,
+  onStartMinutes,
+  onEndMinutes,
   onDurationChange,
   onToggleChipClock,
   onToggleChipDuration,
   onRemoveChip,
-  goals,
 }) {
   const hasChip = selectedChip != null;
 
@@ -1356,12 +1574,11 @@ function MainView({
               onOpenColour={onOpenColour}
               onNameChange={onNameChange}
               onGoalChange={onGoalChange}
-              goals={goals}
             />
             <TimeSection
               chip={selectedChip}
-              onStartChange={onStartChange}
-              onEndChange={onEndChange}
+              onStartMinutes={onStartMinutes}
+              onEndMinutes={onEndMinutes}
               onDurationChange={onDurationChange}
               onToggleClock={onToggleChipClock}
               onToggleDuration={onToggleChipDuration}
@@ -1384,11 +1601,12 @@ export default function PlanPanel() {
   const [navBottom, setNavBottom] = useState(0);
   const { pathname } = useLocation();
 
-  // Panel view: 'main' | 'colour' | 'schedule' | 'goal' | 'timePicker'
+  // Panel view: 'main' | 'colour' | 'schedule'
   const [panelView, setPanelView] = useState('main');
   // Delay hiding the second-slot view until the slide-out animation finishes
-  const [secondSlotView, setSecondSlotView] = useState('colour'); // 'colour' | 'schedule' | 'goal' | 'timePicker'
-  const [timePickerMode, setTimePickerMode] = useState('start'); // 'start' | 'end'
+  const [secondSlotView, setSecondSlotView] = useState('colour'); // 'colour' | 'schedule'
+  // Goal dropdown anchor rect (null = closed)
+  const [goalAnchorRect, setGoalAnchorRect] = useState(null);
   const slideBackTimerRef = useRef(null);
 
   // Page-level display toggles (no chip selected)
@@ -1468,13 +1686,10 @@ export default function PlanPanel() {
     openView('colour', () => setPendingColour(selectedChip?.colour ?? '#c9daf8'));
   }, [openView, selectedChip?.colour]);
 
-  const openGoalView = useCallback(() => {
-    openView('goal');
-  }, [openView]);
+  const openGoalDropdown = useCallback((rect) => {
+    setGoalAnchorRect(rect ?? null);
+  }, []);
 
-  const openTimePickerView = useCallback((mode) => {
-    openView('timePicker', () => setTimePickerMode(mode));
-  }, [openView]);
 
   const openScheduleViewRef = useRef(null);
 
@@ -1504,24 +1719,14 @@ export default function PlanPanel() {
   // Goal confirm
   const handleGoalSelect = useCallback((projectId) => {
     dispatchPlanAction('setChipGoal', { chipId: selectedChip?.id, projectId });
-    goToMain();
-  }, [selectedChip, goToMain]);
-
-  // Time confirm
-  const handleTimeConfirm = useCallback((minutes) => {
-    if (timePickerMode === 'start') {
-      dispatchPlanAction('setChipStartMinutes', { chipId: selectedChip?.id, minutes });
-    } else {
-      dispatchPlanAction('setChipEndMinutes', { chipId: selectedChip?.id, minutes });
-    }
-    goToMain();
-  }, [timePickerMode, selectedChip, goToMain]);
+    setGoalAnchorRect(null);
+  }, [selectedChip]);
 
   // Chip field actions — dispatch events for TacticsPage to handle
   const handleNameChange     = useCallback((value) => dispatchPlanAction('setChipName', { chipId: selectedChip?.id, value }), [selectedChip]);
-  const handleGoalChange     = useCallback(() => openGoalView(), [openGoalView]);
-  const handleStartChange    = useCallback(() => openTimePickerView('start'), [openTimePickerView]);
-  const handleEndChange      = useCallback(() => openTimePickerView('end'), [openTimePickerView]);
+  const handleGoalChange     = useCallback((rect) => openGoalDropdown(rect), [openGoalDropdown]);
+  const handleStartMinutes   = useCallback((minutes) => dispatchPlanAction('setChipStartMinutes', { chipId: selectedChip?.id, minutes }), [selectedChip]);
+  const handleEndMinutes     = useCallback((minutes) => dispatchPlanAction('setChipEndMinutes', { chipId: selectedChip?.id, minutes }), [selectedChip]);
   const handleDurationChange = useCallback((value) => dispatchPlanAction('setChipDuration', { chipId: selectedChip?.id, value }), [selectedChip]);
   const handleToggleChipClock    = useCallback(() => dispatchPlanAction('toggleChipClock', { chipId: selectedChip?.id }), [selectedChip]);
   const handleToggleChipDuration = useCallback(() => dispatchPlanAction('toggleChipDuration', { chipId: selectedChip?.id }), [selectedChip]);
@@ -1616,36 +1821,20 @@ export default function PlanPanel() {
           onOpenColour={openColourView}
           onNameChange={handleNameChange}
           onGoalChange={handleGoalChange}
-          onStartChange={handleStartChange}
-          onEndChange={handleEndChange}
+          onStartMinutes={handleStartMinutes}
+          onEndMinutes={handleEndMinutes}
           onDurationChange={handleDurationChange}
           onToggleChipClock={handleToggleChipClock}
           onToggleChipDuration={handleToggleChipDuration}
           onRemoveChip={handleRemoveChip}
-          goals={selectedChip?.goals ?? []}
         />
 
-        {/* View 2 — Colour, Schedule, Goal, or Time picker */}
+        {/* View 2 — Colour, Schedule, or Time picker */}
         {secondSlotView === 'schedule' ? (
           <ScheduleView
             scheduleData={scheduleData}
             onDragStartRef={onDragStartRef}
             onBack={goToMain}
-          />
-        ) : secondSlotView === 'goal' ? (
-          <GoalPickerView
-            goals={selectedChip?.goals ?? []}
-            currentProjectId={selectedChip?.projectId}
-            onBack={goToMain}
-            onSelect={handleGoalSelect}
-          />
-        ) : secondSlotView === 'timePicker' ? (
-          <TimePickerView
-            label={timePickerMode === 'start' ? 'Start time' : 'End time'}
-            initialMinutes={timePickerMode === 'start' ? selectedChip?.startMinutes : selectedChip?.endMinutes}
-            incrementMinutes={selectedChip?.incrementMinutes ?? 30}
-            onBack={goToMain}
-            onConfirm={handleTimeConfirm}
           />
         ) : (
           <ColourView
@@ -1656,6 +1845,17 @@ export default function PlanPanel() {
           />
         )}
       </div>
+
+      {/* Goal picker floating dropdown */}
+      {goalAnchorRect && (
+        <GoalDropdown
+          allChips={selectedChip?.allChips}
+          currentProjectId={selectedChip?.projectId}
+          anchorRect={goalAnchorRect}
+          onSelect={handleGoalSelect}
+          onClose={() => setGoalAnchorRect(null)}
+        />
+      )}
     </div>,
     document.body
   );
