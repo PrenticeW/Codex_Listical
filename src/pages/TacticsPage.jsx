@@ -4066,7 +4066,12 @@ export default function TacticsPage() {
             largeTimeStr = h === 0 ? `${m}` : m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
           }
         }
-        rawLabel = timeStr != null ? `${baseName}: ${timeStr}` : baseName;
+        if (showDuration && !isMultiRow && largeTimeStr) {
+          rawLabel = `${baseName}:${largeTimeStr}`;
+          largeTimeStr = null;
+        } else {
+          rawLabel = timeStr != null ? `${baseName}: ${timeStr}` : baseName;
+        }
       } else {
         const baseName = block.displayLabel ?? metadata?.label ?? 'Project';
         const overrideMins = chipTimeOverrides[chipId];
@@ -4092,15 +4097,20 @@ export default function TacticsPage() {
             largeTimeStr = h === 0 ? `${m}` : m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
           }
         }
-        const showTime = !isMultiRow && Number.isFinite(effectiveMins) && effectiveMins > 0 &&
-          effectiveMins < incrementMinutes;
-        if (showTime) {
-          const h = Math.floor(effectiveMins / 60);
-          const m = effectiveMins % 60;
-          const timeStr = h === 0 ? `${m}` : m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
-          rawLabel = `${baseName}: ${timeStr}`;
+        if (showDuration && !isMultiRow && largeTimeStr) {
+          rawLabel = `${baseName}:${largeTimeStr}`;
+          largeTimeStr = null;
         } else {
-          rawLabel = baseName;
+          const showTime = !isMultiRow && Number.isFinite(effectiveMins) && effectiveMins > 0 &&
+            effectiveMins < incrementMinutes;
+          if (showTime) {
+            const h = Math.floor(effectiveMins / 60);
+            const m = effectiveMins % 60;
+            const timeStr = h === 0 ? `${m}` : m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
+            rawLabel = `${baseName}: ${timeStr}`;
+          } else {
+            rawLabel = baseName;
+          }
         }
       }
       // Compute sleep time info for sleep chips (only shown when clock mode is on)
