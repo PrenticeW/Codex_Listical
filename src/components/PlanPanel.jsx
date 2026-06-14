@@ -558,6 +558,11 @@ const ICON = {
       <path d="M19 11l-8-8-8.5 8.5a5.5 5.5 0 007.78 7.78L19 11z"/><path d="M20 23a2 2 0 001.4-3.4L16 14"/><line x1="3.5" y1="11.5" x2="13" y2="2"/>
     </svg>
   ),
+  plus: (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+  ),
   chevronDown: (
     <svg width="8" height="5" viewBox="0 0 8 5" fill="none">
       <path d="M1 1l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/>
@@ -1202,15 +1207,27 @@ function UpdateSection({ isUpToDate, onSendToSystem }) {
 
 // ─── Schedule link section (no chip selected) ─────────────────────────────────
 
-function ScheduleLinkSection({ onViewSchedule }) {
+function ScheduleLinkSection({ onViewSchedule, onAddChip }) {
+  const btnRef = useRef(null);
+  const handleAddChip = useCallback(() => {
+    onAddChip?.(btnRef.current?.getBoundingClientRect());
+  }, [onAddChip]);
+
   return (
     <div style={SECTION}>
-      <SectionLabel>Schedule</SectionLabel>
+      <SectionLabel>Add</SectionLabel>
       <ActionBtn
         icon={ICON.calendar}
-        label="View schedule items"
+        label="Add schedule item"
         onClick={onViewSchedule}
       />
+      <div ref={btnRef} style={{ marginTop: 8 }}>
+        <ActionBtn
+          icon={ICON.plus}
+          label="Add new chip"
+          onClick={handleAddChip}
+        />
+      </div>
     </div>
   );
 }
@@ -1485,6 +1502,7 @@ function MainView({
   isUpToDate,
   onSendToSystem,
   onViewSchedule,
+  onAddChip,
   onOpenColour,
   onNameChange,
   onGoalChange,
@@ -1503,7 +1521,7 @@ function MainView({
         <UpdateSection isUpToDate={isUpToDate} onSendToSystem={onSendToSystem} />
         {!hasChip ? (
           <>
-            <ScheduleLinkSection onViewSchedule={onViewSchedule} />
+            <ScheduleLinkSection onViewSchedule={onViewSchedule} onAddChip={onAddChip} />
           </>
         ) : (
           <>
@@ -1548,6 +1566,13 @@ export default function PlanPanel() {
 
   // Selected chip data — populated via PLAN_PANEL_CHIP_EVENT
   const [selectedChip, setSelectedChip] = useState(null);
+
+  // All chip options (defaults + projects + customs) — always present even when
+  // no chip is selected, so the "Add new chip" goal picker has data to show.
+  const [allChips, setAllChips] = useState(null);
+
+  // Goal picker anchor for the "Add new chip" flow (separate from chip-edit flow)
+  const [addChipAnchorRect, setAddChipAnchorRect] = useState(null);
 
   // Ref so the chip-selection effect can call goToMain before it's defined below
   const goToMainRef = useRef(null);
@@ -1595,7 +1620,10 @@ export default function PlanPanel() {
   useEffect(() => {
     const handler = (e) => {
       const chip = e.detail?.chip ?? null;
+      const chips = e.detail?.allChips ?? null;
       setSelectedChip(chip);
+      if (chips) setAllChips(chips);
+      setAddChipAnchorRect(null);
       if (chip) {
         open();
         goToMainRef.current?.();
@@ -1671,6 +1699,15 @@ export default function PlanPanel() {
   const handleRemoveChip    = useCallback(() => dispatchPlanAction('removeChip', { chipId: selectedChip?.id }), [selectedChip]);
   const handleSendToSystem   = useCallback(() => dispatchPlanAction('sendToSystem'), []);
 
+  // "Add new chip" — opens goal picker anchored to the button rect
+  const handleAddChip = useCallback((rect) => {
+    setAddChipAnchorRect(rect ?? null);
+  }, []);
+  const handleAddChipGoalSelect = useCallback((projectId) => {
+    dispatchPlanAction('addChipToCell', { projectId });
+    setAddChipAnchorRect(null);
+  }, []);
+
   // Keep local sync state in sync when TacticsPage pushes state
   useEffect(() => {
     const handler = (e) => {
@@ -1693,6 +1730,10 @@ export default function PlanPanel() {
         incrementMinutes:  d.incrementMinutes  ?? 30,
         rowMetrics:        d.rowMetrics        ?? {},
       });
+      // Also capture allChips so the "Add new chip" goal picker always has data.
+      // This event fires reliably on mount, avoiding the race where PLAN_PANEL_CHIP_EVENT
+      // fires before PlanPanel has registered its listener.
+      if (d.allChips) setAllChips(d.allChips);
     };
     window.addEventListener(PLAN_PANEL_SCHEDULE_DATA_EVENT, handler);
     return () => window.removeEventListener(PLAN_PANEL_SCHEDULE_DATA_EVENT, handler);
@@ -1748,6 +1789,7 @@ export default function PlanPanel() {
           isUpToDate={isUpToDate}
           onSendToSystem={handleSendToSystem}
           onViewSchedule={openScheduleView}
+          onAddChip={handleAddChip}
           onOpenColour={openColourView}
           onNameChange={handleNameChange}
           onGoalChange={handleGoalChange}
@@ -1775,7 +1817,7 @@ export default function PlanPanel() {
         )}
       </div>
 
-      {/* Goal picker floating dropdown */}
+      {/* Goal picker floating dropdown — chip-edit flow */}
       {goalAnchorRect && (
         <GoalDropdown
           allChips={selectedChip?.allChips}
@@ -1783,6 +1825,17 @@ export default function PlanPanel() {
           anchorRect={goalAnchorRect}
           onSelect={handleGoalSelect}
           onClose={() => setGoalAnchorRect(null)}
+        />
+      )}
+
+      {/* Goal picker floating dropdown — add new chip flow */}
+      {addChipAnchorRect && (
+        <GoalDropdown
+          allChips={allChips}
+          currentProjectId={null}
+          anchorRect={addChipAnchorRect}
+          onSelect={handleAddChipGoalSelect}
+          onClose={() => setAddChipAnchorRect(null)}
         />
       )}
     </div>,

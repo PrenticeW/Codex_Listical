@@ -3509,10 +3509,16 @@ export default function TacticsPage() {
         handleRemoveSelectedChip();
         return;
       }
+
+      if (action === 'addChipToCell') {
+        if (!projectId) return;
+        handleProjectSelection(projectId);
+        return;
+      }
     };
     window.addEventListener(PLAN_PANEL_ACTION_EVENT, handler);
     return () => window.removeEventListener(PLAN_PANEL_ACTION_EVENT, handler);
-  }, [undo, redo, handleToggleChipDisplayFlag, handleSendToSystem, executeCommand, minutesToNearestRowId, handleRemoveSelectedChip]);
+  }, [undo, redo, handleToggleChipDisplayFlag, handleSendToSystem, executeCommand, minutesToNearestRowId, handleRemoveSelectedChip, handleProjectSelection]);
 
   // Broadcast selected chip data to PlanPanel whenever selection changes.
   // Fires with chip: null on deselect so the panel reverts to the default view.
@@ -3565,17 +3571,6 @@ export default function TacticsPage() {
           ? { ...defaultFlags, ...perChipFlags }
           : defaultFlags;
 
-        // All chip options grouped by type (for the goal picker in panel)
-        const toMeta = (id, p) => {
-          const meta = projectMetadata.get(id);
-          return { id, name: meta?.label ?? p?.label ?? id, colour: meta?.color ?? p?.color ?? '#d9d9d9' };
-        };
-        const allChips = {
-          defaults: ['sleep', 'rest', 'buffer'].map((id) => toMeta(id, null)),
-          projects: highlightedProjects.map((p) => toMeta(p.id, p)),
-          customs:  customProjects.map((p) => toMeta(p.id, p)),
-        };
-
         chip = {
           id: block.id,
           type: chipType,
@@ -3589,13 +3584,25 @@ export default function TacticsPage() {
           durationMinutes,
           showClock: Boolean(displayFlags.clock),
           showDuration: Boolean(displayFlags.duration),
-          allChips,
           incrementMinutes,
         };
       }
     }
 
-    window.dispatchEvent(new CustomEvent(PLAN_PANEL_CHIP_EVENT, { detail: { chip } }));
+    // Always build allChips so the panel can show the goal picker even when
+    // no chip is selected (empty cell — "Add new chip" flow).
+    const toMeta = (id, p) => {
+      const meta = projectMetadata.get(id);
+      return { id, name: meta?.label ?? p?.label ?? id, colour: meta?.color ?? p?.color ?? '#d9d9d9' };
+    };
+    const allChips = {
+      defaults: ['sleep', 'rest', 'buffer'].map((id) => toMeta(id, null)),
+      projects: highlightedProjects.map((p) => toMeta(p.id, p)),
+      customs:  customProjects.map((p) => toMeta(p.id, p)),
+    };
+    if (chip) chip = { ...chip, allChips };
+
+    window.dispatchEvent(new CustomEvent(PLAN_PANEL_CHIP_EVENT, { detail: { chip, allChips } }));
   }, [
     selectedBlockId,
     getProjectChipById,
@@ -3617,6 +3624,18 @@ export default function TacticsPage() {
       const color = meta?.color ?? p.color;
       return { ...p, color, textColor: meta?.textColor ?? getContrastTextColor(color) };
     });
+    // Build allChips here too so PlanPanel always has it — this event fires
+    // reliably on mount and whenever projects change, avoiding the race condition
+    // where PLAN_PANEL_CHIP_EVENT fires before PlanPanel registers its listener.
+    const toMeta = (id, p) => {
+      const meta = projectMetadata.get(id);
+      return { id, name: meta?.label ?? p?.label ?? id, colour: meta?.color ?? p?.color ?? '#d9d9d9' };
+    };
+    const allChips = {
+      defaults: ['sleep', 'rest', 'buffer'].map((id) => toMeta(id, null)),
+      projects: highlightedProjects.map((p) => toMeta(p.id, p)),
+      customs:  customProjects.map((p) => toMeta(p.id, p)),
+    };
     window.dispatchEvent(new CustomEvent(PLAN_PANEL_SCHEDULE_DATA_EVENT, {
       detail: {
         projects: enrichedProjects,
@@ -3627,6 +3646,7 @@ export default function TacticsPage() {
         rowMetrics,
         onDragStart: handlePanelDragStart,
         onAddChip: handleAddScheduleItemChip,
+        allChips,
       },
     }));
   }, [
@@ -3639,6 +3659,7 @@ export default function TacticsPage() {
     rowMetrics,
     handlePanelDragStart,
     handleAddScheduleItemChip,
+    customProjects,
   ]);
 
   // Keyboard shortcut: Delete/Backspace to remove the selected chip
