@@ -3745,19 +3745,23 @@ export default function TacticsPage() {
         const goalName = isDefault || isCustom ? undefined : (metadata?.label ?? undefined);
         const goalColour = isDefault || isCustom ? undefined : (metadata?.color ?? undefined);
 
+        // Duration (computed first so we can adjust end time for sub-increment chips)
+        const overrideMins = chipTimeOverrides[selectedBlockId];
+        const durationMinutes = overrideMins ?? block.durationMinutes ?? null;
+
         // Clock times from row IDs.
         // sleep-start = configured bed-time hour; sleep-end = configured wake time.
         const startMinutes = rowIdToClockMinutes(block.startRowId, trailingMinuteRows)
           ?? (block.startRowId === 'sleep-start' ? parseHour12ToMinutes(startHour) : null);
         const endRowId = block.endRowId ?? block.startRowId;
         const endRowMinutes = rowIdToClockMinutes(endRowId, trailingMinuteRows);
-        const endMinutes = endRowMinutes != null
-          ? (endRowMinutes + incrementMinutes) % (24 * 60)
-          : (block.endRowId === 'sleep-end' ? parseHour12ToMinutes(startMinute) : null);
-
-        // Duration
-        const overrideMins = chipTimeOverrides[selectedBlockId];
-        const durationMinutes = overrideMins ?? block.durationMinutes ?? null;
+        const isMultiRow = block.endRowId && block.endRowId !== block.startRowId;
+        const isSubIncrement = !isMultiRow && Number.isFinite(durationMinutes) && durationMinutes > 0 && durationMinutes < incrementMinutes;
+        const endMinutes = isSubIncrement && startMinutes != null
+          ? (startMinutes + durationMinutes) % (24 * 60)
+          : endRowMinutes != null
+            ? (endRowMinutes + incrementMinutes) % (24 * 60)
+            : (block.endRowId === 'sleep-end' ? parseHour12ToMinutes(startMinute) : null);
 
         // Display flags — per-chip entry takes precedence over global __default__
         const defaultFlags = chipDisplayModes['__default__'] && typeof chipDisplayModes['__default__'] === 'object'
