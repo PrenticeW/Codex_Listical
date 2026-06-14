@@ -1280,29 +1280,9 @@ function ChipSection({ chip, onOpenColour, onNameChange, onGoalChange }) {
             onChange={e => onNameChange(e.target.value)}
           />
         }
-        style={{ marginBottom: isCustom ? 8 : 0 }}
+        style={{ marginBottom: 0 }}
       />
 
-      {/* Colour — custom chips only */}
-      {isCustom && (
-        <FieldRow
-          label="Colour"
-          control={
-            <button
-              onClick={onOpenColour}
-              style={{
-                width: 160, height: 28, borderRadius: 6, flexShrink: 0,
-                border: '1px solid rgba(0,0,0,0.1)', cursor: 'pointer',
-                background: chip.colour ?? C.border,
-                transition: 'opacity 0.15s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
-              onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
-            />
-          }
-          style={{ marginBottom: 0 }}
-        />
-      )}
     </div>
   );
 }
@@ -1616,6 +1596,9 @@ export default function PlanPanel() {
   // Selected chip data — populated via PLAN_PANEL_CHIP_EVENT
   const [selectedChip, setSelectedChip] = useState(null);
 
+  // Ref so the chip-selection effect can call goToMain before it's defined below
+  const goToMainRef = useRef(null);
+
   // Colour pending during colour-picker editing
   const [pendingColour, setPendingColour] = useState(null);
 
@@ -1662,8 +1645,9 @@ export default function PlanPanel() {
       setSelectedChip(chip);
       if (chip) {
         open();
+        goToMainRef.current?.();
       } else if (panelView !== 'main' && panelView !== 'schedule') {
-        goToMain();
+        goToMainRef.current?.();
       }
     };
     window.addEventListener(PLAN_PANEL_CHIP_EVENT, handler);
@@ -1708,6 +1692,7 @@ export default function PlanPanel() {
       slideBackTimerRef.current = null;
     }, 280);
   }, []);
+  goToMainRef.current = goToMain;
 
   // Colour confirm
   const handleColourConfirm = useCallback((colour) => {

@@ -1921,9 +1921,15 @@ export default function TacticsPage() {
       const mapped = prevChips.map((entry) => {
         if (entry.columnIndex === columnIndex && entry.startRowId === rowId) {
           updated = true;
-          assignedId = entry.id;
+          // If this was a schedule chip, reset its ID so it's no longer
+          // tracked as a placed schedule item for the old project.
+          const newId = entry.id.startsWith('schedule-chip-')
+            ? createProjectChipId()
+            : entry.id;
+          assignedId = newId;
           return {
             ...entry,
+            id: newId,
             projectId,
             startRowId: startRowIdOverride != null ? targetStartRowId : entry.startRowId,
             endRowId: endRowIdOverride != null ? targetEndRowId : entry.endRowId,
@@ -3398,9 +3404,15 @@ export default function TacticsPage() {
       if (action === 'setChipGoal') {
         if (!chipId || !projectId) return;
         const prevChips = projectChipsRef.current;
-        const nextChips = prevChips.map((c) =>
-          c.id === chipId ? { ...c, projectId, displayLabel: null } : c
-        );
+        const nextChips = prevChips.map((c) => {
+          if (c.id !== chipId) return c;
+          // If this was a schedule chip, reset its ID so it's no longer
+          // tracked as a placed schedule item for the old project.
+          const newId = c.id.startsWith('schedule-chip-')
+            ? createProjectChipId()
+            : c.id;
+          return { ...c, id: newId, projectId, displayLabel: null };
+        });
         executeCommand({
           execute: () => setProjectChips(nextChips),
           undo: () => setProjectChips(prevChips),
@@ -3489,8 +3501,8 @@ export default function TacticsPage() {
         return;
       }
 
-      if (action === 'toggleChipClock') { handleToggleChipDisplayFlag('__default__', 'clock'); return; }
-      if (action === 'toggleChipDuration') { handleToggleChipDisplayFlag('__default__', 'duration'); return; }
+      if (action === 'toggleChipClock') { handleToggleChipDisplayFlag(chipId ?? '__default__', 'clock'); return; }
+      if (action === 'toggleChipDuration') { handleToggleChipDisplayFlag(chipId ?? '__default__', 'duration'); return; }
 
       if (action === 'removeChip') {
         handleRemoveSelectedChip();
@@ -3527,20 +3539,30 @@ export default function TacticsPage() {
         const goalName = isDefault || isCustom ? undefined : (metadata?.label ?? undefined);
         const goalColour = isDefault || isCustom ? undefined : (metadata?.color ?? undefined);
 
-        // Clock times from row IDs
-        const startMinutes = rowIdToClockMinutes(block.startRowId, trailingMinuteRows);
+        // Clock times from row IDs.
+        // sleep-start = configured bed-time hour; sleep-end = configured wake time.
+        const startMinutes = rowIdToClockMinutes(block.startRowId, trailingMinuteRows)
+          ?? (block.startRowId === 'sleep-start' ? parseHour12ToMinutes(startHour) : null);
         const endRowId = block.endRowId ?? block.startRowId;
         const endRowMinutes = rowIdToClockMinutes(endRowId, trailingMinuteRows);
-        const endMinutes = endRowMinutes != null ? (endRowMinutes + incrementMinutes) % (24 * 60) : null;
+        const endMinutes = endRowMinutes != null
+          ? (endRowMinutes + incrementMinutes) % (24 * 60)
+          : (block.endRowId === 'sleep-end' ? parseHour12ToMinutes(startMinute) : null);
 
         // Duration
         const overrideMins = chipTimeOverrides[selectedBlockId];
         const durationMinutes = overrideMins ?? block.durationMinutes ?? null;
 
-        // Display flags (global __default__ bucket)
-        const displayFlags = chipDisplayModes['__default__'] && typeof chipDisplayModes['__default__'] === 'object'
+        // Display flags — per-chip entry takes precedence over global __default__
+        const defaultFlags = chipDisplayModes['__default__'] && typeof chipDisplayModes['__default__'] === 'object'
           ? chipDisplayModes['__default__']
           : { duration: false, clock: false };
+        const perChipFlags = chipDisplayModes[selectedBlockId] && typeof chipDisplayModes[selectedBlockId] === 'object'
+          ? chipDisplayModes[selectedBlockId]
+          : null;
+        const displayFlags = perChipFlags
+          ? { ...defaultFlags, ...perChipFlags }
+          : defaultFlags;
 
         // All chip options grouped by type (for the goal picker in panel)
         const toMeta = (id, p) => {
@@ -3579,6 +3601,8 @@ export default function TacticsPage() {
     projectMetadata,
     trailingMinuteRows,
     incrementMinutes,
+    startHour,
+    startMinute,
     chipTimeOverrides,
     chipDisplayModes,
     highlightedProjects,
@@ -3764,7 +3788,9 @@ export default function TacticsPage() {
       const projectId = block.projectId || 'sleep';
       const metadata = projectMetadata.get(projectId);
       const isScheduleChip = block.id.startsWith('schedule-chip-');
-      const displayFlags = chipDisplayModes['__default__'] && typeof chipDisplayModes['__default__'] === 'object' ? chipDisplayModes['__default__'] : { duration: false, clock: false };
+      const defaultFlags = chipDisplayModes['__default__'] && typeof chipDisplayModes['__default__'] === 'object' ? chipDisplayModes['__default__'] : { duration: false, clock: false };
+      const perChipFlags = chipDisplayModes[block.id] && typeof chipDisplayModes[block.id] === 'object' ? chipDisplayModes[block.id] : null;
+      const displayFlags = perChipFlags ? { ...defaultFlags, ...perChipFlags } : defaultFlags;
       const showDuration = Boolean(displayFlags.duration);
       const showClock = Boolean(displayFlags.clock);
       let rawLabel;
