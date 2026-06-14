@@ -598,7 +598,7 @@ function RowSection({ row }) {
               </svg>
             }
             label={row.showActionTimes ? 'Hide Times' : 'Show Times'}
-            disabled={row.sectionType !== 'Actions'}
+            disabled={!(row.sectionType === 'Actions' && row.rowType === 'response')}
             onClick={() => dispatchGoalAction('toggleActionTimes', { goalId: row.goalId })}
             style={{ marginBottom: 0 }}
           />
