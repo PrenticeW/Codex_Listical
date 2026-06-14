@@ -4070,7 +4070,9 @@ export default function TacticsPage() {
           rawLabel = `${baseName} : ${largeTimeStr}`;
           largeTimeStr = null;
         } else {
-          rawLabel = timeStr != null ? `${baseName}: ${timeStr}` : baseName;
+          // Sub-increment chips default to showing duration; only hide if explicitly toggled off
+          const showSubDuration = timeStr != null && (perChipFlags !== null ? Boolean(perChipFlags.duration ?? defaultFlags.duration) : true);
+          rawLabel = showSubDuration ? `${baseName}: ${timeStr}` : baseName;
         }
       } else {
         const baseName = block.displayLabel ?? metadata?.label ?? 'Project';
@@ -4101,13 +4103,15 @@ export default function TacticsPage() {
           rawLabel = `${baseName} : ${largeTimeStr}`;
           largeTimeStr = null;
         } else {
-          const showTime = !isMultiRow && Number.isFinite(effectiveMins) && effectiveMins > 0 &&
+          const isSubIncrement = !isMultiRow && Number.isFinite(effectiveMins) && effectiveMins > 0 &&
             effectiveMins < incrementMinutes;
-          if (showTime) {
+          if (isSubIncrement) {
+            // Sub-increment chips default to showing duration; only hide if explicitly toggled off
+            const showSubDuration = perChipFlags !== null ? Boolean(perChipFlags.duration ?? defaultFlags.duration) : true;
             const h = Math.floor(effectiveMins / 60);
             const m = effectiveMins % 60;
             const timeStr = h === 0 ? `${m}` : m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
-            rawLabel = `${baseName}: ${timeStr}`;
+            rawLabel = showSubDuration ? `${baseName}: ${timeStr}` : baseName;
           } else {
             rawLabel = baseName;
           }
