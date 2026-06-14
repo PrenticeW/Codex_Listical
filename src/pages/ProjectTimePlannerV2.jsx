@@ -1641,7 +1641,11 @@ export default function ProjectTimePlannerV2() {
         setTacticsChips(freshChips);
         resetSubprojectLabels(freshChips);
       });
-      loadMetricsData(currentYear).then(setMetricsData);
+      setMetricsLoaded(false);
+      loadMetricsData(currentYear).then((freshMetrics) => {
+        setMetricsData(freshMetrics);
+        setMetricsLoaded(true);
+      });
     };
     window.addEventListener(TACTICS_SEND_TO_SYSTEM_EVENT, handler);
     return () => window.removeEventListener(TACTICS_SEND_TO_SYSTEM_EVENT, handler);
@@ -2164,14 +2168,16 @@ export default function ProjectTimePlannerV2() {
     const weekNumber = calculateWeekNumber(startDate, new Date(), displayedWeekNumber, currentYear);
 
     // Step 2: Create archive week row with grouping.
-    // Read from refs instead of closure values so we always get the latest
-    // dailyMinValues/dailyMaxValues even if the useCallback closure is stale
-    // (e.g. the mount-effect async load settled after this callback was created).
+    // Use closure values (dailyMinValues, dailyMaxValues) which are guaranteed
+    // fresh because they are in the useCallback dep array — the callback is
+    // recreated whenever either value changes. The refs lag by one frame (they
+    // are updated in a useEffect that runs after paint), so using them here
+    // would capture stale bounds right after a metrics reload.
     const archiveWeekRow = createArchiveWeekRow({
       weekRange,
       weekNumber,
-      dailyMinValues: latestDailyMinValuesRef.current,
-      dailyMaxValues: latestDailyMaxValuesRef.current,
+      dailyMinValues,
+      dailyMaxValues,
       totalDays,
       startDayIndex: firstVisibleDayIndex,
     });
