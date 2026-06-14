@@ -26,6 +26,7 @@ export default function ContextMenu({
     sectionType,
     rowType,
     showOutcomeTotals,
+    isFirstOfType,
     hasSelectedCells,
     hasSelectedRows,
     selectedCellsCount,
@@ -134,7 +135,7 @@ export default function ContextMenu({
             </>
           )}
           {/* Toggle totals for the entire Actions section */}
-          {!isMultiRow && !isHeader && sectionType === 'Actions' && (
+          {!isMultiRow && !isHeader && sectionType === 'Actions' && rowType === 'prompt' && (
             <>
               <button
                 onClick={() => handleAction(onToggleOutcomeTotals)}
@@ -175,8 +176,9 @@ export default function ContextMenu({
           <div className="border-t border-gray-100 my-1" />
           {!isHeader && (
             <button
-              onClick={() => handleAction(onDeleteRows)}
-              className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
+              onClick={() => !isFirstOfType && handleAction(onDeleteRows)}
+              disabled={isFirstOfType}
+              className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${isFirstOfType ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-gray-50 text-red-600'}`}
             >
               <Trash2 className="w-4 h-4" />
               Delete {rowLabel}

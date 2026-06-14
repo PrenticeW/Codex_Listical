@@ -559,7 +559,8 @@ function RowSection({ row }) {
 
       {!isHeader && (
         <ActionBtn
-          danger
+          danger={!row.isFirstOfType}
+          disabled={row.isFirstOfType}
           icon={
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
@@ -580,14 +581,14 @@ function RowSection({ row }) {
               </svg>
             }
             label={row.showOutcomeTotals ? 'Hide Totals' : 'Show Totals'}
+            disabled={!(row.sectionType === 'Actions' && row.rowType === 'prompt')}
             onClick={() => dispatchGoalAction('toggleTotals', { goalId: row.goalId })}
             style={{ marginBottom: 0 }}
           />
         </>
       )}
 
-      {/* Times toggle only applies to Actions rows — kept below its own divider */}
-      {row.sectionType === 'Actions' && (
+      {!isHeader && (
         <>
           <div style={{ borderTop: `1px solid ${C.borderLight}`, margin: '12px 0 12px' }} />
           <ActionBtn
@@ -597,6 +598,7 @@ function RowSection({ row }) {
               </svg>
             }
             label={row.showActionTimes ? 'Hide Times' : 'Show Times'}
+            disabled={row.sectionType !== 'Actions'}
             onClick={() => dispatchGoalAction('toggleActionTimes', { goalId: row.goalId })}
             style={{ marginBottom: 0 }}
           />

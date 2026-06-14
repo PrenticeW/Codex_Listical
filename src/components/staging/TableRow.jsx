@@ -123,6 +123,7 @@ export default function TableRow({
   onInputFocus,
   onEnterKeyAddRow,
   onContextMenu,
+  isFirstOfType,
   // Row action button handlers
   onAddRowBelow,
   onAddPairBelow,
@@ -162,6 +163,7 @@ export default function TableRow({
         sectionType,
         rowType,
         showOutcomeTotals: item.showOutcomeTotals || false,
+        isFirstOfType,
         selectedCells,
         selectedRows,
       }),

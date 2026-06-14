@@ -33,6 +33,7 @@ export default function useContextMenu() {
       sectionType = null,
       rowType = null,
       showOutcomeTotals = false,
+      isFirstOfType = false,
       selectedCells = new Set(),
       selectedRows = new Set(),
     } = options;
@@ -47,6 +48,7 @@ export default function useContextMenu() {
       sectionType,
       rowType,
       showOutcomeTotals,
+      isFirstOfType,
       hasSelectedCells: selectedCells.size > 0,
       hasSelectedRows: selectedRows.size > 0,
       selectedCellsCount: selectedCells.size,

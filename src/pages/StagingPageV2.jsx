@@ -363,15 +363,25 @@ export default function StagingPageV2() {
       }
     }
 
+    const rowType = entry.__rowType || 'row';
+    // Determine if this is the first row of its type within its section
+    let sectionStart = rowIdx;
+    for (let i = rowIdx - 1; i >= 0; i--) {
+      if (entries[i]?.__rowType === 'header') { sectionStart = i + 1; break; }
+      if (i === 0) sectionStart = 0;
+    }
+    const isFirstOfType = !entries.slice(sectionStart, rowIdx).some(e => e?.__rowType === rowType);
+
     window.dispatchEvent(new CustomEvent(GOAL_PANEL_ROW_SELECTION_EVENT, {
       detail: {
         row: {
           goalId: item.id,
           rowIdx,
           sectionType,
-          rowType: entry.__rowType || 'row',
+          rowType,
           showOutcomeTotals: item.showOutcomeTotals || false,
           showActionTimes: item.showActionTimes === true,
+          isFirstOfType,
         },
       },
     }));
@@ -1065,6 +1075,14 @@ export default function StagingPageV2() {
               // Subprojects are managed via the side panel — skip table rendering
               if (sectionType === 'Subprojects') return null;
 
+              // First row of this type in its section cannot be deleted
+              let sectionStart = rowIdx;
+              for (let i = rowIdx - 1; i >= 0; i--) {
+                if (entries[i]?.__rowType === 'header') { sectionStart = i + 1; break; }
+                if (i === 0) sectionStart = 0;
+              }
+              const isFirstOfType = !entries.slice(sectionStart, rowIdx).some(e => e?.__rowType === rowType);
+
               return (
                 <TableRow
                   key={`${item.id}-row-${rowIdx}`}
@@ -1073,6 +1091,7 @@ export default function StagingPageV2() {
                   rowIdx={rowIdx}
                   rowType={rowType}
                   sectionType={sectionType}
+                  isFirstOfType={isFirstOfType}
                   isCellSelected={isCellSelected}
                   isRowSelected={isRowSelected(item.id, rowIdx)}
                   isDropTarget={isDropTarget(item.id, rowIdx)}
