@@ -32,6 +32,8 @@ export default function useComputedDataV2({
       if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
           row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow || row._isFilterRow ||
           row._isInboxRow || row._isArchiveRow ||
+          row._rowType === 'archiveHeader' || row._rowType === 'archiveRow' ||
+          row._rowType === 'archivedProjectHeader' || row._rowType === 'archivedProjectGeneral' || row._rowType === 'archivedProjectUnscheduled' ||
           row._rowType === 'projectHeader' || row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled' ||
           row._rowType === 'subprojectHeader' || row._rowType === 'subprojectGeneral' || row._rowType === 'subprojectUnscheduled') {
         return row;

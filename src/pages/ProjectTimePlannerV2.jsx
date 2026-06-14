@@ -550,6 +550,9 @@ export default function ProjectTimePlannerV2() {
   const [{ dailyBounds, projectWeeklyQuotas }, setMetricsData] = useState(
     () => peekMetricsData(currentYear) || { dailyBounds: [], projectWeeklyQuotas: new Map() },
   );
+  // True once loadMetricsData has resolved for the current year. Guards
+  // handleArchiveWeek so the quota snapshot is never captured from a stale cache.
+  const [metricsLoaded, setMetricsLoaded] = useState(false);
   const [tacticsChips, setTacticsChips] = useState(
     () => peekEnrichedChips(currentYear) || [],
   );
@@ -561,8 +564,12 @@ export default function ProjectTimePlannerV2() {
   // "page builds in front of me" flash (chip data is larger and slower).
   useEffect(() => {
     let cancelled = false;
+    setMetricsLoaded(false);
     loadMetricsData(currentYear).then((data) => {
-      if (!cancelled) setMetricsData(data);
+      if (!cancelled) {
+        setMetricsData(data);
+        setMetricsLoaded(true);
+      }
     });
     if (!peekEnrichedChips(currentYear)) {
       loadEnrichedChips(currentYear).then((chips) => {
@@ -2131,6 +2138,11 @@ export default function ProjectTimePlannerV2() {
   const handleArchiveWeek = useCallback(() => {
     setIsListicalMenuOpen(false);
 
+    // Guard: don't archive if the fresh metrics fetch hasn't resolved yet.
+    // Without this, latestDailyMinValuesRef may hold stale cached bounds from
+    // the previous session, freezing wrong quota values into the archive row.
+    if (!metricsLoaded) return;
+
     // Get the week number from the first VISIBLE week
     // Find the first visible day column
     let firstVisibleDayIndex = 0;
@@ -2224,7 +2236,7 @@ export default function ProjectTimePlannerV2() {
     };
 
     executeCommand(archiveCommand);
-  }, [data, dates, startDate, dailyMinValues, dailyMaxValues, totalDays, executeCommand, collapsedGroups, visibleDayColumns, projectWeeklyQuotas, projectIdByNickname]);
+  }, [data, dates, startDate, dailyMinValues, dailyMaxValues, totalDays, executeCommand, collapsedGroups, visibleDayColumns, projectWeeklyQuotas, projectIdByNickname, metricsLoaded]);
 
   const handleHideWeek = useCallback(() => {
     setIsListicalMenuOpen(false);
