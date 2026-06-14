@@ -4067,7 +4067,7 @@ export default function TacticsPage() {
           }
         }
         if (showDuration && !isMultiRow && largeTimeStr) {
-          rawLabel = `${baseName}:${largeTimeStr}`;
+          rawLabel = `${baseName} : ${largeTimeStr}`;
           largeTimeStr = null;
         } else {
           rawLabel = timeStr != null ? `${baseName}: ${timeStr}` : baseName;
@@ -4098,7 +4098,7 @@ export default function TacticsPage() {
           }
         }
         if (showDuration && !isMultiRow && largeTimeStr) {
-          rawLabel = `${baseName}:${largeTimeStr}`;
+          rawLabel = `${baseName} : ${largeTimeStr}`;
           largeTimeStr = null;
         } else {
           const showTime = !isMultiRow && Number.isFinite(effectiveMins) && effectiveMins > 0 &&
