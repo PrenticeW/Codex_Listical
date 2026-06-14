@@ -1200,29 +1200,6 @@ function UpdateSection({ isUpToDate, onSendToSystem }) {
   );
 }
 
-// ─── Display section (no chip selected) ──────────────────────────────────────
-
-function DisplaySection({ showClock, showDuration, onToggleClock, onToggleDuration }) {
-  return (
-    <div style={SECTION}>
-      <SectionLabel>Display on chips</SectionLabel>
-      <ToggleBtn
-        icon={ICON.clock}
-        label={showClock ? 'Hide clock time' : 'Show clock time'}
-        on={showClock}
-        onClick={onToggleClock}
-        style={{ marginBottom: 8 }}
-      />
-      <ToggleBtn
-        icon={ICON.timer}
-        label={showDuration ? 'Hide duration' : 'Show duration'}
-        on={showDuration}
-        onClick={onToggleDuration}
-      />
-    </div>
-  );
-}
-
 // ─── Schedule link section (no chip selected) ─────────────────────────────────
 
 function ScheduleLinkSection({ onViewSchedule }) {
@@ -1341,7 +1318,7 @@ function TimeReadout({ minutes }) {
   );
 }
 
-function TimeSection({ chip, onStartMinutes, onEndMinutes, onDurationChange, onToggleClock, onToggleDuration }) {
+function TimeSection({ chip, onStartMinutes, onEndMinutes, onDurationChange, onToggleDuration }) {
   const fmtDur = (mins) => {
     if (mins == null || !Number.isFinite(mins) || mins <= 0) return '0:00';
     const h = Math.floor(mins / 60);
@@ -1390,14 +1367,6 @@ function TimeSection({ chip, onStartMinutes, onEndMinutes, onDurationChange, onT
       <FieldRow
         label="End time"
         control={<TimeReadout minutes={endMins} />}
-      />
-
-      <ToggleBtn
-        icon={ICON.clock}
-        label={chip.showClock ? 'Hide clock time' : 'Show clock time'}
-        on={chip.showClock}
-        onClick={onToggleClock}
-        style={{ marginTop: 12, marginBottom: 0 }}
       />
 
       <Divider />
@@ -1513,11 +1482,7 @@ function PageFooter() {
 
 function MainView({
   selectedChip,
-  showClock,
-  showDuration,
   isUpToDate,
-  onToggleClock,
-  onToggleDuration,
   onSendToSystem,
   onViewSchedule,
   onOpenColour,
@@ -1526,7 +1491,6 @@ function MainView({
   onStartMinutes,
   onEndMinutes,
   onDurationChange,
-  onToggleChipClock,
   onToggleChipDuration,
   onRemoveChip,
 }) {
@@ -1539,12 +1503,6 @@ function MainView({
         <UpdateSection isUpToDate={isUpToDate} onSendToSystem={onSendToSystem} />
         {!hasChip ? (
           <>
-            <DisplaySection
-              showClock={showClock}
-              showDuration={showDuration}
-              onToggleClock={onToggleClock}
-              onToggleDuration={onToggleDuration}
-            />
             <ScheduleLinkSection onViewSchedule={onViewSchedule} />
           </>
         ) : (
@@ -1560,7 +1518,6 @@ function MainView({
               onStartMinutes={onStartMinutes}
               onEndMinutes={onEndMinutes}
               onDurationChange={onDurationChange}
-              onToggleClock={onToggleChipClock}
               onToggleDuration={onToggleChipDuration}
             />
             <RemoveSection onRemove={onRemoveChip} />
@@ -1588,10 +1545,6 @@ export default function PlanPanel() {
   // Goal dropdown anchor rect (null = closed)
   const [goalAnchorRect, setGoalAnchorRect] = useState(null);
   const slideBackTimerRef = useRef(null);
-
-  // Page-level display toggles (no chip selected)
-  const [showClock, setShowClock] = useState(false);
-  const [showDuration, setShowDuration] = useState(true);
 
   // Selected chip data — populated via PLAN_PANEL_CHIP_EVENT
   const [selectedChip, setSelectedChip] = useState(null);
@@ -1716,16 +1669,12 @@ export default function PlanPanel() {
   const handleToggleChipClock    = useCallback(() => dispatchPlanAction('toggleChipClock', { chipId: selectedChip?.id }), [selectedChip]);
   const handleToggleChipDuration = useCallback(() => dispatchPlanAction('toggleChipDuration', { chipId: selectedChip?.id }), [selectedChip]);
   const handleRemoveChip    = useCallback(() => dispatchPlanAction('removeChip', { chipId: selectedChip?.id }), [selectedChip]);
-  const handleToggleClock    = useCallback(() => dispatchPlanAction('toggleGlobalClock'), []);
-  const handleToggleDuration = useCallback(() => dispatchPlanAction('toggleGlobalDuration'), []);
   const handleSendToSystem   = useCallback(() => dispatchPlanAction('sendToSystem'), []);
 
-  // Keep local display state in sync when TacticsPage pushes state
+  // Keep local sync state in sync when TacticsPage pushes state
   useEffect(() => {
     const handler = (e) => {
-      if (e.detail?.showClock    != null) setShowClock(e.detail.showClock);
-      if (e.detail?.showDuration != null) setShowDuration(e.detail.showDuration);
-      if (e.detail?.isUpToDate   != null) setIsUpToDate(e.detail.isUpToDate);
+      if (e.detail?.isUpToDate != null) setIsUpToDate(e.detail.isUpToDate);
     };
     window.addEventListener(PLAN_PANEL_STATE_EVENT, handler);
     return () => window.removeEventListener(PLAN_PANEL_STATE_EVENT, handler);
@@ -1796,11 +1745,7 @@ export default function PlanPanel() {
         {/* View 1 — Main */}
         <MainView
           selectedChip={selectedChip}
-          showClock={showClock}
-          showDuration={showDuration}
           isUpToDate={isUpToDate}
-          onToggleClock={handleToggleClock}
-          onToggleDuration={handleToggleDuration}
           onSendToSystem={handleSendToSystem}
           onViewSchedule={openScheduleView}
           onOpenColour={openColourView}
@@ -1809,7 +1754,6 @@ export default function PlanPanel() {
           onStartMinutes={handleStartMinutes}
           onEndMinutes={handleEndMinutes}
           onDurationChange={handleDurationChange}
-          onToggleChipClock={handleToggleChipClock}
           onToggleChipDuration={handleToggleChipDuration}
           onRemoveChip={handleRemoveChip}
         />

@@ -2755,28 +2755,31 @@ export default function TacticsPage() {
       let duration;
       const isScheduleChip = typeof block.id === 'string' && block.id.startsWith('schedule-chip-');
       const isSingleCell = block.startRowId === (block.endRowId ?? block.startRowId);
-      if (isScheduleChip && isSingleCell) {
-        const overrideMins = chipTimeOverrides[block.id];
-        if (overrideMins != null && overrideMins > 0) {
-          duration = overrideMins;
-        } else {
-          const extraMarker = block.id.indexOf('-extra-chip-');
-          const idForParsing = extraMarker !== -1 ? block.id.slice(0, extraMarker) : block.id;
-          const itemIdxMatch = idForParsing.match(/-(\d+)$/);
-          const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
-          const scheduleItems = itemIdx != null
-            ? (scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [])
-            : [];
-          const scheduleItem = itemIdx != null ? scheduleItems[itemIdx] : null;
-          const parsedMins = scheduleItem ? parseEstimateLabelToMinutes(scheduleItem.timeValue) : null;
-          if (Number.isFinite(parsedMins) && parsedMins > 0 && parsedMins < incrementMinutes) {
-            duration = parsedMins;
-          }
+
+      // Manual time override always wins — applies to single-cell AND multi-row
+      // chips so that a user-typed duration (e.g. 1:30 on a 60-min grid) is
+      // respected even after the chip is resized to span 2 grid rows.
+      const overrideMins = chipTimeOverrides[block.id];
+      if (Number.isFinite(overrideMins) && overrideMins > 0) {
+        duration = overrideMins;
+      }
+
+      if (duration == null && isScheduleChip && isSingleCell) {
+        const extraMarker = block.id.indexOf('-extra-chip-');
+        const idForParsing = extraMarker !== -1 ? block.id.slice(0, extraMarker) : block.id;
+        const itemIdxMatch = idForParsing.match(/-(\d+)$/);
+        const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
+        const scheduleItems = itemIdx != null
+          ? (scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [])
+          : [];
+        const scheduleItem = itemIdx != null ? scheduleItems[itemIdx] : null;
+        const parsedMins = scheduleItem ? parseEstimateLabelToMinutes(scheduleItem.timeValue) : null;
+        if (Number.isFinite(parsedMins) && parsedMins > 0 && parsedMins < incrementMinutes) {
+          duration = parsedMins;
         }
       }
       if (duration == null && isSingleCell) {
-        const overrideMins = chipTimeOverrides[block.id];
-        const effectiveMins = overrideMins ?? block.durationMinutes ?? null;
+        const effectiveMins = block.durationMinutes ?? null;
         if (Number.isFinite(effectiveMins) && effectiveMins > 0) {
           duration = effectiveMins;
         }
@@ -3339,17 +3342,6 @@ export default function TacticsPage() {
     }));
   }, [undoStack.length, redoStack.length]);
 
-  // Broadcast display toggle state to PlanPanel whenever chipDisplayModes changes
-  useEffect(() => {
-    const flags = chipDisplayModes['__default__'] ?? { clock: false, duration: false };
-    window.dispatchEvent(new CustomEvent(PLAN_PANEL_STATE_EVENT, {
-      detail: {
-        showClock: Boolean(flags.clock),
-        showDuration: Boolean(flags.duration),
-      },
-    }));
-  }, [chipDisplayModes]);
-
   // JSON fingerprint of the current chip state — recomputes only when chips
   // actually change (not on every render).
   const chipsFingerprint = useMemo(
@@ -3380,8 +3372,6 @@ export default function TacticsPage() {
 
       if (action === 'undo') { undo(); return; }
       if (action === 'redo') { redo(); return; }
-      if (action === 'toggleGlobalClock') { handleToggleChipDisplayFlag('__default__', 'clock'); return; }
-      if (action === 'toggleGlobalDuration') { handleToggleChipDisplayFlag('__default__', 'duration'); return; }
       if (action === 'sendToSystem') { handleSendToSystem(); return; }
 
       // ── Chip-specific actions ──────────────────────────────────────────────
@@ -3496,7 +3486,7 @@ export default function TacticsPage() {
           // exactly ceil(newDuration / inc) rows from startRowId.
           const startIdx = idxMap.get(c.startRowId);
           if (startIdx == null) return c;
-          const rowSpan = inc > 0 ? Math.max(1, Math.round(newDuration / inc)) : 1;
+          const rowSpan = inc > 0 ? Math.max(1, Math.ceil(newDuration / inc)) : 1;
           const newEndIdx = Math.min(startIdx + rowSpan - 1, rows.length - 1);
           const newEndRowId = rows[newEndIdx] ?? c.startRowId;
           return { ...c, endRowId: newEndRowId };
@@ -3863,20 +3853,20 @@ export default function TacticsPage() {
         const effectiveMins = overrideMins ?? block.durationMinutes ?? null;
         const isMultiRow = block.endRowId && block.endRowId !== block.startRowId;
         if (showDuration) {
-          if (isMultiRow) {
+          let blockMins;
+          if (overrideMins != null) {
+            blockMins = overrideMins;
+          } else if (isMultiRow) {
             const startIdx = rowIndexMap.get(block.startRowId);
             const endIdx = rowIndexMap.get(block.endRowId);
             if (startIdx != null && endIdx != null) {
               const rowCount = Math.abs(endIdx - startIdx) + 1;
-              const blockMins = rowCount * incrementMinutes;
-              if (Number.isFinite(blockMins) && blockMins > 0) {
-                const h = Math.floor(blockMins / 60);
-                const m = blockMins % 60;
-                largeTimeStr = m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
-              }
+              blockMins = rowCount * incrementMinutes;
             }
           } else {
-            const blockMins = overrideMins ?? block.durationMinutes ?? incrementMinutes;
+            blockMins = block.durationMinutes ?? incrementMinutes;
+          }
+          if (Number.isFinite(blockMins) && blockMins > 0) {
             const h = Math.floor(blockMins / 60);
             const m = blockMins % 60;
             largeTimeStr = h === 0 ? `${m}` : m === 0 ? `${h}` : `${h}.${String(m).padStart(2, '0')}`;
