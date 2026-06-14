@@ -736,8 +736,17 @@ export default function TacticsPage() {
     });
     return covering;
   }, [projectChips]);
+  // Chip dragged from the schedule panel that hasn't been committed to state yet.
+  // We hold it here during the drag so we can compute preview geometry without
+  // adding it to projectChips (and therefore the table) until the user drops.
+  const pendingPanelChipRef = useRef(null);
+
   const getProjectChipById = useCallback(
-    (blockId) => dedupeChipsById(projectChips).find((block) => block.id === blockId) ?? null,
+    (blockId) => {
+      const pending = pendingPanelChipRef.current;
+      if (pending && pending.id === blockId) return pending;
+      return dedupeChipsById(projectChips).find((block) => block.id === blockId) ?? null;
+    },
     [projectChips]
   );
   const draggingSleepChipIdRef = useRef(null);
@@ -857,6 +866,8 @@ export default function TacticsPage() {
   }, [menuRenamingProjectId]);
   useEffect(() => {
     const handleDragEnd = () => {
+      // If the panel chip was never dropped, discard it without adding to state.
+      pendingPanelChipRef.current = null;
       draggingSleepChipIdRef.current = null;
       setDragPreview(null);
       setIsDragging(false);
@@ -1640,6 +1651,36 @@ export default function TacticsPage() {
     if (!sourceBlock) return;
 
     const prevChips = projectChipsRef.current;
+
+    // If this chip came from the schedule panel and was never added to state,
+    // add it directly at the drop target rather than moving it from the project column.
+    const isPendingPanelChip = pendingPanelChipRef.current?.id === sourceChipId;
+    if (isPendingPanelChip) {
+      const pendingChip = pendingPanelChipRef.current;
+      pendingPanelChipRef.current = null;
+      const placedChip = {
+        ...pendingChip,
+        columnIndex: targetColumnIndex,
+        dayName: targetColumnIndex < DAY_COLUMN_COUNT ? (displayedWeekDays[targetColumnIndex] ?? null) : null,
+        startRowId,
+        endRowId,
+        startMinutes: rowIdToClockMinutes(startRowId, trailingMinuteRows),
+      };
+      const nextChips = [...prevChips, placedChip];
+      executeCommand({
+        execute: () => setProjectChips(nextChips),
+        undo: () => setProjectChips(prevChips),
+      });
+      setSelectedCell(null);
+      setSelectedBlockId(sourceChipId);
+      setDragPreview(null);
+      draggingSleepChipIdRef.current = null;
+      setIsDragging(false);
+      dragAnchorOffsetRef.current = 0;
+      logDragDebug('Panel chip placed and cleared');
+      return;
+    }
+
     const computeNextChips = (prev) => {
       const targetIndex = prev.findIndex((entry) => entry.id === sourceChipId);
       if (targetIndex < 0) return prev;
@@ -3270,8 +3311,75 @@ export default function TacticsPage() {
 
   const handlePanelDragStart = useCallback(
     (projectId, itemIdx, dragEvent) => {
-      const newChip = buildAndAddScheduleItemChip(projectId, itemIdx);
-      if (!newChip) return;
+      // Build the chip data without committing it to state. The chip is held in
+      // pendingPanelChipRef until the user drops onto a valid cell, at which point
+      // applyDragPreview writes it to projectChips in a single undoable command.
+      // This prevents the chip from appearing prematurely in the project column.
+      const colConfig = stagingColumnConfigs.find(
+        (c) => c.type === 'project' && c.project?.id === projectId
+      );
+      if (!colConfig) return;
+      const stagingIdx = stagingColumnConfigs.indexOf(colConfig);
+      const columnIndex = DAY_COLUMN_COUNT + stagingIdx;
+
+      const schedItems = scheduleLayout?.scheduleItemsByProject?.get(projectId) ?? [];
+      const scheduleItem = schedItems[itemIdx];
+      if (!scheduleItem) return;
+
+      const minutes = parseEstimateLabelToMinutes(scheduleItem.timeValue);
+      const totalMinutes = Number.isFinite(minutes) ? minutes : incrementMinutes;
+      const canonicalId = `schedule-chip-${projectId}-${itemIdx}`;
+      const alreadyPlaced = projectChips.reduce((sum, c) => {
+        if (!c.id.startsWith('schedule-chip-')) return sum;
+        if (c.columnIndex >= 8) return sum;
+        const extraIdx = c.id.indexOf('-extra-chip-');
+        if (extraIdx === -1) return sum;
+        const inner = c.id.slice('schedule-chip-'.length, extraIdx);
+        const lastDash = inner.lastIndexOf('-');
+        if (lastDash === -1) return sum;
+        if (inner.slice(0, lastDash) !== projectId) return sum;
+        if (parseInt(inner.slice(lastDash + 1), 10) !== itemIdx) return sum;
+        const chipMins = chipTimeOverrides[c.id] ?? chipTimeOverrides[canonicalId] ?? c.durationMinutes ?? 0;
+        return sum + chipMins;
+      }, 0);
+      const remainingMinutes = Math.max(incrementMinutes, totalMinutes - alreadyPlaced);
+      const durationMinutes = Math.max(1, totalMinutes - alreadyPlaced);
+      const span = Math.max(1, Math.ceil(remainingMinutes / Math.max(1, incrementMinutes)));
+
+      const existingInCol = projectChips.filter(
+        (c) => c.columnIndex === columnIndex && c.id.startsWith('schedule-chip-')
+      );
+      let startRowIdx = 2;
+      existingInCol.forEach((c) => {
+        const endIdx = rowIndexMap.get(c.endRowId);
+        if (endIdx != null && endIdx + 1 > startRowIdx) startRowIdx = endIdx + 1;
+      });
+      startRowIdx = Math.min(startRowIdx, timelineRowIds.length - 1);
+      const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
+      const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
+      const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
+      const startMinutes = rowIdToClockMinutes(startRowId, trailingMinuteRows);
+
+      const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
+      const trimmedName = (scheduleItem.name ?? '').trim();
+      const hasScheduleName = Boolean(trimmedName && trimmedName !== scheduleDefaultText);
+      const displayLabel = hasScheduleName ? trimmedName : null;
+
+      const newChip = {
+        id: `schedule-chip-${projectId}-${itemIdx}-extra-${createProjectChipId()}`,
+        columnIndex,
+        dayName: null,
+        startRowId,
+        endRowId,
+        startMinutes,
+        projectId,
+        displayLabel,
+        hasScheduleName,
+        durationMinutes,
+      };
+
+      // Hold it in the ref — not yet added to projectChips state.
+      pendingPanelChipRef.current = newChip;
 
       dragEvent.dataTransfer.setData(SLEEP_DRAG_TYPE, newChip.id);
       dragEvent.dataTransfer.setData('text/plain', newChip.id);
@@ -3291,7 +3399,18 @@ export default function TacticsPage() {
         endRowId: newChip.endRowId,
       });
     },
-    [buildAndAddScheduleItemChip, setSelectedBlockId]
+    [
+      buildAndAddScheduleItemChip,
+      chipTimeOverrides,
+      incrementMinutes,
+      projectChips,
+      rowIndexMap,
+      scheduleLayout,
+      setSelectedBlockId,
+      stagingColumnConfigs,
+      timelineRowIds,
+      trailingMinuteRows,
+    ]
   );
 
   const hasInitializedScheduleChips = useRef(false);
