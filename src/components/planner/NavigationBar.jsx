@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Settings, RotateCcw } from 'lucide-react';
+import { Settings, RotateCcw, PanelRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useYear } from '../../contexts/YearContext';
 import { useGearPanel } from '../../contexts/GearPanelContext';
@@ -37,7 +37,7 @@ export default function NavigationBar({
     return PAGE_CONFIG[currentPath] || { id: 'global', name: 'Page' };
   }, [currentPath]);
 
-  const { toggle: toggleGearPanel } = useGearPanel();
+  const { isOpen: gearPanelOpen, toggle: toggleGearPanel } = useGearPanel();
   const { isOpen: systemPanelOpen, toggle: toggleSystemPanel } = useSystemPanel();
   const { isOpen: planPanelOpen, toggle: togglePlanPanel } = usePlanPanel();
   const { isOpen: goalPanelOpen, toggle: toggleGoalPanel } = useGoalPanel();
@@ -152,9 +152,7 @@ export default function NavigationBar({
             }`}
             title="Goal actions"
           >
-            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-              <path d="M2 4h11M2 7.5h11M2 11h11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-            </svg>
+            <PanelRight className="w-4 h-4" />
           </button>
         )}
         {user && isPlanPage && (
@@ -167,9 +165,7 @@ export default function NavigationBar({
             }`}
             title="Plan actions"
           >
-            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-              <path d="M2 4h11M2 7.5h11M2 11h11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-            </svg>
+            <PanelRight className="w-4 h-4" />
           </button>
         )}
         {user && isSystemPage && (
@@ -182,9 +178,7 @@ export default function NavigationBar({
             }`}
             title="System actions"
           >
-            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-              <path d="M2 4h11M2 7.5h11M2 11h11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-            </svg>
+            <PanelRight className="w-4 h-4" />
           </button>
         )}
         {user && (
@@ -202,7 +196,7 @@ export default function NavigationBar({
                 console.trace('[Nav] Gear icon call stack');
                 toggleGearPanel();
               }}
-              className="px-4 py-2 text-sm font-medium text-slate-600 bg-transparent rounded-lg hover:bg-slate-100 hover:text-slate-900 transition-all duration-200 flex items-center gap-2"
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center gap-2 ${gearPanelOpen ? 'bg-slate-900 text-white' : 'text-slate-600 bg-transparent hover:bg-slate-100 hover:text-slate-900'}`}
               title="Settings"
             >
               <Settings className="w-4 h-4" />
