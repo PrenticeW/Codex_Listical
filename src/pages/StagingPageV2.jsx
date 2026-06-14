@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { getContrastTextColor } from '../utils/colorUtils';
@@ -307,6 +307,31 @@ export default function StagingPageV2() {
     pendingFocusRequestRef,
     setSelectedCells,
   });
+
+  // Keep GoalPanel in sync whenever the selected goal's panel-visible fields
+  // change (colour, nickname, plan status, name, tagline, toggles). Excluded:
+  // planTableEntries — it changes on every cell keystroke and would cause the
+  // panel to re-render while the user types. Subproject changes go through
+  // fireGoalSelection directly in the action handler so they're still covered.
+  const _selectedGoalSyncKey = useMemo(() => {
+    if (!selectedGoalId) return null;
+    const g = shortlist.find((i) => i.id === selectedGoalId);
+    if (!g) return null;
+    return [
+      g.color, g.projectNickname, g.addedToPlan,
+      g.projectName, g.projectTagline,
+      g.showOutcomeTotals, g.showActionTimes,
+    ].join('\x00');
+  }, [shortlist, selectedGoalId]);
+
+  useEffect(() => {
+    if (!selectedGoalId || _selectedGoalSyncKey === null) return;
+    const item = shortlist.find((i) => i.id === selectedGoalId);
+    if (item) fireGoalSelection(item);
+    // shortlist intentionally omitted: _selectedGoalSyncKey already captures
+    // the fields we care about and prevents the effect from running on unrelated edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_selectedGoalSyncKey, selectedGoalId, fireGoalSelection]);
 
   // Row/cell selection → GoalPanel Row section. Fires the first selected
   // row's context (section + row type); null when nothing is selected.

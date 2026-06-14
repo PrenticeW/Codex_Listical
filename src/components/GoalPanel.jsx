@@ -939,6 +939,17 @@ export default function GoalPanel() {
     return () => window.removeEventListener(GOAL_PANEL_ROW_SELECTION_EVENT, handler);
   }, []);
 
+  // Clear stale goal/row selection when leaving the Goal page. StagingPageV2
+  // re-mounts on return and resets selectedGoalId to null, so the sync effect
+  // won't re-fire — the panel would show old data. Clearing here ensures the
+  // user sees "Click a goal to select it" on return rather than a stale card.
+  useEffect(() => {
+    if (pathname !== '/staging') {
+      setSelectedGoal(null);
+      setSelectedRow(null);
+    }
+  }, [pathname]);
+
   // Close colour view when panel closes
   useEffect(() => {
     if (!isOpen) setColourViewOpen(false);
