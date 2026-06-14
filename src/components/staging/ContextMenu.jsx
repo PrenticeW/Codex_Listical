@@ -93,6 +93,7 @@ export default function ContextMenu({
   const hasRowContext = itemId != null && rowIdx != null;
   const isMultiRow = selectedRowsCount > 1;
   const rowLabel = isMultiRow ? 'Rows' : 'Row';
+  const isHeader = rowType === 'header';
 
   return (
     <div
@@ -133,7 +134,7 @@ export default function ContextMenu({
             </>
           )}
           {/* Toggle totals for the entire Actions section */}
-          {!isMultiRow && sectionType === 'Actions' && (
+          {!isMultiRow && !isHeader && sectionType === 'Actions' && (
             <>
               <button
                 onClick={() => handleAction(onToggleOutcomeTotals)}
@@ -172,13 +173,15 @@ export default function ContextMenu({
             Duplicate {rowLabel}
           </button>
           <div className="border-t border-gray-100 my-1" />
-          <button
-            onClick={() => handleAction(onDeleteRows)}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete {rowLabel}
-          </button>
+          {!isHeader && (
+            <button
+              onClick={() => handleAction(onDeleteRows)}
+              className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete {rowLabel}
+            </button>
+          )}
         </>
       )}
 
