@@ -998,7 +998,7 @@ function TimePickerView({ label, initialMinutes, incrementMinutes, onBack, onCon
 
 // ─── Schedule items sub-view ──────────────────────────────────────────────────
 
-function ScheduleView({ scheduleData, onDragStartRef, onBack }) {
+function ScheduleView({ scheduleData, onDragStartRef, onAddChipRef, onBack }) {
   const {
     projects = [],
     scheduleLayout = null,
@@ -1159,6 +1159,7 @@ function ScheduleView({ scheduleData, onDragStartRef, onBack }) {
                               boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
                             }}
                             onDragStart={(e) => onDragStartRef.current?.(project.id, itemIdx, e)}
+                            onClick={() => onAddChipRef?.current?.(project.id, itemIdx)}
                           >
                             <FitText text={`${baseName}: ${formatTime(remainingMinutes)}`.toUpperCase()} />
                           </div>
@@ -1589,6 +1590,7 @@ export default function PlanPanel() {
     chipTimeOverrides: {}, incrementMinutes: 30, rowMetrics: {},
   });
   const onDragStartRef = useRef(null);
+  const onAddChipRef = useRef(null);
 
   // Measure nav bar bottom so panel starts right below it
   useEffect(() => {
@@ -1722,6 +1724,7 @@ export default function PlanPanel() {
     const handler = (e) => {
       const d = e.detail ?? {};
       onDragStartRef.current = d.onDragStart ?? null;
+      onAddChipRef.current = d.onAddChip ?? null;
       setScheduleData({
         projects:        d.projects        ?? [],
         scheduleLayout:  d.scheduleLayout  ?? null,
@@ -1805,6 +1808,7 @@ export default function PlanPanel() {
           <ScheduleView
             scheduleData={scheduleData}
             onDragStartRef={onDragStartRef}
+            onAddChipRef={onAddChipRef}
             onBack={goToMain}
           />
         ) : (
