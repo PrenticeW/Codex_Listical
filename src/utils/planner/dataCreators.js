@@ -90,7 +90,7 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
 
     if (weekNumber !== currentWeek) {
       if (currentWeek !== null) {
-        weekRow._weekSpans.push({ startDay: spanStartDay, span: currentSpan, label: `Week ${currentWeek}` });
+        weekRow._weekSpans.push({ startDay: spanStartDay, span: currentSpan, weekNumber: currentWeek, label: `Week ${currentWeek}` });
       }
       currentWeek = weekNumber;
       currentSpan = 1;
@@ -101,7 +101,7 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
 
     // Push final span
     if (i === dates.length - 1) {
-      weekRow._weekSpans.push({ startDay: spanStartDay, span: currentSpan, label: `Week ${weekNumber}` });
+      weekRow._weekSpans.push({ startDay: spanStartDay, span: currentSpan, weekNumber, label: `Week ${weekNumber}` });
     }
 
     // Still set individual values for fallback

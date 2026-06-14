@@ -375,6 +375,8 @@ export default function ProjectTimePlannerV2() {
     setTotalDays,
     visibleDayColumns,
     setVisibleDayColumns,
+    weekNames,
+    setWeekNames,
     isLoaded: storageLoaded,
   } = usePlannerStorage({ yearNumber: currentYear });
 
@@ -707,6 +709,7 @@ export default function ProjectTimePlannerV2() {
             weekRow._weekSpans.push({
               startDay: spanStartDay,
               span: currentSpan,
+              weekNumber: currentWeek,
               label: `Week ${currentWeek}`
             });
           }
@@ -720,6 +723,7 @@ export default function ProjectTimePlannerV2() {
           weekRow._weekSpans.push({
             startDay: spanStartDay,
             span: currentSpan,
+            weekNumber,
             label: `Week ${weekNumber}`
           });
         }
@@ -2923,6 +2927,10 @@ export default function ProjectTimePlannerV2() {
         collapsedGroups={collapsedGroups}
         toggleGroupCollapse={toggleGroupCollapse}
         archiveTotals={archiveTotals}
+        weekNames={weekNames}
+        onWeekNameChange={(weekNumber, name) =>
+          setWeekNames(prev => ({ ...prev, [weekNumber]: name }))
+        }
       />
       <FilterPanel
         projectFilterMenu={projectFilterMenu}

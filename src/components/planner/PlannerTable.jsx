@@ -63,6 +63,8 @@ function PlannerTable({
   collapsedGroups,
   toggleGroupCollapse,
   archiveTotals,
+  weekNames,
+  onWeekNameChange,
 }) {
   return (
     <div className="flex-1 flex flex-col min-h-0 gap-4 overflow-hidden">
@@ -271,6 +273,8 @@ function PlannerTable({
                   collapsedGroups={collapsedGroups}
                   toggleGroupCollapse={toggleGroupCollapse}
                   archiveTotals={archiveTotals}
+                  weekNames={weekNames}
+                  onWeekNameChange={onWeekNameChange}
                 />
               );
             })}
@@ -353,6 +357,8 @@ function PlannerTable({
                   collapsedGroups={collapsedGroups}
                   toggleGroupCollapse={toggleGroupCollapse}
                   archiveTotals={archiveTotals}
+                  weekNames={weekNames}
+                  onWeekNameChange={onWeekNameChange}
                 />
               );
             })}

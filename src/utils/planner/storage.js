@@ -686,6 +686,52 @@ export const saveCollapsedGroups = async (
 };
 
 // ============================================================
+// WEEK NAMES (planner_settings.week_names)
+// ============================================================
+
+export const readWeekNames = async (
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
+  try {
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return {};
+    const row = await readPlannerSettingsRow({ userId, yearId, yearNumber });
+    const value = row?.week_names;
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  } catch (error) {
+    console.error('Failed to read week names', error);
+    return {};
+  }
+};
+
+export const saveWeekNames = async (
+  weekNames,
+  projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
+  yearNumber = null,
+) => {
+  try {
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return;
+    await writePlannerSettingsColumns({
+      userId,
+      yearId,
+      yearNumber,
+      columns: {
+        week_names:
+          weekNames && typeof weekNames === 'object' && !Array.isArray(weekNames)
+            ? weekNames
+            : {},
+      },
+    });
+  } catch (error) {
+    console.error('Failed to save week names', error);
+  }
+};
+
+// ============================================================
 // TASK ROWS (planner_rows + archived_weeks, with calendar headers)
 // ============================================================
 //

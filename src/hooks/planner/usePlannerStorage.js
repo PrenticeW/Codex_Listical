@@ -37,6 +37,8 @@ import {
   saveTotalDays,
   readVisibleDayColumns,
   saveVisibleDayColumns,
+  readWeekNames,
+  saveWeekNames,
   PLANNER_START_DATE_EVENT,
   peekPlannerCache,
 } from '../../utils/planner/storage';
@@ -115,6 +117,10 @@ const initVisibleDayColumns = (settingsRow, totalDays) => {
   if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length > 0) return v;
   return defaultVisibleDayColumns(totalDays);
 };
+const initWeekNames = (settingsRow) => {
+  const v = settingsRow?.week_names;
+  return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+};
 
 export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, yearNumber = null } = {}) {
   // Track the authenticated user ID so the load effect re-fires on login/logout.
@@ -170,6 +176,9 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
   const [visibleDayColumns, setVisibleDayColumns] = useState(() =>
     initVisibleDayColumns(initialCache.plannerSettings, initialTotalDays),
   );
+  const [weekNames, setWeekNames] = useState(() =>
+    initWeekNames(initialCache.plannerSettings),
+  );
 
   // isLoaded starts true if the cache had anything for this year, so
   // dependent effects (data hydration, autosave gating) don't briefly see
@@ -206,6 +215,7 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
           loadedSortPlannerStatuses,
           loadedTaskRows,
           loadedVisibleDayColumns,
+          loadedWeekNames,
         ] = await Promise.all([
           readColumnSizing(projectId, yearNumber),
           readSizeScale(projectId, yearNumber),
@@ -217,6 +227,7 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
           readSortPlannerStatuses(projectId, yearNumber),
           readTaskRows(projectId, yearNumber),
           readVisibleDayColumns(projectId, loadedTotalDays, yearNumber),
+          readWeekNames(projectId, yearNumber),
         ]);
         if (cancelled || gen !== loadGen.current) return;
 
@@ -235,6 +246,7 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
         setSelectedSortPlannerStatuses(loadedSortPlannerStatuses);
         setTaskRows(loadedTaskRows);
         setVisibleDayColumns(loadedVisibleDayColumns);
+        setWeekNames(loadedWeekNames);
         setIsLoaded(true);
       } catch (error) {
         if (!cancelled && gen === loadGen.current) {
@@ -296,6 +308,7 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
     ...autoOpts,
     shouldSave: (value) => Object.keys(value).length > 0,
   });
+  useAutoPersist(weekNames, saveWeekNames, autoOpts);
 
   return {
     columnSizing,
@@ -320,6 +333,8 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
     setTotalDays,
     visibleDayColumns,
     setVisibleDayColumns,
+    weekNames,
+    setWeekNames,
     isLoaded,
   };
 }

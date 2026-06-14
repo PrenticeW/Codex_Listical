@@ -71,6 +71,8 @@ const TableRow = React.memo(function TableRow({
   collapsedGroups = new Set(),
   toggleGroupCollapse = () => {},
   archiveTotals = {},
+  weekNames = {},
+  onWeekNameChange,
 }) {
   // Destructure filter states to avoid accessing during render
   const {
@@ -291,6 +293,8 @@ const TableRow = React.memo(function TableRow({
           handleRowNumberClick={handleRowNumberClick}
           handleDragStart={handleDragStart}
           handleDragEnd={handleDragEnd}
+          weekNames={weekNames}
+          onWeekNameChange={onWeekNameChange}
         />
       ) : isDayRow || isDayOfWeekRow || isDailyMinRow || isDailyMaxRow || isInboxRow || isArchiveRow || isArchiveHeader || isArchiveWeekRow ? (
         // Render day/day-of-week/daily-min/daily-max/inbox/archive rows with centered calendar cells

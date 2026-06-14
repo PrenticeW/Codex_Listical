@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GripVertical } from 'lucide-react';
 
 /**
  * WeekRow Component
- * Renders the second row of the table with merged week cells
+ * Renders the second row of the table with merged week cells.
+ * Week labels are click-to-edit inline; custom names persist via weekNames / onWeekNameChange.
  */
 function WeekRow({
   row,
@@ -18,7 +19,44 @@ function WeekRow({
   handleRowNumberClick,
   handleDragStart,
   handleDragEnd,
+  weekNames = {},
+  onWeekNameChange,
 }) {
+  const [editingWeek, setEditingWeek] = useState(null); // weekNumber being edited
+  const [draft, setDraft] = useState('');
+  const inputRef = useRef(null);
+
+  // Focus input when edit starts
+  useEffect(() => {
+    if (editingWeek !== null && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingWeek]);
+
+  const startEdit = useCallback((weekNum, defaultLabel) => {
+    setDraft(weekNames[weekNum] || defaultLabel);
+    setEditingWeek(weekNum);
+  }, [weekNames]);
+
+  const commitEdit = useCallback(() => {
+    if (editingWeek === null) return;
+    const trimmed = draft.trim();
+    if (onWeekNameChange) {
+      onWeekNameChange(editingWeek, trimmed || `Week ${editingWeek}`);
+    }
+    setEditingWeek(null);
+  }, [editingWeek, draft, onWeekNameChange]);
+
+  const cancelEdit = useCallback(() => {
+    setEditingWeek(null);
+  }, []);
+
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
+    if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+  }, [commitEdit, cancelEdit]);
+
   return (
     <>
       {/* Row number cell */}
@@ -91,12 +129,15 @@ function WeekRow({
         for (let i = 0; i < span.span; i++) {
           const colId = `day-${span.startDay + i}`;
           const column = table.getColumn(colId);
-          if (!column || !column.getIsVisible()) continue; // Skip if column doesn't exist or is hidden
+          if (!column || !column.getIsVisible()) continue;
           totalWidth += column.getSize();
         }
 
-        // Skip this span if no valid visible columns were found
         if (totalWidth === 0) return null;
+
+        const weekNum = span.weekNumber ?? (idx + 1);
+        const displayLabel = weekNames[weekNum] || span.label;
+        const isEditing = editingWeek === weekNum;
 
         return (
           <td
@@ -118,10 +159,38 @@ function WeekRow({
                 backgroundColor: 'transparent',
                 borderTop: '1.5px solid black',
                 borderBottom: '1px solid #d3d3d3',
-                borderRight: '1.5px solid black'
+                borderRight: '1.5px solid black',
               }}
             >
-              {span.label}
+              {isEditing ? (
+                <input
+                  ref={inputRef}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onBlur={commitEdit}
+                  onKeyDown={handleKeyDown}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    fontSize: `${cellFontSize}px`,
+                    fontWeight: 600,
+                    width: '90%',
+                    textAlign: 'center',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: '1px solid #6b7280',
+                    outline: 'none',
+                    color: 'inherit',
+                  }}
+                />
+              ) : (
+                <span
+                  title="Click to rename"
+                  onClick={() => startEdit(weekNum, span.label)}
+                  style={{ cursor: 'text', userSelect: 'none', width: '100%', textAlign: 'center', padding: '0 4px' }}
+                >
+                  {displayLabel}
+                </span>
+              )}
             </div>
           </td>
         );

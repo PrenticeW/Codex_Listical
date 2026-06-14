@@ -186,42 +186,34 @@ function lightnessWeight(l) {
  * @param {Array<{colour?: string, color?: string}>} [avoidAlso=[]] - additional colours to avoid (e.g. custom chips)
  * @returns {string} HSL colour string
  */
+// How many hue-distance units below the best score still qualify for random
+// selection. A wider window = more variety; narrower = closer to the "best" pick.
+const PROJECT_RANDOM_THRESHOLD = 30;
+
 export function pickProjectColour(existingProjects, avoidAlso = []) {
   const existingHues = [...(existingProjects ?? []), ...(avoidAlso ?? [])]
     .map((p) => parseHue(p.colour ?? p.color))
     .filter((h) => h !== null);
 
-  // Score each palette entry: primary key = min hue distance (higher is better),
-  // tie-break = lightness weight (lower is better).
-  let best = null;
-  let bestMinDist = -Infinity;
-  let bestLWeight = Infinity;
-
-  for (const entry of PALETTE) {
+  // Score every palette entry.
+  const scored = PALETTE.map((entry) => {
     const lw = lightnessWeight(entry.l);
+    const minDist = existingHues.length === 0
+      ? 360
+      : Math.min(...existingHues.map((eh) => hueDistance(entry.h, eh)));
+    return { entry, effectiveDist: minDist - lw };
+  });
 
-    let minDist;
-    if (existingHues.length === 0) {
-      minDist = 360; // No existing colours — all entries equally "distant"
-    } else {
-      minDist = Math.min(...existingHues.map((eh) => hueDistance(entry.h, eh)));
-    }
+  const bestScore = Math.max(...scored.map((s) => s.effectiveDist));
 
-    // Apply lightness penalty: treat l:68 entries as if their min distance is
-    // capped at (real minDist - 1000), which pushes them below any l:60/52/44
-    // entry unless all other lightness levels are already exhausted.
-    const effectiveDist = minDist - lw;
+  // Collect all candidates within the random threshold of the best score,
+  // excluding the heavily-penalised l:68 tier (effectiveDist will be << 0).
+  const candidates = scored
+    .filter((s) => s.effectiveDist >= bestScore - PROJECT_RANDOM_THRESHOLD && s.entry.l !== 68)
+    .map((s) => s.entry);
 
-    if (
-      effectiveDist > bestMinDist ||
-      (effectiveDist === bestMinDist && lw < bestLWeight)
-    ) {
-      best = entry;
-      bestMinDist = effectiveDist;
-      bestLWeight = lw;
-    }
-  }
-
+  const pool = candidates.length > 0 ? candidates : scored.map((s) => s.entry);
+  const best = pool[Math.floor(Math.random() * pool.length)];
   return `hsl(${best.h}, ${best.s}%, ${best.l}%)`;
 }
 
@@ -233,7 +225,18 @@ export function pickProjectColour(existingProjects, avoidAlso = []) {
  * @param {Array<{colour?: string, color?: string}>} [avoidAlso=[]] - additional colours to avoid (e.g. staged projects)
  * @returns {string} HSL colour string
  */
+const CHIP_RANDOM_THRESHOLD = 30;
+
 export function pickCustomChipColour(existingChips, avoidAlso = []) {
+  // When no chips exist yet, pick purely randomly from the pastel (l:68) tier.
+  // avoidAlso (staging projects) only matters once you have multiple chips that
+  // need to be visually distinct from each other AND from projects.
+  if ((existingChips ?? []).length === 0) {
+    const pool = PALETTE.filter((e) => e.l === 68);
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    return `hsl(${pick.h}, ${pick.s}%, ${pick.l}%)`;
+  }
+
   const existingHues = [...(existingChips ?? []), ...(avoidAlso ?? [])]
     .map((p) => parseHue(p.colour ?? p.color))
     .filter((h) => h !== null);
@@ -246,33 +249,23 @@ export function pickCustomChipColour(existingChips, avoidAlso = []) {
     return 2; // l:44
   }
 
-  let best = null;
-  let bestMinDist = -Infinity;
-  let bestLWeight = Infinity;
-
-  for (const entry of PALETTE) {
+  // Score every palette entry.
+  const scored = PALETTE.map((entry) => {
     const lw = chipLightnessWeight(entry.l);
+    const minDist = existingHues.length === 0
+      ? 360
+      : Math.min(...existingHues.map((eh) => hueDistance(entry.h, eh)));
+    return { entry, effectiveDist: minDist - lw * 1000 };
+  });
 
-    let minDist;
-    if (existingHues.length === 0) {
-      minDist = 360;
-    } else {
-      minDist = Math.min(...existingHues.map((eh) => hueDistance(entry.h, eh)));
-    }
+  const bestScore = Math.max(...scored.map((s) => s.effectiveDist));
 
-    // Penalty of 1000 per lightness tier ensures l:68 exhausted before l:60/52,
-    // and l:60/52 exhausted before l:44.
-    const effectiveDist = minDist - lw * 1000;
+  // Collect all l:68 candidates within the random threshold of the best score.
+  const candidates = scored
+    .filter((s) => s.effectiveDist >= bestScore - CHIP_RANDOM_THRESHOLD && s.entry.l === 68)
+    .map((s) => s.entry);
 
-    if (
-      effectiveDist > bestMinDist ||
-      (effectiveDist === bestMinDist && lw < bestLWeight)
-    ) {
-      best = entry;
-      bestMinDist = effectiveDist;
-      bestLWeight = lw;
-    }
-  }
-
+  const pool = candidates.length > 0 ? candidates : scored.map((s) => s.entry);
+  const best = pool[Math.floor(Math.random() * pool.length)];
   return `hsl(${best.h}, ${best.s}%, ${best.l}%)`;
 }
