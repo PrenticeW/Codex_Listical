@@ -535,6 +535,8 @@ function ColourView({ currentColor, onSelect, onBack, customColors = [], onAddCu
 // Shown in place of the Goal section while a table row/cell is selected.
 
 function RowSection({ row }) {
+  const isHeader = row.rowType === 'header';
+
   return (
     <div style={{ ...SECTION }}>
       <SectionLabel>Row</SectionLabel>
@@ -555,29 +557,34 @@ function RowSection({ row }) {
         </div>
       ) : null}
 
-      <ActionBtn
-        danger
-        icon={
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
-          </svg>
-        }
-        label="Delete Row"
-        onClick={() => dispatchGoalAction('deleteRow', { goalId: row.goalId, rowIdx: row.rowIdx })}
-      />
+      {!isHeader && (
+        <ActionBtn
+          danger
+          icon={
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+            </svg>
+          }
+          label="Delete Row"
+          onClick={() => dispatchGoalAction('deleteRow', { goalId: row.goalId, rowIdx: row.rowIdx })}
+        />
+      )}
 
-      <div style={{ borderTop: `1px solid ${C.borderLight}`, margin: '4px 0 12px' }} />
-
-      <ActionBtn
-        icon={
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
-          </svg>
-        }
-        label={row.showOutcomeTotals ? 'Hide Totals' : 'Show Totals'}
-        onClick={() => dispatchGoalAction('toggleTotals', { goalId: row.goalId })}
-        style={{ marginBottom: 0 }}
-      />
+      {!isHeader && (
+        <>
+          <div style={{ borderTop: `1px solid ${C.borderLight}`, margin: '4px 0 12px' }} />
+          <ActionBtn
+            icon={
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
+              </svg>
+            }
+            label={row.showOutcomeTotals ? 'Hide Totals' : 'Show Totals'}
+            onClick={() => dispatchGoalAction('toggleTotals', { goalId: row.goalId })}
+            style={{ marginBottom: 0 }}
+          />
+        </>
+      )}
 
       {/* Times toggle only applies to Actions rows — kept below its own divider */}
       {row.sectionType === 'Actions' && (
