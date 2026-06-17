@@ -1213,7 +1213,6 @@ export const saveTaskNote = async (taskId, noteText) => {
  */
 export const writeTaskEvent = async (taskId, { field, oldValue, newValue, note = null, isRecurring = false }) => {
   if (!taskId) return;
-  console.log('[task-events] writeTaskEvent called', { taskId, field, oldValue, newValue });
   try {
     const userId = await requireUserId();
 
@@ -1228,7 +1227,6 @@ export const writeTaskEvent = async (taskId, { field, oldValue, newValue, note =
         note: note ?? null,
       });
     if (error) throw error;
-    console.log('[task-events] writeTaskEvent success', { taskId, field, newValue });
 
     // Bookkeeping: increment completion_count and stamp last_completed_at when
     // a recurring task moves to Done.
@@ -1283,7 +1281,6 @@ export const readTaskEvents = async (taskId) => {
   if (!taskId) return [];
   try {
     const userId = await requireUserId();
-    console.log('[task-events] readTaskEvents querying', { taskId });
     const { data, error } = await supabase
       .from('task_events')
       .select('*')
@@ -1291,7 +1288,6 @@ export const readTaskEvents = async (taskId) => {
       .eq('user_id', userId)
       .order('changed_at', { ascending: false });
     if (error) throw error;
-    console.log('[task-events] readTaskEvents result', { taskId, count: data?.length, rows: data });
     return data ?? [];
   } catch (error) {
     console.error('Failed to read task events', error);

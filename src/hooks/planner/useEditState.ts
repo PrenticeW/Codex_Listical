@@ -148,7 +148,6 @@ export default function useEditState({
           newValue,
           isRecurring: row?.recurring === 'true' || row?.recurring === true,
         }).then(() => {
-          console.log('[task-events] dispatching reload (Abandoned/Skipped)', rowId);
           window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
             detail: { taskId: rowId },
           }));
@@ -295,14 +294,14 @@ export default function useEditState({
     executeCommand(command);
 
     // Write task events for status and task name changes
+    const isRecurring = row?.recurring === 'true' || (row?.recurring as any) === true;
     if (columnId === 'status' && row?.id) {
       writeTaskEvent(rowId, {
         field: 'status',
         oldValue: oldValue || null,
         newValue,
-        isRecurring: row?.recurring === 'true' || (row?.recurring as any) === true,
+        isRecurring,
       }).then(() => {
-        console.log('[task-events] dispatching reload (normal status)', rowId);
         window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
           detail: { taskId: rowId },
         }));
@@ -316,10 +315,24 @@ export default function useEditState({
       });
     }
 
+    // When a recurring task is marked Done, optimistically update completionCount and
+    // lastCompletedAt in local data so the panel reflects the new count immediately
+    // (the DB write is handled async inside writeTaskEvent).
+    const recurringCompletion: Record<string, unknown> = {};
+    if (columnId === 'status' && newValue === 'Done' && isRecurring && row?.id) {
+      const newCount = ((row?.completionCount as number) || 0) + 1;
+      const nowIso = new Date().toISOString();
+      recurringCompletion.completionCount = newCount;
+      recurringCompletion.lastCompletedAt = nowIso;
+      setData(prev => prev.map(r =>
+        r.id === rowId ? { ...r, completionCount: newCount, lastCompletedAt: nowIso } : r
+      ));
+    }
+
     // Push fresh task data to the detail panel immediately (synchronous, before next render)
     if (row?.id) {
       window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_UPDATE_EVENT, {
-        detail: { task: { ...row, [actualColumnId]: newValue } },
+        detail: { task: { ...row, [actualColumnId]: newValue, ...recurringCompletion } },
       }));
     }
 
