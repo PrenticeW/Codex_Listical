@@ -2696,6 +2696,11 @@ export default function ProjectTimePlannerV2() {
       if (action === 'redo') { redo(); return; }
       if (action === 'zoomIn') { increaseSize(); return; }
       if (action === 'zoomOut') { decreaseSize(); return; }
+      if (action === 'updateTaskField') {
+        const { rowId, field, value } = e.detail;
+        if (rowId && field) handleEditComplete(rowId, field, value);
+        return;
+      }
       if (action === 'sortInbox' && e.detail.statuses?.length > 0) {
         const command = createSortInboxCommand({
           data,
@@ -2712,7 +2717,7 @@ export default function ProjectTimePlannerV2() {
     };
     window.addEventListener(SYSTEM_PANEL_ACTION_EVENT, handler);
     return () => window.removeEventListener(SYSTEM_PANEL_ACTION_EVENT, handler);
-  }, [addTasksWithCount, addLabelsWithCount, addWeeksWithCount, removeWeek, duplicateSelectedRows, handleHideWeek, handleShowWeek, handleArchiveWeek, undo, redo, increaseSize, decreaseSize, data, setData, executeCommand]);
+  }, [addTasksWithCount, addLabelsWithCount, addWeeksWithCount, removeWeek, duplicateSelectedRows, handleHideWeek, handleShowWeek, handleArchiveWeek, undo, redo, increaseSize, decreaseSize, data, setData, executeCommand, handleEditComplete]);
 
   // After a panel-triggered archive, expand the archive row, collapse its project
   // headers, then scroll to the bottom

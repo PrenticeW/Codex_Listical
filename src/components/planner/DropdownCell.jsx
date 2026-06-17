@@ -19,8 +19,8 @@ const DROPDOWN_OPTIONS = [
   'Accounted'
 ];
 
-// Pillbox color configuration
-const PILLBOX_COLORS = {
+// Pillbox color configuration — exported so other components stay in sync
+export const PILLBOX_COLORS = {
   '-': { bg: '#ffffff', text: '#000000' },
   'Not Scheduled': { bg: '#e5e5e5', text: '#000000' },
   'Scheduled': { bg: '#ffe5a0', text: '#473821' },
@@ -215,4 +215,3 @@ function DropdownCell({
 }
 
 export default DropdownCell;
-export { PILLBOX_COLORS };

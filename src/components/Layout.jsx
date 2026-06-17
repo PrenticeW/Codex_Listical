@@ -7,6 +7,7 @@ import { PagePanelProvider } from '../contexts/PagePanelContext';
 import { SystemPanelProvider } from '../contexts/SystemPanelContext';
 import { PlanPanelProvider } from '../contexts/PlanPanelContext';
 import { GoalPanelProvider } from '../contexts/GoalPanelContext';
+import { TaskRowPanelProvider } from '../contexts/TaskRowPanelContext';
 import GearPanel from './GearPanel';
 import SystemPanel from './SystemPanel';
 import PlanPanel from './PlanPanel';
@@ -75,13 +76,15 @@ export default function Layout() {
       <SystemPanelProvider>
         <PlanPanelProvider>
           <GoalPanelProvider>
-            <YearProvider>
-              <YearKeyedOutlet />
-              <GearPanel />
-              <SystemPanel />
-              <PlanPanel />
-              <GoalPanel />
-            </YearProvider>
+            <TaskRowPanelProvider>
+              <YearProvider>
+                <YearKeyedOutlet />
+                <GearPanel />
+                <SystemPanel />
+                <PlanPanel />
+                <GoalPanel />
+              </YearProvider>
+            </TaskRowPanelProvider>
           </GoalPanelProvider>
         </PlanPanelProvider>
       </SystemPanelProvider>

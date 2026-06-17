@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { GripVertical } from 'lucide-react';
+import { TASK_ROW_DETAIL_EVENT } from '../../../contexts/TaskRowPanelContext';
 import EditableCell from '../EditableCell';
 import DropdownCell, { PILLBOX_COLORS } from '../DropdownCell';
 import EstimateDropdownCell from '../EstimateDropdownCell';
@@ -261,6 +262,14 @@ const TaskRow = React.memo(function TaskRow({
                   if (cellBorderStateRef.current.onBorder && cellBorderStateRef.current.columnId === columnId) {
                     e.stopPropagation();
                     return;
+                  }
+                  // Single left-click on the task name cell opens the detail panel.
+                  // Done here (not onClick) because handleCellMouseDown calls
+                  // e.preventDefault() which can suppress the click event.
+                  if (columnId === 'task' && e.button === 0 && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+                    window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_EVENT, {
+                      detail: { task: { ...row.original, ...rowData } },
+                    }));
                   }
                   handleCellMouseDown(e, rowId, columnId);
                 }}

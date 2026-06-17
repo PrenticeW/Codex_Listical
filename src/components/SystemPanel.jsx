@@ -17,6 +17,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { useSystemPanel } from '../contexts/SystemPanelContext';
+import { useTaskRowPanel } from '../contexts/TaskRowPanelContext';
+import { TaskDetailContent } from './planner/TaskRowPanel';
 
 // Cross-component action event — consumed by ProjectTimePlannerV2
 export const SYSTEM_PANEL_ACTION_EVENT = 'system-panel-action';
@@ -573,7 +575,8 @@ function PageSection() {
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export default function SystemPanel() {
-  const { isOpen, close } = useSystemPanel();
+  const { isOpen, open, close } = useSystemPanel();
+  const { selectedTask, closePanel } = useTaskRowPanel();
   const [navBottom, setNavBottom] = useState(0);
   const { pathname } = useLocation();
 
@@ -594,18 +597,29 @@ export default function SystemPanel() {
     };
   }, [isOpen]);
 
-  // Escape closes
+  // Auto-open the panel when a task row is selected
+  useEffect(() => {
+    if (selectedTask) open();
+  }, [selectedTask, open]);
+
+  // Escape: if showing task detail, go back to system content; otherwise close panel
   useEffect(() => {
     if (!isOpen) return;
-    const handler = e => { if (e.key === 'Escape') close(); };
+    const handler = e => {
+      if (e.key !== 'Escape') return;
+      if (selectedTask) closePanel();
+      else close();
+    };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isOpen, close]);
+  }, [isOpen, selectedTask, close, closePanel]);
 
   // Page panels are mounted globally in Layout; render only on the System
   // page so panels never stack across page switches. Open state is kept,
   // so the panel is still there when the user returns.
   if (pathname !== '/') return null;
+
+  const showTaskDetail = Boolean(selectedTask);
 
   return createPortal(
     <div
@@ -615,16 +629,32 @@ export default function SystemPanel() {
         background: C.bg,
         borderLeft: `1px solid ${C.border}`,
         zIndex: 99994, // one below GearPanel so gear always wins if somehow both open
-        overflowY: 'auto',
-        overflowX: 'hidden',
+        overflow: 'hidden',
         transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
         transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
       }}
     >
-      <InsertSection />
-      <SortSection />
-      <ArchiveSection />
-      <PageSection />
+      {/* ── Outer slide: system content ↔ task detail ── */}
+      <div style={{
+        display: 'flex', width: 640, height: '100%',
+        transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
+        transform: showTaskDetail ? 'translateX(-320px)' : 'translateX(0)',
+      }}>
+
+        {/* System main content (320px, scrollable) */}
+        <div style={{ width: 320, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden', height: '100%' }}>
+          <InsertSection />
+          <SortSection />
+          <ArchiveSection />
+          <PageSection />
+        </div>
+
+        {/* Task detail view (320px, overflow hidden — inner slide handles its own scroll) */}
+        <div style={{ width: 320, flexShrink: 0, overflow: 'hidden', height: '100%' }}>
+          <TaskDetailContent selectedTask={selectedTask} onBack={closePanel} />
+        </div>
+
+      </div>
     </div>,
     document.body
   );
