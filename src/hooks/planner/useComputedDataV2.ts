@@ -15,6 +15,8 @@ import type { UseComputedDataReturn, PlannerRow } from '../../types/planner';
 import { calculateTimeValue, calculateMultiTimeValue } from './useTimeValueCalculation';
 import { getEstimateWithHabitCheck } from './useHabitPatternDetection';
 import { assignParentGroupIds } from './useParentGroupAssignment';
+import { writeTaskEvent } from '../../utils/planner/storage';
+import { TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
 
 export default function useComputedDataV2({
   data,
@@ -133,6 +135,25 @@ export default function useComputedDataV2({
     });
 
     if (hasChanges) {
+      // Write a task-event for every row whose computed status differs from its stored status.
+      // This covers auto-transitions (e.g. '-' → 'Scheduled' when time is scheduled) that
+      // never go through handleEditComplete.
+      data.forEach(row => {
+        const computed = row.id ? computedById.get(row.id) : undefined;
+        if (computed && row.id && row.status !== computed.status) {
+          writeTaskEvent(row.id, {
+            field: 'status',
+            oldValue: row.status || null,
+            newValue: computed.status,
+            isRecurring: row.recurring === 'true' || (row.recurring as any) === true,
+          }).then(() => {
+            window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
+              detail: { taskId: row.id },
+            }));
+          });
+        }
+      });
+
       setData(prevData =>
         prevData.map(row => {
           const computed = row.id ? computedById.get(row.id) : undefined;
