@@ -16,7 +16,7 @@ import useProjectsData from '../hooks/planner/useProjectsData';
 import { TACTICS_SEND_TO_SYSTEM_EVENT, getSendToSystemTimestamp, loadSentChipsSnapshot, loadTacticsYearSettings } from '../lib/tacticsStorage';
 import { SYSTEM_PANEL_ACTION_EVENT, SYSTEM_PANEL_SELECTION_EVENT, SYSTEM_PANEL_SCALE_EVENT } from '../components/SystemPanel';
 import { useSystemPanel } from '../contexts/SystemPanelContext';
-import { useTaskRowPanel, TASK_ROW_DETAIL_UPDATE_EVENT } from '../contexts/TaskRowPanelContext';
+import { useTaskRowPanel, TASK_ROW_DETAIL_UPDATE_EVENT, TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../contexts/TaskRowPanelContext';
 import { loadSentMetricsSnapshot, peekTacticsMetricsCache } from '../lib/tacticsMetricsStorage';
 import { peekTacticsCache } from '../lib/tacticsStorage';
 import { peekStagingCache } from '../lib/stagingStorage';
@@ -71,7 +71,7 @@ import {
 } from '../utils/planner/clipboardOperations';
 import { createSortInboxCommand } from '../utils/planner/sortInbox';
 import { createSortPlannerCommand } from '../utils/planner/sortPlanner';
-import { saveTaskRows, readTaskRows } from '../utils/planner/storage';
+import { saveTaskRows, readTaskRows, writeTaskEvent } from '../utils/planner/storage';
 import { DEFAULT_PROJECT_ID } from '../constants/plannerStorageKeys';
 import {
   calculateWeekRange,
@@ -628,16 +628,33 @@ export default function ProjectTimePlannerV2() {
   });
 
   // Sync the task row detail panel when filteredData changes so the status chip
-  // always reflects the computed status shown in the table.
+  // always reflects the computed status shown in the table. Also write a task
+  // event for computed status changes (chip-task rows whose status is derived
+  // from plan data rather than set via the dropdown).
   const { selectedTask: panelTask } = useTaskRowPanel();
   useEffect(() => {
     if (!panelTask?.id) return;
     const updatedRow = filteredData.find(r => r.id === panelTask.id);
     if (!updatedRow) return;
     if (updatedRow.status === panelTask.status) return;
+
     window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_UPDATE_EVENT, {
       detail: { task: updatedRow },
     }));
+
+    // Write the status change to history. For chip-task rows the status is
+    // computed here (not via handleEditComplete), so this is the only place
+    // the event gets recorded.
+    writeTaskEvent(panelTask.id, {
+      field: 'status',
+      oldValue: panelTask.status || null,
+      newValue: updatedRow.status,
+      isRecurring: updatedRow.recurring === 'true' || updatedRow.recurring === true,
+    }).then(() => {
+      window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
+        detail: { taskId: panelTask.id },
+      }));
+    });
   }, [filteredData, panelTask?.id, panelTask?.status]);
 
   // Keep latestVisibleDayColumnsRef in sync so the event handler can always read
