@@ -16,6 +16,7 @@ import useProjectsData from '../hooks/planner/useProjectsData';
 import { TACTICS_SEND_TO_SYSTEM_EVENT, getSendToSystemTimestamp, loadSentChipsSnapshot, loadTacticsYearSettings } from '../lib/tacticsStorage';
 import { SYSTEM_PANEL_ACTION_EVENT, SYSTEM_PANEL_SELECTION_EVENT, SYSTEM_PANEL_SCALE_EVENT } from '../components/SystemPanel';
 import { useSystemPanel } from '../contexts/SystemPanelContext';
+import { useTaskRowPanel, TASK_ROW_DETAIL_UPDATE_EVENT } from '../contexts/TaskRowPanelContext';
 import { loadSentMetricsSnapshot, peekTacticsMetricsCache } from '../lib/tacticsMetricsStorage';
 import { peekTacticsCache } from '../lib/tacticsStorage';
 import { peekStagingCache } from '../lib/stagingStorage';
@@ -625,6 +626,19 @@ export default function ProjectTimePlannerV2() {
     collapsedGroups,
     coerceNumber,
   });
+
+  // Sync the task row detail panel when filteredData changes so the status chip
+  // always reflects the computed status shown in the table.
+  const { selectedTask: panelTask } = useTaskRowPanel();
+  useEffect(() => {
+    if (!panelTask?.id) return;
+    const updatedRow = filteredData.find(r => r.id === panelTask.id);
+    if (!updatedRow) return;
+    if (updatedRow.status === panelTask.status) return;
+    window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_UPDATE_EVENT, {
+      detail: { task: updatedRow },
+    }));
+  }, [filteredData, panelTask?.id, panelTask?.status]);
 
   // Keep latestVisibleDayColumnsRef in sync so the event handler can always read
   // the current pole-position without needing to be in its dep array.
