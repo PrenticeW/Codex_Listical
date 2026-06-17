@@ -633,6 +633,7 @@ export default function ProjectTimePlannerV2() {
   // from plan data rather than set via the dropdown).
   const { selectedTask: panelTask } = useTaskRowPanel();
   useEffect(() => {
+    console.log('[task-events] panel-sync-effect', { panelTaskId: panelTask?.id });
     if (!panelTask?.id) return;
     const updatedRow = filteredData.find(r => r.id === panelTask.id);
     console.log('[task-events] panel-sync', { panelId: panelTask.id, found: !!updatedRow, old: panelTask.status, new: updatedRow?.status });
