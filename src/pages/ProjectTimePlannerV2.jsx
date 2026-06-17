@@ -2182,6 +2182,12 @@ export default function ProjectTimePlannerV2() {
       startDayIndex: firstVisibleDayIndex,
     });
 
+    // If the user has given this week a custom name, use it in the archive label
+    const customWeekName = weekNames[displayedWeekNumber];
+    if (customWeekName) {
+      archiveWeekRow.archiveWeekLabel = `Year ${weekNumber.year}, ${customWeekName}`;
+    }
+
     // Step 3: Copy project structure as archived (including subproject sections)
     const projectRows = data.filter(row =>
       row._rowType === 'projectHeader' ||
@@ -2242,7 +2248,7 @@ export default function ProjectTimePlannerV2() {
     };
 
     executeCommand(archiveCommand);
-  }, [data, dates, startDate, dailyMinValues, dailyMaxValues, totalDays, executeCommand, collapsedGroups, visibleDayColumns, projectWeeklyQuotas, projectIdByNickname, metricsLoaded]);
+  }, [data, dates, startDate, dailyMinValues, dailyMaxValues, totalDays, executeCommand, collapsedGroups, visibleDayColumns, projectWeeklyQuotas, projectIdByNickname, metricsLoaded, weekNames]);
 
   const handleHideWeek = useCallback(() => {
     setIsListicalMenuOpen(false);

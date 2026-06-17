@@ -502,13 +502,20 @@ const TableRow = React.memo(function TableRow({
                 const isCollapsed = collapsedGroups.has(row.original.groupId);
                 const weekLabel = row.original.archiveWeekLabel || '';
 
+                // Split "Year X, Week Y" → yearPrefix="Year X, " weekName="Week Y"
+                // so only the week name part is user-editable.
+                const commaIdx = weekLabel.indexOf(', ');
+                const yearPrefix = commaIdx !== -1 ? weekLabel.slice(0, commaIdx + 2) : '';
+                const weekName   = commaIdx !== -1 ? weekLabel.slice(commaIdx + 2) : weekLabel;
+
                 // Calculate total width of columns A-D
                 const totalWidth = archiveWeekColumnsToMerge.reduce((sum, colId) => {
                   const column = table.getColumn(colId);
                   return sum + (column ? column.getSize() : 0);
                 }, 0);
 
-                // This merged cell is not editable, but we keep it for consistency
+                const isEditingWeekLabel = editingCell?.rowId === rowId && editingCell?.columnId === 'archiveWeekLabel';
+
                 return (
                   <td
                     key="merged-archive-week-a-to-d"
@@ -531,6 +538,8 @@ const TableRow = React.memo(function TableRow({
                         fontWeight: '400',
                         fontSize: `${cellFontSize}px`,
                         paddingLeft: '8px',
+                        outline: isEditingWeekLabel ? '2px solid black' : 'none',
+                        outlineOffset: '-2px',
                       }}
                     >
                       <span
@@ -539,7 +548,47 @@ const TableRow = React.memo(function TableRow({
                       >
                         {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                       </span>
-                      <span>{weekLabel}</span>
+                      <span>{yearPrefix}</span>
+                      {isEditingWeekLabel ? (
+                        <input
+                          type="text"
+                          value={editValue}
+                          onChange={(e) => setEditValue && setEditValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (handleEditKeyDown) {
+                              handleEditKeyDown(e, rowId, 'archiveWeekLabel', yearPrefix + e.target.value);
+                            }
+                          }}
+                          onBlur={() => {
+                            if (handleEditComplete) {
+                              handleEditComplete(rowId, 'archiveWeekLabel', yearPrefix + editValue);
+                            }
+                          }}
+                          autoFocus
+                          style={{
+                            flex: 1,
+                            height: '100%',
+                            border: 'none',
+                            outline: 'none',
+                            background: 'transparent',
+                            fontSize: `${cellFontSize}px`,
+                            padding: 0,
+                          }}
+                        />
+                      ) : (
+                        <span
+                          className="cursor-text"
+                          title="Click to rename"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (handleCellDoubleClick) {
+                              handleCellDoubleClick(rowId, 'archiveWeekLabel', weekName);
+                            }
+                          }}
+                        >
+                          {weekName}
+                        </span>
+                      )}
                     </div>
                   </td>
                 );
