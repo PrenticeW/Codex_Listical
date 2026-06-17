@@ -278,9 +278,15 @@ export function TaskDetailContent({ selectedTask, onBack }) {
   const [recurringActive, setRecurringActive] = useState(false);
   const [notes, setNotes] = useState('');
   const [events, setEvents] = useState([]);
+  const noteSaveDebounceRef = React.useRef(null);
 
   // Reset inner state and load fresh data whenever the selected task changes
   useEffect(() => {
+    // Cancel any pending note save from the previous task
+    if (noteSaveDebounceRef.current) {
+      clearTimeout(noteSaveDebounceRef.current);
+      noteSaveDebounceRef.current = null;
+    }
     setShowHistory(false);
     if (selectedTask) {
       setRecurringActive(selectedTask.recurring === 'true' || selectedTask.recurring === true);
@@ -312,18 +318,35 @@ export function TaskDetailContent({ selectedTask, onBack }) {
     return () => window.removeEventListener(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, handler);
   }, [selectedTask?.id]);
 
+  const persistNote = useCallback((taskId, noteText) => {
+    saveTaskNote(taskId, noteText);
+    window.dispatchEvent(new CustomEvent('system-panel-action', {
+      detail: { action: 'updateTaskField', rowId: taskId, field: 'notes', value: noteText },
+    }));
+  }, []);
+
+  const handleNotesChange = useCallback((e) => {
+    const noteText = e.target.value;
+    setNotes(noteText);
+    if (!selectedTask?.id) return;
+    if (noteSaveDebounceRef.current) clearTimeout(noteSaveDebounceRef.current);
+    noteSaveDebounceRef.current = setTimeout(() => {
+      persistNote(selectedTask.id, noteText);
+    }, 800);
+  }, [selectedTask?.id, persistNote]);
+
   const handleNotesBlur = useCallback((e) => {
     e.target.style.borderColor = '#e0e0dc';
     e.target.style.background = C.bgSubtle;
-    if (selectedTask?.id) {
-      const noteText = e.target.value;
-      saveTaskNote(selectedTask.id, noteText);
-      // Keep local data state in sync so notes survive task navigation
-      window.dispatchEvent(new CustomEvent('system-panel-action', {
-        detail: { action: 'updateTaskField', rowId: selectedTask.id, field: 'notes', value: noteText },
-      }));
+    // Flush immediately on blur — cancels the debounce timer
+    if (noteSaveDebounceRef.current) {
+      clearTimeout(noteSaveDebounceRef.current);
+      noteSaveDebounceRef.current = null;
     }
-  }, [selectedTask?.id]);
+    if (selectedTask?.id) {
+      persistNote(selectedTask.id, e.target.value);
+    }
+  }, [selectedTask?.id, persistNote]);
 
   function toggleRecurring() {
     const next = !recurringActive;
@@ -407,7 +430,7 @@ export function TaskDetailContent({ selectedTask, onBack }) {
           <textarea
             placeholder="Add a note…"
             value={notes}
-            onChange={e => setNotes(e.target.value)}
+            onChange={handleNotesChange}
             style={{
               width: '100%', minHeight: 360, resize: 'none',
               border: '1px solid #e0e0dc', borderRadius: 10,
