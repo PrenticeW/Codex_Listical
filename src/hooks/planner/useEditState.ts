@@ -148,6 +148,7 @@ export default function useEditState({
           newValue,
           isRecurring: row?.recurring === 'true' || row?.recurring === true,
         }).then(() => {
+          console.log('[task-events] dispatching reload (Abandoned/Skipped)', rowId);
           window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
             detail: { taskId: rowId },
           }));
@@ -301,6 +302,7 @@ export default function useEditState({
         newValue,
         isRecurring: row?.recurring === 'true' || (row?.recurring as any) === true,
       }).then(() => {
+        console.log('[task-events] dispatching reload (normal status)', rowId);
         window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
           detail: { taskId: rowId },
         }));

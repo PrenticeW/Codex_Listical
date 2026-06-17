@@ -304,6 +304,7 @@ export function TaskDetailContent({ selectedTask, onBack }) {
   useEffect(() => {
     if (!selectedTask?.id) return;
     const handler = (e) => {
+      console.log('[task-events] reload event received', { eventTaskId: e.detail?.taskId, panelTaskId: selectedTask.id, match: e.detail?.taskId === selectedTask.id });
       if (e.detail?.taskId === selectedTask.id) {
         readTaskEvents(selectedTask.id).then(setEvents);
       }
