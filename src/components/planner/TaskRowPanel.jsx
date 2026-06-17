@@ -425,14 +425,14 @@ export function TaskDetailContent({ selectedTask, onBack }) {
             </div>
           ) : (
             events.map((ev, i) => (
-              <HistoryEntry key={i} {...ev} isLast={i === events.length - 1 && !selectedTask?.task_created_at} />
+              <HistoryEntry key={i} {...ev} isLast={i === events.length - 1 && !selectedTask?.taskCreatedAt} />
             ))
           )}
 
-          {selectedTask?.task_created_at && (
+          {selectedTask?.taskCreatedAt && (
             <CreatedEntry
-              date={new Date(selectedTask.task_created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-              agePill={getAgePill(selectedTask.task_created_at)}
+              date={new Date(selectedTask.taskCreatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+              agePill={getAgePill(selectedTask.taskCreatedAt)}
             />
           )}
         </div>
@@ -441,10 +441,10 @@ export function TaskDetailContent({ selectedTask, onBack }) {
           <div style={{ borderTop: `1px solid ${C.borderLight}`, padding: '18px 22px' }}>
             <SectionLabel>Recurring</SectionLabel>
             <RecurringBlock
-              completionCount={selectedTask?.completion_count ?? 0}
+              completionCount={selectedTask?.completionCount ?? 0}
               lastCompletedAt={
-                selectedTask?.last_completed_at
-                  ? new Date(selectedTask.last_completed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                selectedTask?.lastCompletedAt
+                  ? new Date(selectedTask.lastCompletedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
                   : null
               }
             />

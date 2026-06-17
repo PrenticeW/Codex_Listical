@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useRef } from 'react';
+import { createContext, useContext, useState, useRef, useCallback } from 'react';
 
 /**
  * Shared open/closed state for the three page panels (Goal, Plan, System).
@@ -14,22 +14,21 @@ export function PagePanelProvider({ children }) {
   const [isOpen, setIsOpen] = useState(false);
   const closedAt = useRef(0);
 
+  const open = useCallback(() => setIsOpen(true), []);
+  const close = useCallback(() => {
+    closedAt.current = Date.now();
+    setIsOpen(false);
+  }, []);
+  const toggle = useCallback(() => {
+    // Ignore toggles fired immediately after a close (click-outside +
+    // toggle-button race) — same debounce the per-page contexts used.
+    const msSinceClose = Date.now() - closedAt.current;
+    if (msSinceClose < 500) return;
+    setIsOpen(v => !v);
+  }, []);
+
   return (
-    <PagePanelContext.Provider value={{
-      isOpen,
-      open: () => setIsOpen(true),
-      close: () => {
-        closedAt.current = Date.now();
-        setIsOpen(false);
-      },
-      toggle: () => {
-        // Ignore toggles fired immediately after a close (click-outside +
-        // toggle-button race) — same debounce the per-page contexts used.
-        const msSinceClose = Date.now() - closedAt.current;
-        if (msSinceClose < 500) return;
-        setIsOpen(v => !v);
-      },
-    }}>
+    <PagePanelContext.Provider value={{ isOpen, open, close, toggle }}>
       {children}
     </PagePanelContext.Provider>
   );
