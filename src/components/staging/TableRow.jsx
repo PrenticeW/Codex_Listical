@@ -74,7 +74,7 @@ function RowShellButtons({ rowType, sectionType, onAddRow, onAddPair, onSendToAc
   const pair = rowType === 'prompt' && (sectionType === 'Outcomes' || sectionType === 'Actions');
 
   return (
-    <span className="flex items-center gap-1.5 opacity-0 pointer-events-none transition-opacity duration-100 group-focus-within/row:opacity-100 group-focus-within/row:pointer-events-auto">
+    <span className="flex items-center gap-1.5 opacity-0 pointer-events-none transition-opacity duration-100 group-hover/cell:opacity-100 group-hover/cell:pointer-events-auto group-focus-within/row:opacity-100 group-focus-within/row:pointer-events-auto">
       {send && (
         <>
           <RowBtn title="Send to Actions" onClick={onSendToActions}>

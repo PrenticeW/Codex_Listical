@@ -118,7 +118,7 @@ export function TextInputCell({
 
   return (
     <td
-      className={cellClassName(isSelected)}
+      className={`${cellClassName(isSelected)}${trailing ? ' group/cell' : ''}`}
       style={style}
       colSpan={colSpan}
       onMouseDown={onMouseDown}
