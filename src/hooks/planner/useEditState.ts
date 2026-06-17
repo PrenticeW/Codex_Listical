@@ -3,7 +3,7 @@ import type { UseEditStateReturn, CellReference, PlannerRow, Command } from '../
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../../constants/planner/rowTypes';
 import { forEachDayColumn } from '../../utils/planner/dayColumnHelpers';
 import { writeTaskEvent } from '../../utils/planner/storage';
-import { TASK_ROW_DETAIL_UPDATE_EVENT } from '../../contexts/TaskRowPanelContext';
+import { TASK_ROW_DETAIL_UPDATE_EVENT, TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
 
 /** Replace all day columns whose value matches prevTimeValue with nextTimeValue */
 function syncDayColumns(row: PlannerRow, nextTimeValue: string, prevTimeValue: string, totalDays: number): Record<string, string> | null {
@@ -147,6 +147,10 @@ export default function useEditState({
           oldValue: oldValue || null,
           newValue,
           isRecurring: row?.recurring === 'true' || row?.recurring === true,
+        }).then(() => {
+          window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
+            detail: { taskId: rowId },
+          }));
         });
       }
 
@@ -296,6 +300,10 @@ export default function useEditState({
         oldValue: oldValue || null,
         newValue,
         isRecurring: row?.recurring === 'true' || (row?.recurring as any) === true,
+      }).then(() => {
+        window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
+          detail: { taskId: rowId },
+        }));
       });
     } else if (columnId === 'task' && row?.id && actualColumnId === 'task') {
       // Only write event for actual task name cells (not section labels / header renames)

@@ -9,6 +9,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PILLBOX_COLORS } from './DropdownCell';
 import { saveTaskNote, readTaskEvents } from '../../utils/planner/storage';
+import { TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -297,6 +298,19 @@ export function TaskDetailContent({ selectedTask, onBack }) {
     setRecurringActive(selectedTask.recurring === 'true' || selectedTask.recurring === true);
     readTaskEvents(selectedTask.id).then(setEvents);
   }, [selectedTask?.status, selectedTask?.recurring, selectedTask?.completionCount, selectedTask?.lastCompletedAt]);
+
+  // Reload history after the DB write completes (fires after writeTaskEvent resolves,
+  // avoiding the race where readTaskEvents runs before the new event is persisted).
+  useEffect(() => {
+    if (!selectedTask?.id) return;
+    const handler = (e) => {
+      if (e.detail?.taskId === selectedTask.id) {
+        readTaskEvents(selectedTask.id).then(setEvents);
+      }
+    };
+    window.addEventListener(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, handler);
+    return () => window.removeEventListener(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, handler);
+  }, [selectedTask?.id]);
 
   const handleNotesBlur = useCallback((e) => {
     e.target.style.borderColor = '#e0e0dc';

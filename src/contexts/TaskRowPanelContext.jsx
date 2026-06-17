@@ -16,6 +16,9 @@ export const TASK_ROW_DETAIL_EVENT = 'task-row-detail-open';
 /** Custom event fired when the task row's data changes while the panel is open. */
 export const TASK_ROW_DETAIL_UPDATE_EVENT = 'task-row-detail-update';
 
+/** Custom event fired after a task event is written to the DB, to trigger a history reload. */
+export const TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT = 'task-row-detail-reload-history';
+
 export function TaskRowPanelProvider({ children }) {
   const [selectedTask, setSelectedTask] = useState(null);
 
