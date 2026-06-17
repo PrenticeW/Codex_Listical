@@ -37,7 +37,7 @@ export function createEmptyTaskRow(id, totalDays) {
  */
 export function createEmptyTaskRows(count, totalDays) {
   return Array.from({ length: count }, (_, i) =>
-    createEmptyTaskRow(`row-${Date.now()}-${i}`, totalDays)
+    createEmptyTaskRow(crypto.randomUUID(), totalDays)
   );
 }
 

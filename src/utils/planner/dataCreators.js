@@ -208,7 +208,7 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
   // Regular data rows (starting from row 8)
   for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
     const row = {
-      id: `row-${rowIndex}`,
+      id: crypto.randomUUID(),
       checkbox: '',
       project: '',
       subproject: '',

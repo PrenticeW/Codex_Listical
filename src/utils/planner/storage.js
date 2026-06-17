@@ -841,7 +841,12 @@ function plannerRowPayloadToDb({ row, userId, yearId, displayOrder }) {
     return 0;
   })();
 
+  // Preserve the row's existing UUID so task_events survive the delete+re-insert cycle.
+  const isValidUUID = typeof row.id === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.id);
+
   return {
+    ...(isValidUUID ? { id: row.id } : {}),
     user_id: userId,
     year_id: yearId,
     project_id: null,
