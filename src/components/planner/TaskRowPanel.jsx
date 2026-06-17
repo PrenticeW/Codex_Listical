@@ -283,6 +283,7 @@ export function TaskDetailContent({ selectedTask, onBack }) {
   useEffect(() => {
     setShowHistory(false);
     if (selectedTask) {
+      console.log('[panel-open] task:', selectedTask.id, 'notes from selectedTask:', selectedTask.notes);
       setRecurringActive(selectedTask.recurring === 'true' || selectedTask.recurring === true);
       setNotes(selectedTask.notes ?? '');
       readTaskEvents(selectedTask.id).then(setEvents);
@@ -315,10 +316,12 @@ export function TaskDetailContent({ selectedTask, onBack }) {
   const handleNotesBlur = useCallback((e) => {
     e.target.style.borderColor = '#e0e0dc';
     e.target.style.background = C.bgSubtle;
+    console.log('[notes-blur] selectedTask.id:', selectedTask?.id, 'value:', e.target.value);
     if (selectedTask?.id) {
       const noteText = e.target.value;
       saveTaskNote(selectedTask.id, noteText);
       // Keep local data state in sync so notes survive task navigation
+      console.log('[notes-blur] dispatching updateTaskField for notes');
       window.dispatchEvent(new CustomEvent('system-panel-action', {
         detail: { action: 'updateTaskField', rowId: selectedTask.id, field: 'notes', value: noteText },
       }));

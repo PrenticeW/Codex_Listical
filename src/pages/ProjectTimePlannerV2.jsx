@@ -2714,6 +2714,7 @@ export default function ProjectTimePlannerV2() {
       if (action === 'zoomOut') { decreaseSize(); return; }
       if (action === 'updateTaskField') {
         const { rowId, field, value } = e.detail;
+        console.log('[updateTaskField] rowId:', rowId, 'field:', field, 'value:', value);
         if (rowId && field) handleEditComplete(rowId, field, value);
         return;
       }

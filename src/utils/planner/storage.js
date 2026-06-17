@@ -1174,6 +1174,7 @@ async function _saveTaskRowsImpl(taskRows, yearNumber) {
 export const saveTaskNote = async (taskId, noteText) => {
   if (!taskId) return;
   const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId);
+  console.log('[saveTaskNote] taskId:', taskId, 'isValidUUID:', isValidUUID, 'noteText:', noteText);
   if (!isValidUUID) return;
   try {
     const userId = await requireUserId();
@@ -1182,6 +1183,7 @@ export const saveTaskNote = async (taskId, noteText) => {
       .update({ notes: noteText ?? null })
       .eq('id', taskId)
       .eq('user_id', userId);
+    console.log('[saveTaskNote] result:', error ? 'error: ' + error.message : 'ok');
     if (error) throw error;
   } catch (error) {
     console.error('Failed to save task note', error);
