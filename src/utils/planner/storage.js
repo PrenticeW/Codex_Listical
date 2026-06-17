@@ -1172,6 +1172,9 @@ async function _saveTaskRowsImpl(taskRows, yearNumber) {
 // single-field change.
 
 export const saveTaskNote = async (taskId, noteText) => {
+  if (!taskId) return;
+  const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId);
+  if (!isValidUUID) return;
   try {
     const userId = await requireUserId();
     const { error } = await supabase
@@ -1231,13 +1234,21 @@ export const writeTaskEvent = async (taskId, { field, oldValue, newValue, note =
     // Bookkeeping: increment completion_count and stamp last_completed_at when
     // a recurring task moves to Done.
     if (field === 'status' && newValue === 'Done' && isRecurring) {
-      const { error: countError } = await supabase.rpc('increment_completion_count', {
-        p_task_id: taskId,
-        p_user_id: userId,
-      }).catch(() => ({ error: new Error('rpc not available') }));
+      let countError = null;
+      try {
+        const { error } = await supabase.rpc('increment_completion_count', {
+          p_task_id: taskId,
+          p_user_id: userId,
+        });
+        countError = error;
+      } catch {
+        countError = new Error('rpc not available');
+      }
 
       // Fallback if the RPC doesn't exist yet: do a manual read-increment-write.
-      if (countError) {
+      // Skip for non-UUID row IDs (e.g. chip-task rows) — they have no planner_rows record.
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId);
+      if (countError && isUUID) {
         const { data: rowData } = await supabase
           .from('planner_rows')
           .select('completion_count')
