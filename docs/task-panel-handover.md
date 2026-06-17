@@ -11,12 +11,19 @@
 - `src/components/planner/DropdownCell.jsx` — `PILLBOX_COLORS` is now a named export so panel chips stay in sync with table chips.
 - Recurring toggle chip is fully wired: toggles local state + dispatches `updateTaskField` via `system-panel-action`, which calls `handleEditComplete` in `ProjectTimePlannerV2.jsx` and saves to Supabase.
 
-### Shell only (needs Supabase)
-- Notes textarea — visible but unsaved. Needs `notes` column on `planner_rows`.
-- Status history preview + full list — shows "No history yet." Needs `task_events` table.
-- "See all N changes" count — hardcoded label. Needs event count from `task_events`.
-- Created date + age pill — not shown. Needs `task_created_at` column on `planner_rows`.
-- Recurring block (completion count + last completed) — shows zeroes. Needs `completion_count` and `last_completed_at` columns on `planner_rows`.
+### Done (2026-06-17 — session 2)
+- `supabase/migrations/20260617000001_task_panel_columns.sql` — adds `notes`, `task_created_at`, `completion_count`, `last_completed_at` to `planner_rows`; creates `task_events` table with RLS.
+- `src/utils/planner/storage.js` — `FIRST_CLASS_KEYS` updated; `plannerRowPayloadToDb` and `plannerRowDbToPayload` round-trip all four new columns (camelCase in JS, snake_case in DB). New exports: `saveTaskNote`, `writeTaskEvent`, `readTaskEvents`.
+- `src/contexts/PagePanelContext.jsx` — `open`, `close`, `toggle` now memoized with `useCallback` so `SystemPanel`'s auto-open `useEffect` dep array stays stable.
+- `src/components/planner/TaskRowPanel.jsx` — camelCase property names fixed (`taskCreatedAt`, `completionCount`, `lastCompletedAt`) to match what `plannerRowDbToPayload` returns.
+
+### Shell only (needs wiring)
+- Notes textarea — visible but unsaved. `saveTaskNote` exists in storage; needs to be called on blur/save.
+- Status history preview + full list — shows "No history yet." `readTaskEvents` exists; needs to be called when panel opens.
+- "See all N changes" count — hardcoded label. Needs event count from `readTaskEvents`.
+- Created date + age pill — column exists; `task_created_at` stamping needs to be wired into the task name save path via `writeTaskEvent`.
+- Recurring block (completion count + last completed) — columns exist; `completion_count` / `last_completed_at` update needs to be wired into the status change path via `writeTaskEvent`.
+- `writeTaskEvent` wiring — needs to be called from the status dropdown save path and the task name save path in `ProjectTimePlannerV2.jsx` or storage layer.
 
 ---
 
@@ -131,10 +138,19 @@ All reads/writes go through `plannerStorage` (`src/utils/planner/storage.js`). D
 
 ---
 
-## Files likely touched during implementation
+## Files remaining to touch
 
-- `src/utils/planner/storage.js` — add event writes, notes save, completion count logic
+- `src/pages/ProjectTimePlannerV2.jsx` — call `writeTaskEvent` from status dropdown save path (`handleEditComplete` for `columnId === 'status'`) and task name save path
+- `src/components/planner/TaskRowPanel.jsx` — wire notes textarea to `saveTaskNote` on blur; call `readTaskEvents` when panel opens and pass events into the history render
+
+## Files already touched
+
+- `src/utils/planner/storage.js` ✅
+- `src/contexts/PagePanelContext.jsx` ✅
+- `src/components/planner/TaskRowPanel.jsx` ✅ (camelCase fix; storage wiring still needed)
+- `src/components/SystemPanel.jsx` ✅
+- `src/components/planner/rows/TaskRow.jsx` ✅
+- `src/contexts/TaskRowPanelContext.jsx` ✅
+- `src/components/Layout.jsx` ✅
+- `supabase/migrations/20260617000001_task_panel_columns.sql` ✅
 - `src/utils/planner/archiveHelpers.js` — no changes needed; completion is captured upstream at status change
-- `src/pages/ProjectTimePlannerV2.jsx` — wire panel open/close to row selection
-- `src/components/SystemPanel.jsx` — main panel component (new or extend existing)
-- Supabase migration — new `task_events` table + new columns on task rows table

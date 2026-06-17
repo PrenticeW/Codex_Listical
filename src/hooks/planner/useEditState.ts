@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import type { UseEditStateReturn, CellReference, PlannerRow, Command } from '../../types/planner';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../../constants/planner/rowTypes';
 import { forEachDayColumn } from '../../utils/planner/dayColumnHelpers';
+import { writeTaskEvent } from '../../utils/planner/storage';
 
 /** Replace all day columns whose value matches prevTimeValue with nextTimeValue */
 function syncDayColumns(row: PlannerRow, nextTimeValue: string, prevTimeValue: string, totalDays: number): Record<string, string> | null {
@@ -137,6 +138,17 @@ export default function useEditState({
       };
 
       executeCommand(command);
+
+      // Write status event for Abandoned / Skipped
+      if (row?.id && row?.id === rowId) {
+        writeTaskEvent(rowId, {
+          field: 'status',
+          oldValue: oldValue || null,
+          newValue,
+          isRecurring: row?.recurring === 'true' || row?.recurring === true,
+        });
+      }
+
       setEditingCell(null);
       setEditValue('');
       return;
@@ -268,6 +280,23 @@ export default function useEditState({
     };
 
     executeCommand(command);
+
+    // Write task events for status and task name changes
+    if (columnId === 'status' && row?.id) {
+      writeTaskEvent(rowId, {
+        field: 'status',
+        oldValue: oldValue || null,
+        newValue,
+        isRecurring: row?.recurring === 'true' || (row?.recurring as any) === true,
+      });
+    } else if (columnId === 'task' && row?.id && actualColumnId === 'task') {
+      // Only write event for actual task name cells (not section labels / header renames)
+      writeTaskEvent(rowId, {
+        field: 'task_name',
+        oldValue: oldValue || null,
+        newValue,
+      });
+    }
 
     setEditingCell(null);
     setEditValue('');

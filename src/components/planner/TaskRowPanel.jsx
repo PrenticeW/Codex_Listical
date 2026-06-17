@@ -6,8 +6,9 @@
  * positioning — SystemPanel owns the panel shell and the outer slide.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { PILLBOX_COLORS } from './DropdownCell';
+import { saveTaskNote, readTaskEvents } from '../../utils/planner/storage';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -274,12 +275,27 @@ function getAgePill(isoDate) {
 export function TaskDetailContent({ selectedTask, onBack }) {
   const [showHistory, setShowHistory] = useState(false);
   const [recurringActive, setRecurringActive] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [events, setEvents] = useState([]);
 
-  // Reset inner state whenever the selected task changes
+  // Reset inner state and load fresh data whenever the selected task changes
   useEffect(() => {
     setShowHistory(false);
     if (selectedTask) {
       setRecurringActive(selectedTask.recurring === 'true' || selectedTask.recurring === true);
+      setNotes(selectedTask.notes ?? '');
+      readTaskEvents(selectedTask.id).then(setEvents);
+    } else {
+      setNotes('');
+      setEvents([]);
+    }
+  }, [selectedTask?.id]);
+
+  const handleNotesBlur = useCallback((e) => {
+    e.target.style.borderColor = '#e0e0dc';
+    e.target.style.background = C.bgSubtle;
+    if (selectedTask?.id) {
+      saveTaskNote(selectedTask.id, e.target.value);
     }
   }, [selectedTask?.id]);
 
@@ -300,8 +316,15 @@ export function TaskDetailContent({ selectedTask, onBack }) {
   const hasProject    = project && project !== '-' && project !== '';
   const hasSubproject = subproject && subproject !== '-' && subproject !== '';
 
-  // Shell: no history events yet (wired in next pass)
-  const events = [];
+  // Map DB event rows to HistoryEntry props (status events only)
+  const statusEvents = events
+    .filter(ev => ev.field === 'status')
+    .map(ev => ({
+      status: ev.new_value,
+      fromStatus: ev.old_value || null,
+      time: new Date(ev.changed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      note: ev.note || null,
+    }));
 
   return (
     // Inner slide: 640px wide, clips at 320px via parent overflow:hidden
@@ -357,6 +380,8 @@ export function TaskDetailContent({ selectedTask, onBack }) {
           <SectionLabel>Notes</SectionLabel>
           <textarea
             placeholder="Add a note…"
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
             style={{
               width: '100%', minHeight: 360, resize: 'none',
               border: '1px solid #e0e0dc', borderRadius: 10,
@@ -366,7 +391,7 @@ export function TaskDetailContent({ selectedTask, onBack }) {
               transition: 'border-color 0.15s',
             }}
             onFocus={e => { e.target.style.borderColor = C.green; e.target.style.background = '#fff'; }}
-            onBlur={e => { e.target.style.borderColor = '#e0e0dc'; e.target.style.background = C.bgSubtle; }}
+            onBlur={handleNotesBlur}
           />
         </div>
 
@@ -374,13 +399,13 @@ export function TaskDetailContent({ selectedTask, onBack }) {
         <div style={{ padding: '18px 22px 28px' }}>
           <SectionLabel>Status history</SectionLabel>
 
-          {events.length === 0 ? (
+          {statusEvents.length === 0 ? (
             <div style={{ fontSize: 12, color: C.textLight, fontStyle: 'italic' }}>
               No history yet.
             </div>
           ) : (
-            events.slice(0, 3).map((ev, i) => (
-              <HistoryEntry key={i} {...ev} isLast={i === Math.min(2, events.length - 1)} />
+            statusEvents.slice(0, 3).map((ev, i) => (
+              <HistoryEntry key={i} {...ev} isLast={i === Math.min(2, statusEvents.length - 1)} />
             ))
           )}
 
@@ -398,7 +423,7 @@ export function TaskDetailContent({ selectedTask, onBack }) {
             <svg width="11" height="11" viewBox="0 0 13 13" fill="none">
               <path d="M6.5 1v12M1 6.5h11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity="0.5"/>
             </svg>
-            See all changes
+            See all {statusEvents.length > 0 ? `${statusEvents.length} ` : ''}changes
             <ChevronRight />
           </button>
         </div>
@@ -419,13 +444,13 @@ export function TaskDetailContent({ selectedTask, onBack }) {
         </div>
 
         <div style={{ padding: '4px 22px 20px' }}>
-          {events.length === 0 ? (
+          {statusEvents.length === 0 ? (
             <div style={{ fontSize: 12, color: C.textLight, fontStyle: 'italic', paddingTop: 14 }}>
               No history yet.
             </div>
           ) : (
-            events.map((ev, i) => (
-              <HistoryEntry key={i} {...ev} isLast={i === events.length - 1 && !selectedTask?.taskCreatedAt} />
+            statusEvents.map((ev, i) => (
+              <HistoryEntry key={i} {...ev} isLast={i === statusEvents.length - 1 && !selectedTask?.taskCreatedAt} />
             ))
           )}
 
