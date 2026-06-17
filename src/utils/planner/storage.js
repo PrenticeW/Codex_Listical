@@ -1211,11 +1211,8 @@ export const saveTaskNote = async (taskId, noteText) => {
  * @param {boolean} [payload.isRecurring] - pass true on status events so the
  *   function can handle completion_count / last_completed_at bookkeeping.
  */
-const isSupabaseUUID = (id) =>
-  typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-
 export const writeTaskEvent = async (taskId, { field, oldValue, newValue, note = null, isRecurring = false }) => {
-  if (!isSupabaseUUID(taskId)) return;
+  if (!taskId) return;
   try {
     const userId = await requireUserId();
 
@@ -1281,7 +1278,7 @@ export const writeTaskEvent = async (taskId, { field, oldValue, newValue, note =
  * @returns {Promise<Array>}
  */
 export const readTaskEvents = async (taskId) => {
-  if (!isSupabaseUUID(taskId)) return [];
+  if (!taskId) return [];
   try {
     const userId = await requireUserId();
     const { data, error } = await supabase
