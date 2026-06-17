@@ -78,10 +78,6 @@ export default function useEditState({
       : columnId;
     const oldValue = row?.[actualColumnId] || '';
 
-    if (columnId === 'notes') {
-      console.log('[handleEditComplete-notes] rowId:', rowId, 'rowFound:', !!row, 'oldValue:', oldValue, 'newValue:', newValue, 'willSkip:', oldValue === newValue);
-    }
-
     // Don't create command if value hasn't changed
     if (oldValue === newValue) {
       setEditingCell(null);

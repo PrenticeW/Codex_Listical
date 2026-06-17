@@ -71,7 +71,7 @@ import {
 } from '../utils/planner/clipboardOperations';
 import { createSortInboxCommand } from '../utils/planner/sortInbox';
 import { createSortPlannerCommand } from '../utils/planner/sortPlanner';
-import { saveTaskRows, readTaskRows } from '../utils/planner/storage';
+import { saveTaskRows, readTaskRows, loadChipTaskNote } from '../utils/planner/storage';
 import { DEFAULT_PROJECT_ID } from '../constants/plannerStorageKeys';
 import {
   calculateWeekRange,
@@ -1334,6 +1334,7 @@ export default function ProjectTimePlannerV2() {
             recurring: recurringInitial,
             estimate: estimateLabel,
             timeValue: timeVal,
+            notes: loadChipTaskNote(chip.id),
             // Stamps of the last canonical values written from Plan.
             // resetSubprojectLabels uses these to detect user edits and preserve them
             // (mirrors the _chipLabel pattern on the subproject header row).
@@ -1589,6 +1590,7 @@ export default function ProjectTimePlannerV2() {
           recurring: recurringInitial,
           estimate: estimateLabel,
           timeValue: timeVal,
+          notes: loadChipTaskNote(chip.id),
           // Stamps of the last canonical values written from Plan.
           // Mirrors the _chipLabel pattern on the subproject header row.
           _originalTask: shortLabel,
@@ -2714,7 +2716,6 @@ export default function ProjectTimePlannerV2() {
       if (action === 'zoomOut') { decreaseSize(); return; }
       if (action === 'updateTaskField') {
         const { rowId, field, value } = e.detail;
-        console.log('[updateTaskField] rowId:', rowId, 'field:', field, 'value:', value);
         if (rowId && field) handleEditComplete(rowId, field, value);
         return;
       }

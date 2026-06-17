@@ -1171,11 +1171,33 @@ async function _saveTaskRowsImpl(taskRows, yearNumber) {
 // The direct UPDATE also avoids kicking off a full row replacement for a
 // single-field change.
 
+// Chip task notes are stored in localStorage keyed by chip ID because chip
+// tasks have ephemeral local IDs that never match the DB row (Supabase
+// auto-assigns a UUID on each save cycle). The chip ID portion of the row ID
+// is stable across sessions as long as the chip exists.
+const CHIP_NOTE_PREFIX = 'listical-chip-note-';
+
+export const saveChipTaskNote = (taskId, noteText) => {
+  // taskId is 'chip-task-<chipId>'
+  const chipId = taskId.slice('chip-task-'.length);
+  if (!chipId) return;
+  if (noteText) {
+    localStorage.setItem(CHIP_NOTE_PREFIX + chipId, noteText);
+  } else {
+    localStorage.removeItem(CHIP_NOTE_PREFIX + chipId);
+  }
+};
+
+export const loadChipTaskNote = (chipId) =>
+  localStorage.getItem(CHIP_NOTE_PREFIX + chipId) || null;
+
 export const saveTaskNote = async (taskId, noteText) => {
   if (!taskId) return;
-  const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId);
-  console.log('[saveTaskNote] taskId:', taskId, 'isValidUUID:', isValidUUID, 'noteText:', noteText);
-  if (!isValidUUID) return;
+  // Chip tasks have ephemeral local IDs — use localStorage instead of Supabase.
+  if (taskId.startsWith('chip-task-')) {
+    saveChipTaskNote(taskId, noteText);
+    return;
+  }
   try {
     const userId = await requireUserId();
     const { error } = await supabase
@@ -1183,7 +1205,6 @@ export const saveTaskNote = async (taskId, noteText) => {
       .update({ notes: noteText ?? null })
       .eq('id', taskId)
       .eq('user_id', userId);
-    console.log('[saveTaskNote] result:', error ? 'error: ' + error.message : 'ok');
     if (error) throw error;
   } catch (error) {
     console.error('Failed to save task note', error);
