@@ -316,7 +316,12 @@ export function TaskDetailContent({ selectedTask, onBack }) {
     e.target.style.borderColor = '#e0e0dc';
     e.target.style.background = C.bgSubtle;
     if (selectedTask?.id) {
-      saveTaskNote(selectedTask.id, e.target.value);
+      const noteText = e.target.value;
+      saveTaskNote(selectedTask.id, noteText);
+      // Keep local data state in sync so notes survive task navigation
+      window.dispatchEvent(new CustomEvent('system-panel-action', {
+        detail: { action: 'updateTaskField', rowId: selectedTask.id, field: 'notes', value: noteText },
+      }));
     }
   }, [selectedTask?.id]);
 
