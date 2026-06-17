@@ -3,6 +3,7 @@ import type { UseEditStateReturn, CellReference, PlannerRow, Command } from '../
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../../constants/planner/rowTypes';
 import { forEachDayColumn } from '../../utils/planner/dayColumnHelpers';
 import { writeTaskEvent } from '../../utils/planner/storage';
+import { TASK_ROW_DETAIL_UPDATE_EVENT } from '../../contexts/TaskRowPanelContext';
 
 /** Replace all day columns whose value matches prevTimeValue with nextTimeValue */
 function syncDayColumns(row: PlannerRow, nextTimeValue: string, prevTimeValue: string, totalDays: number): Record<string, string> | null {
@@ -147,6 +148,13 @@ export default function useEditState({
           newValue,
           isRecurring: row?.recurring === 'true' || row?.recurring === true,
         });
+      }
+
+      // Push fresh task data to the detail panel immediately
+      if (row?.id) {
+        window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_UPDATE_EVENT, {
+          detail: { task: { ...row, status: newValue } },
+        }));
       }
 
       setEditingCell(null);
@@ -296,6 +304,13 @@ export default function useEditState({
         oldValue: oldValue || null,
         newValue,
       });
+    }
+
+    // Push fresh task data to the detail panel immediately (synchronous, before next render)
+    if (row?.id) {
+      window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_UPDATE_EVENT, {
+        detail: { task: { ...row, [actualColumnId]: newValue } },
+      }));
     }
 
     setEditingCell(null);

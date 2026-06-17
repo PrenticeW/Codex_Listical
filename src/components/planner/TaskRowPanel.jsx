@@ -291,6 +291,13 @@ export function TaskDetailContent({ selectedTask, onBack }) {
     }
   }, [selectedTask?.id]);
 
+  // Reload events (and sync recurring state) when status or recurring changes on the same task
+  useEffect(() => {
+    if (!selectedTask?.id) return;
+    setRecurringActive(selectedTask.recurring === 'true' || selectedTask.recurring === true);
+    readTaskEvents(selectedTask.id).then(setEvents);
+  }, [selectedTask?.status, selectedTask?.recurring, selectedTask?.completionCount, selectedTask?.lastCompletedAt]);
+
   const handleNotesBlur = useCallback((e) => {
     e.target.style.borderColor = '#e0e0dc';
     e.target.style.background = C.bgSubtle;

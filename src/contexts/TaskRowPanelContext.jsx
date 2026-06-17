@@ -13,6 +13,9 @@ const TaskRowPanelContext = createContext(null);
 /** Custom event fired to open the panel with a task's data. */
 export const TASK_ROW_DETAIL_EVENT = 'task-row-detail-open';
 
+/** Custom event fired when the task row's data changes while the panel is open. */
+export const TASK_ROW_DETAIL_UPDATE_EVENT = 'task-row-detail-update';
+
 export function TaskRowPanelProvider({ children }) {
   const [selectedTask, setSelectedTask] = useState(null);
 
@@ -32,6 +35,17 @@ export function TaskRowPanelProvider({ children }) {
     window.addEventListener(TASK_ROW_DETAIL_EVENT, handler);
     return () => window.removeEventListener(TASK_ROW_DETAIL_EVENT, handler);
   }, [openPanel]);
+
+  // Listen for live updates to the currently-open task (e.g. status change from the table)
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.task) {
+        setSelectedTask(prev => prev?.id === e.detail.task.id ? e.detail.task : prev);
+      }
+    };
+    window.addEventListener(TASK_ROW_DETAIL_UPDATE_EVENT, handler);
+    return () => window.removeEventListener(TASK_ROW_DETAIL_UPDATE_EVENT, handler);
+  }, []);
 
   return (
     <TaskRowPanelContext.Provider value={{
