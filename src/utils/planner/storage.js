@@ -811,6 +811,11 @@ const FIRST_CLASS_KEYS = new Set([
   'recurring',
   'estimate',
   'timeValue',
+  // task panel fields (added 2026-06-17)
+  'notes',
+  'taskCreatedAt',
+  'completionCount',
+  'lastCompletedAt',
 ]);
 
 function plannerRowPayloadToDb({ row, userId, yearId, displayOrder }) {
@@ -851,6 +856,11 @@ function plannerRowPayloadToDb({ row, userId, yearId, displayOrder }) {
     time_value_minutes: timeValueMinutes,
     day_entries: { __cells: dayEntries, __project: row.project ?? '', __extra: extraData },
     display_order: displayOrder,
+    // task panel fields
+    notes: typeof row.notes === 'string' ? row.notes : null,
+    task_created_at: row.taskCreatedAt ?? null,
+    completion_count: typeof row.completionCount === 'number' ? row.completionCount : 0,
+    last_completed_at: row.lastCompletedAt ?? null,
   };
 }
 
@@ -870,6 +880,11 @@ function plannerRowDbToPayload(dbRow) {
     timeValue: typeof dbRow.time_value_minutes === 'number'
       ? (dbRow.time_value_minutes / 60).toFixed(2)
       : '0.00',
+    // task panel fields
+    notes: dbRow.notes ?? null,
+    taskCreatedAt: dbRow.task_created_at ?? null,
+    completionCount: typeof dbRow.completion_count === 'number' ? dbRow.completion_count : 0,
+    lastCompletedAt: dbRow.last_completed_at ?? null,
   };
   for (const [idxStr, value] of Object.entries(cells)) {
     row[`day-${idxStr}`] = value;
@@ -1137,6 +1152,141 @@ async function _saveTaskRowsImpl(taskRows, yearNumber) {
     console.error('Failed to save task rows', error);
   }
 }
+
+// ============================================================
+// Legacy storage key helper (kept for any one-off consumer)
+// ============================================================
+
+// ============================================================
+// TASK NOTES (planner_rows.notes — direct UPDATE, not replace-the-layer)
+// ============================================================
+//
+// Notes are saved immediately on blur/debounce so the user doesn't lose
+// typed text if they close the panel before the next full saveTaskRows call.
+// The direct UPDATE also avoids kicking off a full row replacement for a
+// single-field change.
+
+export const saveTaskNote = async (taskId, noteText) => {
+  try {
+    const userId = await requireUserId();
+    const { error } = await supabase
+      .from('planner_rows')
+      .update({ notes: noteText ?? null })
+      .eq('id', taskId)
+      .eq('user_id', userId);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Failed to save task note', error);
+  }
+};
+
+// ============================================================
+// TASK EVENTS (task_events table — append-only)
+// ============================================================
+//
+// writeTaskEvent: called at status change and (debounced) at task name change.
+// readTaskEvents: returns all events for a task, newest first.
+//
+// Rules from docs/task-panel-handover.md:
+//   - Write on every status change via the status dropdown
+//   - Write on task name change (debounced, only when value actually differs)
+//   - Do NOT write for the weekly recurring reset in archiveHelpers
+//   - Increment completion_count + stamp last_completed_at when status → Done
+//     on a recurring task (handled here alongside the event write)
+
+/**
+ * Append one event row for a field change on a task.
+ *
+ * @param {string}  taskId     - UUID of the planner_row
+ * @param {object}  payload
+ * @param {string}  payload.field      - 'status' | 'task_name'
+ * @param {string|null} payload.oldValue  - previous value (null on first set)
+ * @param {string}  payload.newValue   - new value
+ * @param {string|null} [payload.note] - optional user note (Blocked, On Hold)
+ * @param {boolean} [payload.isRecurring] - pass true on status events so the
+ *   function can handle completion_count / last_completed_at bookkeeping.
+ */
+export const writeTaskEvent = async (taskId, { field, oldValue, newValue, note = null, isRecurring = false }) => {
+  try {
+    const userId = await requireUserId();
+
+    const { error } = await supabase
+      .from('task_events')
+      .insert({
+        task_id: taskId,
+        user_id: userId,
+        field,
+        old_value: oldValue ?? null,
+        new_value: newValue,
+        note: note ?? null,
+      });
+    if (error) throw error;
+
+    // Bookkeeping: increment completion_count and stamp last_completed_at when
+    // a recurring task moves to Done.
+    if (field === 'status' && newValue === 'Done' && isRecurring) {
+      const { error: countError } = await supabase.rpc('increment_completion_count', {
+        p_task_id: taskId,
+        p_user_id: userId,
+      }).catch(() => ({ error: new Error('rpc not available') }));
+
+      // Fallback if the RPC doesn't exist yet: do a manual read-increment-write.
+      if (countError) {
+        const { data: rowData } = await supabase
+          .from('planner_rows')
+          .select('completion_count')
+          .eq('id', taskId)
+          .eq('user_id', userId)
+          .maybeSingle();
+        const current = rowData?.completion_count ?? 0;
+        await supabase
+          .from('planner_rows')
+          .update({
+            completion_count: current + 1,
+            last_completed_at: new Date().toISOString(),
+          })
+          .eq('id', taskId)
+          .eq('user_id', userId);
+      }
+    }
+
+    // Stamp task_created_at when a task name is saved for the first time.
+    if (field === 'task_name' && (!oldValue || oldValue === '') && newValue) {
+      await supabase
+        .from('planner_rows')
+        .update({ task_created_at: new Date().toISOString() })
+        .eq('id', taskId)
+        .eq('user_id', userId)
+        .is('task_created_at', null);
+    }
+  } catch (error) {
+    console.error('Failed to write task event', error);
+  }
+};
+
+/**
+ * Read all events for a task, newest first.
+ * Returns an empty array on error so callers can always map over the result.
+ *
+ * @param {string} taskId - UUID of the planner_row
+ * @returns {Promise<Array>}
+ */
+export const readTaskEvents = async (taskId) => {
+  try {
+    const userId = await requireUserId();
+    const { data, error } = await supabase
+      .from('task_events')
+      .select('*')
+      .eq('task_id', taskId)
+      .eq('user_id', userId)
+      .order('changed_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  } catch (error) {
+    console.error('Failed to read task events', error);
+    return [];
+  }
+};
 
 // ============================================================
 // Legacy storage key helper (kept for any one-off consumer)
