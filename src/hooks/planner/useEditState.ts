@@ -65,6 +65,9 @@ export default function useEditState({
   const handleEditComplete = useCallback((rowId: string, columnId: string, newValue: string) => {
     // Get the old value before updating
     const row = data.find(r => r.id === rowId);
+    if (columnId === 'status') {
+      console.log('[task-events] handleEditComplete status', { rowId, newValue, rowFound: !!row, oldValue: row?.status, rowId_in_data: row?.id });
+    }
 
     // For subproject header rows, save to subprojectName; for subproject section rows with custom labels, save to subprojectLabel;
     // for general/unscheduled rows, save to sectionLabel
@@ -80,6 +83,7 @@ export default function useEditState({
 
     // Don't create command if value hasn't changed
     if (oldValue === newValue) {
+      if (columnId === 'status') console.log('[task-events] early return: oldValue === newValue', { rowId, oldValue, newValue });
       setEditingCell(null);
       setEditValue('');
       return;
