@@ -636,6 +636,7 @@ export default function ProjectTimePlannerV2() {
     if (!panelTask?.id) return;
     const updatedRow = filteredData.find(r => r.id === panelTask.id);
     if (!updatedRow) return;
+    console.log('[task-events] panel-sync', { old: panelTask.status, new: updatedRow.status, same: updatedRow.status === panelTask.status });
     if (updatedRow.status === panelTask.status) return;
 
     window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_UPDATE_EVENT, {
