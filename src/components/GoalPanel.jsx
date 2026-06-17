@@ -532,78 +532,57 @@ function ColourView({ currentColor, onSelect, onBack, customColors = [], onAddCu
 }
 
 // ─── Row section ──────────────────────────────────────────────────────────────
-// Shown in place of the Goal section while a table row/cell is selected.
+// Always visible in the Goal panel. Buttons grey out when no row is selected
+// or when a header row is selected.
 
 function RowSection({ row }) {
-  const isHeader = row.rowType === 'header';
+  // All buttons disabled when nothing selected or it's a grey header row
+  const noSelection = !row;
+  const isHeader = row?.rowType === 'header';
+  const allDisabled = noSelection || isHeader;
+
+  const deleteDisabled = allDisabled || row?.isFirstOfType;
+  const totalsDisabled = allDisabled || !(row?.sectionType === 'Actions' && row?.rowType === 'prompt');
+  const timesDisabled  = allDisabled || !(row?.sectionType === 'Actions' && row?.rowType === 'response');
 
   return (
     <div style={{ ...SECTION }}>
-      <SectionLabel>Row</SectionLabel>
+      <SectionLabel>Row Actions</SectionLabel>
 
-      {/* Section / row-type context */}
-      {row.sectionType ? (
-        <div style={{
-          fontFamily: FONT, fontSize: 11, color: C.textFaint,
-          marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6,
-        }}>
-          <span style={{
-            background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 4,
-            padding: '2px 7px', fontWeight: 600, letterSpacing: '0.05em',
-            textTransform: 'uppercase', fontSize: 10, color: '#64748b',
-          }}>
-            {row.sectionType}
-          </span>
-        </div>
-      ) : null}
+      <ActionBtn
+        icon={
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+        }
+        label={row?.showActionTimes ? 'Hide Times' : 'Show Times'}
+        disabled={timesDisabled}
+        onClick={() => row && dispatchGoalAction('toggleActionTimes', { goalId: row.goalId })}
+      />
 
-      {!isHeader && (
-        <ActionBtn
-          danger={!row.isFirstOfType}
-          disabled={row.isFirstOfType}
-          icon={
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
-            </svg>
-          }
-          label="Delete Row"
-          onClick={() => dispatchGoalAction('deleteRow', { goalId: row.goalId, rowIdx: row.rowIdx })}
-        />
-      )}
+      <ActionBtn
+        icon={
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
+          </svg>
+        }
+        label={row?.showOutcomeTotals ? 'Hide Totals' : 'Show Totals'}
+        disabled={totalsDisabled}
+        onClick={() => row && dispatchGoalAction('toggleTotals', { goalId: row.goalId })}
+      />
 
-      {!isHeader && (
-        <>
-          <div style={{ borderTop: `1px solid ${C.borderLight}`, margin: '4px 0 12px' }} />
-          <ActionBtn
-            icon={
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
-              </svg>
-            }
-            label={row.showOutcomeTotals ? 'Hide Totals' : 'Show Totals'}
-            disabled={!(row.sectionType === 'Actions' && row.rowType === 'prompt')}
-            onClick={() => dispatchGoalAction('toggleTotals', { goalId: row.goalId })}
-            style={{ marginBottom: 0 }}
-          />
-        </>
-      )}
-
-      {!isHeader && (
-        <>
-          <div style={{ borderTop: `1px solid ${C.borderLight}`, margin: '12px 0 12px' }} />
-          <ActionBtn
-            icon={
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-              </svg>
-            }
-            label={row.showActionTimes ? 'Hide Times' : 'Show Times'}
-            disabled={!(row.sectionType === 'Actions' && row.rowType === 'response')}
-            onClick={() => dispatchGoalAction('toggleActionTimes', { goalId: row.goalId })}
-            style={{ marginBottom: 0 }}
-          />
-        </>
-      )}
+      <ActionBtn
+        danger={!deleteDisabled && !row?.isFirstOfType}
+        disabled={deleteDisabled}
+        icon={
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+          </svg>
+        }
+        label="Delete Row"
+        onClick={() => row && dispatchGoalAction('deleteRow', { goalId: row.goalId, rowIdx: row.rowIdx })}
+        style={{ marginBottom: 0 }}
+      />
     </div>
   );
 }
@@ -620,7 +599,7 @@ function GoalSection({ goal, onOpenColour }) {
   if (!goal) {
     return (
       <div style={{ ...SECTION }}>
-        <SectionLabel>Goal</SectionLabel>
+        <SectionLabel>Goal Info</SectionLabel>
         <p style={{ fontFamily: FONT, fontSize: 13, color: C.textFaint, fontStyle: 'italic' }}>
           Click a goal to select it
         </p>
@@ -666,8 +645,9 @@ function GoalSection({ goal, onOpenColour }) {
   );
 
   return (
+    <div>
     <div style={{ ...SECTION }}>
-      <SectionLabel>Goal</SectionLabel>
+      <SectionLabel>Goal Info</SectionLabel>
 
       {/* Colour */}
       <FieldRow label="Colour">
@@ -802,14 +782,14 @@ function GoalSection({ goal, onOpenColour }) {
         </div>
       )}
 
-      {/* Divider */}
-      <div style={{ borderTop: `1px solid ${C.borderLight}`, margin: '4px 0 12px' }} />
+    </div>
+
+    {/* Goal Actions section */}
+    <div style={{ ...SECTION }}>
+      <SectionLabel>Goal Actions</SectionLabel>
 
       {/* Plan toggle */}
       {planBtn}
-
-      {/* Divider */}
-      <div style={{ borderTop: `1px solid ${C.borderLight}`, margin: '4px 0 12px' }} />
 
       {/* Archive — two-step confirm */}
       <ConfirmActionBtn
@@ -837,6 +817,7 @@ function GoalSection({ goal, onOpenColour }) {
         onConfirm={() => dispatchGoalAction('deleteGoal', { goalId: goal.id })}
         style={{ marginBottom: 0 }}
       />
+    </div>
     </div>
   );
 }
@@ -1008,11 +989,10 @@ export default function GoalPanel() {
     <>
       {/* ── Main panel ── */}
       <div style={{ ...panelStyle, transform: isOpen ? 'translateX(0)' : 'translateX(100%)' }}>
-        {/* Scrollable goal section */}
+        {/* Scrollable goal + row sections */}
         <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-          {selectedRow
-            ? <RowSection row={selectedRow} />
-            : <GoalSection goal={selectedGoal} onOpenColour={() => setColourViewOpen(true)} />}
+          <GoalSection goal={selectedGoal} onOpenColour={() => setColourViewOpen(true)} />
+          <RowSection row={selectedRow} />
         </div>
         {/* Page actions pinned to bottom */}
         <div style={{ flexShrink: 0, borderTop: `1px solid ${C.borderLight}` }}>

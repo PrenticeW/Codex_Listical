@@ -156,7 +156,7 @@ export default function TableRow({
     onDragOver: (e) => onDragOver(e, item.id, rowIdx),
     onDrop: (e) => onDrop(e, item.id, rowIdx),
     onDragEnd,
-    onContextMenu: (e) =>
+    onContextMenu: onContextMenu ? (e) =>
       onContextMenu(e, {
         itemId: item.id,
         rowIdx,
@@ -166,7 +166,7 @@ export default function TableRow({
         isFirstOfType,
         selectedCells,
         selectedRows,
-      }),
+      }) : undefined,
     style: {
       opacity: isDragged ? 0.5 : 1,
       cursor: 'grab',

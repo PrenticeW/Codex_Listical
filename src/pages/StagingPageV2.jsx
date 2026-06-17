@@ -21,10 +21,8 @@ import {
   usePlanTableSelection,
   useStagingKeyboardHandlers,
   usePlanTableDragAndDrop,
-  useContextMenu,
   useRowCommands,
 } from '../hooks/staging';
-import ContextMenu from '../components/staging/ContextMenu';
 import TableRow from '../components/staging/TableRow';
 import InlineEditableText from '../components/staging/InlineEditableText';
 import {
@@ -435,49 +433,6 @@ export default function StagingPageV2() {
     handleCopy,
     handlePaste,
   });
-
-  // Context menu
-  const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
-
-  // Context menu action handlers - wrapped to use the hook
-  const handleInsertRowAbove = useCallback(() => {
-    if (contextMenu.itemId != null && contextMenu.rowIdx != null) {
-      insertRowAbove(contextMenu.itemId, contextMenu.rowIdx);
-    }
-  }, [contextMenu.itemId, contextMenu.rowIdx, insertRowAbove]);
-
-  const handleInsertRowBelow = useCallback(() => {
-    if (contextMenu.itemId != null && contextMenu.rowIdx != null) {
-      insertRowBelow(contextMenu.itemId, contextMenu.rowIdx);
-    }
-  }, [contextMenu.itemId, contextMenu.rowIdx, insertRowBelow]);
-
-  const handleDeleteRows = useCallback(() => {
-    deleteRows(selectedRows, contextMenu.itemId, contextMenu.rowIdx);
-  }, [selectedRows, contextMenu.itemId, contextMenu.rowIdx, deleteRows]);
-
-  const handleDuplicateRow = useCallback(() => {
-    duplicateRows(selectedRows, contextMenu.itemId, contextMenu.rowIdx);
-  }, [selectedRows, contextMenu.itemId, contextMenu.rowIdx, duplicateRows]);
-
-  const handleClearCells = useCallback(() => {
-    clearCells(selectedCells);
-  }, [selectedCells, clearCells]);
-
-  const handleInsertRowType = useCallback(
-    (rowType) => {
-      if (contextMenu.itemId != null && contextMenu.rowIdx != null) {
-        insertRowType(contextMenu.itemId, contextMenu.rowIdx, contextMenu.sectionType, rowType);
-      }
-    },
-    [contextMenu.itemId, contextMenu.rowIdx, contextMenu.sectionType, insertRowType]
-  );
-
-  const handleToggleOutcomeTotals = useCallback(() => {
-    if (contextMenu.itemId != null) {
-      toggleItemOutcomeTotals(contextMenu.itemId);
-    }
-  }, [contextMenu.itemId, toggleItemOutcomeTotals]);
 
   // Add to Plan handler
   const handleTogglePlanStatus = useCallback(
@@ -1103,7 +1058,7 @@ export default function StagingPageV2() {
                   onHandleClick={handleHandleClick}
                   onInputFocus={handleInputFocus}
                   onEnterKeyAddRow={addRowOnEnter}
-                  onContextMenu={handleContextMenu}
+
                   onAddRowBelow={handleAddRowBelow}
                   onAddPairBelow={handleAddPairBelow}
                   onSendToActions={handleSendToActions}
@@ -1302,17 +1257,7 @@ export default function StagingPageV2() {
           </div>
         </div>
       </div>
-      <ContextMenu
-        contextMenu={contextMenu}
-        onClose={closeContextMenu}
-        onDeleteRows={handleDeleteRows}
-        onInsertRowAbove={handleInsertRowAbove}
-        onInsertRowBelow={handleInsertRowBelow}
-        onDuplicateRow={handleDuplicateRow}
-        onClearCells={handleClearCells}
-        onInsertRowType={handleInsertRowType}
-        onToggleOutcomeTotals={handleToggleOutcomeTotals}
-      />
+
       <ArchiveYearModal
         isOpen={isArchiveModalOpen}
         onClose={() => setIsArchiveModalOpen(false)}
