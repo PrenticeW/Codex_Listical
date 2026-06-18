@@ -641,12 +641,16 @@ export default function SystemPanel() {
         transform: showTaskDetail ? 'translateX(-320px)' : 'translateX(0)',
       }}>
 
-        {/* System main content (320px, scrollable) */}
-        <div style={{ width: 320, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden', height: '100%' }}>
-          <InsertSection />
-          <SortSection />
-          <ArchiveSection />
-          <PageSection />
+        {/* System main content (320px, flex column so PageSection pins to bottom) */}
+        <div style={{ width: 320, flexShrink: 0, overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+            <InsertSection />
+            <SortSection />
+            <ArchiveSection />
+          </div>
+          <div style={{ flexShrink: 0, borderTop: `1px solid ${C.borderLight}` }}>
+            <PageSection />
+          </div>
         </div>
 
         {/* Task detail view (320px, overflow hidden — inner slide handles its own scroll) */}
