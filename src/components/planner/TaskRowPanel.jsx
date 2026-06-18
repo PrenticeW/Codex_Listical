@@ -419,7 +419,7 @@ export function TaskDetailContent({ selectedTask, onBack }) {
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {status && <HeaderStatusChip status={status} />}
+            {/* {status && <HeaderStatusChip status={status} />} */}
             <RecurringChip active={recurringActive} onToggle={toggleRecurring} />
           </div>
         </div>
