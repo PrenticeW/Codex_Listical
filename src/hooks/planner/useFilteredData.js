@@ -202,9 +202,11 @@ export const useFilteredData = ({
         if (row.parentGroupId && hiddenByProjectFilter.has(row.parentGroupId)) return false;
         // Hide task rows with no parentGroupId (inbox / outside any project section)
         // that don't belong to the selected project. assignParentGroupIds clears parentGroupId
-        // for these rows, so fall back to projectNickname as the membership signal.
+        // for these rows, so fall back to row.project (the dropdown value for user-created rows)
+        // or row.projectNickname (set on chip/projectTask rows) as the membership signal.
         // isSpecialRow lets timeline rows, dividers, and structural rows through unconditionally.
-        if (!row.parentGroupId && !isSpecialRow(row) && row.projectNickname !== projectFilter) return false;
+        const rowProject = row.project || row.projectNickname;
+        if (!row.parentGroupId && !isSpecialRow(row) && rowProject !== projectFilter) return false;
       }
 
       // If no other filters are active and no collapsed groups, include all rows
