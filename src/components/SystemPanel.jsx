@@ -50,7 +50,7 @@ const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
 
 const SECTION = {
   borderBottom: `1px solid ${C.borderLight}`,
-  padding: '20px 22px',
+  padding: '24px 26px',
 };
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
@@ -58,8 +58,8 @@ const SECTION = {
 function SectionLabel({ children }) {
   return (
     <div style={{
-      fontSize: 10, fontWeight: 600, letterSpacing: '0.1em',
-      textTransform: 'uppercase', color: C.textLight, marginBottom: 14,
+      fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
+      textTransform: 'uppercase', color: C.textLight, marginBottom: 16,
     }}>
       {children}
     </div>
@@ -75,7 +75,7 @@ function ActionBtn({ icon, label, disabled, onClick, rightSlot, style }) {
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
-        padding: '11px 14px', fontFamily: FONT, fontSize: 13, fontWeight: 400,
+        padding: '13px 16px', fontFamily: FONT, fontSize: 14, fontWeight: 400,
         color: disabled ? C.textFaint : C.textDim,
         cursor: disabled ? 'not-allowed' : 'pointer',
         transition: 'border-color 0.15s, color 0.15s',
@@ -180,7 +180,7 @@ function StatusChip({ label, checked, onChange }) {
   return (
     <label style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-      fontSize: 12,
+      fontSize: 13,
       color: checked ? '#1a5c3a' : C.textDim,
       cursor: 'pointer',
       background: checked ? '#edf5f0' : C.bgBlock,
@@ -239,12 +239,12 @@ function InsertSection() {
         overflow: 'hidden', marginBottom: 8,
         ...rowDependentStyle,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, padding: '11px 14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, padding: '13px 16px' }}>
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
             <path d="M1 3.5h11M1 6.5h11M1 9.5h7" stroke={C.textDim} strokeWidth="1.2" strokeLinecap="round"/>
             <path d="M10 8v4M8 10h4" stroke={C.textDim} strokeWidth="1.2" strokeLinecap="round"/>
           </svg>
-          <span style={{ fontFamily: FONT, fontSize: 13, color: C.textDim }}>Insert task rows</span>
+          <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim }}>Insert task rows</span>
         </div>
         <InsertControl
           value={taskCount}
@@ -260,12 +260,12 @@ function InsertSection() {
         overflow: 'hidden', marginBottom: 8,
         ...rowDependentStyle,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, padding: '11px 14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, padding: '13px 16px' }}>
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
             <path d="M2 2h4v4H2zM7 2h4v4H7zM2 7h4v4H2z" stroke={C.textDim} strokeWidth="1.2" strokeLinejoin="round"/>
             <path d="M9 7v4M7 9h4" stroke={C.textDim} strokeWidth="1.2" strokeLinecap="round"/>
           </svg>
-          <span style={{ fontFamily: FONT, fontSize: 13, color: C.textDim }}>Insert label rows</span>
+          <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim }}>Insert label rows</span>
         </div>
         <InsertControl
           value={labelCount}
@@ -286,12 +286,12 @@ function InsertSection() {
         border: `1px solid ${C.border}`, borderRadius: 10,
         overflow: 'hidden', marginBottom: 8,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, padding: '11px 14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, padding: '13px 16px' }}>
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
             <rect x="1" y="2" width="11" height="9" rx="1.5" stroke={C.textDim} strokeWidth="1.2"/>
             <path d="M6.5 4.5v4M4.5 6.5h4" stroke={C.textDim} strokeWidth="1.2" strokeLinecap="round"/>
           </svg>
-          <span style={{ fontFamily: FONT, fontSize: 13, color: C.textDim }}>Add weeks</span>
+          <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim }}>Add weeks</span>
         </div>
         <InsertControl
           value={weekCount}
@@ -366,7 +366,7 @@ function SortSection() {
         {/* Header row */}
         <div
           style={{
-            display: 'flex', alignItems: 'center', padding: '11px 14px',
+            display: 'flex', alignItems: 'center', padding: '13px 16px',
             cursor: 'pointer',
           }}
           onClick={() => setInboxOpen(v => !v)}
@@ -375,7 +375,7 @@ function SortSection() {
             <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
               <path d="M1 3h11M3 6.5h7M5 10h3" stroke={C.textDim} strokeWidth="1.2" strokeLinecap="round"/>
             </svg>
-            <span style={{ fontFamily: FONT, fontSize: 13, color: C.textDim }}>Move from Inbox to Planner</span>
+            <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim }}>Move from Inbox to Planner</span>
           </div>
           <svg
             width="7" height="11" viewBox="0 0 7 11" fill="none"
@@ -387,8 +387,8 @@ function SortSection() {
 
         {/* Expanded panel */}
         {inboxOpen && (
-          <div style={{ borderTop: `1px solid ${C.border}`, padding: '10px 14px 12px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <div style={{ borderTop: `1px solid ${C.border}`, padding: '12px 16px 14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {SORT_STATUSES.map(s => (
                 <StatusChip
                   key={s}
@@ -509,7 +509,7 @@ function PageSection() {
             style={{
               flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
-              padding: '10px 14px', fontFamily: FONT, fontSize: 13, fontWeight: 400,
+              padding: '12px 16px', fontFamily: FONT, fontSize: 14, fontWeight: 400,
               color: C.textDim, cursor: 'pointer', transition: 'border-color 0.15s, color 0.15s',
             }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = C.green; e.currentTarget.style.color = C.green; }}
@@ -526,9 +526,9 @@ function PageSection() {
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         border: `1px solid ${C.border}`, borderRadius: 10,
-        padding: '8px 14px',
+        padding: '10px 16px',
       }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: FONT, fontSize: 13, color: C.textDim }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: FONT, fontSize: 14, color: C.textDim }}>
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
             <circle cx="5.5" cy="5.5" r="4" stroke={C.textFaint} strokeWidth="1.2"/>
             <path d="M8.5 8.5L12 12" stroke={C.textFaint} strokeWidth="1.2" strokeLinecap="round"/>
@@ -551,8 +551,8 @@ function PageSection() {
             onMouseLeave={e => { e.currentTarget.style.background = C.bgBlock; }}
           >−</button>
           <span style={{
-            minWidth: 40, textAlign: 'center',
-            fontSize: 13, fontWeight: 500, color: C.text,
+            minWidth: 44, textAlign: 'center',
+            fontSize: 14, fontWeight: 500, color: C.text,
             lineHeight: '28px', fontFamily: FONT,
           }}>{Math.round(scale * 100)}%</span>
           <button

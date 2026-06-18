@@ -47,7 +47,7 @@ const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
 
 const SECTION = {
   borderBottom: `1px solid ${C.borderLight}`,
-  padding: '20px 22px',
+  padding: '24px 26px',
 };
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
@@ -55,8 +55,8 @@ const SECTION = {
 function SectionLabel({ children }) {
   return (
     <div style={{
-      fontSize: 10, fontWeight: 600, letterSpacing: '0.1em',
-      textTransform: 'uppercase', color: C.textLight, marginBottom: 14,
+      fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
+      textTransform: 'uppercase', color: C.textLight, marginBottom: 16,
     }}>
       {children}
     </div>
@@ -85,8 +85,8 @@ function ActionBtn({ icon, label, disabled, onClick, danger, hoverIcon, hoverLab
         background: hovered && !disabled ? hoverBg : 'none',
         border: `1px solid ${hovered && !disabled ? hoverBorder : C.border}`,
         borderRadius: 10,
-        padding: '10px 14px',
-        fontFamily: FONT, fontSize: 13, fontWeight: 400,
+        padding: '12px 16px',
+        fontFamily: FONT, fontSize: 14, fontWeight: 400,
         color: disabled ? C.textFaint : (hovered ? hoverColor : C.textDim),
         cursor: disabled ? 'not-allowed' : 'pointer',
         transition: 'border-color 0.15s, color 0.15s, background 0.15s',
@@ -148,7 +148,7 @@ function ButtonPair({ left, right }) {
           style={{
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
-            padding: '10px 14px', fontFamily: FONT, fontSize: 13, fontWeight: 400,
+            padding: '12px 16px', fontFamily: FONT, fontSize: 14, fontWeight: 400,
             color: btn.disabled ? C.textFaint : C.textDim,
             cursor: btn.disabled ? 'not-allowed' : 'pointer',
             transition: 'border-color 0.15s, color 0.15s',
@@ -198,9 +198,9 @@ function StepperRow({ icon, label, value, onDecrease, onIncrease, decreaseDisabl
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      border: `1px solid ${C.border}`, borderRadius: 10, padding: '8px 14px',
+      border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 16px',
     }}>
-      <span style={{ fontFamily: FONT, fontSize: 13, color: C.textDim, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim, display: 'flex', alignItems: 'center', gap: 8 }}>
         {icon}
         {label}
       </span>
@@ -210,7 +210,7 @@ function StepperRow({ icon, label, value, onDecrease, onIncrease, decreaseDisabl
       }}>
         <StepBtn onClick={onDecrease} disabled={decreaseDisabled}>−</StepBtn>
         <span style={{
-          minWidth: 34, textAlign: 'center', fontSize: 13, fontWeight: 500, color: C.text,
+          minWidth: 38, textAlign: 'center', fontSize: 14, fontWeight: 500, color: C.text,
           borderLeft: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`,
           lineHeight: '28px',
         }}>

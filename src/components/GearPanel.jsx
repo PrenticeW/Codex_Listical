@@ -62,7 +62,7 @@ const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
 
 const SECTION = {
   borderBottom: `1px solid ${C.borderLight}`,
-  padding: '20px 28px 20px 22px',
+  padding: '24px 32px 24px 26px',
 };
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
@@ -70,8 +70,8 @@ const SECTION = {
 function SectionLabel({ children }) {
   return (
     <div style={{
-      fontSize: 10, fontWeight: 600, letterSpacing: '0.1em',
-      textTransform: 'uppercase', color: C.textLight, marginBottom: 16,
+      fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
+      textTransform: 'uppercase', color: C.textLight, marginBottom: 18,
     }}>
       {children}
     </div>
@@ -128,7 +128,7 @@ function PanelDropdown({ value, options, onChange }) {
   const triggerStyle = {
     position: 'relative', display: 'flex', alignItems: 'center', gap: 6,
     background: C.bgBlock, border: `1px solid ${C.border}`, borderRadius: 8,
-    padding: '6px 11px', fontSize: 13, fontWeight: 500,
+    padding: '7px 13px', fontSize: 14, fontWeight: 500,
     color: C.text, cursor: 'pointer', minWidth: 110, userSelect: 'none',
   };
 
@@ -156,7 +156,7 @@ function PanelDropdown({ value, options, onChange }) {
               key={opt}
               onClick={() => { onChange(opt); setOpen(false); }}
               style={{
-                padding: '8px 14px', fontSize: 13,
+                padding: '10px 16px', fontSize: 14,
                 color: opt === value ? C.green : C.textMed,
                 fontWeight: opt === value ? 500 : 400,
                 cursor: 'pointer',
@@ -532,7 +532,7 @@ function YourYearSection() {
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
-            padding: '11px 14px', fontSize: 13, fontWeight: 400,
+            padding: '13px 16px', fontSize: 14, fontWeight: 400,
             color: isCreating ? C.textLight : C.textDim,
             cursor: isCreating ? 'default' : 'pointer',
             width: '100%', textAlign: 'left', opacity: isCreating ? 0.6 : 1,
@@ -568,7 +568,7 @@ function YourYearSection() {
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
-            padding: '11px 14px', fontSize: 13, fontWeight: 400,
+            padding: '13px 16px', fontSize: 14, fontWeight: 400,
             color: isUndoing ? C.textLight : C.textDim,
             cursor: isUndoing ? 'default' : 'pointer',
             width: '100%', textAlign: 'left', opacity: isUndoing ? 0.6 : 1,
@@ -594,7 +594,7 @@ function YourYearSection() {
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
-            padding: '11px 14px', fontSize: 13, fontWeight: 400,
+            padding: '13px 16px', fontSize: 14, fontWeight: 400,
             color: C.textDim, cursor: 'pointer', width: '100%', textAlign: 'left',
             marginTop: 8,
           }}
@@ -636,7 +636,7 @@ function TimelineSection({ onShowHistory }) {
   const btnStyle = {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
-    padding: '11px 14px', fontSize: 13, fontWeight: 400,
+    padding: '13px 16px', fontSize: 14, fontWeight: 400,
     color: C.textDim, cursor: 'pointer', width: '100%', textAlign: 'left',
   };
 

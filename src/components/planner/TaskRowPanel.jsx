@@ -45,8 +45,8 @@ function getStatusChip(status) {
 function SectionLabel({ children }) {
   return (
     <div style={{
-      fontSize: 10, fontWeight: 600, letterSpacing: '0.1em',
-      textTransform: 'uppercase', color: C.textLight, marginBottom: 14,
+      fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
+      textTransform: 'uppercase', color: C.textLight, marginBottom: 16,
     }}>
       {children}
     </div>
@@ -216,7 +216,7 @@ function RecurringBlock({ completionCount, lastCompletedAt }) {
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        fontSize: 13, paddingBottom: 5, borderBottom: `1px solid ${C.borderLight}`,
+        fontSize: 14, paddingBottom: 6, borderBottom: `1px solid ${C.borderLight}`,
       }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 7, color: C.textFaint }}>
           <svg width="12" height="12" viewBox="0 0 13 13" fill="none">
@@ -234,7 +234,7 @@ function RecurringBlock({ completionCount, lastCompletedAt }) {
       </div>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        fontSize: 13, paddingTop: 5,
+        fontSize: 14, paddingTop: 6,
       }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 7, color: C.textFaint }}>
           <svg width="12" height="12" viewBox="0 0 13 13" fill="none">
@@ -243,7 +243,7 @@ function RecurringBlock({ completionCount, lastCompletedAt }) {
           </svg>
           Last completed
         </span>
-        <span style={{ color: C.text, fontWeight: 500, fontSize: 13 }}>{lastCompletedAt ?? '—'}</span>
+        <span style={{ color: C.text, fontWeight: 500, fontSize: 14 }}>{lastCompletedAt ?? '—'}</span>
       </div>
     </div>
   );
@@ -390,7 +390,7 @@ export function TaskDetailContent({ selectedTask, onBack }) {
       }}>
         {/* Sticky header */}
         <div style={{
-          padding: '18px 22px 14px',
+          padding: '20px 26px 16px',
           borderBottom: `1px solid ${C.borderLight}`,
           position: 'sticky', top: 0, background: C.bg, zIndex: 2,
         }}>
@@ -399,20 +399,20 @@ export function TaskDetailContent({ selectedTask, onBack }) {
           </div>
 
           <div style={{
-            fontSize: 13, fontWeight: 600, color: C.text,
+            fontSize: 15, fontWeight: 600, color: C.text,
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            marginBottom: 6,
+            marginBottom: 8,
           }}>
             {taskName}
           </div>
 
           {hasProject && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: C.textDim }}>{project}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: C.textDim }}>{project}</span>
               {hasSubproject && (
                 <>
                   <span style={{ fontSize: 11, color: C.textLight }}>/</span>
-                  <span style={{ fontSize: 11, color: C.textMid }}>{subproject}</span>
+                  <span style={{ fontSize: 12, color: C.textMid }}>{subproject}</span>
                 </>
               )}
             </div>
@@ -425,7 +425,7 @@ export function TaskDetailContent({ selectedTask, onBack }) {
         </div>
 
         {/* Notes */}
-        <div style={{ borderBottom: `1px solid ${C.borderLight}`, padding: '18px 22px 12px' }}>
+        <div style={{ borderBottom: `1px solid ${C.borderLight}`, padding: '20px 26px 14px' }}>
           <SectionLabel>Notes</SectionLabel>
           <textarea
             placeholder="Add a note…"
@@ -434,8 +434,8 @@ export function TaskDetailContent({ selectedTask, onBack }) {
             style={{
               width: '100%', minHeight: 360, resize: 'none',
               border: '1px solid #e0e0dc', borderRadius: 10,
-              fontFamily: FONT, fontSize: 13, color: C.text,
-              background: C.bgSubtle, padding: '10px 12px',
+              fontFamily: FONT, fontSize: 14, color: C.text,
+              background: C.bgSubtle, padding: '12px 14px',
               outline: 'none', lineHeight: 1.55,
               transition: 'border-color 0.15s',
             }}
@@ -445,7 +445,7 @@ export function TaskDetailContent({ selectedTask, onBack }) {
         </div>
 
         {/* Status history preview */}
-        <div style={{ padding: '18px 22px 28px' }}>
+        <div style={{ padding: '20px 26px 32px' }}>
           <SectionLabel>Status history</SectionLabel>
 
           <button
@@ -453,7 +453,7 @@ export function TaskDetailContent({ selectedTask, onBack }) {
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
               background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-              fontFamily: FONT, fontSize: 12, color: C.green, marginTop: 12,
+              fontFamily: FONT, fontSize: 13, color: C.green, marginTop: 14,
               transition: 'opacity 0.15s',
             }}
             onMouseEnter={e => e.currentTarget.style.opacity = '0.7'}
@@ -475,14 +475,14 @@ export function TaskDetailContent({ selectedTask, onBack }) {
       }}>
         <div style={{
           display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10,
-          padding: '18px 22px 14px', borderBottom: `1px solid ${C.borderLight}`,
+          padding: '20px 26px 16px', borderBottom: `1px solid ${C.borderLight}`,
           position: 'sticky', top: 0, background: C.bg, zIndex: 2,
         }}>
           <BackBtn onClick={() => setShowHistory(false)} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Status history</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Status history</span>
         </div>
 
-        <div style={{ padding: '4px 22px 20px' }}>
+        <div style={{ padding: '6px 26px 24px' }}>
           {statusEvents.length === 0 ? (
             <div style={{ fontSize: 12, color: C.textLight, fontStyle: 'italic', paddingTop: 14 }}>
               No history yet.
@@ -502,7 +502,7 @@ export function TaskDetailContent({ selectedTask, onBack }) {
         </div>
 
         {recurringActive && (
-          <div style={{ borderTop: `1px solid ${C.borderLight}`, padding: '18px 22px' }}>
+          <div style={{ borderTop: `1px solid ${C.borderLight}`, padding: '20px 26px' }}>
             <SectionLabel>Recurring</SectionLabel>
             <RecurringBlock
               completionCount={selectedTask?.completionCount ?? 0}
