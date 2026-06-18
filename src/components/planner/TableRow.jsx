@@ -534,6 +534,12 @@ const TableRow = React.memo(function TableRow({
                       boxSizing: 'border-box',
                     }}
                     className="p-0"
+                    onMouseDown={(e) => {
+                      if (e.button !== 0 || isEditingWeekLabel) return;
+                      window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_EVENT, {
+                        detail: { task: row.original },
+                      }));
+                    }}
                   >
                     <div
                       className="h-full flex items-center gap-2"
@@ -649,6 +655,11 @@ const TableRow = React.memo(function TableRow({
                   onMouseDown={(e) => {
                     if (isTaskColumn && handleCellMouseDown) {
                       handleCellMouseDown(e, rowId, editableColumnId);
+                    }
+                    if (e.button === 0 && !isEditing) {
+                      window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_EVENT, {
+                        detail: { task: row.original },
+                      }));
                     }
                   }}
                   onMouseEnter={(e) => {

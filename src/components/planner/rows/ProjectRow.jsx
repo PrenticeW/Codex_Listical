@@ -480,6 +480,9 @@ export default function ProjectRow({
                   if (handleCellMouseDown) {
                     handleCellMouseDown(e, rowId, editableColumnId);
                   }
+                  window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_EVENT, {
+                    detail: { task: row.original },
+                  }));
                 }}
                 onMouseEnter={(e) => {
                   if (isEditing) return;
