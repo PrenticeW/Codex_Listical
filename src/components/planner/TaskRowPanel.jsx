@@ -292,6 +292,118 @@ function getAgePill(isoDate) {
   return `${Math.floor(days / 30)}mo old`;
 }
 
+// ─── Day tag editor (subproject header rows) ─────────────────────────────────
+
+const DAY_TAGS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/** Panel view shown when the selected row is a subprojectHeader. Allows the user
+ *  to view and override the auto-detected day tag. */
+function SubprojectHeaderPanel({ selectedTask, onBack }) {
+  const [dayTag, setDayTagLocal] = useState(selectedTask?.dayTag ?? null);
+  const [dayTagLocked, setDayTagLockedLocal] = useState(selectedTask?.dayTagLocked === true);
+
+  // Sync if the task prop changes (e.g. auto-detection fired from a text edit).
+  // We depend on the full selectedTask object so any field change (including dayTag) re-syncs.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setDayTagLocal(selectedTask?.dayTag ?? null);
+    setDayTagLockedLocal(selectedTask?.dayTagLocked === true);
+  }, [selectedTask?.dayTag, selectedTask?.dayTagLocked, selectedTask?.id]);
+
+  const dispatchDayTag = useCallback((newDay, locked) => {
+    if (!selectedTask?.id) return;
+    window.dispatchEvent(new CustomEvent('system-panel-action', {
+      detail: { action: 'setDayTag', rowId: selectedTask.id, dayTag: newDay, dayTagLocked: locked },
+    }));
+    // Keep the panel context in sync without waiting for a table rerender
+    window.dispatchEvent(new CustomEvent('task-row-detail-update', {
+      detail: { task: { ...selectedTask, dayTag: newDay, dayTagLocked: locked } },
+    }));
+  }, [selectedTask]);
+
+  function handleDayPick(day) {
+    const next = dayTag === day ? null : day;  // toggle off if already selected
+    setDayTagLocal(next);
+    setDayTagLockedLocal(true);
+    dispatchDayTag(next, true);
+  }
+
+  function handleClearLock() {
+    // Remove the manual lock and let auto-detection take over on next edit
+    setDayTagLockedLocal(false);
+    dispatchDayTag(dayTag, false);
+  }
+
+  const rowLabel = selectedTask?.subprojectName || selectedTask?.subproject || '—';
+
+  return (
+    <div style={{ display: 'flex', width: 960, height: '100%' }}>
+      <div style={{ width: 480, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
+        {/* Sticky header */}
+        <div style={{ padding: '20px 26px 16px', borderBottom: `1px solid ${C.borderLight}`, position: 'sticky', top: 0, background: C.bg, zIndex: 2 }}>
+          <div style={{ marginBottom: 18 }}>
+            <BackBtn onClick={onBack} />
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 500, color: C.textDim, marginBottom: 4 }}>Subproject</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {rowLabel}
+          </div>
+        </div>
+
+        {/* Day tag section */}
+        <div style={{ padding: '20px 26px', borderBottom: `1px solid ${C.borderLight}` }}>
+          <SectionLabel>Day</SectionLabel>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {DAY_TAGS.map(day => {
+              const isActive = dayTag === day;
+              return (
+                <button
+                  key={day}
+                  onClick={() => handleDayPick(day)}
+                  style={{
+                    padding: '5px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                    fontFamily: FONT, fontSize: 13, fontWeight: isActive ? 600 : 400,
+                    background: isActive ? C.green : C.bgSubtle,
+                    color: isActive ? '#fff' : C.textMid,
+                    transition: 'background 0.12s, color 0.12s',
+                  }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#e8efe9'; }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = C.bgSubtle; }}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Lock status */}
+          <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {dayTagLocked ? (
+              <>
+                <span style={{ fontSize: 12, color: C.textMid }}>Manually set</span>
+                <button
+                  onClick={handleClearLock}
+                  style={{
+                    fontSize: 12, color: C.green, background: 'none', border: 'none',
+                    cursor: 'pointer', padding: 0, fontFamily: FONT,
+                    textDecoration: 'underline',
+                  }}
+                >
+                  Reset to auto-detect
+                </button>
+              </>
+            ) : (
+              <span style={{ fontSize: 12, color: C.textFaint, fontStyle: 'italic' }}>
+                {dayTag ? 'Auto-detected from row name' : 'No day detected — pick one above to set manually'}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 /**
@@ -388,6 +500,11 @@ export function TaskDetailContent({ selectedTask, onBack }) {
         detail: { action: 'updateTaskField', rowId: selectedTask.id, field: 'recurring', value: String(next) },
       }));
     }
+  }
+
+  // Subproject header rows get their own dedicated view with the day tag editor
+  if (selectedTask?._rowType === 'subprojectHeader') {
+    return <SubprojectHeaderPanel selectedTask={selectedTask} onBack={onBack} />;
   }
 
   const taskName   = selectedTask?.task || '—';

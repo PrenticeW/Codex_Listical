@@ -9,7 +9,8 @@ import { getNormalizedColumnValue } from '../../utils/planner/valueNormalizers';
 
 /**
  * Custom hook for filtering planner data
- * Handles both column filters (project, status, etc.), day column filters, and collapsed groups
+ * Handles both column filters (project, status, etc.), day column filters, collapsed groups,
+ * and the day-tag view filter (dayFilter).
  *
  * @param {Object} params - Configuration object
  * @param {Array} params.computedData - The computed data to filter
@@ -21,6 +22,7 @@ import { getNormalizedColumnValue } from '../../utils/planner/valueNormalizers';
  * @param {Set} params.selectedEstimateFilters - Selected estimate filters
  * @param {Set} params.collapsedGroups - Set of groupIds that are collapsed (optional)
  * @param {Function} params.coerceNumber - Function to coerce values to numbers
+ * @param {string|null} params.dayFilter - Day abbreviation to filter subheaders by (e.g. 'Mon'), or null for no filter
  * @returns {Array} Filtered data
  */
 export const useFilteredData = ({
@@ -33,6 +35,7 @@ export const useFilteredData = ({
   selectedEstimateFilters,
   collapsedGroups = new Set(),
   coerceNumber,
+  dayFilter = null,
 }) => {
   return useMemo(() => {
     // Strip tombstone rows — these are internal bookkeeping only and must never render
@@ -45,8 +48,21 @@ export const useFilteredData = ({
         !selectedStatusFilters.size &&
         !selectedRecurringFilters.size &&
         !selectedEstimateFilters.size &&
-        collapsedGroups.size === 0) {
+        collapsedGroups.size === 0 &&
+        !dayFilter) {
       return visibleData;
+    }
+
+    // Build the set of subheader groupIds hidden by the day filter.
+    // A subprojectHeader is hidden if it has a dayTag that doesn't match dayFilter.
+    // Subheaders with no dayTag are always kept (they're not day-specific sections).
+    const hiddenByDayFilter = new Set();
+    if (dayFilter) {
+      for (const row of visibleData) {
+        if (row._rowType === 'subprojectHeader' && row.dayTag && row.dayTag !== dayFilter) {
+          if (row.groupId) hiddenByDayFilter.add(row.groupId);
+        }
+      }
     }
 
     // Helper: Check if a row or any of its ancestors are collapsed
@@ -115,6 +131,18 @@ export const useFilteredData = ({
         return false;
       }
 
+      // Day filter: hide subheader rows whose dayTag doesn't match, and hide their child rows.
+      if (dayFilter) {
+        // Hide the subheader itself
+        if (row._rowType === 'subprojectHeader' && row.groupId && hiddenByDayFilter.has(row.groupId)) {
+          return false;
+        }
+        // Hide task rows that live under a hidden subheader
+        if (row.parentGroupId && hiddenByDayFilter.has(row.parentGroupId)) {
+          return false;
+        }
+      }
+
       // If no other filters are active and no collapsed groups, include all rows
       if (dayColumnFilters.size === 0 &&
           !selectedProjectFilters.size &&
@@ -163,6 +191,7 @@ export const useFilteredData = ({
     selectedEstimateFilters,
     collapsedGroups,
     coerceNumber,
+    dayFilter,
   ]);
 };
 

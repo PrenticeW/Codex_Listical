@@ -5,6 +5,28 @@ import { forEachDayColumn } from '../../utils/planner/dayColumnHelpers';
 import { writeTaskEvent } from '../../utils/planner/storage';
 import { TASK_ROW_DETAIL_UPDATE_EVENT, TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
 
+/** Day-of-week patterns for auto-detecting a day tag from subheader text */
+const DAY_TAG_PATTERNS: [RegExp, string][] = [
+  [/\b(monday|mon)\b/i, 'Mon'],
+  [/\b(tuesday|tue|tues)\b/i, 'Tue'],
+  [/\b(wednesday|wed)\b/i, 'Wed'],
+  [/\b(thursday|thu|thur|thurs)\b/i, 'Thu'],
+  [/\b(friday|fri)\b/i, 'Fri'],
+  [/\b(saturday|sat)\b/i, 'Sat'],
+  [/\b(sunday|sun)\b/i, 'Sun'],
+];
+
+/**
+ * Returns the short day abbreviation (e.g. 'Mon') found in text, or null if none found.
+ * Only used for subheader rows as part of parse-on-write day detection.
+ */
+function detectDayTag(text: string): string | null {
+  for (const [pattern, tag] of DAY_TAG_PATTERNS) {
+    if (pattern.test(text)) return tag;
+  }
+  return null;
+}
+
 /** Replace all day columns whose value matches prevTimeValue with nextTimeValue */
 function syncDayColumns(row: PlannerRow, nextTimeValue: string, prevTimeValue: string, totalDays: number): Record<string, string> | null {
   const prev = (prevTimeValue ?? '').trim();
@@ -276,6 +298,15 @@ export default function useEditState({
       !!newValue;
     const stampedCreatedAt = shouldStampCreatedAt ? new Date().toISOString() : null;
 
+    // Parse-on-write day detection for subheader rows.
+    // Only runs when the subheader text itself is being edited and the user hasn't
+    // manually locked the day tag in the side panel.
+    const isSubheaderTextEdit = row?._rowType === 'subprojectHeader' && actualColumnId === 'subprojectName';
+    const oldDayTag = row?.dayTag ?? null;
+    const newDayTag = (isSubheaderTextEdit && !row?.dayTagLocked)
+      ? detectDayTag(newValue)
+      : undefined; // undefined = don't touch dayTag
+
     // Create command for regular edits
     const command: Command = {
       execute: () => {
@@ -283,6 +314,7 @@ export default function useEditState({
           if (row.id === rowId) {
             const updates: any = { [actualColumnId]: newValue };
             if (stampedCreatedAt) updates.taskCreatedAt = stampedCreatedAt;
+            if (newDayTag !== undefined) updates.dayTag = newDayTag;
             // Clear import review flag when subproject or project is updated
             if ((columnId === 'subproject' || columnId === 'project') && row._importNeedsSubprojectReview) {
               updates._importNeedsSubprojectReview = undefined;
@@ -297,6 +329,7 @@ export default function useEditState({
           if (row.id === rowId) {
             const undoUpdates: any = { [actualColumnId]: oldValue };
             if (stampedCreatedAt) undoUpdates.taskCreatedAt = null;
+            if (newDayTag !== undefined) undoUpdates.dayTag = oldDayTag;
             return { ...row, ...undoUpdates };
           }
           return row;
@@ -351,6 +384,8 @@ export default function useEditState({
             [actualColumnId]: newValue,
             ...recurringCompletion,
             ...(stampedCreatedAt ? { taskCreatedAt: stampedCreatedAt } : {}),
+            // Propagate auto-detected dayTag so the side panel reflects the new value
+            ...(newDayTag !== undefined ? { dayTag: newDayTag } : {}),
           },
         },
       }));

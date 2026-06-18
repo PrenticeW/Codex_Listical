@@ -816,6 +816,9 @@ const FIRST_CLASS_KEYS = new Set([
   'taskCreatedAt',
   'completionCount',
   'lastCompletedAt',
+  // day-filter fields (added 2026-06-18)
+  'dayTag',
+  'dayTagLocked',
 ]);
 
 function plannerRowPayloadToDb({ row, userId, yearId, displayOrder }) {
@@ -866,6 +869,9 @@ function plannerRowPayloadToDb({ row, userId, yearId, displayOrder }) {
     task_created_at: row.taskCreatedAt ?? null,
     completion_count: typeof row.completionCount === 'number' ? row.completionCount : 0,
     last_completed_at: row.lastCompletedAt ?? null,
+    // day-filter fields
+    day_tag: typeof row.dayTag === 'string' ? row.dayTag : null,
+    day_tag_locked: row.dayTagLocked === true,
   };
 }
 
@@ -890,6 +896,9 @@ function plannerRowDbToPayload(dbRow) {
     taskCreatedAt: dbRow.task_created_at ?? null,
     completionCount: typeof dbRow.completion_count === 'number' ? dbRow.completion_count : 0,
     lastCompletedAt: dbRow.last_completed_at ?? null,
+    // day-filter fields
+    dayTag: dbRow.day_tag ?? null,
+    dayTagLocked: dbRow.day_tag_locked === true,
   };
   for (const [idxStr, value] of Object.entries(cells)) {
     row[`day-${idxStr}`] = value;

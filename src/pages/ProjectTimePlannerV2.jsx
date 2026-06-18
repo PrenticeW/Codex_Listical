@@ -14,7 +14,7 @@ import usePlannerColumns from '../hooks/planner/usePlannerColumns';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
 import { TACTICS_SEND_TO_SYSTEM_EVENT, getSendToSystemTimestamp, loadSentChipsSnapshot, loadTacticsYearSettings } from '../lib/tacticsStorage';
-import { SYSTEM_PANEL_ACTION_EVENT, SYSTEM_PANEL_SELECTION_EVENT, SYSTEM_PANEL_SCALE_EVENT } from '../components/SystemPanel';
+import { SYSTEM_PANEL_ACTION_EVENT, SYSTEM_PANEL_SELECTION_EVENT, SYSTEM_PANEL_SCALE_EVENT, SYSTEM_PANEL_DAY_FILTER_EVENT } from '../components/SystemPanel';
 import { useSystemPanel } from '../contexts/SystemPanelContext';
 import { useTaskRowPanel, TASK_ROW_DETAIL_UPDATE_EVENT } from '../contexts/TaskRowPanelContext';
 import { loadSentMetricsSnapshot, peekTacticsMetricsCache } from '../lib/tacticsMetricsStorage';
@@ -522,6 +522,12 @@ export default function ProjectTimePlannerV2() {
     closeEstimateFilterMenu,
   } = filters;
 
+  // Day filter state — null means off; a day abbreviation (e.g. 'Mon') means active
+  const [dayFilter, setDayFilter] = useState(null);
+  const handleDayFilterSelect = useCallback((day) => {
+    setDayFilter(prev => (prev === day ? null : day));
+  }, []);
+
   // Listical menu state
   const [isListicalMenuOpen, setIsListicalMenuOpen] = useState(false);
   const [addTasksCount, setAddTasksCount] = useState('');
@@ -627,6 +633,7 @@ export default function ProjectTimePlannerV2() {
     selectedEstimateFilters,
     collapsedGroups,
     coerceNumber,
+    dayFilter,
   });
 
   // Sync the task row detail panel when filteredData changes so the status chip
@@ -2721,6 +2728,19 @@ export default function ProjectTimePlannerV2() {
         if (rowId && field) handleEditComplete(rowId, field, value);
         return;
       }
+      if (action === 'setDayTag') {
+        const { rowId, dayTag: newDay, dayTagLocked: locked } = e.detail;
+        if (rowId) {
+          setData(prev => prev.map(r =>
+            r.id === rowId ? { ...r, dayTag: newDay ?? null, dayTagLocked: locked === true } : r
+          ));
+        }
+        return;
+      }
+      if (action === 'setDayFilter') {
+        setDayFilter(e.detail.day ?? null);
+        return;
+      }
       if (action === 'sortInbox' && e.detail.statuses?.length > 0) {
         const command = createSortInboxCommand({
           data,
@@ -2780,6 +2800,11 @@ export default function ProjectTimePlannerV2() {
   useEffect(() => {
     window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_SCALE_EVENT, { detail: { scale: sizeScale } }));
   }, [sizeScale]);
+
+  // Broadcast day filter state to SystemPanel so the ViewSection stays in sync
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_DAY_FILTER_EVENT, { detail: { dayFilter } }));
+  }, [dayFilter]);
 
   // Context menu action handlers
   const handleContextMenuAddTasks = useCallback(() => {

@@ -26,6 +26,8 @@ export const SYSTEM_PANEL_ACTION_EVENT = 'system-panel-action';
 export const SYSTEM_PANEL_SELECTION_EVENT = 'system-panel-selection';
 // Fired by ProjectTimePlannerV2 when page scale changes
 export const SYSTEM_PANEL_SCALE_EVENT = 'system-panel-scale';
+// Fired by ProjectTimePlannerV2 when the day filter changes
+export const SYSTEM_PANEL_DAY_FILTER_EVENT = 'system-panel-day-filter';
 
 function dispatchSystemAction(action, payload = {}) {
   window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_ACTION_EVENT, { detail: { action, ...payload } }));
@@ -469,6 +471,69 @@ function ArchiveSection() {
   );
 }
 
+const DAY_FILTER_TAGS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function PlanSection() {
+  const [dayFilter, setDayFilter] = useState(null);
+
+  // Sync when ProjectTimePlannerV2 changes the filter externally
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.dayFilter !== undefined) setDayFilter(e.detail.dayFilter);
+    };
+    window.addEventListener(SYSTEM_PANEL_DAY_FILTER_EVENT, handler);
+    return () => window.removeEventListener(SYSTEM_PANEL_DAY_FILTER_EVENT, handler);
+  }, []);
+
+  function handleDayPick(day) {
+    const next = dayFilter === day ? null : day;
+    dispatchSystemAction('setDayFilter', { day: next });
+    // Optimistic local update so the panel feels instant
+    setDayFilter(next);
+  }
+
+  return (
+    <div style={SECTION}>
+      <SectionLabel>Plan</SectionLabel>
+      <div style={{ marginBottom: 12, fontSize: 12, color: C.textDim }}>Filter by day</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {DAY_FILTER_TAGS.map(day => {
+          const isActive = dayFilter === day;
+          return (
+            <button
+              key={day}
+              onClick={() => handleDayPick(day)}
+              style={{
+                padding: '5px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                fontFamily: FONT, fontSize: 13, fontWeight: isActive ? 600 : 400,
+                background: isActive ? C.green : C.bgBlock,
+                color: isActive ? '#fff' : C.textDim,
+                transition: 'background 0.12s, color 0.12s',
+              }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#e8efe9'; }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = C.bgBlock; }}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+      {dayFilter && (
+        <button
+          onClick={() => handleDayPick(dayFilter)}
+          style={{
+            marginTop: 10, padding: 0, background: 'none', border: 'none',
+            cursor: 'pointer', fontFamily: FONT, fontSize: 12, color: C.textFaint,
+            textDecoration: 'underline',
+          }}
+        >
+          Clear filter
+        </button>
+      )}
+    </div>
+  );
+}
+
 function PageSection() {
   const [scale, setScale] = useState(1.0);
 
@@ -644,6 +709,7 @@ export default function SystemPanel() {
         {/* System main content (320px, flex column so PageSection pins to bottom) */}
         <div style={{ width: 480, flexShrink: 0, overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+            <PlanSection />
             <InsertSection />
             <SortSection />
             <ArchiveSection />
