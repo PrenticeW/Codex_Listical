@@ -1,5 +1,6 @@
 import { GripVertical, ChevronRight, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
+import { TASK_ROW_DETAIL_EVENT } from '../../../contexts/TaskRowPanelContext';
 
 /**
  * ProjectRow Component
@@ -232,6 +233,9 @@ export default function ProjectRow({
                     if ((isHeader || isSubprojectHeader) && handleCellMouseDown) {
                       handleCellMouseDown(e, rowId, editableColumnId);
                     }
+                    window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_EVENT, {
+                      detail: { task: row.original },
+                    }));
                   }}
                   onMouseEnter={(e) => {
                     if (isEditing) return;

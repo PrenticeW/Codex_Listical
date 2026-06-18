@@ -9,6 +9,7 @@ import {
   ARCHIVED_PROJECT_HEADER_STYLE,
   ARCHIVED_PROJECT_SUB_STYLE,
 } from '../../constants/planner/rowTypes';
+import { TASK_ROW_DETAIL_EVENT } from '../../contexts/TaskRowPanelContext';
 
 /**
  * TableRow Component
@@ -481,6 +482,12 @@ const TableRow = React.memo(function TableRow({
                       fontWeight: '600',
                       fontSize: `${cellFontSize}px`,
                       paddingLeft: '8px',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_EVENT, {
+                        detail: { task: row.original },
+                      }));
                     }}
                   >
                     Archive

@@ -40,6 +40,38 @@ function getStatusChip(status) {
   return { bg: p.bg, color: p.text, dot: p.text, border: p.bg };
 }
 
+// ─── Structural row messages ──────────────────────────────────────────────────
+
+function getStructuralRowMessage(task) {
+  const rowType = task?._rowType;
+  const projectLabel = task?.projectNickname || task?.projectName || task?.project || '';
+  const subprojectLabel = task?.subprojectName || task?.subproject || '';
+
+  switch (rowType) {
+    case 'projectHeader':
+    case 'archivedProjectHeader':
+      return projectLabel ? `Project group — ${projectLabel}` : 'Project group';
+    case 'projectGeneral':
+    case 'archivedProjectGeneral':
+      return 'General section';
+    case 'projectUnscheduled':
+    case 'archivedProjectUnscheduled':
+      return 'Unscheduled section';
+    case 'subprojectHeader':
+      return subprojectLabel ? `Subproject group — ${subprojectLabel}` : 'Subproject group';
+    case 'subprojectGeneral':
+      return 'General section';
+    case 'subprojectUnscheduled':
+      return 'Unscheduled section';
+    case 'archiveHeader':
+      return 'Archive section';
+    case 'archiveRow':
+      return 'Archive week';
+    default:
+      return null;
+  }
+}
+
 // ─── Shared primitives ────────────────────────────────────────────────────────
 
 function SectionLabel({ children }) {
@@ -359,19 +391,20 @@ export function TaskDetailContent({ selectedTask, onBack }) {
   }
 
   const taskName   = selectedTask?.task || '—';
-  const isBlankRow = !(selectedTask?.task ?? '').trim();
   const status     = selectedTask?.status || '';
   const project    = selectedTask?.project;
   const subproject = selectedTask?.subproject;
   const hasProject    = project && project !== '-' && project !== '';
   const hasSubproject = subproject && subproject !== '-' && subproject !== '';
 
-  // Empty state for blank rows
-  if (isBlankRow) {
+  // Structural/blank row empty state
+  const structuralMessage = getStructuralRowMessage(selectedTask);
+  const isBlankRow = !structuralMessage && !(selectedTask?.task ?? '').trim();
+
+  if (structuralMessage || isBlankRow) {
+    const message = structuralMessage ?? 'Empty row — add a task name to get started';
     return (
-      <div style={{
-        display: 'flex', width: 960, height: '100%',
-      }}>
+      <div style={{ display: 'flex', width: 960, height: '100%' }}>
         <div style={{
           width: 480, flexShrink: 0, height: '100%', display: 'flex', flexDirection: 'column',
         }}>
@@ -384,9 +417,9 @@ export function TaskDetailContent({ selectedTask, onBack }) {
               <BackBtn onClick={onBack} />
             </div>
           </div>
-          <div style={{ padding: '24px 26px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+          <div style={{ padding: '24px 26px' }}>
             <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, color: C.textFaint, fontStyle: 'italic', margin: 0 }}>
-              Empty row — add a task name to get started
+              {message}
             </p>
           </div>
         </div>
