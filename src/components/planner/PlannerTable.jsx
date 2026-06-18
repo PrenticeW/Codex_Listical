@@ -1,6 +1,5 @@
 import React from 'react';
 import TableRow from './TableRow';
-import { useCrosshairOverlay } from '../../hooks/planner/useCrosshairOverlay';
 
 /**
  * PlannerTable Component
@@ -67,8 +66,6 @@ function PlannerTable({
   weekNames,
   onWeekNameChange,
 }) {
-  useCrosshairOverlay({ tableBodyRef, table, rowHeight });
-
   return (
     <div className="flex-1 flex flex-col min-h-0 gap-4 overflow-hidden">
       <div
