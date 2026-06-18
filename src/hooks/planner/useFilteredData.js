@@ -200,10 +200,11 @@ export const useFilteredData = ({
         if (row.groupId && hiddenByProjectFilter.has(row.groupId)) return false;
         // Hide rows whose parent traces to another project
         if (row.parentGroupId && hiddenByProjectFilter.has(row.parentGroupId)) return false;
-        // Hide task rows with no parentGroupId (inbox / outside any project section).
-        // assignParentGroupIds clears parentGroupId for these rows. isSpecialRow lets
-        // timeline rows, dividers, and structural rows through unconditionally.
-        if (!row.parentGroupId && !isSpecialRow(row)) return false;
+        // Hide task rows with no parentGroupId (inbox / outside any project section)
+        // that don't belong to the selected project. assignParentGroupIds clears parentGroupId
+        // for these rows, so fall back to projectNickname as the membership signal.
+        // isSpecialRow lets timeline rows, dividers, and structural rows through unconditionally.
+        if (!row.parentGroupId && !isSpecialRow(row) && row.projectNickname !== projectFilter) return false;
       }
 
       // If no other filters are active and no collapsed groups, include all rows
