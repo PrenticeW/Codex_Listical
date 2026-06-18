@@ -206,7 +206,9 @@ export const useFilteredData = ({
         // or row.projectNickname (set on chip/projectTask rows) as the membership signal.
         // isSpecialRow lets timeline rows, dividers, and structural rows through unconditionally.
         const rowProject = row.project || row.projectNickname;
-        if (!row.parentGroupId && !isSpecialRow(row) && rowProject !== projectFilter) return false;
+        // Only hide if the row has a project explicitly set that doesn't match.
+        // Rows with no project (empty / '-') are kept visible so blank inbox rows show through.
+        if (!row.parentGroupId && !isSpecialRow(row) && rowProject && rowProject !== '-' && rowProject !== projectFilter) return false;
       }
 
       // If no other filters are active and no collapsed groups, include all rows
