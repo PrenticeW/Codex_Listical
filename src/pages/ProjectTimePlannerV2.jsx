@@ -14,7 +14,7 @@ import usePlannerColumns from '../hooks/planner/usePlannerColumns';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
 import { TACTICS_SEND_TO_SYSTEM_EVENT, getSendToSystemTimestamp, loadSentChipsSnapshot, loadTacticsYearSettings } from '../lib/tacticsStorage';
-import { SYSTEM_PANEL_ACTION_EVENT, SYSTEM_PANEL_SELECTION_EVENT, SYSTEM_PANEL_SCALE_EVENT, SYSTEM_PANEL_DAY_FILTER_EVENT } from '../components/SystemPanel';
+import { SYSTEM_PANEL_ACTION_EVENT, SYSTEM_PANEL_SELECTION_EVENT, SYSTEM_PANEL_SCALE_EVENT, SYSTEM_PANEL_DAY_FILTER_EVENT, SYSTEM_PANEL_PROJECT_NAMES_EVENT, SYSTEM_PANEL_PROJECT_FILTER_EVENT } from '../components/SystemPanel';
 import { useSystemPanel } from '../contexts/SystemPanelContext';
 import { useTaskRowPanel, TASK_ROW_DETAIL_UPDATE_EVENT } from '../contexts/TaskRowPanelContext';
 import { loadSentMetricsSnapshot, peekTacticsMetricsCache } from '../lib/tacticsMetricsStorage';
@@ -524,6 +524,8 @@ export default function ProjectTimePlannerV2() {
 
   // Day filter state — empty Set means off; populated Set means those days are active
   const [dayFilter, setDayFilter] = useState(new Set());
+  // Project filter state — null means off; a project name means only that project's rows are shown
+  const [projectFilter, setProjectFilter] = useState(null);
   const handleDayFilterSelect = useCallback((day) => {
     setDayFilter(prev => {
       const next = new Set(prev);
@@ -638,6 +640,7 @@ export default function ProjectTimePlannerV2() {
     collapsedGroups,
     coerceNumber,
     dayFilter,
+    projectFilter,
   });
 
   // Sync the task row detail panel when filteredData changes so the status chip
@@ -2745,6 +2748,10 @@ export default function ProjectTimePlannerV2() {
         setDayFilter(new Set(Array.isArray(e.detail.days) ? e.detail.days : []));
         return;
       }
+      if (action === 'setProjectFilter') {
+        setProjectFilter(e.detail.project ?? null);
+        return;
+      }
       if (action === 'sortInbox' && e.detail.statuses?.length > 0) {
         const command = createSortInboxCommand({
           data,
@@ -2805,10 +2812,25 @@ export default function ProjectTimePlannerV2() {
     window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_SCALE_EVENT, { detail: { scale: sizeScale } }));
   }, [sizeScale]);
 
-  // Broadcast day filter state to SystemPanel so the ViewSection stays in sync
+  // Broadcast day filter state to SystemPanel
   useEffect(() => {
     window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_DAY_FILTER_EVENT, { detail: { dayFilter: Array.from(dayFilter) } }));
   }, [dayFilter]);
+
+  // Broadcast project filter state to SystemPanel
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_PROJECT_FILTER_EVENT, { detail: { projectFilter } }));
+  }, [projectFilter]);
+
+  // Broadcast available project names to SystemPanel whenever data changes
+  useEffect(() => {
+    const names = new Set();
+    for (const row of data) {
+      if (row.project) names.add(row.project);
+    }
+    const projectNames = Array.from(names).sort();
+    window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_PROJECT_NAMES_EVENT, { detail: { projectNames } }));
+  }, [data]);
 
   // Context menu action handlers
   const handleContextMenuAddTasks = useCallback(() => {

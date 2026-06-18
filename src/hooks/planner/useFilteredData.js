@@ -56,6 +56,7 @@ export const useFilteredData = ({
   collapsedGroups = new Set(),
   coerceNumber,
   dayFilter = null,
+  projectFilter = null,
 }) => {
   return useMemo(() => {
     // Strip tombstone rows — these are internal bookkeeping only and must never render
@@ -69,7 +70,8 @@ export const useFilteredData = ({
         !selectedRecurringFilters.size &&
         !selectedEstimateFilters.size &&
         collapsedGroups.size === 0 &&
-        (!dayFilter || dayFilter.size === 0)) {
+        (!dayFilter || dayFilter.size === 0) &&
+        !projectFilter) {
       return visibleData;
     }
 
@@ -169,6 +171,12 @@ export const useFilteredData = ({
         }
       }
 
+      // Project filter: hide any row that explicitly belongs to a different project.
+      // Rows with no project set (timeline headers, section dividers, blank placeholders) are always kept.
+      if (projectFilter) {
+        if (row.project && row.project !== projectFilter) return false;
+      }
+
       // If no other filters are active and no collapsed groups, include all rows
       if (dayColumnFilters.size === 0 &&
           !selectedProjectFilters.size &&
@@ -218,6 +226,7 @@ export const useFilteredData = ({
     collapsedGroups,
     coerceNumber,
     dayFilter,
+    projectFilter,
   ]);
 };
 

@@ -28,6 +28,10 @@ export const SYSTEM_PANEL_SELECTION_EVENT = 'system-panel-selection';
 export const SYSTEM_PANEL_SCALE_EVENT = 'system-panel-scale';
 // Fired by ProjectTimePlannerV2 when the day filter changes
 export const SYSTEM_PANEL_DAY_FILTER_EVENT = 'system-panel-day-filter';
+// Fired by ProjectTimePlannerV2 with the current list of project names (for the project filter UI)
+export const SYSTEM_PANEL_PROJECT_NAMES_EVENT = 'system-panel-project-names';
+// Fired by ProjectTimePlannerV2 when the project filter changes
+export const SYSTEM_PANEL_PROJECT_FILTER_EVENT = 'system-panel-project-filter';
 
 function dispatchSystemAction(action, payload = {}) {
   window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_ACTION_EVENT, { detail: { action, ...payload } }));
@@ -475,14 +479,34 @@ const DAY_FILTER_TAGS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function PlanSection() {
   const [activeDays, setActiveDays] = useState(new Set());
+  const [projectNames, setProjectNames] = useState([]);
+  const [activeProject, setActiveProject] = useState(null);
 
-  // Sync when ProjectTimePlannerV2 changes the filter externally
+  // Sync day filter from ProjectTimePlannerV2
   useEffect(() => {
     const handler = (e) => {
       if (Array.isArray(e.detail?.dayFilter)) setActiveDays(new Set(e.detail.dayFilter));
     };
     window.addEventListener(SYSTEM_PANEL_DAY_FILTER_EVENT, handler);
     return () => window.removeEventListener(SYSTEM_PANEL_DAY_FILTER_EVENT, handler);
+  }, []);
+
+  // Receive available project names from ProjectTimePlannerV2
+  useEffect(() => {
+    const handler = (e) => {
+      if (Array.isArray(e.detail?.projectNames)) setProjectNames(e.detail.projectNames);
+    };
+    window.addEventListener(SYSTEM_PANEL_PROJECT_NAMES_EVENT, handler);
+    return () => window.removeEventListener(SYSTEM_PANEL_PROJECT_NAMES_EVENT, handler);
+  }, []);
+
+  // Sync project filter from ProjectTimePlannerV2
+  useEffect(() => {
+    const handler = (e) => {
+      if ('projectFilter' in (e.detail ?? {})) setActiveProject(e.detail.projectFilter);
+    };
+    window.addEventListener(SYSTEM_PANEL_PROJECT_FILTER_EVENT, handler);
+    return () => window.removeEventListener(SYSTEM_PANEL_PROJECT_FILTER_EVENT, handler);
   }, []);
 
   function handleDayPick(day) {
@@ -497,9 +521,16 @@ function PlanSection() {
     dispatchSystemAction('setDayFilter', { days: [] });
   }
 
+  function handleProjectPick(name) {
+    const next = activeProject === name ? null : name;
+    setActiveProject(next);
+    dispatchSystemAction('setProjectFilter', { project: next });
+  }
+
   return (
     <div style={SECTION}>
       <SectionLabel>Plan</SectionLabel>
+
       <div style={{ marginBottom: 12, fontSize: 12, color: C.textDim }}>Filter by day</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {DAY_FILTER_TAGS.map(day => {
@@ -534,6 +565,46 @@ function PlanSection() {
         >
           Clear filter
         </button>
+      )}
+
+      {projectNames.length > 0 && (
+        <>
+          <div style={{ marginTop: 20, marginBottom: 12, fontSize: 12, color: C.textDim }}>Filter by project</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {projectNames.map(name => {
+              const isActive = activeProject === name;
+              return (
+                <button
+                  key={name}
+                  onClick={() => handleProjectPick(name)}
+                  style={{
+                    padding: '5px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                    fontFamily: FONT, fontSize: 13, fontWeight: isActive ? 600 : 400,
+                    background: isActive ? C.green : C.bgBlock,
+                    color: isActive ? '#fff' : C.textDim,
+                    transition: 'background 0.12s, color 0.12s',
+                  }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#e8efe9'; }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = C.bgBlock; }}
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+          {activeProject && (
+            <button
+              onClick={() => handleProjectPick(activeProject)}
+              style={{
+                marginTop: 10, padding: 0, background: 'none', border: 'none',
+                cursor: 'pointer', fontFamily: FONT, fontSize: 12, color: C.textFaint,
+                textDecoration: 'underline',
+              }}
+            >
+              Clear filter
+            </button>
+          )}
+        </>
       )}
     </div>
   );
