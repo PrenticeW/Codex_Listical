@@ -19,6 +19,9 @@ export const TASK_ROW_DETAIL_UPDATE_EVENT = 'task-row-detail-update';
 /** Custom event fired after a task event is written to the DB, to trigger a history reload. */
 export const TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT = 'task-row-detail-reload-history';
 
+/** Custom event fired to close the panel (e.g. clicking a row number cell). */
+export const TASK_ROW_PANEL_CLOSE_EVENT = 'task-row-panel-close';
+
 export function TaskRowPanelProvider({ children }) {
   const [selectedTask, setSelectedTask] = useState(null);
 
@@ -30,7 +33,7 @@ export function TaskRowPanelProvider({ children }) {
     setSelectedTask(null);
   }, []);
 
-  // Listen for open events dispatched from anywhere (e.g. TaskRow row-number click)
+  // Listen for open events dispatched from anywhere (e.g. TaskRow task-cell click)
   useEffect(() => {
     const handler = (e) => {
       if (e.detail?.task) openPanel(e.detail.task);
@@ -38,6 +41,12 @@ export function TaskRowPanelProvider({ children }) {
     window.addEventListener(TASK_ROW_DETAIL_EVENT, handler);
     return () => window.removeEventListener(TASK_ROW_DETAIL_EVENT, handler);
   }, [openPanel]);
+
+  // Listen for close events dispatched from anywhere (e.g. row number cell click)
+  useEffect(() => {
+    window.addEventListener(TASK_ROW_PANEL_CLOSE_EVENT, closePanel);
+    return () => window.removeEventListener(TASK_ROW_PANEL_CLOSE_EVENT, closePanel);
+  }, [closePanel]);
 
   // Listen for live updates to the currently-open task (e.g. status change from the table)
   useEffect(() => {

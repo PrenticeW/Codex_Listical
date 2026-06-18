@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { GripVertical } from 'lucide-react';
-import { TASK_ROW_DETAIL_EVENT } from '../../../contexts/TaskRowPanelContext';
+import { TASK_ROW_DETAIL_EVENT, TASK_ROW_PANEL_CLOSE_EVENT } from '../../../contexts/TaskRowPanelContext';
 import EditableCell from '../EditableCell';
 import DropdownCell, { PILLBOX_COLORS } from '../DropdownCell';
 import EstimateDropdownCell from '../EstimateDropdownCell';
@@ -152,7 +152,10 @@ const TaskRow = React.memo(function TaskRow({
                   onDragEnd={handleDragEnd}
                   className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-grab active:cursor-grabbing`}
                   style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? '#a7e8b8' : '#d9f6e0', color: '#065f46' }}
-                  onClick={(e) => handleRowNumberClick(e, rowId)}
+                  onClick={(e) => {
+                    handleRowNumberClick(e, rowId);
+                    window.dispatchEvent(new CustomEvent(TASK_ROW_PANEL_CLOSE_EVENT));
+                  }}
                   onContextMenu={(e) => handleCellContextMenu?.(e, rowId, 'rowNum')}
                   title="Drag to reorder"
                 >

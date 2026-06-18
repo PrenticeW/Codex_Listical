@@ -1,6 +1,6 @@
 import { GripVertical, ChevronRight, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
-import { TASK_ROW_DETAIL_EVENT } from '../../../contexts/TaskRowPanelContext';
+import { TASK_ROW_DETAIL_EVENT, TASK_ROW_PANEL_CLOSE_EVENT } from '../../../contexts/TaskRowPanelContext';
 
 /**
  * ProjectRow Component
@@ -169,7 +169,10 @@ export default function ProjectRow({
                   onDragEnd={handleDragEnd}
                   className="h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-grab active:cursor-grabbing"
                   style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? '#a7e8b8' : '#d9f6e0', color: '#065f46' }}
-                  onClick={(e) => handleRowNumberClick(e, rowId)}
+                  onClick={(e) => {
+                    handleRowNumberClick(e, rowId);
+                    window.dispatchEvent(new CustomEvent(TASK_ROW_PANEL_CLOSE_EVENT));
+                  }}
                   onContextMenu={(e) => handleCellContextMenu?.(e, rowId, 'rowNum')}
                   title="Drag to reorder"
                 >
