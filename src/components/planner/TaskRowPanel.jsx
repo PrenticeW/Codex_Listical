@@ -359,11 +359,40 @@ export function TaskDetailContent({ selectedTask, onBack }) {
   }
 
   const taskName   = selectedTask?.task || '—';
+  const isBlankRow = !(selectedTask?.task ?? '').trim();
   const status     = selectedTask?.status || '';
   const project    = selectedTask?.project;
   const subproject = selectedTask?.subproject;
   const hasProject    = project && project !== '-' && project !== '';
   const hasSubproject = subproject && subproject !== '-' && subproject !== '';
+
+  // Empty state for blank rows
+  if (isBlankRow) {
+    return (
+      <div style={{
+        display: 'flex', width: 960, height: '100%',
+      }}>
+        <div style={{
+          width: 480, flexShrink: 0, height: '100%', display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{
+            padding: '20px 26px 16px',
+            borderBottom: `1px solid ${C.borderLight}`,
+            position: 'sticky', top: 0, background: C.bg, zIndex: 2,
+          }}>
+            <div style={{ marginBottom: 18 }}>
+              <BackBtn onClick={onBack} />
+            </div>
+          </div>
+          <div style={{ padding: '24px 26px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+            <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, color: C.textFaint, fontStyle: 'italic', margin: 0 }}>
+              Empty row — add a task name to get started
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Map DB event rows to HistoryEntry props (status events only)
   const statusEvents = events
