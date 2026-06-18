@@ -2822,15 +2822,10 @@ export default function ProjectTimePlannerV2() {
     window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_PROJECT_FILTER_EVENT, { detail: { projectFilter } }));
   }, [projectFilter]);
 
-  // Broadcast available project names to SystemPanel whenever data changes
+  // Broadcast available project names to SystemPanel (projectNames comes from useFilterValues which skips structural rows)
   useEffect(() => {
-    const names = new Set();
-    for (const row of data) {
-      if (row.project) names.add(row.project);
-    }
-    const projectNames = Array.from(names).sort();
     window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_PROJECT_NAMES_EVENT, { detail: { projectNames } }));
-  }, [data]);
+  }, [projectNames]);
 
   // Context menu action handlers
   const handleContextMenuAddTasks = useCallback(() => {
