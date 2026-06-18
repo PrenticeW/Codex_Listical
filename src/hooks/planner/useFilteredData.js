@@ -193,14 +193,17 @@ export const useFilteredData = ({
       }
 
       // Project filter: hide rows that belong to a different project.
-      // Uses the groupId/parentGroupId chain (same pattern as day filter) so it correctly
-      // reaches project headers, subproject headers, section rows, and task rows alike.
-      // Timeline rows, dividers, and manually-created tasks with no parentGroupId are always kept.
+      // Uses the groupId/parentGroupId chain so it correctly reaches all row types.
+      // isSpecialRow guards timeline rows, section dividers, and structural rows from being hidden.
       if (projectFilter) {
-        // Hide the project header itself (its groupId is in the hidden set)
+        // Hide project header rows for other projects (caught by their groupId)
         if (row.groupId && hiddenByProjectFilter.has(row.groupId)) return false;
-        // Hide all descendant rows (sections, subproject headers, task rows)
+        // Hide rows whose parent traces to another project
         if (row.parentGroupId && hiddenByProjectFilter.has(row.parentGroupId)) return false;
+        // Hide task rows with no parentGroupId (inbox / outside any project section).
+        // assignParentGroupIds clears parentGroupId for these rows. isSpecialRow lets
+        // timeline rows, dividers, and structural rows through unconditionally.
+        if (!row.parentGroupId && !isSpecialRow(row)) return false;
       }
 
       // If no other filters are active and no collapsed groups, include all rows
