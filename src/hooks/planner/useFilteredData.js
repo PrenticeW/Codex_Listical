@@ -75,6 +75,27 @@ export const useFilteredData = ({
       return visibleData;
     }
 
+    // Build the set of groupIds hidden by the project filter.
+    // Pass 1: collect groupIds of projectHeader rows for OTHER projects.
+    // Pass 2: propagate to their children (subprojectHeaders, sections) so task rows get caught too.
+    const hiddenByProjectFilter = new Set();
+    if (projectFilter) {
+      const selectedGroupId = `project-${projectFilter}`;
+      // Pass 1 — project headers for other projects
+      for (const row of visibleData) {
+        if (row._rowType === 'projectHeader' && row.groupId && row.groupId !== selectedGroupId) {
+          hiddenByProjectFilter.add(row.groupId);
+        }
+      }
+      // Pass 2 — propagate: any row whose parentGroupId is already hidden → hide its groupId too
+      // (catches subprojectHeader rows, which are parents of chip task rows)
+      for (const row of visibleData) {
+        if (row.parentGroupId && hiddenByProjectFilter.has(row.parentGroupId) && row.groupId) {
+          hiddenByProjectFilter.add(row.groupId);
+        }
+      }
+    }
+
     // Build the set of subheader groupIds hidden by the day filter.
     // Uses the stored dayTag if available; falls back to text detection on the row's label.
     // A subheader with no detectable day (neither stored nor in text) is always kept visible.
@@ -171,12 +192,15 @@ export const useFilteredData = ({
         }
       }
 
-      // Project filter: hide any row that explicitly belongs to a different project.
-      // Uses projectNickname which is present on all project-related row types (projectHeader,
-      // projectGeneral, projectUnscheduled, subprojectHeader, projectTask chips).
-      // Rows with no projectNickname (timeline headers, dividers, manually created tasks) are always kept.
+      // Project filter: hide rows that belong to a different project.
+      // Uses the groupId/parentGroupId chain (same pattern as day filter) so it correctly
+      // reaches project headers, subproject headers, section rows, and task rows alike.
+      // Timeline rows, dividers, and manually-created tasks with no parentGroupId are always kept.
       if (projectFilter) {
-        if (row.projectNickname && row.projectNickname !== projectFilter) return false;
+        // Hide the project header itself (its groupId is in the hidden set)
+        if (row.groupId && hiddenByProjectFilter.has(row.groupId)) return false;
+        // Hide all descendant rows (sections, subproject headers, task rows)
+        if (row.parentGroupId && hiddenByProjectFilter.has(row.parentGroupId)) return false;
       }
 
       // If no other filters are active and no collapsed groups, include all rows
