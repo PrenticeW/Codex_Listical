@@ -970,7 +970,7 @@ export default function GoalPanel() {
 
   const panelStyle = {
     position: 'fixed', right: 0, top: navBottom, bottom: 0,
-    width: 320,
+    width: 640,
     background: C.bg,
     borderLeft: `1px solid ${C.border}`,
     zIndex: 99994,

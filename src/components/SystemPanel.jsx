@@ -625,7 +625,7 @@ export default function SystemPanel() {
     <div
       style={{
         position: 'fixed', right: 0, top: navBottom, bottom: 0,
-        width: 320,
+        width: 640,
         background: C.bg,
         borderLeft: `1px solid ${C.border}`,
         zIndex: 99994, // one below GearPanel so gear always wins if somehow both open
@@ -636,13 +636,13 @@ export default function SystemPanel() {
     >
       {/* ── Outer slide: system content ↔ task detail ── */}
       <div style={{
-        display: 'flex', width: 640, height: '100%',
+        display: 'flex', width: 1280, height: '100%',
         transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
-        transform: showTaskDetail ? 'translateX(-320px)' : 'translateX(0)',
+        transform: showTaskDetail ? 'translateX(-640px)' : 'translateX(0)',
       }}>
 
         {/* System main content (320px, flex column so PageSection pins to bottom) */}
-        <div style={{ width: 320, flexShrink: 0, overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ width: 640, flexShrink: 0, overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
             <InsertSection />
             <SortSection />
@@ -654,7 +654,7 @@ export default function SystemPanel() {
         </div>
 
         {/* Task detail view (320px, overflow hidden — inner slide handles its own scroll) */}
-        <div style={{ width: 320, flexShrink: 0, overflow: 'hidden', height: '100%' }}>
+        <div style={{ width: 640, flexShrink: 0, overflow: 'hidden', height: '100%' }}>
           <TaskDetailContent selectedTask={selectedTask} onBack={closePanel} />
         </div>
 

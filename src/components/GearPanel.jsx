@@ -1089,7 +1089,7 @@ export default function GearPanel() {
     <div
         style={{
           position: 'fixed', right: 0, top: navBottom, bottom: 0,
-          width: 320,
+          width: 640,
           background: C.bg,
           borderLeft: `1px solid ${C.border}`,
           zIndex: 99996, // above page panels (99994) and ScheduleItemPanel (99995)
@@ -1104,15 +1104,15 @@ export default function GearPanel() {
         <div
           style={{
             display: 'flex',
-            width: 640,
+            width: 1280,
             flex: 1,
             minHeight: 0,
-            transform: showHistory ? 'translateX(-320px)' : 'translateX(0)',
+            transform: showHistory ? 'translateX(-640px)' : 'translateX(0)',
             transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
           }}
         >
           {/* Main view */}
-          <div style={{ width: 320, flexShrink: 0, overflowY: 'auto' }}>
+          <div style={{ width: 640, flexShrink: 0, overflowY: 'auto' }}>
             <YourYearSection />
             <TimelineSection onShowHistory={() => setShowHistory(true)} />
             <SystemSettingsSection />
@@ -1121,7 +1121,7 @@ export default function GearPanel() {
           </div>
 
           {/* History view */}
-          <div style={{ width: 320, flexShrink: 0, overflowY: 'auto' }}>
+          <div style={{ width: 640, flexShrink: 0, overflowY: 'auto' }}>
             <HistoryView onBack={() => setShowHistory(false)} isActive={showHistory && isOpen} />
           </div>
         </div>
