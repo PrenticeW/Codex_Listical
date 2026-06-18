@@ -448,16 +448,6 @@ export function TaskDetailContent({ selectedTask, onBack }) {
         <div style={{ padding: '18px 22px 28px' }}>
           <SectionLabel>Status history</SectionLabel>
 
-          {statusEvents.length === 0 ? (
-            <div style={{ fontSize: 12, color: C.textLight, fontStyle: 'italic' }}>
-              No history yet.
-            </div>
-          ) : (
-            statusEvents.slice(0, 3).map((ev, i) => (
-              <HistoryEntry key={i} {...ev} isLast={i === Math.min(2, statusEvents.length - 1)} />
-            ))
-          )}
-
           <button
             onClick={() => setShowHistory(true)}
             style={{
