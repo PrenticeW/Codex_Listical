@@ -1,4 +1,24 @@
 import { useMemo } from 'react';
+
+// Day-of-week patterns used as a fallback when a subheader row has no stored dayTag.
+// Matches full names and common abbreviations, word-boundary aware.
+const DAY_TAG_PATTERNS = [
+  [/\b(monday|mon)\b/i, 'Mon'],
+  [/\b(tuesday|tue|tues)\b/i, 'Tue'],
+  [/\b(wednesday|wed)\b/i, 'Wed'],
+  [/\b(thursday|thu|thur|thurs)\b/i, 'Thu'],
+  [/\b(friday|fri)\b/i, 'Fri'],
+  [/\b(saturday|sat)\b/i, 'Sat'],
+  [/\b(sunday|sun)\b/i, 'Sun'],
+];
+
+function detectDayTagFromText(text) {
+  if (!text) return null;
+  for (const [pattern, tag] of DAY_TAG_PATTERNS) {
+    if (pattern.test(text)) return tag;
+  }
+  return null;
+}
 import {
   shouldBypassFilters,
   isSectionDivider,
@@ -54,13 +74,19 @@ export const useFilteredData = ({
     }
 
     // Build the set of subheader groupIds hidden by the day filter.
-    // A subprojectHeader is hidden if it has a dayTag that doesn't match dayFilter.
-    // Subheaders with no dayTag are always kept (they're not day-specific sections).
+    // Uses the stored dayTag if available; falls back to text detection on the row's label.
+    // A subheader with no detectable day (neither stored nor in text) is always kept visible.
     const hiddenByDayFilter = new Set();
     if (dayFilter) {
       for (const row of visibleData) {
-        if (row._rowType === 'subprojectHeader' && row.dayTag && row.dayTag !== dayFilter) {
-          if (row.groupId) hiddenByDayFilter.add(row.groupId);
+        if (row._rowType === 'subprojectHeader') {
+          // Stored dayTag takes precedence; fall back to scanning the subheader text
+          const effectiveDay = row.dayTag
+            ?? detectDayTagFromText(row.subprojectName || row.subproject || row.task || '');
+          // Only hide if a day was detected AND it doesn't match the active filter
+          if (effectiveDay && effectiveDay !== dayFilter) {
+            if (row.groupId) hiddenByDayFilter.add(row.groupId);
+          }
         }
       }
     }
