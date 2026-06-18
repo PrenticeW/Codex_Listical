@@ -479,7 +479,7 @@ const DAY_FILTER_TAGS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function PlanSection() {
   const [activeDays, setActiveDays] = useState(new Set());
-  const [projectNames, setProjectNames] = useState([]);
+  const [projects, setProjects] = useState([]); // [{nickname, displayName}]
   const [activeProject, setActiveProject] = useState(null);
 
   // Sync day filter from ProjectTimePlannerV2
@@ -491,10 +491,10 @@ function PlanSection() {
     return () => window.removeEventListener(SYSTEM_PANEL_DAY_FILTER_EVENT, handler);
   }, []);
 
-  // Receive available project names from ProjectTimePlannerV2
+  // Receive available projects from ProjectTimePlannerV2
   useEffect(() => {
     const handler = (e) => {
-      if (Array.isArray(e.detail?.projectNames)) setProjectNames(e.detail.projectNames);
+      if (Array.isArray(e.detail?.projects)) setProjects(e.detail.projects);
     };
     window.addEventListener(SYSTEM_PANEL_PROJECT_NAMES_EVENT, handler);
     return () => window.removeEventListener(SYSTEM_PANEL_PROJECT_NAMES_EVENT, handler);
@@ -567,16 +567,16 @@ function PlanSection() {
         </button>
       )}
 
-      {projectNames.length > 0 && (
+      {projects.length > 0 && (
         <>
           <div style={{ marginTop: 20, marginBottom: 12, fontSize: 12, color: C.textDim }}>Filter by project</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {projectNames.map(name => {
-              const isActive = activeProject === name;
+            {projects.map(({ nickname, displayName }) => {
+              const isActive = activeProject === nickname;
               return (
                 <button
-                  key={name}
-                  onClick={() => handleProjectPick(name)}
+                  key={nickname}
+                  onClick={() => handleProjectPick(nickname)}
                   style={{
                     padding: '5px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
                     fontFamily: FONT, fontSize: 13, fontWeight: isActive ? 600 : 400,
@@ -587,7 +587,7 @@ function PlanSection() {
                   onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#e8efe9'; }}
                   onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = C.bgBlock; }}
                 >
-                  {name}
+                  {displayName}
                 </button>
               );
             })}

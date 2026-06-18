@@ -172,9 +172,11 @@ export const useFilteredData = ({
       }
 
       // Project filter: hide any row that explicitly belongs to a different project.
-      // Rows with no project set (timeline headers, section dividers, blank placeholders) are always kept.
+      // Uses projectNickname which is present on all project-related row types (projectHeader,
+      // projectGeneral, projectUnscheduled, subprojectHeader, projectTask chips).
+      // Rows with no projectNickname (timeline headers, dividers, manually created tasks) are always kept.
       if (projectFilter) {
-        if (row.project && row.project !== projectFilter) return false;
+        if (row.projectNickname && row.projectNickname !== projectFilter) return false;
       }
 
       // If no other filters are active and no collapsed groups, include all rows
