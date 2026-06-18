@@ -69,7 +69,7 @@ export const useFilteredData = ({
         !selectedRecurringFilters.size &&
         !selectedEstimateFilters.size &&
         collapsedGroups.size === 0 &&
-        !dayFilter) {
+        (!dayFilter || dayFilter.size === 0)) {
       return visibleData;
     }
 
@@ -77,14 +77,14 @@ export const useFilteredData = ({
     // Uses the stored dayTag if available; falls back to text detection on the row's label.
     // A subheader with no detectable day (neither stored nor in text) is always kept visible.
     const hiddenByDayFilter = new Set();
-    if (dayFilter) {
+    if (dayFilter && dayFilter.size > 0) {
       for (const row of visibleData) {
         if (row._rowType === 'subprojectHeader') {
           // Stored dayTag takes precedence; fall back to scanning the subheader text
           const effectiveDay = row.dayTag
             ?? detectDayTagFromText(row.subprojectName || row.subproject || row.task || '');
-          // Only hide if a day was detected AND it doesn't match the active filter
-          if (effectiveDay && effectiveDay !== dayFilter) {
+          // Only hide if a day was detected AND it's not in the active filter set
+          if (effectiveDay && !dayFilter.has(effectiveDay)) {
             if (row.groupId) hiddenByDayFilter.add(row.groupId);
           }
         }
@@ -158,7 +158,7 @@ export const useFilteredData = ({
       }
 
       // Day filter: hide subheader rows whose dayTag doesn't match, and hide their child rows.
-      if (dayFilter) {
+      if (dayFilter && dayFilter.size > 0) {
         // Hide the subheader itself
         if (row._rowType === 'subprojectHeader' && row.groupId && hiddenByDayFilter.has(row.groupId)) {
           return false;

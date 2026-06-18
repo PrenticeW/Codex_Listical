@@ -522,10 +522,14 @@ export default function ProjectTimePlannerV2() {
     closeEstimateFilterMenu,
   } = filters;
 
-  // Day filter state — null means off; a day abbreviation (e.g. 'Mon') means active
-  const [dayFilter, setDayFilter] = useState(null);
+  // Day filter state — empty Set means off; populated Set means those days are active
+  const [dayFilter, setDayFilter] = useState(new Set());
   const handleDayFilterSelect = useCallback((day) => {
-    setDayFilter(prev => (prev === day ? null : day));
+    setDayFilter(prev => {
+      const next = new Set(prev);
+      if (next.has(day)) { next.delete(day); } else { next.add(day); }
+      return next;
+    });
   }, []);
 
   // Listical menu state
@@ -2738,7 +2742,7 @@ export default function ProjectTimePlannerV2() {
         return;
       }
       if (action === 'setDayFilter') {
-        setDayFilter(e.detail.day ?? null);
+        setDayFilter(new Set(Array.isArray(e.detail.days) ? e.detail.days : []));
         return;
       }
       if (action === 'sortInbox' && e.detail.statuses?.length > 0) {
@@ -2803,7 +2807,7 @@ export default function ProjectTimePlannerV2() {
 
   // Broadcast day filter state to SystemPanel so the ViewSection stays in sync
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_DAY_FILTER_EVENT, { detail: { dayFilter } }));
+    window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_DAY_FILTER_EVENT, { detail: { dayFilter: Array.from(dayFilter) } }));
   }, [dayFilter]);
 
   // Context menu action handlers

@@ -474,22 +474,27 @@ function ArchiveSection() {
 const DAY_FILTER_TAGS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function PlanSection() {
-  const [dayFilter, setDayFilter] = useState(null);
+  const [activeDays, setActiveDays] = useState(new Set());
 
   // Sync when ProjectTimePlannerV2 changes the filter externally
   useEffect(() => {
     const handler = (e) => {
-      if (e.detail?.dayFilter !== undefined) setDayFilter(e.detail.dayFilter);
+      if (Array.isArray(e.detail?.dayFilter)) setActiveDays(new Set(e.detail.dayFilter));
     };
     window.addEventListener(SYSTEM_PANEL_DAY_FILTER_EVENT, handler);
     return () => window.removeEventListener(SYSTEM_PANEL_DAY_FILTER_EVENT, handler);
   }, []);
 
   function handleDayPick(day) {
-    const next = dayFilter === day ? null : day;
-    dispatchSystemAction('setDayFilter', { day: next });
-    // Optimistic local update so the panel feels instant
-    setDayFilter(next);
+    const next = new Set(activeDays);
+    if (next.has(day)) { next.delete(day); } else { next.add(day); }
+    setActiveDays(next);
+    dispatchSystemAction('setDayFilter', { days: Array.from(next) });
+  }
+
+  function handleClear() {
+    setActiveDays(new Set());
+    dispatchSystemAction('setDayFilter', { days: [] });
   }
 
   return (
@@ -498,7 +503,7 @@ function PlanSection() {
       <div style={{ marginBottom: 12, fontSize: 12, color: C.textDim }}>Filter by day</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {DAY_FILTER_TAGS.map(day => {
-          const isActive = dayFilter === day;
+          const isActive = activeDays.has(day);
           return (
             <button
               key={day}
@@ -518,9 +523,9 @@ function PlanSection() {
           );
         })}
       </div>
-      {dayFilter && (
+      {activeDays.size > 0 && (
         <button
-          onClick={() => handleDayPick(dayFilter)}
+          onClick={handleClear}
           style={{
             marginTop: 10, padding: 0, background: 'none', border: 'none',
             cursor: 'pointer', fontFamily: FONT, fontSize: 12, color: C.textFaint,
