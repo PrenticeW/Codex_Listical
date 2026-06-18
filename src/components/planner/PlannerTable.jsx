@@ -67,29 +67,9 @@ function PlannerTable({
   weekNames,
   onWeekNameChange,
 }) {
-  const { vLineRef, hLineRef } = useCrosshairOverlay({ tableBodyRef, table, rowHeight });
+  useCrosshairOverlay({ tableBodyRef, table, rowHeight });
 
   return (
-    <>
-      {/* Crosshair overlay lines — position:fixed, pointer-events:none */}
-      <div
-        ref={vLineRef}
-        style={{
-          position: 'fixed',
-          display: 'none',
-          pointerEvents: 'none',
-          zIndex: 100,
-        }}
-      />
-      <div
-        ref={hLineRef}
-        style={{
-          position: 'fixed',
-          display: 'none',
-          pointerEvents: 'none',
-          zIndex: 100,
-        }}
-      />
     <div className="flex-1 flex flex-col min-h-0 gap-4 overflow-hidden">
       <div
         ref={tableBodyRef}
@@ -414,7 +394,6 @@ function PlannerTable({
         </div>
       </div>
     </div>
-    </>
   );
 }
 
