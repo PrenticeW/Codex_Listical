@@ -17,13 +17,18 @@
 - `src/contexts/PagePanelContext.jsx` — `open`, `close`, `toggle` now memoized with `useCallback` so `SystemPanel`'s auto-open `useEffect` dep array stays stable.
 - `src/components/planner/TaskRowPanel.jsx` — camelCase property names fixed (`taskCreatedAt`, `completionCount`, `lastCompletedAt`) to match what `plannerRowDbToPayload` returns.
 
+### Done (2026-06-17 — session 3)
+- **Status history** — `readTaskEvents` called when panel opens and when task changes. Preview shows 3 most recent; "See all N changes" button slides to history sub-view with full list. Count is live from DB.
+- **`writeTaskEvent` wiring** — called from `useEditState.ts` (`handleEditComplete`) for every status change (including Abandoned/Skipped special path) and task name changes. Also called from `useComputedDataV2.ts` for computed auto-transitions (e.g. `'-' → 'Scheduled'`) that never go through `handleEditComplete`. Each write dispatches `TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT` after the DB write resolves to avoid a race where `readTaskEvents` fires before the new row is committed.
+- **`HeaderStatusChip`** — updates immediately when the selected task's status changes in the table (via `TASK_ROW_DETAIL_UPDATE_EVENT` dispatched from `ProjectTimePlannerV2` chip-sync effect and from `handleEditComplete`).
+- **Recurring completion tracking** — `completion_count` and `last_completed_at` incremented optimistically in local state when status → Done on a recurring task (`useEditState.ts`). DB increment via `increment_completion_count` RPC with manual read-increment-write fallback. Panel recurring block reflects updated count immediately via `TASK_ROW_DETAIL_UPDATE_EVENT`.
+- **Notes** — textarea saves on a 800ms debounce as you type; blur flushes immediately. `saveTaskNote` does a direct `UPDATE planner_rows SET notes` (bypasses the full row replace). `updateTaskField` event also dispatched on save so local `data` state stays in sync and notes survive task navigation within the session.
+- **Notes — chip tasks** — chip task IDs (`chip-task-<chipId>`) are not valid UUIDs and have no stable DB row, so `saveTaskNote` routes them to `localStorage` instead (key `listical-chip-note-<chipId>`). `loadChipTaskNote` is called at both chip task row creation sites in `ProjectTimePlannerV2.jsx` so notes are restored when chip rows are rebuilt.
+- **Notes — legacy `row-N` IDs** — old rows created before the UUID migration still have `row-N` IDs in local state. The UUID guard in `saveTaskNote` was changed to a chip-task prefix check so `row-N` rows are now allowed to attempt a DB save. After the next save+reload cycle their IDs become proper UUIDs and everything works normally.
+
 ### Shell only (needs wiring)
-- Notes textarea — visible but unsaved. `saveTaskNote` exists in storage; needs to be called on blur/save.
-- Status history preview + full list — shows "No history yet." `readTaskEvents` exists; needs to be called when panel opens.
-- "See all N changes" count — hardcoded label. Needs event count from `readTaskEvents`.
-- Created date + age pill — column exists; `task_created_at` stamping needs to be wired into the task name save path via `writeTaskEvent`.
-- Recurring block (completion count + last completed) — columns exist; `completion_count` / `last_completed_at` update needs to be wired into the status change path via `writeTaskEvent`.
-- `writeTaskEvent` wiring — needs to be called from the status dropdown save path and the task name save path in `ProjectTimePlannerV2.jsx` or storage layer.
+- **Created date + age pill** — `task_created_at` column exists in DB. Stamping not yet wired: on every task name save in `useEditState.ts`, if `task_created_at` is null and the new value is non-empty, stamp it (update the row + write a synthetic `task_events` row or just use the column directly). The "Created" entry in the full history sub-view is hardcoded/absent — needs to be rendered as the final list item using `task_created_at` with an age pill and a grey "Created" chip.
+- **Status event notes** — `note` column exists on `task_events`. No UI to enter it yet. Spec says: prompt for an optional note when status is set to Blocked or On Hold. Low priority.
 
 ---
 
@@ -140,17 +145,20 @@ All reads/writes go through `plannerStorage` (`src/utils/planner/storage.js`). D
 
 ## Files remaining to touch
 
-- `src/pages/ProjectTimePlannerV2.jsx` — call `writeTaskEvent` from status dropdown save path (`handleEditComplete` for `columnId === 'status'`) and task name save path
-- `src/components/planner/TaskRowPanel.jsx` — wire notes textarea to `saveTaskNote` on blur; call `readTaskEvents` when panel opens and pass events into the history render
+- `src/hooks/planner/useEditState.ts` — stamp `task_created_at` when task name is first saved (if `task_created_at` is null and new value is non-empty, include it in the command's `setData` update and write it to the DB)
+- `src/components/planner/TaskRowPanel.jsx` — render "Created" as the final entry in the full history sub-view, using `selectedTask.taskCreatedAt` with an age pill and a grey "Created" chip
 
 ## Files already touched
 
-- `src/utils/planner/storage.js` ✅
+- `src/utils/planner/storage.js` ✅ — `saveTaskNote`, `writeTaskEvent`, `readTaskEvents`, `saveChipTaskNote`, `loadChipTaskNote`
+- `src/hooks/planner/useEditState.ts` ✅ — `writeTaskEvent` on status + task name changes; recurring completion optimistic update
+- `src/hooks/planner/useComputedDataV2.ts` ✅ — `writeTaskEvent` for computed auto-transitions
+- `src/pages/ProjectTimePlannerV2.jsx` ✅ — chip-sync effect dispatches `TASK_ROW_DETAIL_UPDATE_EVENT`; `loadChipTaskNote` injected at both chip row creation sites
 - `src/contexts/PagePanelContext.jsx` ✅
-- `src/components/planner/TaskRowPanel.jsx` ✅ (camelCase fix; storage wiring still needed)
+- `src/components/planner/TaskRowPanel.jsx` ✅ — notes debounce, history wiring, status chip, recurring block
 - `src/components/SystemPanel.jsx` ✅
 - `src/components/planner/rows/TaskRow.jsx` ✅
-- `src/contexts/TaskRowPanelContext.jsx` ✅
+- `src/contexts/TaskRowPanelContext.jsx` ✅ — exports `TASK_ROW_DETAIL_EVENT`, `TASK_ROW_DETAIL_UPDATE_EVENT`, `TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT`
 - `src/components/Layout.jsx` ✅
 - `supabase/migrations/20260617000001_task_panel_columns.sql` ✅
-- `src/utils/planner/archiveHelpers.js` — no changes needed; completion is captured upstream at status change
+- `src/utils/planner/archiveHelpers.js` — no changes needed

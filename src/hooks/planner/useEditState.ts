@@ -266,12 +266,23 @@ export default function useEditState({
       return;
     }
 
+    // Stamp taskCreatedAt the first time a task name is entered (local state mirror;
+    // the DB write is handled inside writeTaskEvent when field === 'task_name').
+    const shouldStampCreatedAt =
+      columnId === 'task' &&
+      actualColumnId === 'task' &&
+      !row?.taskCreatedAt &&
+      (!oldValue || oldValue === '') &&
+      !!newValue;
+    const stampedCreatedAt = shouldStampCreatedAt ? new Date().toISOString() : null;
+
     // Create command for regular edits
     const command: Command = {
       execute: () => {
         setData(prev => prev.map(row => {
           if (row.id === rowId) {
             const updates: any = { [actualColumnId]: newValue };
+            if (stampedCreatedAt) updates.taskCreatedAt = stampedCreatedAt;
             // Clear import review flag when subproject or project is updated
             if ((columnId === 'subproject' || columnId === 'project') && row._importNeedsSubprojectReview) {
               updates._importNeedsSubprojectReview = undefined;
@@ -284,7 +295,9 @@ export default function useEditState({
       undo: () => {
         setData(prev => prev.map(row => {
           if (row.id === rowId) {
-            return { ...row, [actualColumnId]: oldValue };
+            const undoUpdates: any = { [actualColumnId]: oldValue };
+            if (stampedCreatedAt) undoUpdates.taskCreatedAt = null;
+            return { ...row, ...undoUpdates };
           }
           return row;
         }));
@@ -332,7 +345,14 @@ export default function useEditState({
     // Push fresh task data to the detail panel immediately (synchronous, before next render)
     if (row?.id) {
       window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_UPDATE_EVENT, {
-        detail: { task: { ...row, [actualColumnId]: newValue, ...recurringCompletion } },
+        detail: {
+          task: {
+            ...row,
+            [actualColumnId]: newValue,
+            ...recurringCompletion,
+            ...(stampedCreatedAt ? { taskCreatedAt: stampedCreatedAt } : {}),
+          },
+        },
       }));
     }
 
