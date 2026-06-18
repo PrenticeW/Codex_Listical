@@ -378,14 +378,14 @@ export function TaskDetailContent({ selectedTask, onBack }) {
   return (
     // Inner slide: 640px wide, clips at 320px via parent overflow:hidden
     <div style={{
-      display: 'flex', width: 1280, height: '100%',
+      display: 'flex', width: 960, height: '100%',
       transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
-      transform: showHistory ? 'translateX(-640px)' : 'translateX(0)',
+      transform: showHistory ? 'translateX(-480px)' : 'translateX(0)',
     }}>
 
       {/* ── Task detail main view ── */}
       <div style={{
-        width: 640, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden',
+        width: 480, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden',
         height: '100%', display: 'flex', flexDirection: 'column',
       }}>
         {/* Sticky header */}
@@ -470,7 +470,7 @@ export function TaskDetailContent({ selectedTask, onBack }) {
 
       {/* ── History sub-view ── */}
       <div style={{
-        width: 640, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden',
+        width: 480, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden',
         height: '100%', display: 'flex', flexDirection: 'column',
       }}>
         <div style={{

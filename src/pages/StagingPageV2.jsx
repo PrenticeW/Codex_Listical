@@ -1095,7 +1095,7 @@ export default function StagingPageV2() {
           />
           <div
             className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm mt-2"
-            style={{ maxWidth: 'calc(100% - 336px)', minWidth: boxMinWidth ?? undefined }}
+            style={{ maxWidth: 'calc(100% - 496px)', minWidth: boxMinWidth ?? undefined }}
           >
             <input
               id="staging-input"
@@ -1119,7 +1119,7 @@ export default function StagingPageV2() {
           <div
             ref={tableCardRef}
             className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm"
-            style={{ maxWidth: 'calc(100% - 336px)', minWidth: boxMinWidth ?? undefined }}
+            style={{ maxWidth: 'calc(100% - 496px)', minWidth: boxMinWidth ?? undefined }}
           >
             <div className="grid gap-[5px]">
               {shortlist.map((item) => {
