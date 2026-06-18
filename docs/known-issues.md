@@ -33,6 +33,21 @@
 
 ---
 
+## Version history snapshot gaps
+
+The snapshot system (`snapshotStorage.js`) captures planner rows, archived weeks, Goal state, Plan chips/settings/metrics, and year metadata — but misses the following. Rolling back a snapshot does **not** restore these domains, and none of them appear in the diff viewer.
+
+| Gap | Impact |
+|---|---|
+| `years.total_days` not captured | Added or removed weeks are not rolled back. After a snapshot restore the planner grid may have more or fewer week columns than the snapshot reflects. |
+| `task_events` not captured | Task status history survives a rollback intact. The history panel will show events that post-date the snapshot, giving a misleading view of what the row looked like at snapshot time. |
+| `planner_settings` not captured | Column widths, visible columns, sort order, and other UI prefs are not restored. The grid layout after a rollback may differ from what was active when the snapshot was taken. |
+| `tactics_custom_projects` not captured | Custom chip project definitions survive a rollback. A chip project created after the snapshot point will still exist on the Plan page even after restoring. |
+| Chip task notes not captured | Notes on chip-task rows are stored per-device (localStorage → Supabase migration pending). They are not included in the snapshot payload and are never restored. See "Migrate chip task notes" below. |
+| `tactics_metrics` sent-snapshot not captured separately | The metrics blob written to Supabase when tasks are sent to System is not part of the snapshot. Rolling back planner rows without rolling back the corresponding metrics snapshot can leave quota tracking inconsistent. |
+
+---
+
 ## Pending Supabase migrations — run together before testing
 
 Migrations written but not yet applied to the database. Apply as a batch.

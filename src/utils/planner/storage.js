@@ -1171,31 +1171,110 @@ async function _saveTaskRowsImpl(taskRows, yearNumber) {
 // The direct UPDATE also avoids kicking off a full row replacement for a
 // single-field change.
 
-// Chip task notes are stored in localStorage keyed by chip ID because chip
-// tasks have ephemeral local IDs that never match the DB row (Supabase
-// auto-assigns a UUID on each save cycle). The chip ID portion of the row ID
-// is stable across sessions as long as the chip exists.
+// Chip task notes are keyed by the stable chip ID (tactics chip UUID).
+// Previously held in localStorage; now stored in the chip_task_notes Supabase
+// table (migration 20260618000001_chip_task_notes.sql).
+//
+// In-memory cache so loadChipTaskNote stays synchronous at the call sites in
+// ProjectTimePlannerV2 where chip rows are rebuilt. Call preloadChipTaskNotes()
+// on mount to populate the cache from Supabase before chips are rendered.
+// Falls back to localStorage on a cache miss so any notes written before the
+// migration are still visible until the user saves them again.
 const CHIP_NOTE_PREFIX = 'listical-chip-note-';
+const chipNotesCache = new Map(); // chipId → note text (or null)
 
-export const saveChipTaskNote = (taskId, noteText) => {
-  // taskId is 'chip-task-<chipId>'
-  const chipId = taskId.slice('chip-task-'.length);
-  if (!chipId) return;
-  if (noteText) {
-    localStorage.setItem(CHIP_NOTE_PREFIX + chipId, noteText);
-  } else {
-    localStorage.removeItem(CHIP_NOTE_PREFIX + chipId);
+// Fetch all chip notes for the signed-in user and populate chipNotesCache.
+// Also migrates any localStorage-only notes to Supabase (one-time, per device).
+// Call this once on System-page mount before chip rows are rendered.
+export const preloadChipTaskNotes = async () => {
+  try {
+    const userId = await requireUserId();
+    const { data, error } = await supabase
+      .from('chip_task_notes')
+      .select('chip_id, note')
+      .eq('user_id', userId);
+    if (error) throw error;
+
+    // Populate cache from Supabase.
+    chipNotesCache.clear();
+    for (const row of data) {
+      chipNotesCache.set(row.chip_id, row.note || null);
+    }
+
+    // One-time migration: push any localStorage-only notes up to Supabase.
+    const toMigrate = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith(CHIP_NOTE_PREFIX)) continue;
+      const chipId = key.slice(CHIP_NOTE_PREFIX.length);
+      if (chipNotesCache.has(chipId)) continue; // already in Supabase
+      const note = localStorage.getItem(key);
+      if (note) toMigrate.push({ user_id: userId, chip_id: chipId, note, updated_at: new Date().toISOString() });
+    }
+    if (toMigrate.length > 0) {
+      const { error: migrateError } = await supabase
+        .from('chip_task_notes')
+        .upsert(toMigrate, { onConflict: 'user_id,chip_id' });
+      if (!migrateError) {
+        for (const row of toMigrate) {
+          chipNotesCache.set(row.chip_id, row.note);
+          localStorage.removeItem(CHIP_NOTE_PREFIX + row.chip_id);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to preload chip task notes', err);
   }
 };
 
-export const loadChipTaskNote = (chipId) =>
-  localStorage.getItem(CHIP_NOTE_PREFIX + chipId) || null;
+// Save a chip task note to Supabase and update the in-memory cache.
+// taskId is 'chip-task-<chipId>'.
+export const saveChipTaskNote = async (taskId, noteText) => {
+  const chipId = taskId.slice('chip-task-'.length);
+  if (!chipId) return;
+
+  // Update cache immediately so subsequent loadChipTaskNote calls see the value.
+  chipNotesCache.set(chipId, noteText || null);
+
+  try {
+    const userId = await requireUserId();
+    if (noteText) {
+      const { error } = await supabase
+        .from('chip_task_notes')
+        .upsert(
+          { user_id: userId, chip_id: chipId, note: noteText, updated_at: new Date().toISOString() },
+          { onConflict: 'user_id,chip_id' }
+        );
+      if (error) throw error;
+    } else {
+      // Empty note — delete the row so the table stays clean.
+      const { error } = await supabase
+        .from('chip_task_notes')
+        .delete()
+        .eq('user_id', userId)
+        .eq('chip_id', chipId);
+      if (error) throw error;
+    }
+    // Clean up any leftover localStorage entry for this chip.
+    localStorage.removeItem(CHIP_NOTE_PREFIX + chipId);
+  } catch (err) {
+    console.error('Failed to save chip task note', err);
+  }
+};
+
+// Synchronous read from the in-memory cache.
+// Falls back to localStorage for notes written before preloadChipTaskNotes ran
+// (e.g. on the very first render before the async preload completes).
+export const loadChipTaskNote = (chipId) => {
+  if (chipNotesCache.has(chipId)) return chipNotesCache.get(chipId);
+  return localStorage.getItem(CHIP_NOTE_PREFIX + chipId) || null;
+};
 
 export const saveTaskNote = async (taskId, noteText) => {
   if (!taskId) return;
-  // Chip tasks have ephemeral local IDs — use localStorage instead of Supabase.
+  // Chip tasks have ephemeral planner_row UUIDs — use chip_task_notes table.
   if (taskId.startsWith('chip-task-')) {
-    saveChipTaskNote(taskId, noteText);
+    await saveChipTaskNote(taskId, noteText);
     return;
   }
   try {

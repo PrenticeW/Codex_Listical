@@ -71,7 +71,7 @@ import {
 } from '../utils/planner/clipboardOperations';
 import { createSortInboxCommand } from '../utils/planner/sortInbox';
 import { createSortPlannerCommand } from '../utils/planner/sortPlanner';
-import { saveTaskRows, readTaskRows, loadChipTaskNote } from '../utils/planner/storage';
+import { saveTaskRows, readTaskRows, loadChipTaskNote, preloadChipTaskNotes } from '../utils/planner/storage';
 import { DEFAULT_PROJECT_ID } from '../constants/plannerStorageKeys';
 import {
   calculateWeekRange,
@@ -566,6 +566,8 @@ export default function ProjectTimePlannerV2() {
   useEffect(() => {
     let cancelled = false;
     setMetricsLoaded(false);
+    // Preload chip notes into the in-memory cache before chip rows are rendered.
+    preloadChipTaskNotes();
     loadMetricsData(currentYear).then((data) => {
       if (!cancelled) {
         setMetricsData(data);
