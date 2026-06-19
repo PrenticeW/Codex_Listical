@@ -852,7 +852,7 @@ function snapSummary(snap) {
   return parts.length > 0 ? parts.join(' · ') : 'Empty snapshot';
 }
 
-function ConfirmRestoreModal({ snapshot, onConfirm, onCancel, isRestoring }) {
+function ConfirmRestoreModal({ snapshot, onConfirm, onCancel, isRestoring, use24Hour }) {
   return createPortal(
     <div
       style={{ position: 'fixed', inset: 0, zIndex: 1000010, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)' }}
@@ -872,7 +872,7 @@ function ConfirmRestoreModal({ snapshot, onConfirm, onCancel, isRestoring }) {
             <p style={{ fontSize: 14, fontWeight: 600, color: '#1e293b', marginBottom: 6 }}>Restore this version?</p>
             <p style={{ fontSize: 13, color: '#64748b', lineHeight: 1.5 }}>
               This will replace your Goal, Plan, and System pages with the version from{' '}
-              <span style={{ fontWeight: 500, color: '#334155' }}>{fmtTimestamp(snapshot.created_at)}</span>.
+              <span style={{ fontWeight: 500, color: '#334155' }}>{fmtTimestamp(snapshot.created_at, { use24Hour })}</span>.
               This cannot be undone.
             </p>
           </div>
@@ -901,7 +901,7 @@ function ConfirmRestoreModal({ snapshot, onConfirm, onCancel, isRestoring }) {
   );
 }
 
-function HistoryView({ onBack, isActive }) {
+function HistoryView({ onBack, isActive, use24Hour }) {
   // WIRED: loads + restores snapshots via snapshotStorage
   const { currentYear } = useYear();
   const navigate = useNavigate();
@@ -997,7 +997,7 @@ function HistoryView({ onBack, isActive }) {
           >
             <div>
               <div style={{ fontSize: 13, color: '#333' }}>
-                {fmtTimestamp(snap.created_at)}
+                {fmtTimestamp(snap.created_at, { use24Hour })}
                 {idx === 0 && (
                   <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.green, background: '#e8f5f0', padding: '2px 7px', borderRadius: 4, marginLeft: 7, verticalAlign: 'middle' }}>
                     Latest
@@ -1030,6 +1030,7 @@ function HistoryView({ onBack, isActive }) {
           onConfirm={handleRestore}
           onCancel={() => setConfirmTarget(null)}
           isRestoring={isRestoring}
+          use24Hour={use24Hour}
         />
       )}
     </>
@@ -1110,7 +1111,7 @@ export default function GearPanel() {
 
           {/* History view */}
           <div style={{ width: 480, flexShrink: 0, overflowY: 'auto' }}>
-            <HistoryView onBack={() => setShowHistory(false)} isActive={showHistory && isOpen} />
+            <HistoryView onBack={() => setShowHistory(false)} isActive={showHistory && isOpen} use24Hour={settings?.use24Hour ?? false} />
           </div>
         </div>
       </div>,
