@@ -5,7 +5,7 @@
 ## Part 1: Project Object (originates on Goals / StagingPageV2)
 
 ### Source files
-- **Written by:** `useShortlistState.js` → `saveStagingState()` → `staging-year-N-shortlist` localStorage key
+- **Written by:** `stagingStorage.js` → `saveStagingState()` → Supabase `staging_items` table (year-scoped by `yearNumber`)
 - `planSummary` is computed by `buildProjectPlanSummary()` in `planTableHelpers.js` and attached at save time
 
 ### Project object field table
@@ -70,10 +70,10 @@
 ## Part 2: Tactics Output Data (originates on TacticsPage, consumed by System)
 
 ### Source files
-- **Metrics storage:** `tacticsMetricsStorage.js` → `tactics-year-N-metrics-state`
-- **Chips storage:** inline `saveTacticsChipsState` / `loadTacticsChipsState` in `TacticsPage.jsx` → `tactics-year-N-chips-state`
-- **Settings storage:** inline `saveTacticsSettings` → `tactics-page-settings` (not year-scoped)
-- **Column widths:** direct `storage.setJSON` → `tactics-column-widths-N`
+- **Metrics storage:** `tacticsMetricsStorage.js` → Supabase `tactics_metrics` table (year-scoped)
+- **Chips storage:** `tacticsStorage.js` → `saveTacticsChipsState` → Supabase `tactics_chips` table (year-scoped)
+- **Settings storage:** `tacticsStorage.js` → `saveTacticsYearSettings` → Supabase `tactics_settings` table (year-scoped; all eight settings are year-scoped)
+- **Column widths:** direct `storage.setJSON` → `tactics-column-widths-N` (bypasses storage module — see known-issues.md)
 
 ---
 
@@ -81,15 +81,15 @@
 
 | Field name | Storage key it lives in | Written by Tactics — what for | Read by System — what for | Notes |
 |---|---|---|---|---|
-| `projectWeeklyQuotas` | `tactics-year-N-metrics-state` | Array of `{id, label, weeklyHours}` — total minutes per project per week derived from chip block durations | `useTacticsMetrics` converts to `Map<label, weeklyHours>`; `ProjectRow` displays quota vs actual total for each project header row | `weeklyHours` is H.MM decimal (e.g. `5.30` = 5h 30m). Keyed by `label` (= nickname). `id` is stored but System ignores it |
-| `projectWeeklyQuotas[].id` | same | Project `id` for reference | **Never read** by System | Stored but unused on consumption side |
-| `projectWeeklyQuotas[].label` | same | Project nickname / label string | Map key used by `ProjectRow.projectWeeklyQuotas.get(projectNickname)` | Must match `projectNickname` exactly; mismatch silently produces 0 quota |
+| `projectWeeklyQuotas` | `tactics_metrics` (Supabase) | Array of `{id, label, weeklyHours}` — total minutes per project per week derived from chip block durations | `plannerStorage.readTaskRows` loads these into a `Map<id, weeklyHours>`; `ProjectRow` displays quota vs actual total for each project header row | `weeklyHours` is H.MM decimal (e.g. `5.30` = 5h 30m). Map is keyed by `id` (H1 fix — previously keyed by `label`/nickname) |
+| `projectWeeklyQuotas[].id` | same | Project `id` for reference | **Map key** — `projectWeeklyQuotas.get(projectId)` in `ProjectRow`; resolved via `projectIdByNickname.get(projectNickname)` in `useProjectsData` | Was unused before H1 fix; now the stable lookup key |
+| `projectWeeklyQuotas[].label` | same | Project nickname / label string | No longer the map key; still stored for display purposes | Nickname mismatch no longer silently breaks quota lookup once the full `project_id` fix lands on System rows |
 | `projectWeeklyQuotas[].weeklyHours` | same | Decimal hours total for the week | Displayed in project header row as "quota" | H.MM format |
-| `dailyBounds` | `tactics-year-N-metrics-state` | Array of `{day, dailyMaxHours, dailyMinHours}` — available and working hours per day of week | `useTacticsMetrics` → `mapDailyBoundsToTimeline()` maps day names to timeline dates → `dailyMinValues[]` and `dailyMaxValues[]` passed as column metadata | `day` is full day name (e.g. `"Monday"`) |
+| `dailyBounds` | `tactics_metrics` (Supabase) | Array of `{day, dailyMaxHours, dailyMinHours}` — available and working hours per day of week | `plannerStorage.readTaskRows` → `mapDailyBoundsToTimeline()` maps day names to timeline dates → `dailyMinValues[]` and `dailyMaxValues[]` passed as column metadata | `day` is full day name (e.g. `"Monday"`) |
 | `dailyBounds[].day` | same | Day name string | Used as lookup key in `mapDailyBoundsToTimeline` | Must match JS `toLocaleDateString('en-US', {weekday:'long'})` output |
 | `dailyBounds[].dailyMaxHours` | same | Available hours (sleep subtracted) for the day | `dailyMaxValues[]` per timeline column | H.MM decimal |
 | `dailyBounds[].dailyMinHours` | same | Working (non-buffer) hours for the day | `dailyMinValues[]` per timeline column | H.MM decimal |
-| `weeklyTotals` | `tactics-year-N-metrics-state` | `{availableHours, workingHours}` — week-level aggregates | **Never read** by System (`useTacticsMetrics` only extracts `dailyBounds` and `projectWeeklyQuotas`) | Saved to storage but no consumer reads it |
+| `weeklyTotals` | `tactics_metrics` (Supabase) | `{availableHours, workingHours}` — week-level aggregates | **Never read** by System (`plannerStorage.readTaskRows` only extracts `dailyBounds` and `projectWeeklyQuotas`) | Saved to storage but no consumer reads it |
 | `weeklyTotals.availableHours` | same | Total available hours for the week | **Never read** | Same as sum of `dailyBounds[].dailyMaxHours` |
 | `weeklyTotals.workingHours` | same | Total working hours for the week | **Never read** | Same as sum of `dailyBounds[].dailyMinHours` |
 
@@ -117,12 +117,12 @@
 
 ---
 
-### Tactics settings (`tactics-page-settings`, not year-scoped)
+### Tactics settings (year-scoped via `tacticsStorage.saveTacticsYearSettings`)
 
-| Field name | Storage key | Written by Tactics | Read by System |
+| Field name | Storage | Written by Tactics | Read by System |
 |---|---|---|---|
-| `startHour` | `tactics-page-settings` | Grid start time | Never |
-| `startMinute` | same | Grid end time | Never |
+| `startHour` | Supabase `tactics_settings` (year-scoped) | Grid start time | Never |
+| `startMinute` | same | Grid start minute | Never |
 | `incrementMinutes` | same | Row height unit in minutes | Never |
 | `showAmPm` | same | AM/PM display toggle | Never |
 | `use24Hour` | same | 24h format toggle | Never |
@@ -142,11 +142,10 @@
 
 | Field | Storage object | Comment |
 |---|---|---|
-| `weeklyTotals` (entire object) | metrics state | Saved but `useTacticsMetrics` only extracts `dailyBounds` and `projectWeeklyQuotas` |
+| `weeklyTotals` (entire object) | metrics state | Saved but `plannerStorage.readTaskRows` only extracts `dailyBounds` and `projectWeeklyQuotas` |
 | `weeklyTotals.availableHours` | metrics state | Same |
 | `weeklyTotals.workingHours` | metrics state | Same |
-| `projectWeeklyQuotas[].id` | metrics state | Stored; System keys the map by `.label` only |
-| Entire `chips-state` blob | chips state | System has no hook or import for `tactics-year-N-chips-state` |
+| Entire `chips-state` blob | chips state | System has no hook or import for chips state |
 | `projectChips` (all sub-fields) | chips state | Not read by System |
 | `customProjects` (all sub-fields) | chips state | Not read by System |
 | `chipTimeOverrides` | chips state | Not read by System |
@@ -175,8 +174,8 @@
 2. **`weeklyTotals` (metrics state)**
    TacticsPage calculates total available and working hours for the week and saves them to the metrics object. `useTacticsMetrics` only extracts `dailyBounds` and `projectWeeklyQuotas` from the same object; the weekly aggregate fields are never unpacked or used anywhere.
 
-3. **`projectWeeklyQuotas[].id`**
-   The project `id` is stored alongside `label` and `weeklyHours` in each quota entry. System only ever looks up quotas by `label` (nickname), so the `id` is saved for nothing.
+3. **`projectWeeklyQuotas[].id` — partially resolved**
+   H1 fix switched the quota Map to key by `id` instead of `label`. System now resolves `id` via `projectIdByNickname.get(projectNickname)` in `useProjectsData`, meaning the lookup still has one nickname hop. Full resolution requires storing `project_id` directly on System rows — see `docs/known-issues.md`.
 
 4. **Entire chips state** (`projectChips`, `customProjects`, `chipTimeOverrides`)
    This is the richest data Tactics produces — every chip's position, project, duration, and override. Nothing outside TacticsPage reads it. System cannot see how the week was actually scheduled; it only sees the weekly total (`weeklyHours` in metrics), not the daily breakdown per project.

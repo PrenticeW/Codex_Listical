@@ -45,6 +45,8 @@ The snapshot system (`snapshotStorage.js`) captures planner rows, archived weeks
 | `tactics_custom_projects` not captured | Custom chip project definitions survive a rollback. A chip project created after the snapshot point will still exist on the Plan page even after restoring. |
 | Chip task notes not captured | Notes on chip-task rows are stored per-device (localStorage → Supabase migration pending). They are not included in the snapshot payload and are never restored. See "Migrate chip task notes" below. |
 | `tactics_metrics` sent-snapshot not captured separately | The metrics blob written to Supabase when tasks are sent to System is not part of the snapshot. Rolling back planner rows without rolling back the corresponding metrics snapshot can leave quota tracking inconsistent. |
+| Sent chips layer (`is_sent=true`) not captured | `capturePlan` only reads the live chip layer (`is_sent=false`). On restore, `saveTacticsChipsState` rewrites the live layer but leaves the sent layer untouched. If the sent layer is from a different point in time, live and sent chips will be out of sync after restore. |
+| Week names not captured | `weekNames` is stored in `planner_settings` and excluded from snapshots along with other UI prefs, but it is user-facing content (not a display preference). Restoring a snapshot silently drops any custom week names the user had at snapshot time. |
 
 ---
 
@@ -55,6 +57,16 @@ Migrations written but not yet applied to the database. Apply as a batch.
 | Migration file | What it does | Blocked features until applied |
 |---|---|---|
 | `supabase/migrations/20260612000001_add_show_action_times.sql` | Adds `projects.show_action_times` (boolean, default FALSE) | Goal page side-panel "Hide Times" toggle on action rows — saves will fail on the unknown column until applied |
+
+---
+
+## Launch prerequisites — must do before public launch
+
+| Item | Detail |
+|---|---|
+| Configure custom SMTP | Supabase's built-in mailer is dev-only (roughly 2 auth emails/hour/project). Set up Resend, Postmark, or SendGrid under Auth → Emails → SMTP Settings before any public rollout. |
+| B3 end-to-end smoke test | Signup → "Check your inbox" card → email confirmation link → authenticated redirect. Was blocked on Supabase rate limit; unblocks once custom SMTP is configured. |
+| OG card / brand asset | `index.html` references `/og-card.png` with a TODO comment. Needed before the app is publicly shareable. |
 
 ---
 
@@ -78,9 +90,12 @@ Migrations written but not yet applied to the database. Apply as a batch.
 | `src/hooks/planner/usePlannerRowRendering.js` | Not imported anywhere |
 | `src/hooks/planner/usePlannerInteractions.js` | Not imported anywhere |
 | `src/hooks/planner/useRowDragSelection.jsx` | Not imported anywhere |
+| `src/components/planner/VersionHistoryPanel.jsx` | Never imported anywhere; version history UI lives in `GearPanel.jsx` as `HistoryView` |
 | `src/utils/plannerStorage.js` | Legacy; active storage is `src/utils/planner/storage.js` |
 | `src/utils/rowDataTransformers.js` | Likely legacy |
 | `src/utils/plannerStyles.js` | Likely legacy |
 | `src/utils/plannerFormatters.js` | Likely legacy |
 | `src/timeline/useTimelineRows.js` | Leftover from earlier architecture |
 | `src/constants/plannerConstants.js` | Only referenced by legacy `plannerStorage.js` |
+| `src/utils/yearMigration.js` | Not imported anywhere; was a one-time localStorage-to-Supabase migration helper, now dead |
+| No-draft else branch in `src/utils/planner/archiveYear.js` | The Archive button only renders when a draft year exists, making the `else` branch (lines ~290–320, "Legacy path: no draft year, create fresh next year") unreachable. Safe to delete along with the unused `loadStagingState` and `loadTacticsMetrics` reads it depends on. |

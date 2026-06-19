@@ -4,7 +4,7 @@
 
 Listical is a 12-week cycle-planning tool. Three pages: **Goal** (`/staging`), **Plan** (`/tactics`), **System** (`/`). Nav labels and URL paths do not match — always use nav names in conversation, paths only when discussing routing.
 
-Pre-launch. Working through `CODE_REVIEW_April2026.md` before public launch.
+Pre-launch. See `docs/known-issues.md` for the current bug list and launch checklist.
 
 ---
 
@@ -28,9 +28,10 @@ Pre-launch. Working through `CODE_REVIEW_April2026.md` before public launch.
 
 ### Storage modules — always use them
 
-All planning data is stored in Supabase via three named modules:
+All planning data is stored in Supabase via four named modules:
 
 - `stagingStorage` — Goal page (`src/lib/stagingStorage.js`)
+- `tacticsStorage` — Plan page chips and settings (`src/lib/tacticsStorage.js`)
 - `tacticsMetricsStorage` — Plan page metrics (`src/lib/tacticsMetricsStorage.js`)
 - `plannerStorage` — System page task rows (`src/utils/planner/storage.js`)
 
@@ -51,13 +52,13 @@ Pages communicate via custom browser events. **Do not add direct imports between
 
 **Year-scoping on events:** Every year-scoped event carries `__eventYear` in `CustomEvent.detail`. Listeners short-circuit if `event.detail.__eventYear` does not match their own `currentYear`. `yearMetadataStorage` is intentionally not tagged. Include `__eventYear` in any new year-scoped cross-page event.
 
-### Storage key scoping
+### Year scoping
 
-Pattern: `{domain}-year-{N}-{descriptor}`. All eight tactics settings are year-scoped under `tactics-year-{N}-settings`. Do not reintroduce a global tactics settings blob.
+All data is scoped by `yearNumber` — every storage module function takes it as a parameter and uses it to scope Supabase queries. Never read or write planning data without a yearNumber. Do not reintroduce a global tactics settings blob; all eight tactics settings are year-scoped.
 
 ### `projectNickname` as join key — do not extend
 
-`projectNickname` is the current join key between Plan and System. It is fragile — a nickname change silently breaks quota lookups. Do not add any new logic depending on it. The Supabase migration will replace it with `id`.
+`projectNickname` is the current join key between Plan and System. It is fragile — a nickname change silently breaks quota lookups. Do not add any new logic depending on it. The Supabase migration is complete but this specific join has not yet been switched to `id` — see `docs/known-issues.md`.
 
 ### Draft year / Plan Next Year flow
 
