@@ -919,6 +919,16 @@ function HistoryView({ onBack, isActive }) {
     loadTacticsYearSettings(currentYear).then(s => setUse24Hour(s?.use24Hour ?? false));
   }, [currentYear]);
 
+  // Keep use24Hour in sync when the user changes the clock format in the main view
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.__eventYear !== currentYear) return;
+      if (e.detail?.use24Hour !== undefined) setUse24Hour(e.detail.use24Hour);
+    };
+    window.addEventListener(GEAR_TACTICS_SETTINGS_EVENT, handler);
+    return () => window.removeEventListener(GEAR_TACTICS_SETTINGS_EVENT, handler);
+  }, [currentYear]);
+
   const load = useCallback(async () => {
     setIsLoading(true);
     setError(null);
