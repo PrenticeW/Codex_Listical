@@ -185,8 +185,12 @@ async function captureSystem(yearNumber) {
       captureSystemSettings(yearNumber),
       captureYearData(yearNumber),
     ]);
+    // TEMP DEBUG — remove after confirming fix
+    console.error('[snapshotDebug] captureSystem result:', { plannerSettingsType: typeof plannerSettings, plannerSettings, yearDataType: typeof yearData, yearData });
     return { taskRows: rows, plannerSettings, yearData };
-  } catch {
+  } catch (err) {
+    // TEMP DEBUG — remove after confirming fix
+    console.error('[snapshotDebug] captureSystem caught error:', err);
     return null;
   }
 }
