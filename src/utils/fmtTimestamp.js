@@ -14,7 +14,7 @@ export function fmtTimestamp(iso) {
   const mins    = Math.round((now - d) / 60000);
   const hours   = Math.round((now - d) / 3600000);
   const days    = Math.round((now - d) / 86400000);
-  const timeStr = d.toLocaleTimeString(undefined, { timeStyle: 'short' });
+  const timeStr = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
   if (mins  < 1)  return 'Just now';
   if (mins  < 60) return `${timeStr} · ${mins}m ago`;
   if (hours < 24) return `${timeStr} · ${hours}h ago`;
