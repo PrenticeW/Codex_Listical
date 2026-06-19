@@ -33,12 +33,10 @@ export function resetTaskForNewYear(task) {
 
   // Strip chip-related metadata — the source year's chip IDs don't exist in
   // the draft year, so keeping them causes the chip-sync effect to remove
-  // the imported row on the next mount.
+  // the imported row on the next mount. _rowType is intentionally kept so
+  // that extractRecurringTasks can detect these rows on the next archive.
   delete reset._chipId;
   delete reset._chipLabel;
-  if (reset._rowType === 'projectTask') {
-    delete reset._rowType;
-  }
 
   // Fresh id so the imported row doesn't collide with an existing row
   reset.id = `imported-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
