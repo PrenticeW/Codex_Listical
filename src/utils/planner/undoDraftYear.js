@@ -61,6 +61,14 @@ export async function undoDraftYear() {
       return { success: false, error: 'No active year found — cannot switch back' };
     }
 
+    // Safety guard: never delete the active year, even if metadata is
+    // inconsistent. This should not happen given getDraftYear() filters by
+    // status === 'draft', but a DB inconsistency (e.g. promoteDraftToActive
+    // failing silently) could leave the active year with status 'draft'.
+    if (draft.yearNumber === active.yearNumber) {
+      return { success: false, error: `Draft year (${draft.yearNumber}) and active year are the same — aborting to protect data` };
+    }
+
     // Sweep every localStorage key associated with this draft year. After the
     // step-5 port lands fully, year-scoped data will live in Supabase under
     // year_id foreign keys with ON DELETE CASCADE, so deleting the year row

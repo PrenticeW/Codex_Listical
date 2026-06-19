@@ -347,22 +347,18 @@ export async function initializeYearMetadata(startDate) {
  *   intermediate ones that briefly show an inconsistent state.
  */
 export async function updateYearInfo(yearNumber, updates, { silent = false } = {}) {
-  try {
-    const userId = await requireUserId();
-    const dbUpdates = infoUpdatesToDbColumns(updates);
-    if (Object.keys(dbUpdates).length === 0) return;
+  const userId = await requireUserId();
+  const dbUpdates = infoUpdatesToDbColumns(updates);
+  if (Object.keys(dbUpdates).length === 0) return;
 
-    const { error } = await supabase
-      .from('years')
-      .update(dbUpdates)
-      .eq('user_id', userId)
-      .eq('year_number', yearNumber);
-    if (error) throw error;
+  const { error } = await supabase
+    .from('years')
+    .update(dbUpdates)
+    .eq('user_id', userId)
+    .eq('year_number', yearNumber);
+  if (error) throw error;
 
-    if (!silent) await dispatchMetadataEvent();
-  } catch (error) {
-    console.error('Failed to update year info:', error);
-  }
+  if (!silent) await dispatchMetadataEvent();
 }
 
 /**
@@ -492,16 +488,22 @@ export async function promoteDraftToActive(yearNumber, { silent = false } = {}) 
 export async function deleteDraftYearRecord(yearNumber) {
   try {
     const userId = await requireUserId();
+    // Safety guard: only delete if the row is actually a draft.
+    // Without this, a stale status in the DB (e.g. after a silent
+    // promoteDraftToActive failure) could match the active year and
+    // CASCADE-delete all its planning data.
     const { error } = await supabase
       .from('years')
       .delete()
       .eq('user_id', userId)
-      .eq('year_number', yearNumber);
+      .eq('year_number', yearNumber)
+      .eq('status', 'draft');
     if (error) throw error;
 
     await dispatchMetadataEvent();
   } catch (error) {
     console.error('Failed to delete draft year record:', error);
+    throw error;
   }
 }
 
