@@ -81,14 +81,18 @@ async function dispatchMetadataEvent() {
 }
 
 async function findYearIdByNumber(userId, yearNumber) {
+  // Use limit(1) instead of maybeSingle() so duplicate year rows (which can
+  // exist if the unique constraint was absent from the deployed schema) don't
+  // return a PGRST116 error that breaks setCurrentYear, updateYearInfo, etc.
   const { data, error } = await supabase
     .from('years')
     .select('id')
     .eq('user_id', userId)
     .eq('year_number', yearNumber)
-    .maybeSingle();
+    .order('created_at', { ascending: false })
+    .limit(1);
   if (error) throw error;
-  return data?.id ?? null;
+  return (data && data.length > 0) ? data[0].id : null;
 }
 
 // --- public read API ---------------------------------------------------
@@ -453,7 +457,18 @@ export async function createDraftYear(yearNumber, startDate) {
       })
       .select()
       .single();
-    if (error) throw error;
+
+    if (error) {
+      // 23505 = unique_violation. A row for this year_number already exists —
+      // most likely a previous Plan Next Year run that didn't fully clean up.
+      // Recover by returning the existing row rather than failing entirely.
+      // Matches the same idempotency pattern used by initializeYearMetadata.
+      if (error.code === '23505') {
+        const existing = await getYearInfo(yearNumber);
+        return existing;
+      }
+      throw error;
+    }
 
     await dispatchMetadataEvent();
     return dbRowToYearInfo(data);

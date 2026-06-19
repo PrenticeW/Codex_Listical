@@ -69,14 +69,18 @@ async function requireUserId() {
 }
 
 async function findYearId(userId, yearNumber) {
+  // Use limit(1) instead of maybeSingle() so duplicate year rows (which can
+  // exist if the unique constraint was absent from the deployed schema) don't
+  // return a PGRST116 error that silently breaks every save for that year.
   const { data, error } = await supabase
     .from('years')
     .select('id')
     .eq('user_id', userId)
     .eq('year_number', yearNumber)
-    .maybeSingle();
+    .order('created_at', { ascending: false })
+    .limit(1);
   if (error) throw error;
-  return data?.id ?? null;
+  return (data && data.length > 0) ? data[0].id : null;
 }
 
 /**

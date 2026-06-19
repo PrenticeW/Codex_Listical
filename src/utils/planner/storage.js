@@ -121,14 +121,18 @@ async function findYearRow(userId, yearNumber) {
   if (yearNumber == null) return null;
   const key = yearKey(yearNumber);
   if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
+  // Use limit(1) instead of maybeSingle() so duplicate year rows (which can
+  // exist if the unique constraint was absent from the deployed schema) don't
+  // return a PGRST116 error that silently breaks every System-page read/write.
   const { data, error } = await supabase
     .from('years')
     .select('id, start_date, total_days')
     .eq('user_id', userId)
     .eq('year_number', yearNumber)
-    .maybeSingle();
+    .order('created_at', { ascending: false })
+    .limit(1);
   if (error) throw error;
-  const row = data ?? null;
+  const row = (data && data.length > 0) ? data[0] : null;
   setCached(CACHE_NS, key, row);
   return row;
 }
