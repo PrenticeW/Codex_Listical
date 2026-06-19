@@ -10,6 +10,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { PILLBOX_COLORS } from './DropdownCell';
 import { saveTaskNote, readTaskEvents } from '../../utils/planner/storage';
 import { TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
+import { fmtTimestamp } from '../../utils/fmtTimestamp';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -417,7 +418,7 @@ function SubprojectHeaderPanel({ selectedTask, onBack }) {
  *   onBack       — called when the user presses "System" back button;
  *                  should clear selectedTask so the outer slide returns left
  */
-export function TaskDetailContent({ selectedTask, onBack }) {
+export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
   const [showHistory, setShowHistory] = useState(false);
   const [recurringActive, setRecurringActive] = useState(false);
   const [notes, setNotes] = useState('');
@@ -550,7 +551,7 @@ export function TaskDetailContent({ selectedTask, onBack }) {
     .map(ev => ({
       status: ev.new_value,
       fromStatus: ev.old_value || null,
-      time: new Date(ev.changed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      time: fmtTimestamp(ev.changed_at, { use24Hour }),
       note: ev.note || null,
     }));
 

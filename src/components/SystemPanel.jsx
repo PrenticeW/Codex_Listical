@@ -19,6 +19,9 @@ import { useLocation } from 'react-router-dom';
 import { useSystemPanel } from '../contexts/SystemPanelContext';
 import { useTaskRowPanel } from '../contexts/TaskRowPanelContext';
 import { TaskDetailContent } from './planner/TaskRowPanel';
+import { useYear } from '../contexts/YearContext';
+import { peekTacticsCache, loadTacticsYearSettings } from '../lib/tacticsStorage';
+import { GEAR_TACTICS_SETTINGS_EVENT } from './GearPanel';
 
 // Cross-component action event — consumed by ProjectTimePlannerV2
 export const SYSTEM_PANEL_ACTION_EVENT = 'system-panel-action';
@@ -775,6 +778,22 @@ export default function SystemPanel() {
   const { selectedTask, closePanel } = useTaskRowPanel();
   const [navBottom, setNavBottom] = useState(0);
   const { pathname } = useLocation();
+  const { currentYear } = useYear();
+
+  const [use24Hour, setUse24Hour] = useState(
+    () => peekTacticsCache(currentYear).yearSettings?.use24Hour ?? false
+  );
+  useEffect(() => {
+    loadTacticsYearSettings(currentYear).then(s => setUse24Hour(s?.use24Hour ?? false));
+  }, [currentYear]);
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.__eventYear !== currentYear) return;
+      if ('use24Hour' in (e.detail ?? {})) setUse24Hour(e.detail.use24Hour);
+    };
+    window.addEventListener(GEAR_TACTICS_SETTINGS_EVENT, handler);
+    return () => window.removeEventListener(GEAR_TACTICS_SETTINGS_EVENT, handler);
+  }, [currentYear]);
 
   // Measure NavigationBar bottom edge (same as GearPanel)
   useEffect(() => {
@@ -852,7 +871,7 @@ export default function SystemPanel() {
 
         {/* Task detail view (320px, overflow hidden — inner slide handles its own scroll) */}
         <div style={{ width: 480, flexShrink: 0, overflow: 'hidden', height: '100%' }}>
-          <TaskDetailContent selectedTask={selectedTask} onBack={closePanel} />
+          <TaskDetailContent selectedTask={selectedTask} onBack={closePanel} use24Hour={use24Hour} />
         </div>
 
       </div>
