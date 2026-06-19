@@ -156,11 +156,15 @@ vi.mock('../tacticsStorage', () => ({
   loadTacticsYearSettings: vi.fn().mockResolvedValue({}),
   saveTacticsChipsState: vi.fn().mockResolvedValue(undefined),
   saveTacticsYearSettings: vi.fn().mockResolvedValue(undefined),
+  loadSentChipsSnapshot: vi.fn().mockResolvedValue(null),
+  saveSentChipsSnapshot: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../tacticsMetricsStorage', () => ({
   loadTacticsMetrics: vi.fn().mockResolvedValue(null),
   saveTacticsMetrics: vi.fn().mockResolvedValue(undefined),
+  loadSentMetricsSnapshot: vi.fn().mockResolvedValue(null),
+  saveSentMetricsSnapshot: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../utils/planner/storage', () => ({
@@ -178,6 +182,7 @@ vi.mock('../storageCache', () => ({
 
 import { saveSiteSnapshot, restoreSiteSnapshot } from '../snapshotStorage';
 import * as tacticsStorage from '../tacticsStorage';
+import * as tacticsMetricsStorage from '../tacticsMetricsStorage';
 import * as storageCache from '../storageCache';
 
 // ---------------------------------------------------------------------------
@@ -196,6 +201,10 @@ beforeEach(() => {
     chipTimeOverrides: null,
   });
   tacticsStorage.saveTacticsChipsState.mockResolvedValue(undefined);
+  tacticsStorage.loadSentChipsSnapshot.mockResolvedValue(null);
+  tacticsStorage.saveSentChipsSnapshot.mockResolvedValue(undefined);
+  tacticsMetricsStorage.loadSentMetricsSnapshot.mockResolvedValue(null);
+  tacticsMetricsStorage.saveSentMetricsSnapshot.mockResolvedValue(undefined);
 });
 
 // ===========================================================================
@@ -500,5 +509,155 @@ describe('restoreSiteSnapshot — cache invalidation', () => {
     );
 
     expect(storageCache.clearForYear).toHaveBeenCalledWith(MOCK_YEAR_NUMBER);
+  });
+});
+
+// ===========================================================================
+// 5. sentChips captured in plan
+// ===========================================================================
+
+describe('sent chips capture', () => {
+  it('stores sentChips as plan.sentChips when a sent snapshot exists', async () => {
+    const sentChips = {
+      projectChips: [{ id: 'chip-1', projectNickname: 'Proj A' }],
+      customProjects: [],
+      chipTimeOverrides: null,
+    };
+    tacticsStorage.loadSentChipsSnapshot.mockResolvedValue(sentChips);
+
+    await saveSiteSnapshot(MOCK_YEAR_NUMBER);
+
+    const snap = calls.inserts.find((c) => c.table === 'site_snapshots');
+    expect(snap, 'site_snapshots insert should have fired').toBeTruthy();
+    expect(snap.rows.plan.sentChips).toEqual(sentChips);
+  });
+
+  it('stores null sentChips when no sent snapshot exists', async () => {
+    tacticsStorage.loadSentChipsSnapshot.mockResolvedValue(null);
+
+    await saveSiteSnapshot(MOCK_YEAR_NUMBER);
+
+    const snap = calls.inserts.find((c) => c.table === 'site_snapshots');
+    expect(snap, 'site_snapshots insert should have fired').toBeTruthy();
+    expect(snap.rows.plan.sentChips).toBeNull();
+  });
+});
+
+// ===========================================================================
+// 6. sentMetrics captured in plan
+// ===========================================================================
+
+describe('sent metrics capture', () => {
+  it('stores sentMetrics as plan.sentMetrics when a sent snapshot exists', async () => {
+    const sentMetrics = {
+      projectWeeklyQuotas: [{ id: 'p1', label: 'Proj A', weeklyHours: 2.0 }],
+      dailyBounds: [],
+      weeklyTotals: { availableHours: 10.0, workingHours: 8.0 },
+    };
+    tacticsMetricsStorage.loadSentMetricsSnapshot.mockResolvedValue(sentMetrics);
+
+    await saveSiteSnapshot(MOCK_YEAR_NUMBER);
+
+    const snap = calls.inserts.find((c) => c.table === 'site_snapshots');
+    expect(snap, 'site_snapshots insert should have fired').toBeTruthy();
+    expect(snap.rows.plan.sentMetrics).toEqual(sentMetrics);
+  });
+
+  it('stores null sentMetrics when no sent snapshot exists', async () => {
+    tacticsMetricsStorage.loadSentMetricsSnapshot.mockResolvedValue(null);
+
+    await saveSiteSnapshot(MOCK_YEAR_NUMBER);
+
+    const snap = calls.inserts.find((c) => c.table === 'site_snapshots');
+    expect(snap, 'site_snapshots insert should have fired').toBeTruthy();
+    expect(snap.rows.plan.sentMetrics).toBeNull();
+  });
+});
+
+// ===========================================================================
+// Restore — sent chips layer
+// ===========================================================================
+
+describe('restoreSiteSnapshot — sent chips layer', () => {
+  it('calls saveSentChipsSnapshot when sentChips is non-null', async () => {
+    const sentChips = {
+      projectChips: [{ id: 'chip-1', projectNickname: 'Proj A' }],
+      customProjects: [],
+      chipTimeOverrides: null,
+    };
+
+    await restoreSiteSnapshot(
+      {
+        goal: null,
+        plan: {
+          chips: null, settings: null, metrics: null,
+          customProjects: null, sentChips, sentMetrics: null,
+        },
+        system: { taskRows: [] },
+      },
+      MOCK_YEAR_NUMBER,
+    );
+
+    expect(tacticsStorage.saveSentChipsSnapshot).toHaveBeenCalledWith(sentChips, MOCK_YEAR_NUMBER);
+  });
+
+  it('skips saveSentChipsSnapshot when sentChips is null (old snapshot)', async () => {
+    await restoreSiteSnapshot(
+      {
+        goal: null,
+        plan: {
+          chips: null, settings: null, metrics: null,
+          customProjects: null, sentChips: null, sentMetrics: null,
+        },
+        system: { taskRows: [] },
+      },
+      MOCK_YEAR_NUMBER,
+    );
+
+    expect(tacticsStorage.saveSentChipsSnapshot).not.toHaveBeenCalled();
+  });
+});
+
+// ===========================================================================
+// Restore — sent metrics snapshot
+// ===========================================================================
+
+describe('restoreSiteSnapshot — sent metrics snapshot', () => {
+  it('calls saveSentMetricsSnapshot when sentMetrics is non-null', async () => {
+    const sentMetrics = {
+      projectWeeklyQuotas: [],
+      dailyBounds: [],
+      weeklyTotals: { availableHours: 5.0, workingHours: 4.0 },
+    };
+
+    await restoreSiteSnapshot(
+      {
+        goal: null,
+        plan: {
+          chips: null, settings: null, metrics: null,
+          customProjects: null, sentChips: null, sentMetrics,
+        },
+        system: { taskRows: [] },
+      },
+      MOCK_YEAR_NUMBER,
+    );
+
+    expect(tacticsMetricsStorage.saveSentMetricsSnapshot).toHaveBeenCalledWith(sentMetrics, MOCK_YEAR_NUMBER);
+  });
+
+  it('skips saveSentMetricsSnapshot when sentMetrics is null (old snapshot)', async () => {
+    await restoreSiteSnapshot(
+      {
+        goal: null,
+        plan: {
+          chips: null, settings: null, metrics: null,
+          customProjects: null, sentChips: null, sentMetrics: null,
+        },
+        system: { taskRows: [] },
+      },
+      MOCK_YEAR_NUMBER,
+    );
+
+    expect(tacticsMetricsStorage.saveSentMetricsSnapshot).not.toHaveBeenCalled();
   });
 });

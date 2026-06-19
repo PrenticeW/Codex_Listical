@@ -35,6 +35,8 @@ import { clearForYear } from './storageCache';
 import {
   loadTacticsMetrics,
   saveTacticsMetrics,
+  loadSentMetricsSnapshot,
+  saveSentMetricsSnapshot,
 } from './tacticsMetricsStorage';
 
 // stagingStorage, tacticsStorage, and plannerStorage are all imported
@@ -156,16 +158,20 @@ async function captureGoal(yearNumber) {
 
 async function capturePlan(yearNumber) {
   try {
-    const { loadTacticsChipsState, loadTacticsYearSettings } = await import('./tacticsStorage');
-    const [chips, settings, metrics, customProjects] = await Promise.all([
+    const { loadTacticsChipsState, loadTacticsYearSettings, loadSentChipsSnapshot } = await import('./tacticsStorage');
+    const [chips, settings, metrics, customProjects, sentChips, sentMetrics] = await Promise.all([
       loadTacticsChipsState(yearNumber).catch(() => null),
       loadTacticsYearSettings(yearNumber).catch(() => null),
       loadTacticsMetrics(yearNumber).catch(() => null),
       // Capture custom projects independently so they survive if chip capture
       // fails. restorePlan uses this as a fallback when chips is null.
       captureCustomProjects(yearNumber),
+      // Capture the sent (is_sent=true) chip layer — what System page sees.
+      loadSentChipsSnapshot(yearNumber).catch(() => null),
+      // Capture the sent metrics snapshot — quota data the System page uses.
+      loadSentMetricsSnapshot(yearNumber).catch(() => null),
     ]);
-    return { chips, settings, metrics, customProjects };
+    return { chips, settings, metrics, customProjects, sentChips, sentMetrics };
   } catch {
     return null;
   }
@@ -271,8 +277,8 @@ async function restoreGoal(goalData, yearNumber) {
 
 async function restorePlan(planData, yearNumber) {
   if (!planData) return;
-  const { saveTacticsChipsState, saveTacticsYearSettings } = await import('./tacticsStorage');
-  const { chips, settings, metrics, customProjects } = planData;
+  const { saveTacticsChipsState, saveTacticsYearSettings, saveSentChipsSnapshot } = await import('./tacticsStorage');
+  const { chips, settings, metrics, customProjects, sentChips, sentMetrics } = planData;
   const ops = [];
 
   if (chips) {
@@ -290,6 +296,14 @@ async function restorePlan(planData, yearNumber) {
 
   if (settings) ops.push(saveTacticsYearSettings(settings, yearNumber).catch(() => {}));
   if (metrics) ops.push(saveTacticsMetrics(metrics, yearNumber).catch(() => {}));
+
+  // Restore the sent (is_sent=true) chip layer — reverts what System page sees.
+  // null means the snapshot predates this fix; skip to avoid wiping the live layer.
+  if (sentChips != null) ops.push(saveSentChipsSnapshot(sentChips, yearNumber).catch(() => {}));
+
+  // Restore the sent metrics snapshot — quota data System page uses.
+  if (sentMetrics != null) ops.push(saveSentMetricsSnapshot(sentMetrics, yearNumber).catch(() => {}));
+
   await Promise.all(ops);
 }
 
