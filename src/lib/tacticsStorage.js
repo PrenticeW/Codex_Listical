@@ -673,19 +673,16 @@ async function readPlannerSettingsRow({ userId, yearId }) {
 }
 
 async function writePlannerSettingsTimestamp({ userId, yearId, value }) {
-  const existing = await readPlannerSettingsRow({ userId, yearId });
-  if (existing) {
-    const { error } = await supabase
-      .from('planner_settings')
-      .update({ send_to_system_at: value })
-      .eq('id', existing.id);
-    if (error) throw error;
-  } else {
-    const { error } = await supabase
-      .from('planner_settings')
-      .insert({ user_id: userId, year_id: yearId, send_to_system_at: value });
-    if (error) throw error;
-  }
+  // Pure upsert — mirrors writePlannerSettingsColumns in storage.js.
+  // The old read-then-INSERT pattern raced with concurrent writes from the
+  // System page GearPanel, producing 23505 unique-constraint violations.
+  const { error } = await supabase
+    .from('planner_settings')
+    .upsert(
+      { user_id: userId, year_id: yearId, send_to_system_at: value },
+      { onConflict: 'user_id,year_id' },
+    );
+  if (error) throw error;
 }
 
 /**

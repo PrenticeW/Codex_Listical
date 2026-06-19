@@ -179,38 +179,21 @@ async function readPlannerSettingsRow({ userId, yearId, yearNumber }) {
  * the new value without a round-trip.
  */
 async function writePlannerSettingsColumns({ userId, yearId, yearNumber, columns }) {
-  const existing = await readPlannerSettingsRow({ userId, yearId, yearNumber });
-  let updatedRow;
-  if (existing) {
-    const { data, error } = await supabase
-      .from('planner_settings')
-      .update(columns)
-      .eq('id', existing.id)
-      .select()
-      .single();
-    if (error) throw error;
-    updatedRow = data;
-  } else {
-    // Use upsert instead of insert so concurrent parallel writes (e.g. the
-    // Promise.all in createDraftYearFromActive / performYearArchive) don't
-    // race to INSERT the same row. Without this, all callers see "no row
-    // exists", all try to INSERT, only one wins, and the rest silently fail
-    // with a unique-constraint violation — leaving most settings unsaved.
-    // ON CONFLICT DO UPDATE means every concurrent write lands as an atomic
-    // UPDATE even if another call inserted the row a millisecond earlier.
-    const { data, error } = await supabase
-      .from('planner_settings')
-      .upsert(
-        { user_id: userId, year_id: yearId, ...columns },
-        { onConflict: 'user_id,year_id' },
-      )
-      .select()
-      .single();
-    if (error) throw error;
-    updatedRow = data;
-  }
+  // Pure upsert — no read needed. ON CONFLICT DO UPDATE updates only the
+  // columns present in the payload; other columns keep their DB values.
+  // Eliminates the read-first race where 8 concurrent callers all see "no
+  // row" and then all try to INSERT, causing unique-constraint violations.
+  const { data, error } = await supabase
+    .from('planner_settings')
+    .upsert(
+      { user_id: userId, year_id: yearId, ...columns },
+      { onConflict: 'user_id,year_id' },
+    )
+    .select()
+    .single();
+  if (error) throw error;
   if (yearNumber != null) {
-    setCached(CACHE_NS, settingsKey(yearNumber), updatedRow);
+    setCached(CACHE_NS, settingsKey(yearNumber), data);
   }
 }
 
@@ -854,12 +837,18 @@ function plannerRowPayloadToDb({ row, userId, yearId, displayOrder }) {
     return 0;
   })();
 
-  // Preserve the row's existing UUID so task_events survive the delete+re-insert cycle.
+  // Always include id. Existing rows carry their DB UUID so task_events FKs
+  // survive the delete+re-insert cycle. New rows (synthetic ids like 'row-0')
+  // get a fresh UUID generated here. Without this, the Supabase JS client
+  // collects all unique keys across the bulk-insert array and lists 'id' in
+  // the PostgREST columns param — rows missing id then get null, which
+  // violates the NOT NULL constraint and wipes all tasks on failure.
   const isValidUUID = typeof row.id === 'string' &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.id);
+  const rowId = isValidUUID ? row.id : crypto.randomUUID();
 
   return {
-    ...(isValidUUID ? { id: row.id } : {}),
+    id: rowId,
     user_id: userId,
     year_id: yearId,
     project_id: null,
