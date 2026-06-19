@@ -2947,7 +2947,6 @@ export default function ProjectTimePlannerV2() {
         listicalButton={
           <span className="font-serif text-sm font-medium text-slate-900 select-none">Listical</span>
         }
-        onUndoDraft={draftYear ? handleUndoDraft : null}
         onRevertArchive={!draftYear && allYears.some(y => y.status === 'archived') ? handleRevertArchive : null}
       />
       </div>

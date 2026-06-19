@@ -14,7 +14,8 @@
 
 import {
   readYearMetadata,
-  saveYearMetadata,
+  updateYearInfo,
+  setCurrentYear,
 } from '../../lib/yearMetadataStorage';
 import { clearForYear } from '../../lib/storageCache';
 
@@ -69,35 +70,29 @@ export async function revertArchive() {
       };
     }
 
-    // Demote the current active year back to draft
-    const activeIdx = metadata.years.findIndex(y => y.yearNumber === activeYear.yearNumber);
-    metadata.years[activeIdx] = {
-      ...metadata.years[activeIdx],
-      status: 'draft',
-    };
+    // Demote the current active year back to draft. Use silent: true on both
+    // status writes so we fire only one event at the end (via setCurrentYear),
+    // not three events with intermediate inconsistent states.
+    await updateYearInfo(activeYear.yearNumber, { status: 'draft' }, { silent: true });
 
-    // Un-archive the previous year back to active
-    const archivedIdx = metadata.years.findIndex(y => y.yearNumber === archivedYear.yearNumber);
-    metadata.years[archivedIdx] = {
-      ...metadata.years[archivedIdx],
+    // Un-archive the previous year back to active. Clear the archived-at /
+    // end-date / stats so the year looks exactly as it did before archiving.
+    await updateYearInfo(archivedYear.yearNumber, {
       status: 'active',
       endDate: null,
       archivedAt: null,
       totalWeeksCompleted: 0,
       totalHoursCompleted: 0,
-    };
+    }, { silent: true });
 
-    // Switch to the restored active year
-    metadata.currentYear = archivedYear.yearNumber;
-    await saveYearMetadata(metadata);
-
-    // saveYearMetadata fires the metadata event; setCurrentYear is now redundant
-    // because saveYearMetadata syncs currentYear from the payload.
-
-    // Both years' `years.status` columns changed. Clear any cached row for
-    // either year so the next read sees the restored state.
+    // Both years' `years.status` columns changed. Clear caches before the
+    // setCurrentYear event fires so the remounting pages read fresh state.
     clearForYear(archivedYear.yearNumber);
     clearForYear(activeYear.yearNumber);
+
+    // Switch to the restored active year — fires the single authoritative
+    // yearMetadataStorage event so YearContext re-reads the updated rows.
+    await setCurrentYear(archivedYear.yearNumber);
 
     return {
       success: true,

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Settings, RotateCcw, PanelRight } from 'lucide-react';
+import { Settings, PanelRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useYear } from '../../contexts/YearContext';
 import { useGearPanel } from '../../contexts/GearPanelContext';
@@ -24,7 +24,6 @@ const DRAFT_NAV_ITEMS = [
 export default function NavigationBar({
   listicalButton = null,
   actionButton = null,
-  onUndoDraft = null,
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -129,18 +128,6 @@ export default function NavigationBar({
       <div className="flex items-center gap-4">
         {actionButton || null}
 
-        {/* Dev undo button — remove before launch */}
-        {onUndoDraft && (
-          <button
-            type="button"
-            onClick={onUndoDraft}
-            className="px-3 py-2 text-xs font-bold text-rose-600 bg-rose-50 border border-rose-300 rounded-lg hover:bg-rose-100 transition-all duration-200 flex items-center gap-1.5"
-            title="Undo draft year (dev only)"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            Undo Draft
-          </button>
-        )}
 
         {user && isGoalPage && (
           <button

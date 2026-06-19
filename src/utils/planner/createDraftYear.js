@@ -156,7 +156,12 @@ const resetItemForDraft = (item) => {
   ];
 
   return {
-    id: item.id,
+    // Generate a fresh UUID so saveStagingState INSERTs a new row for the
+    // draft year rather than upserting over the active year's project row.
+    // Reusing item.id caused the upsert (onConflict: 'id') to UPDATE the
+    // existing row's year_id, silently moving the project from the active
+    // year to the draft year instead of copying it.
+    id: crypto.randomUUID(),
     text: item.text,
     projectName: item.projectName,
     projectNickname: item.projectNickname,
