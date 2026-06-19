@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { getContrastTextColor } from '../utils/colorUtils';
-import { SquarePlus, CalendarCheck, Archive, CheckCircle2 } from 'lucide-react';
+import { SquarePlus, CalendarCheck } from 'lucide-react';
 import { GOAL_PANEL_ACTION_EVENT, GOAL_PANEL_STATE_EVENT, GOAL_PANEL_SELECTION_EVENT, GOAL_PANEL_ROW_SELECTION_EVENT } from '../components/GoalPanel';
 import { useGoalPanel } from '../contexts/GoalPanelContext';
 import { useYear } from '../contexts/YearContext';
@@ -206,8 +206,6 @@ export default function StagingPageV2() {
     handleArchiveWithStatus,
     togglePlanTable,
   } = useShortlistState({ currentYear, executeCommand });
-
-  const isDraftYearView = Boolean(draftYear && currentYear === draftYear.yearNumber);
 
   // Archive project and clean up associated chips + task rows
   const handleArchiveAndCleanup = useCallback(async (id, status) => {
@@ -800,6 +798,11 @@ export default function StagingPageV2() {
         fireGoalSelection(null);
       }
 
+      if (action === 'completeGoal' && goalId) {
+        handleArchiveAndCleanup(goalId, 'completed');
+        fireGoalSelection(null);
+      }
+
       if ((action === 'addToPlan' || action === 'removeFromPlan') && goalId) {
         const item = shortlist.find((i) => i.id === goalId);
         if (!item) return;
@@ -1158,10 +1161,7 @@ export default function StagingPageV2() {
                             color: headerTextColor,
                             paddingLeft: '12px',
                             fontWeight: 600,
-                            // Trailing column only exists in draft view (archive /
-                            // complete buttons); otherwise the total is the last
-                            // column so it aligns with the table's time column
-                            gridTemplateColumns: `1fr auto 140px 24px 80px${isDraftYearView ? ' auto' : ''}`,
+                            gridTemplateColumns: '1fr auto 140px 24px 80px',
                             alignItems: 'center',
                             gap: '12px',
                             cursor: 'pointer',
@@ -1217,32 +1217,6 @@ export default function StagingPageV2() {
                           >
                             {projectTotal}
                           </div>
-                          {isDraftYearView && (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <>
-                                <button
-                                  type="button"
-                                  className="rounded-full p-1 text-slate-700 hover:text-slate-900 focus:outline-none"
-                                  style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: 'none' }}
-                                  onClick={() => handleArchiveAndCleanup(item.id, 'completed')}
-                                  aria-label="Mark project completed"
-                                  title="Mark completed"
-                                >
-                                  <CheckCircle2 size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="rounded-full p-1 text-slate-700 hover:text-slate-900 focus:outline-none"
-                                  style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: 'none' }}
-                                  onClick={() => handleArchiveAndCleanup(item.id, 'archived')}
-                                  aria-label="Archive project"
-                                  title="Archive"
-                                >
-                                  <Archive size={14} />
-                                </button>
-                              </>
-                            </div>
-                          )}
                         </div>
                         {item.planTableVisible && !item.planTableCollapsed
                           ? renderTable(item)

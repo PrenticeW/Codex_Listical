@@ -13,6 +13,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { useGoalPanel } from '../contexts/GoalPanelContext';
+import { useYear } from '../contexts/YearContext';
 import usePageSize from '../hooks/usePageSize';
 import { PALETTE } from '../utils/staging/projectColour';
 
@@ -595,6 +596,8 @@ function GoalSection({ goal, onOpenColour }) {
   // Ref so onDrop always reads the current drag source index,
   // avoiding stale-closure issues with batched React state.
   const dragIdxRef = useRef(null);
+  const { draftYear, currentYear } = useYear();
+  const isDraftYearView = Boolean(draftYear && currentYear === draftYear.yearNumber);
 
   if (!goal) {
     return (
@@ -790,6 +793,21 @@ function GoalSection({ goal, onOpenColour }) {
 
       {/* Plan toggle */}
       {planBtn}
+
+      {/* Mark as Completed — draft year only */}
+      {isDraftYearView && (
+        <ConfirmActionBtn
+          icon={
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+          }
+          label="Mark as Completed"
+          confirmLabel="Confirm Complete"
+          onConfirm={() => dispatchGoalAction('completeGoal', { goalId: goal.id })}
+        />
+      )}
 
       {/* Archive — two-step confirm */}
       <ConfirmActionBtn
