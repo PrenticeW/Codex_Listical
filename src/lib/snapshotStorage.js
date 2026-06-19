@@ -21,15 +21,17 @@
  *     It fires immediately if the most recent snapshot is older than 4 hours,
  *     ensuring a clean "before this session" restore point is always available.
  *   - What is snapshotted: Goal shortlist/archived (stagingStorage), Plan
- *     chips + settings + metrics (tacticsStorage + tacticsMetricsStorage),
- *     System task rows (plannerStorage). Year metadata and UI prefs are NOT
- *     included — they are low-stakes and change rarely.
+ *     chips + settings + metrics + custom projects (tacticsStorage +
+ *     tacticsMetricsStorage), System task rows + planner settings +
+ *     years.total_days (plannerStorage).
  *   - What restore does: writes each page's data back through its storage
  *     helper's save functions so normal cache invalidation and custom events
- *     fire correctly.
+ *     fire correctly. Calls clearForYear at the end so stale in-memory cache
+ *     entries don't survive into the next read.
  */
 
 import { supabase } from './supabase';
+import { clearForYear } from './storageCache';
 import {
   loadTacticsMetrics,
   saveTacticsMetrics,
@@ -40,8 +42,8 @@ import {
 // circular dependencies. Each of those modules imports saveSiteSnapshot
 // from this file; a static import here would leave saveSiteSnapshot as
 // undefined at load time in all three, silently breaking snapshot triggers.
-// tacticsMetricsStorage does NOT import snapshotStorage so it is safe to
-// import statically above.
+// tacticsMetricsStorage and storageCache do NOT import snapshotStorage so
+// they are safe to import statically above.
 const DEFAULT_PROJECT_ID = 'project-1';
 
 // ---------------------------------------------------------------------------
@@ -60,6 +62,22 @@ async function requireUserId() {
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) throw new Error('No authenticated user');
   return user.id;
+}
+
+/**
+ * Resolve a year UUID from yearNumber within this module without relying on
+ * plannerStorage's internal findYearRow (which would require a dynamic import
+ * and adds indirect coupling). Uses the same ordering guard as plannerStorage.
+ */
+async function findYearIdForSnapshot(userId, yearNumber) {
+  const { data } = await supabase
+    .from('years')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('year_number', yearNumber)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  return data?.[0]?.id ?? null;
 }
 
 /**
@@ -139,12 +157,15 @@ async function captureGoal(yearNumber) {
 async function capturePlan(yearNumber) {
   try {
     const { loadTacticsChipsState, loadTacticsYearSettings } = await import('./tacticsStorage');
-    const [chips, settings, metrics] = await Promise.all([
+    const [chips, settings, metrics, customProjects] = await Promise.all([
       loadTacticsChipsState(yearNumber).catch(() => null),
       loadTacticsYearSettings(yearNumber).catch(() => null),
       loadTacticsMetrics(yearNumber).catch(() => null),
+      // Capture custom projects independently so they survive if chip capture
+      // fails. restorePlan uses this as a fallback when chips is null.
+      captureCustomProjects(yearNumber),
     ]);
-    return { chips, settings, metrics };
+    return { chips, settings, metrics, customProjects };
   } catch {
     return null;
   }
@@ -153,8 +174,86 @@ async function capturePlan(yearNumber) {
 async function captureSystem(yearNumber) {
   try {
     const { readTaskRows } = await import('../utils/planner/storage');
-    const rows = await readTaskRows(DEFAULT_PROJECT_ID, yearNumber);
-    return { taskRows: rows };
+    const [rows, plannerSettings, yearData] = await Promise.all([
+      readTaskRows(DEFAULT_PROJECT_ID, yearNumber),
+      captureSystemSettings(yearNumber),
+      captureYearData(yearNumber),
+    ]);
+    return { taskRows: rows, plannerSettings, yearData };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Captures the full planner_settings row (all UI columns + week_names) for
+ * the given year. Excludes send_to_system_at which is owned by tacticsStorage.
+ */
+async function captureSystemSettings(yearNumber) {
+  try {
+    const userId = await requireUserId();
+    const yearId = await findYearIdForSnapshot(userId, yearNumber);
+    if (!yearId) return null;
+    const { data, error } = await supabase
+      .from('planner_settings')
+      .select(
+        'column_sizing, size_scale, show_recurring, show_subprojects, ' +
+        'show_max_min_rows, sort_statuses, sort_planner_statuses, ' +
+        'visible_day_columns, collapsed_groups, week_names',
+      )
+      .eq('user_id', userId)
+      .eq('year_id', yearId)
+      .maybeSingle();
+    if (error) throw error;
+    return data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Captures years.total_days for the given year. Stored as { totalDays } so
+ * the restore helper can update the column without a years-table read.
+ */
+async function captureYearData(yearNumber) {
+  try {
+    const userId = await requireUserId();
+    const { data, error } = await supabase
+      .from('years')
+      .select('total_days')
+      .eq('user_id', userId)
+      .eq('year_number', yearNumber)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    const row = data?.[0];
+    if (!row) return null;
+    return { totalDays: row.total_days };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Captures the live (is_sent=false) tactics_custom_projects for the year.
+ *
+ * Returns [] when confirmed empty, null when the read failed. The restore
+ * helper uses this distinction: [] triggers a delete-and-reinsert (cleaning up
+ * any projects added after the snapshot), null skips the restore entirely.
+ */
+async function captureCustomProjects(yearNumber) {
+  try {
+    const userId = await requireUserId();
+    const yearId = await findYearIdForSnapshot(userId, yearNumber);
+    if (!yearId) return [];
+    const { data, error } = await supabase
+      .from('tactics_custom_projects')
+      .select('external_id, label, color')
+      .eq('user_id', userId)
+      .eq('year_id', yearId)
+      .eq('is_sent', false);
+    if (error) throw error;
+    return (data ?? []).map((r) => ({ id: r.external_id, label: r.label, color: r.color }));
   } catch {
     return null;
   }
@@ -173,9 +272,22 @@ async function restoreGoal(goalData, yearNumber) {
 async function restorePlan(planData, yearNumber) {
   if (!planData) return;
   const { saveTacticsChipsState, saveTacticsYearSettings } = await import('./tacticsStorage');
-  const { chips, settings, metrics } = planData;
+  const { chips, settings, metrics, customProjects } = planData;
   const ops = [];
-  if (chips) ops.push(saveTacticsChipsState(chips, yearNumber).catch(() => {}));
+
+  if (chips) {
+    // saveTacticsChipsState writes both the chip layer and customProjects
+    // internally via writeChipsLayer. No need to call restoreCustomProjects
+    // separately — chips.customProjects already covers it.
+    ops.push(saveTacticsChipsState(chips, yearNumber).catch(() => {}));
+  } else {
+    // chips capture failed — restore custom projects independently so any
+    // projects created after the snapshot point don't survive the rollback.
+    // restoreCustomProjects skips when customProjects is null (failed capture)
+    // but correctly clears on [] (confirmed empty at snapshot time).
+    ops.push(restoreCustomProjects(customProjects ?? null, yearNumber).catch(() => {}));
+  }
+
   if (settings) ops.push(saveTacticsYearSettings(settings, yearNumber).catch(() => {}));
   if (metrics) ops.push(saveTacticsMetrics(metrics, yearNumber).catch(() => {}));
   await Promise.all(ops);
@@ -184,7 +296,115 @@ async function restorePlan(planData, yearNumber) {
 async function restoreSystem(systemData, yearNumber) {
   if (!systemData?.taskRows) return;
   const { saveTaskRows } = await import('../utils/planner/storage');
-  await saveTaskRows(systemData.taskRows, DEFAULT_PROJECT_ID, yearNumber);
+  await Promise.all([
+    saveTaskRows(systemData.taskRows, DEFAULT_PROJECT_ID, yearNumber),
+    restoreSystemSettings(systemData.plannerSettings ?? null, yearNumber),
+    restoreYearData(systemData.yearData ?? null, yearNumber),
+  ]);
+}
+
+/**
+ * Upserts all planner_settings UI columns from a previously captured snapshot.
+ * Deliberately excludes send_to_system_at (owned by tacticsStorage) and any
+ * columns not present in the captured object so old snapshots that predate
+ * this fix restore cleanly without clobbering unrelated columns.
+ */
+async function restoreSystemSettings(settingsData, yearNumber) {
+  if (!settingsData) return;
+  try {
+    const userId = await requireUserId();
+    const yearId = await findYearIdForSnapshot(userId, yearNumber);
+    if (!yearId) return;
+    const {
+      column_sizing, size_scale, show_recurring, show_subprojects,
+      show_max_min_rows, sort_statuses, sort_planner_statuses,
+      visible_day_columns, collapsed_groups, week_names,
+    } = settingsData;
+    const { error } = await supabase
+      .from('planner_settings')
+      .upsert(
+        {
+          user_id: userId,
+          year_id: yearId,
+          column_sizing,
+          size_scale,
+          show_recurring,
+          show_subprojects,
+          show_max_min_rows,
+          sort_statuses,
+          sort_planner_statuses,
+          visible_day_columns,
+          collapsed_groups,
+          week_names,
+        },
+        { onConflict: 'user_id,year_id' },
+      );
+    if (error) throw error;
+  } catch (err) {
+    console.error('[snapshotStorage] restoreSystemSettings failed', err);
+  }
+}
+
+/**
+ * Writes years.total_days back from a captured { totalDays } object.
+ * Skips when totalDays is null/undefined (old snapshots that predate this fix).
+ */
+async function restoreYearData(yearData, yearNumber) {
+  if (yearData?.totalDays == null) return;
+  try {
+    const userId = await requireUserId();
+    const yearId = await findYearIdForSnapshot(userId, yearNumber);
+    if (!yearId) return;
+    const { error } = await supabase
+      .from('years')
+      .update({ total_days: yearData.totalDays })
+      .eq('id', yearId)
+      .eq('user_id', userId);
+    if (error) throw error;
+  } catch (err) {
+    console.error('[snapshotStorage] restoreYearData failed', err);
+  }
+}
+
+/**
+ * Replaces the live (is_sent=false) tactics_custom_projects layer with the
+ * captured snapshot array.
+ *
+ * null  → skip entirely (capture failed; don't risk wiping real data)
+ * []    → delete all existing rows and insert nothing (correctly removes any
+ *         projects that were added after the snapshot point)
+ * [...] → delete existing, re-insert the captured set
+ */
+async function restoreCustomProjects(customProjects, yearNumber) {
+  if (customProjects === null || customProjects === undefined) return;
+  try {
+    const userId = await requireUserId();
+    const yearId = await findYearIdForSnapshot(userId, yearNumber);
+    if (!yearId) return;
+    const { error: deleteError } = await supabase
+      .from('tactics_custom_projects')
+      .delete()
+      .eq('user_id', userId)
+      .eq('year_id', yearId)
+      .eq('is_sent', false);
+    if (deleteError) throw deleteError;
+    if (customProjects.length > 0) {
+      const rows = customProjects.map((cp) => ({
+        user_id: userId,
+        year_id: yearId,
+        is_sent: false,
+        external_id: cp.id,
+        label: cp.label,
+        color: cp.color,
+      }));
+      const { error: insertError } = await supabase
+        .from('tactics_custom_projects')
+        .insert(rows);
+      if (insertError) throw insertError;
+    }
+  } catch (err) {
+    console.error('[snapshotStorage] restoreCustomProjects failed', err);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -270,8 +490,10 @@ export async function loadSiteSnapshots(yearNumber) {
 
 /**
  * Restores a snapshot by writing each page's data back through its storage
- * helper's save functions. Callers should reload the page (or navigate home)
- * after this resolves so the UI reflects the restored state.
+ * helper's save functions. Clears the in-memory cache for this year after
+ * restore so the next read fetches the restored values from Supabase.
+ * Callers should reload the page (or navigate home) after this resolves so
+ * the UI reflects the restored state.
  *
  * @param {object} snapshot   A row from loadSiteSnapshots
  * @param {number} yearNumber
@@ -284,6 +506,10 @@ export async function restoreSiteSnapshot(snapshot, yearNumber) {
     restorePlan(snapshot.plan, yearNumber),
     restoreSystem(snapshot.system, yearNumber),
   ]);
+
+  // Bust the in-memory + localStorage cache for this year so stale values
+  // are not served from cache after the restore completes.
+  clearForYear(yearNumber);
 }
 
 /**
