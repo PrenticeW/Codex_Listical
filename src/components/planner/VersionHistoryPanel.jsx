@@ -15,35 +15,7 @@ import { History, RotateCcw, X, AlertTriangle, Loader } from 'lucide-react';
 import { loadSiteSnapshots, restoreSiteSnapshot } from '../../lib/snapshotStorage';
 import { useYear } from '../../contexts/YearContext';
 import { useNavigate } from 'react-router-dom';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function formatTimestamp(isoString) {
-  if (!isoString) return 'Unknown time';
-  const d = new Date(isoString);
-  const now = new Date();
-  const diffMs = now - d;
-  const diffMins = Math.round(diffMs / 60000);
-  const diffHours = Math.round(diffMs / 3600000);
-  const diffDays = Math.round(diffMs / 86400000);
-
-  const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${timeStr} · ${diffMins}m ago`;
-  if (diffHours < 24) return `${timeStr} · ${diffHours}h ago`;
-  if (diffDays < 7) return `${d.toLocaleDateString(undefined, { weekday: 'short' })} ${timeStr}`;
-
-  return d.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+import { fmtTimestamp as formatTimestamp } from '../../utils/fmtTimestamp';
 
 function snapshotSummary(snapshot) {
   const parts = [];

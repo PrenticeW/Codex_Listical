@@ -17,6 +17,7 @@ import { useGearPanel } from '../contexts/GearPanelContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useYear } from '../contexts/YearContext';
 import { loadSiteSnapshots, restoreSiteSnapshot } from '../lib/snapshotStorage';
+import { fmtTimestamp } from '../utils/fmtTimestamp';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import { ArchiveYearModal } from './ArchiveYearModal';
@@ -837,20 +838,6 @@ function AccountSection({ onClose }) {
 
 // ─── Version history view ─────────────────────────────────────────────────────
 
-function fmtTimestamp(iso) {
-  if (!iso) return 'Unknown time';
-  const d     = new Date(iso);
-  const now   = new Date();
-  const mins  = Math.round((now - d) / 60000);
-  const hours = Math.round((now - d) / 3600000);
-  const days  = Math.round((now - d) / 86400000);
-  const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  if (mins  < 1)  return 'Just now';
-  if (mins  < 60) return `${timeStr} · ${mins}m ago`;
-  if (hours < 24) return `${timeStr} · ${hours}h ago`;
-  if (days  < 7)  return `${d.toLocaleDateString(undefined, { weekday: 'short' })} ${timeStr}`;
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
 
 function snapSummary(snap) {
   const parts = [];
