@@ -901,7 +901,7 @@ function ConfirmRestoreModal({ snapshot, onConfirm, onCancel, isRestoring, use24
   );
 }
 
-function HistoryView({ onBack, isActive }) {
+function HistoryView({ onBack, isActive, use24Hour }) {
   // WIRED: loads + restores snapshots via snapshotStorage
   const { currentYear } = useYear();
   const navigate = useNavigate();
@@ -911,23 +911,6 @@ function HistoryView({ onBack, isActive }) {
   const [error, setError]               = useState(null);
   const [confirmTarget, setConfirmTarget] = useState(null);
   const [isRestoring, setIsRestoring]   = useState(false);
-  const [use24Hour, setUse24Hour]       = useState(
-    () => peekTacticsCache(currentYear).yearSettings?.use24Hour ?? false
-  );
-
-  useEffect(() => {
-    loadTacticsYearSettings(currentYear).then(s => setUse24Hour(s?.use24Hour ?? false));
-  }, [currentYear]);
-
-  // Keep use24Hour in sync when the user changes the clock format in the main view
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.detail?.__eventYear !== currentYear) return;
-      if (e.detail?.use24Hour !== undefined) setUse24Hour(e.detail.use24Hour);
-    };
-    window.addEventListener(GEAR_TACTICS_SETTINGS_EVENT, handler);
-    return () => window.removeEventListener(GEAR_TACTICS_SETTINGS_EVENT, handler);
-  }, [currentYear]);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -1058,8 +1041,26 @@ function HistoryView({ onBack, isActive }) {
 
 export default function GearPanel() {
   const { isOpen, close } = useGearPanel();
+  const { currentYear } = useYear();
   const [showHistory, setShowHistory] = useState(false);
   const [navBottom, setNavBottom] = useState(0);
+
+  // Track clock format at the GearPanel level so HistoryView always has the
+  // latest value without managing its own copy.
+  const [use24Hour, setUse24Hour] = useState(
+    () => peekTacticsCache(currentYear).yearSettings?.use24Hour ?? false
+  );
+  useEffect(() => {
+    loadTacticsYearSettings(currentYear).then(s => setUse24Hour(s?.use24Hour ?? false));
+  }, [currentYear]);
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.__eventYear !== currentYear) return;
+      if ('use24Hour' in (e.detail ?? {})) setUse24Hour(e.detail.use24Hour);
+    };
+    window.addEventListener(GEAR_TACTICS_SETTINGS_EVENT, handler);
+    return () => window.removeEventListener(GEAR_TACTICS_SETTINGS_EVENT, handler);
+  }, [currentYear]);
 
   // Measure the NavigationBar's bottom edge so the panel starts below it
   useEffect(() => {
@@ -1128,7 +1129,7 @@ export default function GearPanel() {
 
           {/* History view */}
           <div style={{ width: 480, flexShrink: 0, overflowY: 'auto' }}>
-            <HistoryView onBack={() => setShowHistory(false)} isActive={showHistory && isOpen} />
+            <HistoryView onBack={() => setShowHistory(false)} isActive={showHistory && isOpen} use24Hour={use24Hour} />
           </div>
         </div>
       </div>,
