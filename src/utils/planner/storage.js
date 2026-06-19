@@ -191,9 +191,19 @@ async function writePlannerSettingsColumns({ userId, yearId, yearNumber, columns
     if (error) throw error;
     updatedRow = data;
   } else {
+    // Use upsert instead of insert so concurrent parallel writes (e.g. the
+    // Promise.all in createDraftYearFromActive / performYearArchive) don't
+    // race to INSERT the same row. Without this, all callers see "no row
+    // exists", all try to INSERT, only one wins, and the rest silently fail
+    // with a unique-constraint violation — leaving most settings unsaved.
+    // ON CONFLICT DO UPDATE means every concurrent write lands as an atomic
+    // UPDATE even if another call inserted the row a millisecond earlier.
     const { data, error } = await supabase
       .from('planner_settings')
-      .insert({ user_id: userId, year_id: yearId, ...columns })
+      .upsert(
+        { user_id: userId, year_id: yearId, ...columns },
+        { onConflict: 'user_id,year_id' },
+      )
       .select()
       .single();
     if (error) throw error;

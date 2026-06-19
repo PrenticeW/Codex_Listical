@@ -250,11 +250,15 @@ export async function performYearArchive(yearNumber) {
       ? JSON.parse(JSON.stringify(preMutationMeta))
       : null;
 
-    // 6. Archive the year metadata (first mutation)
+    // 6. Archive the year metadata (first mutation).
+    //    Pass { silent: true } so this intermediate write does not dispatch a
+    //    yearMetadataStorage event with a misleading "currentYear is now
+    //    archived" payload. The single authoritative event is fired by
+    //    setCurrentYear at the end of this function.
     await archiveYearMetadata(yearNumber, {
       totalWeeksCompleted: weeksCompleted,
       totalHoursCompleted: totalHours,
-    });
+    }, { silent: true });
     // The archived year's `years.status` flipped; clear any cached row for
     // that year so the next read returns the new state.
     clearForYear(yearNumber);
@@ -266,20 +270,29 @@ export async function performYearArchive(yearNumber) {
     let nextStartDate;
 
     if (draftYear) {
-      // Draft year already set up by "Plan Next Year" — just promote it
+      // Draft year already set up by "Plan Next Year" — just promote it.
+      // Pass { silent: true } to suppress the intermediate event; setCurrentYear
+      // below fires the single authoritative event with the correct final state.
       nextYearNumber = draftYear.yearNumber;
       nextStartDate = draftYear.startDate;
-      await promoteDraftToActive(nextYearNumber);
+      await promoteDraftToActive(nextYearNumber, { silent: true });
       // The promoted year's status flipped from 'draft' to 'active'; clear
       // any cached years-row for it so the next read sees the new status.
       clearForYear(nextYearNumber);
       console.log(`[Archive Year] Promoted draft Year ${nextYearNumber} to active`);
     } else {
-      // Legacy path: no draft year, create fresh next year
+      // Legacy path: no draft year, create fresh next year.
       nextYearNumber = yearNumber + 1;
       nextStartDate = calculateNextCycleStartDate(startDate);
 
-      await createNewYear(nextYearNumber, nextStartDate);
+      // Clear any stale cache for the incoming year number before writing.
+      // A prior failed archive attempt or Undo Draft can leave null entries
+      // cached for year N+1, causing every findYearId call to short-circuit
+      // and silently skip all writes.
+      clearForYear(nextYearNumber);
+
+      // Pass { silent: true } — setCurrentYear fires the final event.
+      await createNewYear(nextYearNumber, nextStartDate, { silent: true });
       console.log(`[Archive Year] Year ${nextYearNumber} created with start date: ${nextStartDate}`);
 
       // Copy settings. All planner writes are now async (Supabase port);

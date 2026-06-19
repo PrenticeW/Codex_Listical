@@ -516,7 +516,7 @@ function PlanSection() {
     dispatchSystemAction('setDayFilter', { days: Array.from(next) });
   }
 
-  function handleClear() {
+  function handleClearDays() {
     setActiveDays(new Set());
     dispatchSystemAction('setDayFilter', { days: [] });
   }
@@ -527,85 +527,140 @@ function PlanSection() {
     dispatchSystemAction('setProjectFilter', { project: next });
   }
 
+  const [dayOpen, setDayOpen] = useState(false);
+  const [goalOpen, setGoalOpen] = useState(false);
+
   return (
     <div style={SECTION}>
       <SectionLabel>Plan</SectionLabel>
 
-      <div style={{ marginBottom: 12, fontSize: 12, color: C.textDim }}>Filter by day</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {DAY_FILTER_TAGS.map(day => {
-          const isActive = activeDays.has(day);
-          return (
-            <button
-              key={day}
-              onClick={() => handleDayPick(day)}
-              style={{
-                padding: '5px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
-                fontFamily: FONT, fontSize: 13, fontWeight: isActive ? 600 : 400,
-                background: isActive ? C.green : C.bgBlock,
-                color: isActive ? '#fff' : C.textDim,
-                transition: 'background 0.12s, color 0.12s',
-              }}
-              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#e8efe9'; }}
-              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = C.bgBlock; }}
-            >
-              {day}
-            </button>
-          );
-        })}
-      </div>
-      {activeDays.size > 0 && (
-        <button
-          onClick={handleClear}
-          style={{
-            marginTop: 10, padding: 0, background: 'none', border: 'none',
-            cursor: 'pointer', fontFamily: FONT, fontSize: 12, color: C.textFaint,
-            textDecoration: 'underline',
-          }}
+      {/* Filter by day */}
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden', marginBottom: 8 }}>
+        <div
+          style={{ display: 'flex', alignItems: 'center', padding: '13px 16px', cursor: 'pointer' }}
+          onClick={() => setDayOpen(v => !v)}
         >
-          Clear filter
-        </button>
-      )}
-
-      {projects.length > 0 && (
-        <>
-          <div style={{ marginTop: 20, marginBottom: 12, fontSize: 12, color: C.textDim }}>Filter by project</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {projects.map(({ nickname, displayName }) => {
-              const isActive = activeProject === nickname;
-              return (
-                <button
-                  key={nickname}
-                  onClick={() => handleProjectPick(nickname)}
-                  style={{
-                    padding: '5px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
-                    fontFamily: FONT, fontSize: 13, fontWeight: isActive ? 600 : 400,
-                    background: isActive ? C.green : C.bgBlock,
-                    color: isActive ? '#fff' : C.textDim,
-                    transition: 'background 0.12s, color 0.12s',
-                  }}
-                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#e8efe9'; }}
-                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = C.bgBlock; }}
-                >
-                  {displayName}
-                </button>
-              );
-            })}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+              <rect x="1" y="2" width="11" height="9" rx="1.5" stroke={C.textDim} strokeWidth="1.2"/>
+              <path d="M4 1v2M9 1v2" stroke={C.textDim} strokeWidth="1.2" strokeLinecap="round"/>
+              <path d="M1 5h11" stroke={C.textDim} strokeWidth="1.2"/>
+            </svg>
+            <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim }}>Filter by day</span>
           </div>
-          {activeProject && (
-            <button
-              onClick={() => handleProjectPick(activeProject)}
-              style={{
-                marginTop: 10, padding: 0, background: 'none', border: 'none',
-                cursor: 'pointer', fontFamily: FONT, fontSize: 12, color: C.textFaint,
-                textDecoration: 'underline',
-              }}
-            >
-              Clear filter
-            </button>
-          )}
-        </>
-      )}
+          <svg
+            width="7" height="11" viewBox="0 0 7 11" fill="none"
+            style={{ transition: 'transform 0.2s', transform: dayOpen ? 'rotate(90deg)' : 'rotate(0deg)', flexShrink: 0 }}
+          >
+            <path d="M1 1l5 4.5L1 10" stroke={C.textLight} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        {dayOpen && (
+          <div style={{ borderTop: `1px solid ${C.border}`, padding: '14px 16px 16px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {DAY_FILTER_TAGS.map(day => {
+                const isActive = activeDays.has(day);
+                return (
+                  <button
+                    key={day}
+                    onClick={() => handleDayPick(day)}
+                    style={{
+                      padding: '5px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                      fontFamily: FONT, fontSize: 13, fontWeight: isActive ? 600 : 400,
+                      background: isActive ? C.green : C.bgBlock,
+                      color: isActive ? '#fff' : C.textDim,
+                      transition: 'background 0.12s, color 0.12s',
+                    }}
+                    onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#e8efe9'; }}
+                    onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = C.bgBlock; }}
+                  >
+                    {day}
+                  </button>
+                );
+              })}
+            </div>
+            {activeDays.size > 0 && (
+              <button
+                onClick={handleClearDays}
+                style={{
+                  marginTop: 8, padding: 0, background: 'none', border: 'none',
+                  cursor: 'pointer', fontFamily: FONT, fontSize: 12, color: C.textFaint,
+                  textDecoration: 'underline',
+                }}
+              >
+                Clear filter
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Filter by goal */}
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+        <div
+          style={{ display: 'flex', alignItems: 'center', padding: '13px 16px', cursor: 'pointer' }}
+          onClick={() => setGoalOpen(v => !v)}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+              <circle cx="6.5" cy="6.5" r="5" stroke={C.textDim} strokeWidth="1.2"/>
+              <circle cx="6.5" cy="6.5" r="2.5" stroke={C.textDim} strokeWidth="1.2"/>
+              <circle cx="6.5" cy="6.5" r="0.8" fill={C.textDim}/>
+            </svg>
+            <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim }}>Filter by goal</span>
+          </div>
+          <svg
+            width="7" height="11" viewBox="0 0 7 11" fill="none"
+            style={{ transition: 'transform 0.2s', transform: goalOpen ? 'rotate(90deg)' : 'rotate(0deg)', flexShrink: 0 }}
+          >
+            <path d="M1 1l5 4.5L1 10" stroke={C.textLight} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        {goalOpen && (
+          <div style={{ borderTop: `1px solid ${C.border}`, padding: '14px 16px 16px' }}>
+            {projects.length === 0 ? (
+              <div style={{ fontFamily: FONT, fontSize: 13, color: C.textFaint }}>No goals found</div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {projects.map(({ nickname, displayName }) => {
+                    const isActive = activeProject === nickname;
+                    return (
+                      <button
+                        key={nickname}
+                        onClick={() => handleProjectPick(nickname)}
+                        style={{
+                          padding: '5px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                          fontFamily: FONT, fontSize: 13, fontWeight: isActive ? 600 : 400,
+                          background: isActive ? C.green : C.bgBlock,
+                          color: isActive ? '#fff' : C.textDim,
+                          transition: 'background 0.12s, color 0.12s',
+                        }}
+                        onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#e8efe9'; }}
+                        onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = C.bgBlock; }}
+                      >
+                        {displayName}
+                      </button>
+                    );
+                  })}
+                </div>
+                {activeProject && (
+                  <button
+                    onClick={() => handleProjectPick(activeProject)}
+                    style={{
+                      marginTop: 8, padding: 0, background: 'none', border: 'none',
+                      cursor: 'pointer', fontFamily: FONT, fontSize: 12, color: C.textFaint,
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Clear filter
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -785,10 +840,10 @@ export default function SystemPanel() {
         {/* System main content (320px, flex column so PageSection pins to bottom) */}
         <div style={{ width: 480, flexShrink: 0, overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-            <PlanSection />
             <InsertSection />
             <SortSection />
             <ArchiveSection />
+            <PlanSection />
           </div>
           <div style={{ flexShrink: 0, borderTop: `1px solid ${C.borderLight}` }}>
             <PageSection />

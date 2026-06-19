@@ -340,8 +340,13 @@ export async function initializeYearMetadata(startDate) {
  * Update specific year info.
  * @param {number} yearNumber
  * @param {Partial<YearInfo>} updates
+ * @param {{ silent?: boolean }} [options]
+ *   silent — when true, skip the yearMetadataStorage event dispatch. Use this
+ *   inside multi-step flows (e.g. performYearArchive) so only the final
+ *   setCurrentYear call fires a single, consistent event rather than several
+ *   intermediate ones that briefly show an inconsistent state.
  */
-export async function updateYearInfo(yearNumber, updates) {
+export async function updateYearInfo(yearNumber, updates, { silent = false } = {}) {
   try {
     const userId = await requireUserId();
     const dbUpdates = infoUpdatesToDbColumns(updates);
@@ -354,7 +359,7 @@ export async function updateYearInfo(yearNumber, updates) {
       .eq('year_number', yearNumber);
     if (error) throw error;
 
-    await dispatchMetadataEvent();
+    if (!silent) await dispatchMetadataEvent();
   } catch (error) {
     console.error('Failed to update year info:', error);
   }
@@ -386,9 +391,11 @@ export async function setCurrentYear(yearNumber) {
  * Create a new active year.
  * @param {number} yearNumber
  * @param {string} startDate
+ * @param {{ silent?: boolean }} [options]
+ *   silent — skip the yearMetadataStorage event dispatch (see updateYearInfo).
  * @returns {Promise<YearInfo|null>}
  */
-export async function createNewYear(yearNumber, startDate) {
+export async function createNewYear(yearNumber, startDate, { silent = false } = {}) {
   try {
     const userId = await requireUserId();
     const { data, error } = await supabase
@@ -403,7 +410,7 @@ export async function createNewYear(yearNumber, startDate) {
       .single();
     if (error) throw error;
 
-    await dispatchMetadataEvent();
+    if (!silent) await dispatchMetadataEvent();
     return dbRowToYearInfo(data);
   } catch (error) {
     console.error('Failed to create new year:', error);
@@ -415,8 +422,10 @@ export async function createNewYear(yearNumber, startDate) {
  * Archive a year.
  * @param {number} yearNumber
  * @param {{ totalWeeksCompleted: number, totalHoursCompleted: number }} stats
+ * @param {{ silent?: boolean }} [options]
+ *   silent — skip the yearMetadataStorage event dispatch (see updateYearInfo).
  */
-export async function archiveYear(yearNumber, stats) {
+export async function archiveYear(yearNumber, stats, { silent = false } = {}) {
   const now = new Date().toISOString();
   const today = now.split('T')[0];
 
@@ -426,7 +435,7 @@ export async function archiveYear(yearNumber, stats) {
     archivedAt: now,
     totalWeeksCompleted: stats.totalWeeksCompleted,
     totalHoursCompleted: stats.totalHoursCompleted,
-  });
+  }, { silent });
 }
 
 /**
@@ -461,9 +470,11 @@ export async function createDraftYear(yearNumber, startDate) {
 /**
  * Promote a draft year to active status.
  * @param {number} yearNumber
+ * @param {{ silent?: boolean }} [options]
+ *   silent — skip the yearMetadataStorage event dispatch (see updateYearInfo).
  */
-export async function promoteDraftToActive(yearNumber) {
-  await updateYearInfo(yearNumber, { status: 'active' });
+export async function promoteDraftToActive(yearNumber, { silent = false } = {}) {
+  await updateYearInfo(yearNumber, { status: 'active' }, { silent });
 }
 
 /**
