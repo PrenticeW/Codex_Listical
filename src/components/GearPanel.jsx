@@ -901,7 +901,7 @@ function ConfirmRestoreModal({ snapshot, onConfirm, onCancel, isRestoring, use24
   );
 }
 
-function HistoryView({ onBack, isActive, use24Hour }) {
+function HistoryView({ onBack, isActive }) {
   // WIRED: loads + restores snapshots via snapshotStorage
   const { currentYear } = useYear();
   const navigate = useNavigate();
@@ -911,6 +911,13 @@ function HistoryView({ onBack, isActive, use24Hour }) {
   const [error, setError]               = useState(null);
   const [confirmTarget, setConfirmTarget] = useState(null);
   const [isRestoring, setIsRestoring]   = useState(false);
+  const [use24Hour, setUse24Hour]       = useState(
+    () => peekTacticsCache(currentYear).yearSettings?.use24Hour ?? false
+  );
+
+  useEffect(() => {
+    loadTacticsYearSettings(currentYear).then(s => setUse24Hour(s?.use24Hour ?? false));
+  }, [currentYear]);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -1111,7 +1118,7 @@ export default function GearPanel() {
 
           {/* History view */}
           <div style={{ width: 480, flexShrink: 0, overflowY: 'auto' }}>
-            <HistoryView onBack={() => setShowHistory(false)} isActive={showHistory && isOpen} use24Hour={settings?.use24Hour ?? false} />
+            <HistoryView onBack={() => setShowHistory(false)} isActive={showHistory && isOpen} />
           </div>
         </div>
       </div>,
