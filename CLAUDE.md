@@ -61,7 +61,7 @@ Pattern: `{domain}-year-{N}-{descriptor}`. All eight tactics settings are year-s
 
 ### Draft year / Plan Next Year flow
 
-See `docs/year-flow.md` for the full spec. Key rule: only one draft year may exist at a time. The **Undo Draft** nav button (`NavigationBar.jsx` line 179) still needs to be removed before launch.
+See `docs/year-flow.md` for the full spec. Key rule: only one draft year may exist at a time.
 
 ---
 

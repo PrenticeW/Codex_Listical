@@ -29,7 +29,7 @@ export default function NavigationBar({
   const location = useLocation();
   const currentPath = location.pathname;
   const { logout, user } = useAuth();
-  const { draftYear, activeYear, currentYear, switchToYear } = useYear();
+  const { draftYear, currentYear, switchToYear } = useYear();
 
   // Get current page config
   const currentPageConfig = useMemo(() => {
@@ -91,9 +91,6 @@ export default function NavigationBar({
               type="button"
               className={buttonClasses(currentPath === item.path && currentYear !== draftYear?.yearNumber)}
               onClick={() => {
-                if (activeYear && currentYear !== activeYear.yearNumber) {
-                  switchToYear(activeYear.yearNumber);
-                }
                 navigate(item.path);
               }}
             >
