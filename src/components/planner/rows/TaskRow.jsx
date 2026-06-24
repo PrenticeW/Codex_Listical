@@ -405,7 +405,9 @@ const TaskRow = React.memo(function TaskRow({
                             fontSize: `${cellFontSize}px`,
                             paddingLeft: '6px',
                             paddingRight: '6px',
-                            border: '2px solid white'
+                            border: '2px solid white',
+                            overflow: 'hidden',
+                            minWidth: 0,
                           }}
                         >
                           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value}>{value}</span>
@@ -466,7 +468,9 @@ const TaskRow = React.memo(function TaskRow({
                           paddingLeft: '8px',
                           paddingRight: '8px',
                           color: '#000000',
-                          border: '1px solid white'
+                          border: '1px solid white',
+                          overflow: 'hidden',
+                          minWidth: 0,
                         }}
                       >
                         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value || '-'}>{value || '-'}</span>
@@ -491,7 +495,9 @@ const TaskRow = React.memo(function TaskRow({
                             fontSize: `${cellFontSize}px`,
                             paddingLeft: '6px',
                             paddingRight: '6px',
-                            border: '2px solid white'
+                            border: '2px solid white',
+                            overflow: 'hidden',
+                            minWidth: 0,
                           }}
                         >
                           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value}>{value}</span>
@@ -536,7 +542,9 @@ const TaskRow = React.memo(function TaskRow({
                           fontSize: `${cellFontSize}px`,
                           paddingLeft: '8px',
                           paddingRight: '8px',
-                          color: ESTIMATE_COLOR_MAP[value]?.text || 'inherit'
+                          color: ESTIMATE_COLOR_MAP[value]?.text || 'inherit',
+                          overflow: 'hidden',
+                          minWidth: 0,
                         }}
                       >
                         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value || '-'}>{value || '-'}</span>
