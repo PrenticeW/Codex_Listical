@@ -255,14 +255,9 @@ async function captureTaskEvents(taskRows) {
       .select('task_id, field, old_value, new_value, note, changed_at')
       .eq('user_id', userId)
       .in('task_id', taskIds);
-    if (error) {
-      console.error('[snapshotStorage] captureTaskEvents failed', error);
-      throw error;
-    }
-    console.log(`[snapshotStorage] captureTaskEvents: captured ${(data ?? []).length} events for ${taskIds.length} tasks`);
+    if (error) throw error;
     return data ?? [];
-  } catch (err) {
-    console.error('[snapshotStorage] captureTaskEvents threw', err);
+  } catch {
     return null;
   }
 }
@@ -436,7 +431,6 @@ async function restoreSystem(systemData, yearNumber) {
   ]);
   // null = capture failed or old snapshot predating this fix — skip to avoid
   // wiping real events. [] = confirmed empty at snapshot time — delete all.
-  console.log('[snapshotStorage] restoreSystem: taskEvents in snapshot =', systemData.taskEvents);
   if (systemData.taskEvents != null) {
     await restoreTaskEvents(systemData.taskEvents, systemData.taskRows).catch((err) => {
       console.error('[snapshotStorage] restoreTaskEvents failed', err);
@@ -464,7 +458,6 @@ async function restoreTaskEvents(taskEvents, taskRows) {
   const taskIds = (taskRows ?? []).map((r) => r.id).filter(isValidUUID);
   if (!taskIds.length) return;
 
-  console.log(`[snapshotStorage] restoreTaskEvents: deleting events for ${taskIds.length} tasks, re-inserting ${taskEvents.length}`);
   try {
     const userId = await requireUserId();
 
@@ -473,10 +466,7 @@ async function restoreTaskEvents(taskEvents, taskRows) {
       .delete()
       .eq('user_id', userId)
       .in('task_id', taskIds);
-    if (deleteError) {
-      console.error('[snapshotStorage] restoreTaskEvents delete failed', deleteError);
-      throw deleteError;
-    }
+    if (deleteError) throw deleteError;
 
     if (taskEvents.length > 0) {
       const rows = taskEvents.map((e) => ({
@@ -491,14 +481,10 @@ async function restoreTaskEvents(taskEvents, taskRows) {
       const { error: insertError } = await supabase
         .from('task_events')
         .insert(rows);
-      if (insertError) {
-        console.error('[snapshotStorage] restoreTaskEvents insert failed', insertError);
-        throw insertError;
-      }
+      if (insertError) throw insertError;
     }
-    console.log('[snapshotStorage] restoreTaskEvents: done');
   } catch (err) {
-    console.error('[snapshotStorage] restoreTaskEvents threw', err);
+    console.error('[snapshotStorage] restoreTaskEvents failed', err);
   }
 }
 
