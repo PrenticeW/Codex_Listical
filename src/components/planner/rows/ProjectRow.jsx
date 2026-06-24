@@ -89,7 +89,11 @@ export default function ProjectRow({
   // sent-metrics value via the project's stable id so that Goal-side renames
   // don't silently zero out the hours shown here.
   const archivedWeeklyQuota = row.original.archivedWeeklyQuota;
-  const projectIdForQuota = (isHeader && rowType !== 'archivedProjectHeader') ? projectIdByNickname.get(projectNickname) : null;
+  // Prefer the stable projectId stamped on the row at creation; fall back to the
+  // nickname-map lookup for rows written before this field was introduced.
+  const projectIdForQuota = (isHeader && rowType !== 'archivedProjectHeader')
+    ? (row.original.projectId ?? projectIdByNickname.get(projectNickname))
+    : null;
   const rawQuota = isHeader
     ? (rowType === 'archivedProjectHeader' && archivedWeeklyQuota != null
         ? archivedWeeklyQuota
