@@ -137,7 +137,7 @@ const normalizeLegacySeedText = (shortlist) =>
  * @param {number} options.currentYear - Current year for storage
  * @param {Function} options.executeCommand - Optional command executor for undo/redo support
  */
-export default function useShortlistState({ currentYear, executeCommand }) {
+export default function useShortlistState({ currentYear, executeCommand, isCurrentYearArchived = false }) {
   const [inputValue, setInputValue] = useState('');
   const [{ shortlist, archived }, setState] = useState({ shortlist: [], archived: [] });
   // Skip the autosave effect until the initial load has populated state.
@@ -221,6 +221,7 @@ export default function useShortlistState({ currentYear, executeCommand }) {
   // when state changes or the hook unmounts.
   useEffect(() => {
     if (!hasInitialLoaded) return;
+    if (isCurrentYearArchived) return;
     const timer = setTimeout(() => {
       const enrichedShortlist = shortlist.map((item) => ({
         ...item,
@@ -229,7 +230,7 @@ export default function useShortlistState({ currentYear, executeCommand }) {
       saveStagingState({ shortlist: enrichedShortlist, archived }, currentYear);
     }, 500);
     return () => clearTimeout(timer);
-  }, [shortlist, archived, currentYear, hasInitialLoaded]);
+  }, [shortlist, archived, currentYear, hasInitialLoaded, isCurrentYearArchived]);
 
   // Add new item to shortlist
   const handleAdd = useCallback(() => {

@@ -473,6 +473,7 @@ export default function TacticsPage() {
       suppressNextSaveRef.current = false;
       return;
     }
+    if (isCurrentYearArchived) return;
     saveTacticsYearSettings(
       { startHour, startMinute, incrementMinutes, showAmPm, use24Hour, startDay, chipDisplayModes, summaryRowOrder, defaultChipOverrides },
       currentYear
@@ -616,6 +617,7 @@ export default function TacticsPage() {
       columnWidthsLoadedForYear.current = currentYear;
       return;
     }
+    if (isCurrentYearArchived) return;
     const widthsToSave = columnWidths;
     const yearToSave = currentYear;
     const timer = setTimeout(() => {
@@ -2209,6 +2211,7 @@ export default function TacticsPage() {
     if (chipsLoadedForYear.current !== currentYear) {
       return;
     }
+    if (isCurrentYearArchived) return;
     // Debounce: chip resize fires setProjectChips on every mousemove pixel,
     // queuing dozens of Supabase writes per drag (each a delete-then-insert).
     // The cleanup cancels the pending save on each new change, so only the
@@ -3009,6 +3012,7 @@ export default function TacticsPage() {
   // fire on every chip drag / settings tweak; without debounce each one is
   // a Supabase round-trip. 500ms idle window matches the staging autosave.
   useEffect(() => {
+    if (isCurrentYearArchived) return;
     const timer = setTimeout(() => {
       const projectWeeklyQuotas = projectSummaries.map((summary) => ({
         id: summary.id,
@@ -3047,6 +3051,7 @@ export default function TacticsPage() {
   // updated _sessionSentFingerprint module variable.
   const [sentFingerprintTick, setSentFingerprintTick] = useState(0);
   const handleSendToSystem = useCallback(async () => {
+    if (isCurrentYearArchived) return;
     const yearInfo = getYearInfo(currentYear);
     if (yearInfo?.startDate) {
       await saveStartDate(yearInfo.startDate, undefined, currentYear);

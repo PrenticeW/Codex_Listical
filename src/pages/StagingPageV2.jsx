@@ -205,7 +205,7 @@ export default function StagingPageV2() {
     handleRemove,
     handleArchiveWithStatus,
     togglePlanTable,
-  } = useShortlistState({ currentYear, executeCommand });
+  } = useShortlistState({ currentYear, executeCommand, isCurrentYearArchived });
 
   // Archive project and clean up associated chips + task rows
   const handleArchiveAndCleanup = useCallback(async (id, status) => {

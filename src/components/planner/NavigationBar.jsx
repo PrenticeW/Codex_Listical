@@ -29,7 +29,7 @@ export default function NavigationBar({
   const location = useLocation();
   const currentPath = location.pathname;
   const { logout, user } = useAuth();
-  const { draftYear, currentYear, switchToYear } = useYear();
+  const { draftYear, currentYear, switchToYear, isCurrentYearArchived } = useYear();
 
   // Get current page config
   const currentPageConfig = useMemo(() => {
@@ -123,6 +123,11 @@ export default function NavigationBar({
       </div>
 
       <div className="flex items-center gap-4">
+        {isCurrentYearArchived && (
+          <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1 select-none">
+            Archived · Read only
+          </span>
+        )}
         {actionButton || null}
 
 

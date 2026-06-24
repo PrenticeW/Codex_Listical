@@ -434,6 +434,7 @@ export default function ProjectTimePlannerV2() {
   // pushed back to Supabase and wipe the loaded rows.
   useEffect(() => {
     if (!dataHydrated.current) return;
+    if (isCurrentYearArchived) return;
     const timeoutId = setTimeout(() => {
       lastSaveInitiatedRef.current = Date.now();
       setTaskRows(data);
@@ -442,7 +443,7 @@ export default function ProjectTimePlannerV2() {
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [data, setTaskRows]);
+  }, [data, setTaskRows, isCurrentYearArchived]);
 
   // Flush unsaved data to storage on unmount (bypasses debounce so navigation away doesn't lose edits).
   // Guarded by dataHydrated so React strict-mode's dev double-mount can't
@@ -450,9 +451,11 @@ export default function ProjectTimePlannerV2() {
   // Also skipped if a save was initiated within the last 2 seconds — the
   // useAutoPersist call from setTaskRows is in flight and will commit the
   // correct (hydrated) data; firing a concurrent flush would race it.
+  // Also skipped for archived years — reads are allowed, writes are not.
   useEffect(() => {
     return () => {
       if (!dataHydrated.current) return;
+      if (isCurrentYearArchived) return;
       if (Date.now() - lastSaveInitiatedRef.current < 2000) return;
       // saveTaskRows is now async (Supabase). Fire-and-forget on unmount —
       // the user is navigating away so there's no caller to await.
