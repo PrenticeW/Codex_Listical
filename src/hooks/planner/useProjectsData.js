@@ -83,7 +83,7 @@ export function extractProjectsData(shortlist) {
   const projectIdByNickname = new Map(); // Nickname/key -> stable project id (join key for quotas)
 
   shortlist.forEach(item => {
-    const fullProjectName = (item.projectName || '').trim();
+    const fullProjectName = (item.projectName || item.text || '').trim();
     const nickname = (item.projectNickname || '').trim();
 
     // Use nickname as key if available, otherwise use full name
