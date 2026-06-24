@@ -329,8 +329,6 @@ export async function saveStagingState(payload, yearNumber) {
   try {
     if (!payload || typeof payload !== 'object') return;
 
-    saveSiteSnapshot(yearNumber).catch(() => {});
-
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) {
@@ -377,6 +375,9 @@ export async function saveStagingState(payload, yearNumber) {
         .upsert(desiredRows, { onConflict: 'id' });
       if (upsertErr) throw upsertErr;
     }
+
+    // Snapshot after the write so the captured state includes this edit.
+    saveSiteSnapshot(yearNumber).catch(() => {});
 
     // Refresh the cache with the serialised form of each item so the value
     // is safe to JSON.stringify (storageCache mirrors to localStorage on every

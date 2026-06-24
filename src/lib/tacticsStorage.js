@@ -606,8 +606,6 @@ export async function loadTacticsChipsState(yearNumber) {
  */
 export async function saveTacticsChipsState(payload, yearNumber) {
   try {
-    saveSiteSnapshot(yearNumber).catch(() => {});
-
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) {
@@ -615,6 +613,8 @@ export async function saveTacticsChipsState(payload, yearNumber) {
       return;
     }
     await writeChipsLayer({ userId, yearId, yearNumber, isSent: false, payload });
+    // Snapshot after the write so the captured state includes this edit.
+    saveSiteSnapshot(yearNumber).catch(() => {});
     dispatchEvent(TACTICS_CHIPS_STORAGE_EVENT, payload, yearNumber);
   } catch (error) {
     console.error('Failed to save tactics chip state', error);

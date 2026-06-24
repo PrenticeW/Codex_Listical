@@ -1092,10 +1092,6 @@ export const saveTaskRows = (
 
 async function _saveTaskRowsImpl(taskRows, yearNumber) {
   try {
-    // Fire a snapshot before each save (internally throttled to one every
-    // 2 minutes). Best-effort — a snapshot failure must never block the save.
-    saveSiteSnapshot(yearNumber).catch(() => {});
-
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
     if (!yearId) return;
@@ -1165,6 +1161,10 @@ async function _saveTaskRowsImpl(taskRows, yearNumber) {
     if (currentUser?.id === userId) {
       setCached(CACHE_NS, taskRowsKey(yearNumber), allRows);
     }
+
+    // Snapshot after the write so the captured state includes this edit.
+    // Best-effort — a snapshot failure must never block the save.
+    saveSiteSnapshot(yearNumber).catch(() => {});
   } catch (error) {
     console.error('Failed to save task rows', error);
   }
