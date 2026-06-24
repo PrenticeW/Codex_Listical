@@ -40,6 +40,8 @@ const {
     site_snapshots: [],
     planner_settings: null,
     tactics_custom_projects: [],
+    tactics_chips: [],
+    chip_task_notes: [],
   };
 
   // Recorded DB calls for assertions.
@@ -57,6 +59,8 @@ const {
     mockTableData.site_snapshots = [];
     mockTableData.planner_settings = null;
     mockTableData.tactics_custom_projects = [];
+    mockTableData.tactics_chips = [];
+    mockTableData.chip_task_notes = [];
   }
 
   /**
@@ -659,5 +663,147 @@ describe('restoreSiteSnapshot — sent metrics snapshot', () => {
     );
 
     expect(tacticsMetricsStorage.saveSentMetricsSnapshot).not.toHaveBeenCalled();
+  });
+});
+
+// ===========================================================================
+// 7. chip_task_notes captured in plan
+// ===========================================================================
+
+describe('chip_task_notes capture', () => {
+  it('stores chip notes as plan.chipNotes when notes exist', async () => {
+    mockTableData.tactics_chips = [
+      { chip_id: 'chip-uuid-1' },
+      { chip_id: 'chip-uuid-2' },
+    ];
+    mockTableData.chip_task_notes = [
+      { chip_id: 'chip-uuid-1', note: 'Remember to follow up' },
+    ];
+
+    await saveSiteSnapshot(MOCK_YEAR_NUMBER);
+
+    const snap = calls.inserts.find((c) => c.table === 'site_snapshots');
+    expect(snap, 'site_snapshots insert should have fired').toBeTruthy();
+    expect(snap.rows.plan.chipNotes).toEqual([
+      { chipId: 'chip-uuid-1', note: 'Remember to follow up' },
+    ]);
+  });
+
+  it('stores [] when no notes exist for the year\'s chips', async () => {
+    mockTableData.tactics_chips = [{ chip_id: 'chip-uuid-1' }];
+    mockTableData.chip_task_notes = [];
+
+    await saveSiteSnapshot(MOCK_YEAR_NUMBER);
+
+    const snap = calls.inserts.find((c) => c.table === 'site_snapshots');
+    expect(snap, 'site_snapshots insert should have fired').toBeTruthy();
+    expect(snap.rows.plan.chipNotes).toEqual([]);
+  });
+
+  it('stores [] when no chips exist for the year', async () => {
+    mockTableData.tactics_chips = [];
+
+    await saveSiteSnapshot(MOCK_YEAR_NUMBER);
+
+    const snap = calls.inserts.find((c) => c.table === 'site_snapshots');
+    expect(snap, 'site_snapshots insert should have fired').toBeTruthy();
+    expect(snap.rows.plan.chipNotes).toEqual([]);
+  });
+});
+
+// ===========================================================================
+// Restore — chip_task_notes
+// ===========================================================================
+
+describe('restoreSiteSnapshot — chip_task_notes', () => {
+  it('deletes then reinserts notes when chipNotes is a non-empty array', async () => {
+    mockTableData.tactics_chips = [{ chip_id: 'chip-uuid-1' }];
+    const chipNotes = [{ chipId: 'chip-uuid-1', note: 'My note' }];
+
+    await restoreSiteSnapshot(
+      {
+        goal: null,
+        plan: {
+          chips: null, settings: null, metrics: null,
+          customProjects: null, sentChips: null, sentMetrics: null,
+          chipNotes,
+        },
+        system: { taskRows: [] },
+      },
+      MOCK_YEAR_NUMBER,
+    );
+
+    const del = calls.deletes.find((c) => c.table === 'chip_task_notes');
+    expect(del, 'chip_task_notes delete should have fired').toBeTruthy();
+
+    const ins = calls.inserts.find((c) => c.table === 'chip_task_notes');
+    expect(ins, 'chip_task_notes insert should have fired').toBeTruthy();
+    expect(ins.rows).toHaveLength(1);
+    expect(ins.rows[0].chip_id).toBe('chip-uuid-1');
+    expect(ins.rows[0].note).toBe('My note');
+    expect(ins.rows[0].user_id).toBe(MOCK_USER_ID);
+  });
+
+  it('deletes without reinserting when chipNotes is [] (no notes at snapshot time)', async () => {
+    mockTableData.tactics_chips = [{ chip_id: 'chip-uuid-1' }];
+
+    await restoreSiteSnapshot(
+      {
+        goal: null,
+        plan: {
+          chips: null, settings: null, metrics: null,
+          customProjects: null, sentChips: null, sentMetrics: null,
+          chipNotes: [],
+        },
+        system: { taskRows: [] },
+      },
+      MOCK_YEAR_NUMBER,
+    );
+
+    const del = calls.deletes.find((c) => c.table === 'chip_task_notes');
+    expect(del, 'chip_task_notes delete should have fired').toBeTruthy();
+
+    const ins = calls.inserts.find((c) => c.table === 'chip_task_notes');
+    expect(ins).toBeUndefined();
+  });
+
+  it('skips entirely when chipNotes is null (capture failed)', async () => {
+    mockTableData.tactics_chips = [{ chip_id: 'chip-uuid-1' }];
+
+    await restoreSiteSnapshot(
+      {
+        goal: null,
+        plan: {
+          chips: null, settings: null, metrics: null,
+          customProjects: null, sentChips: null, sentMetrics: null,
+          chipNotes: null,
+        },
+        system: { taskRows: [] },
+      },
+      MOCK_YEAR_NUMBER,
+    );
+
+    const del = calls.deletes.find((c) => c.table === 'chip_task_notes');
+    expect(del).toBeUndefined();
+  });
+
+  it('skips entirely when chipNotes is absent (old snapshot predating this fix)', async () => {
+    mockTableData.tactics_chips = [{ chip_id: 'chip-uuid-1' }];
+
+    await restoreSiteSnapshot(
+      {
+        goal: null,
+        plan: {
+          chips: null, settings: null, metrics: null,
+          customProjects: null, sentChips: null, sentMetrics: null,
+          // chipNotes key intentionally absent
+        },
+        system: { taskRows: [] },
+      },
+      MOCK_YEAR_NUMBER,
+    );
+
+    const del = calls.deletes.find((c) => c.table === 'chip_task_notes');
+    expect(del).toBeUndefined();
   });
 });

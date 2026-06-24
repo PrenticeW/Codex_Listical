@@ -21,9 +21,9 @@
  *     It fires immediately if the most recent snapshot is older than 4 hours,
  *     ensuring a clean "before this session" restore point is always available.
  *   - What is snapshotted: Goal shortlist/archived (stagingStorage), Plan
- *     chips + settings + metrics + custom projects (tacticsStorage +
- *     tacticsMetricsStorage), System task rows + planner settings +
- *     years.total_days (plannerStorage).
+ *     chips + settings + metrics + custom projects + sent chips/metrics +
+ *     chip task notes (tacticsStorage + tacticsMetricsStorage + chip_task_notes),
+ *     System task rows + planner settings + years.total_days (plannerStorage).
  *   - What restore does: writes each page's data back through its storage
  *     helper's save functions so normal cache invalidation and custom events
  *     fire correctly. Calls clearForYear at the end so stale in-memory cache
@@ -159,7 +159,7 @@ async function captureGoal(yearNumber) {
 async function capturePlan(yearNumber) {
   try {
     const { loadTacticsChipsState, loadTacticsYearSettings, loadSentChipsSnapshot } = await import('./tacticsStorage');
-    const [chips, settings, metrics, customProjects, sentChips, sentMetrics] = await Promise.all([
+    const [chips, settings, metrics, customProjects, sentChips, sentMetrics, chipNotes] = await Promise.all([
       loadTacticsChipsState(yearNumber).catch(() => null),
       loadTacticsYearSettings(yearNumber).catch(() => null),
       loadTacticsMetrics(yearNumber).catch(() => null),
@@ -170,8 +170,10 @@ async function capturePlan(yearNumber) {
       loadSentChipsSnapshot(yearNumber).catch(() => null),
       // Capture the sent metrics snapshot — quota data the System page uses.
       loadSentMetricsSnapshot(yearNumber).catch(() => null),
+      // Capture chip task notes (keyed by stable chip UUID, not year-scoped in DB).
+      captureChipNotes(yearNumber),
     ]);
-    return { chips, settings, metrics, customProjects, sentChips, sentMetrics };
+    return { chips, settings, metrics, customProjects, sentChips, sentMetrics, chipNotes };
   } catch {
     return null;
   }
@@ -265,6 +267,43 @@ async function captureCustomProjects(yearNumber) {
   }
 }
 
+/**
+ * Captures chip task notes for all chips belonging to this year (both live
+ * and sent layers). Notes are keyed by chip UUID with no year_id in the DB,
+ * so we first resolve which chip IDs belong to this year via tactics_chips.
+ *
+ * Returns [] when confirmed empty, null when the read failed.
+ */
+async function captureChipNotes(yearNumber) {
+  try {
+    const userId = await requireUserId();
+    const yearId = await findYearIdForSnapshot(userId, yearNumber);
+    if (!yearId) return [];
+
+    // Fetch all chip UUIDs for this year (both live and sent layers).
+    const { data: chipRows, error: chipError } = await supabase
+      .from('tactics_chips')
+      .select('chip_id')
+      .eq('user_id', userId)
+      .eq('year_id', yearId);
+    if (chipError) throw chipError;
+    if (!chipRows?.length) return [];
+
+    const chipIds = chipRows.map((r) => r.chip_id);
+
+    const { data: noteRows, error: noteError } = await supabase
+      .from('chip_task_notes')
+      .select('chip_id, note')
+      .eq('user_id', userId)
+      .in('chip_id', chipIds);
+    if (noteError) throw noteError;
+
+    return (noteRows ?? []).map((r) => ({ chipId: r.chip_id, note: r.note }));
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Restore helpers: write snapshot data back through storage helpers
 // ---------------------------------------------------------------------------
@@ -303,6 +342,10 @@ async function restorePlan(planData, yearNumber) {
 
   // Restore the sent metrics snapshot — quota data System page uses.
   if (sentMetrics != null) ops.push(saveSentMetricsSnapshot(sentMetrics, yearNumber).catch(() => {}));
+
+  // Restore chip task notes for this year's chips.
+  // null/undefined = capture failed or old snapshot — skip to avoid wiping live notes.
+  if (planData.chipNotes != null) ops.push(restoreChipNotes(planData.chipNotes, yearNumber).catch(() => {}));
 
   await Promise.all(ops);
 }
@@ -418,6 +461,60 @@ async function restoreCustomProjects(customProjects, yearNumber) {
     }
   } catch (err) {
     console.error('[snapshotStorage] restoreCustomProjects failed', err);
+  }
+}
+
+/**
+ * Replaces chip task notes for this year's chips with the captured snapshot array.
+ *
+ * null/undefined → skip entirely (capture failed or old snapshot; don't risk wiping data)
+ * []             → delete all existing notes for this year's chips and insert nothing
+ * [...]          → delete existing notes for this year's chips, re-insert the captured set
+ *
+ * Scopes the delete to chip IDs belonging to this year so notes for other
+ * years' chips are never touched.
+ */
+async function restoreChipNotes(chipNotes, yearNumber) {
+  if (chipNotes === null || chipNotes === undefined) return;
+  try {
+    const userId = await requireUserId();
+    const yearId = await findYearIdForSnapshot(userId, yearNumber);
+    if (!yearId) return;
+
+    // Resolve chip IDs for this year to scope the delete correctly.
+    const { data: chipRows, error: chipError } = await supabase
+      .from('tactics_chips')
+      .select('chip_id')
+      .eq('user_id', userId)
+      .eq('year_id', yearId);
+    if (chipError) throw chipError;
+    if (!chipRows?.length) return; // No chips → no notes to manage.
+
+    const chipIds = chipRows.map((r) => r.chip_id);
+
+    // Delete existing notes for this year's chips.
+    const { error: deleteError } = await supabase
+      .from('chip_task_notes')
+      .delete()
+      .eq('user_id', userId)
+      .in('chip_id', chipIds);
+    if (deleteError) throw deleteError;
+
+    // Re-insert the captured notes (skip if empty — confirmed no notes at snapshot time).
+    if (chipNotes.length > 0) {
+      const rows = chipNotes.map((n) => ({
+        user_id: userId,
+        chip_id: n.chipId,
+        note: n.note,
+        updated_at: new Date().toISOString(),
+      }));
+      const { error: insertError } = await supabase
+        .from('chip_task_notes')
+        .insert(rows);
+      if (insertError) throw insertError;
+    }
+  } catch (err) {
+    console.error('[snapshotStorage] restoreChipNotes failed', err);
   }
 }
 
