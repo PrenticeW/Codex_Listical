@@ -518,6 +518,9 @@ export default function ProjectRow({
                     fontWeight: '600',
                     outline: isEditing ? '2px solid black' : 'none',
                     outlineOffset: '-2px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
                   }}
                 >
                   {isEditing ? (

@@ -408,7 +408,7 @@ const TaskRow = React.memo(function TaskRow({
                             border: '2px solid white'
                           }}
                         >
-                          <span>{value}</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value}>{value}</span>
                           <ChevronDown
                             size={10}
                             style={{ color: '#000000', cursor: 'pointer' }}
@@ -494,7 +494,7 @@ const TaskRow = React.memo(function TaskRow({
                             border: '2px solid white'
                           }}
                         >
-                          <span>{value}</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value}>{value}</span>
                           <ChevronDown
                             size={10}
                             style={{ color: PILLBOX_COLORS[value]?.text || PILLBOX_COLORS['-'].text, cursor: 'pointer' }}
@@ -559,7 +559,7 @@ const TaskRow = React.memo(function TaskRow({
                       {value || '\u00A0'}
                     </div>
                   ) : (
-                    <div className="w-full" style={{ paddingLeft: '8px', paddingRight: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div className="w-full" style={{ paddingLeft: '8px', paddingRight: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                       {value || '\u00A0'}
                     </div>
                   )
