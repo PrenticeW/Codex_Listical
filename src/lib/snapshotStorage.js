@@ -53,8 +53,9 @@ const DEFAULT_PROJECT_ID = 'project-1';
 // ---------------------------------------------------------------------------
 
 const SNAPSHOT_CAP = 50;
-const MIN_INTERVAL_MS = 1 * 60 * 1000;      // 1 minute
+const MIN_INTERVAL_MS = 25 * 1000;          // 25 seconds (safety floor under the 30s debounce)
 const SESSION_GAP_MS  = 4 * 60 * 60 * 1000; // 4 hours
+const DEBOUNCE_MS     = 30 * 1000;          // 30 seconds
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -516,6 +517,35 @@ async function restoreChipNotes(chipNotes, yearNumber) {
   } catch (err) {
     console.error('[snapshotStorage] restoreChipNotes failed', err);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Debounced snapshot trigger (used by storage save functions)
+// ---------------------------------------------------------------------------
+
+// Per-year debounce timers. Keyed by yearNumber so concurrent year edits
+// are tracked independently.
+const _debounceTimers = new Map();
+
+/**
+ * Schedules a snapshot for yearNumber after 30 seconds of inactivity.
+ * Each call resets the timer, so rapid or mid-thought edits (typing a note,
+ * adjusting chips) coalesce into a single snapshot taken after the last
+ * write settles.
+ *
+ * Use this in storage save functions instead of saveSiteSnapshot directly.
+ *
+ * @param {number} yearNumber
+ */
+export function debounceSiteSnapshot(yearNumber) {
+  if (yearNumber == null) return;
+  const existing = _debounceTimers.get(yearNumber);
+  if (existing) clearTimeout(existing);
+  const id = setTimeout(() => {
+    _debounceTimers.delete(yearNumber);
+    saveSiteSnapshot(yearNumber);
+  }, DEBOUNCE_MS);
+  _debounceTimers.set(yearNumber, id);
 }
 
 // ---------------------------------------------------------------------------

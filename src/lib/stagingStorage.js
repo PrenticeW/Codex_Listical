@@ -20,7 +20,7 @@
 import { supabase } from './supabase';
 import { defineRowMetadata } from '../utils/staging/planTableHelpers';
 import { getCached, hasCached, setCached, invalidate } from './storageCache';
-import { saveSiteSnapshot } from './snapshotStorage';
+import { debounceSiteSnapshot } from './snapshotStorage';
 
 export const STAGING_STORAGE_EVENT = 'staging-state-update';
 
@@ -376,8 +376,9 @@ export async function saveStagingState(payload, yearNumber) {
       if (upsertErr) throw upsertErr;
     }
 
-    // Snapshot after the write so the captured state includes this edit.
-    saveSiteSnapshot(yearNumber).catch(() => {});
+    // Schedule a snapshot after 30s of inactivity so the captured state
+    // includes this edit but rapid/mid-thought edits don't produce partials.
+    debounceSiteSnapshot(yearNumber);
 
     // Refresh the cache with the serialised form of each item so the value
     // is safe to JSON.stringify (storageCache mirrors to localStorage on every

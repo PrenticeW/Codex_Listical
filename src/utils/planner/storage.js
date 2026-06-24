@@ -42,7 +42,7 @@
 import { supabase } from '../../lib/supabase';
 import { createInitialData } from './dataCreators';
 import { loadTacticsMetrics } from '../../lib/tacticsMetricsStorage';
-import { saveSiteSnapshot } from '../../lib/snapshotStorage';
+import { debounceSiteSnapshot } from '../../lib/snapshotStorage';
 import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
 import {
   getCached,
@@ -1162,9 +1162,9 @@ async function _saveTaskRowsImpl(taskRows, yearNumber) {
       setCached(CACHE_NS, taskRowsKey(yearNumber), allRows);
     }
 
-    // Snapshot after the write so the captured state includes this edit.
-    // Best-effort — a snapshot failure must never block the save.
-    saveSiteSnapshot(yearNumber).catch(() => {});
+    // Schedule a snapshot after 30s of inactivity so the captured state
+    // includes this edit but rapid/mid-thought edits don't produce partials.
+    debounceSiteSnapshot(yearNumber);
   } catch (error) {
     console.error('Failed to save task rows', error);
   }

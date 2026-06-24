@@ -41,7 +41,7 @@
 
 import { supabase } from './supabase';
 import { getCached, hasCached, setCached } from './storageCache';
-import { saveSiteSnapshot } from './snapshotStorage';
+import { debounceSiteSnapshot } from './snapshotStorage';
 
 // --- cache namespacing -------------------------------------------------
 
@@ -613,8 +613,9 @@ export async function saveTacticsChipsState(payload, yearNumber) {
       return;
     }
     await writeChipsLayer({ userId, yearId, yearNumber, isSent: false, payload });
-    // Snapshot after the write so the captured state includes this edit.
-    saveSiteSnapshot(yearNumber).catch(() => {});
+    // Schedule a snapshot after 30s of inactivity so the captured state
+    // includes this edit but rapid/mid-thought edits don't produce partials.
+    debounceSiteSnapshot(yearNumber);
     dispatchEvent(TACTICS_CHIPS_STORAGE_EVENT, payload, yearNumber);
   } catch (error) {
     console.error('Failed to save tactics chip state', error);
