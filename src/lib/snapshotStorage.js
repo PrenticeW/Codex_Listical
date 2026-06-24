@@ -49,6 +49,37 @@ import {
 const DEFAULT_PROJECT_ID = 'project-1';
 
 // ---------------------------------------------------------------------------
+// DEBUG: snapshot toast — remove before launch
+// ---------------------------------------------------------------------------
+
+function showSnapshotToast() {
+  const now = new Date();
+  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const el = document.createElement('div');
+  el.textContent = `📸 Snapshot taken at ${time}`;
+  Object.assign(el.style, {
+    position:     'fixed',
+    bottom:       '24px',
+    right:        '24px',
+    zIndex:       '999999',
+    background:   '#1e293b',
+    color:        '#f8fafc',
+    fontSize:     '13px',
+    fontWeight:   '600',
+    padding:      '10px 16px',
+    borderRadius: '8px',
+    boxShadow:    '0 4px 16px rgba(0,0,0,0.35)',
+    opacity:      '1',
+    transition:   'opacity 0.4s ease',
+    pointerEvents:'none',
+    fontFamily:   'system-ui, sans-serif',
+  });
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; }, 2500);
+  setTimeout(() => { el.remove(); }, 3000);
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
@@ -592,6 +623,7 @@ export async function saveSiteSnapshot(yearNumber) {
 
     if (insertError) throw insertError;
 
+    showSnapshotToast(); // DEBUG — remove before launch
     // Trim to the cap — best-effort, don't let a cleanup failure block saves.
     enforceSnapshotCap(userId, yearNumber).catch(() => {});
   } catch (err) {
@@ -692,6 +724,7 @@ export async function maybeSnapshotOnSessionStart(yearNumber) {
 
     if (insertError) throw insertError;
 
+    showSnapshotToast(); // DEBUG — remove before launch
     enforceSnapshotCap(userId, yearNumber).catch(() => {});
   } catch (err) {
     console.error('[snapshotStorage] maybeSnapshotOnSessionStart failed', err);

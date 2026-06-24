@@ -73,6 +73,7 @@ Migrations written but not yet applied to the database. Apply as a batch.
 
 | Item | Location |
 |---|---|
+| Snapshot toast (`showSnapshotToast`) | `src/lib/snapshotStorage.js` — two `showSnapshotToast()` calls and the function itself. Search `DEBUG — remove before launch`. |
 | `[Probe]` render counter and `setData` probes | `ProjectTimePlannerV2.jsx` (top of component + each `setData` effect call) and `useComputedDataV2.ts`. Search for `// RENDER PROBE`. |
 | **Undo Draft** button | Nav bar on all three pages. See `docs/year-flow.md`. |
 | **Revert Archive** button | Nav bar (dev-only). |
