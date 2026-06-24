@@ -7,14 +7,18 @@
  * single action.
  *
  * Public API:
- *   saveSiteSnapshot(yearNumber)       => Promise<void>
- *   loadSiteSnapshots(yearNumber)      => Promise<Snapshot[]>
+ *   debounceSiteSnapshot(yearNumber)          => void        (call from storage saves)
+ *   saveSiteSnapshot(yearNumber)              => Promise<void>
+ *   loadSiteSnapshots(yearNumber)             => Promise<Snapshot[]>
  *   restoreSiteSnapshot(snapshot, yearNumber) => Promise<void>
  *   maybeSnapshotOnSessionStart(yearNumber)   => Promise<void>
  *
  * Design decisions:
- *   - Activity-driven: a snapshot fires before each save, throttled to one
- *     every 2 minutes so snapshots cluster around real editing sessions.
+ *   - Activity-driven via debounce: storage save functions call
+ *     debounceSiteSnapshot(), which resets a 30-second timer on each write.
+ *     The snapshot fires only after 30 seconds of inactivity, so rapid or
+ *     mid-thought edits coalesce into one clean snapshot. A 25-second
+ *     MIN_INTERVAL floor prevents duplicate snapshots if timers race.
  *   - Rolling window of 50: when a 51st row would be inserted, the oldest
  *     is deleted first.
  *   - Session-start snapshot: call maybeSnapshotOnSessionStart on app load.
@@ -219,8 +223,41 @@ async function captureSystem(yearNumber) {
       captureSystemSettings(yearNumber),
       captureYearData(yearNumber),
     ]);
-    return { taskRows: rows, plannerSettings, yearData };
+    const taskEvents = await captureTaskEvents(rows).catch(() => null);
+    return { taskRows: rows, plannerSettings, yearData, taskEvents };
   } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Captures all task_events rows for the given task rows.
+ *
+ * Only reads events for UUID-format task IDs — rows with synthetic IDs
+ * (e.g. 'row-0') never have events written against them.
+ *
+ * Returns [] when confirmed empty, null when the read failed. The restore
+ * helper uses this distinction: [] triggers a delete-and-reinsert (removing
+ * any events written after the snapshot), null skips the restore entirely.
+ */
+async function captureTaskEvents(taskRows) {
+  try {
+    const isValidUUID = (id) =>
+      typeof id === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+    const taskIds = (taskRows ?? []).map((r) => r.id).filter(isValidUUID);
+    if (!taskIds.length) return [];
+
+    const userId = await requireUserId();
+    const { data, error } = await supabase
+      .from('task_events')
+      .select('task_id, field, old_value, new_value, note, changed_at')
+      .eq('user_id', userId)
+      .in('task_id', taskIds);
+    if (error) throw error;
+    return data ?? [];
+  } catch {
     return null;
   }
 }
@@ -385,11 +422,70 @@ async function restorePlan(planData, yearNumber) {
 async function restoreSystem(systemData, yearNumber) {
   if (!systemData?.taskRows) return;
   const { saveTaskRows } = await import('../utils/planner/storage');
+  // saveTaskRows must complete before restoreTaskEvents so the planner_rows
+  // exist in the DB when events are re-inserted (in case a FK is enforced).
   await Promise.all([
     saveTaskRows(systemData.taskRows, DEFAULT_PROJECT_ID, yearNumber),
     restoreSystemSettings(systemData.plannerSettings ?? null, yearNumber),
     restoreYearData(systemData.yearData ?? null, yearNumber),
   ]);
+  // null = capture failed or old snapshot predating this fix — skip to avoid
+  // wiping real events. [] = confirmed empty at snapshot time — delete all.
+  if (systemData.taskEvents != null) {
+    await restoreTaskEvents(systemData.taskEvents, systemData.taskRows).catch((err) => {
+      console.error('[snapshotStorage] restoreTaskEvents failed', err);
+    });
+  }
+}
+
+/**
+ * Replaces task_events for the restored task rows with the captured snapshot array.
+ *
+ * null/undefined → skip (capture failed or old snapshot; don't risk wiping data)
+ * []             → delete all events for these tasks, insert nothing
+ * [...]          → delete existing events for these tasks, re-insert captured set
+ *
+ * Scopes the delete to the task IDs present in the snapshot so events for other
+ * years' tasks are never touched.
+ */
+async function restoreTaskEvents(taskEvents, taskRows) {
+  if (taskEvents === null || taskEvents === undefined) return;
+
+  const isValidUUID = (id) =>
+    typeof id === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+  const taskIds = (taskRows ?? []).map((r) => r.id).filter(isValidUUID);
+  if (!taskIds.length) return;
+
+  try {
+    const userId = await requireUserId();
+
+    const { error: deleteError } = await supabase
+      .from('task_events')
+      .delete()
+      .eq('user_id', userId)
+      .in('task_id', taskIds);
+    if (deleteError) throw deleteError;
+
+    if (taskEvents.length > 0) {
+      const rows = taskEvents.map((e) => ({
+        user_id: userId,
+        task_id: e.task_id,
+        field: e.field,
+        old_value: e.old_value,
+        new_value: e.new_value,
+        note: e.note,
+        changed_at: e.changed_at,
+      }));
+      const { error: insertError } = await supabase
+        .from('task_events')
+        .insert(rows);
+      if (insertError) throw insertError;
+    }
+  } catch (err) {
+    console.error('[snapshotStorage] restoreTaskEvents failed', err);
+  }
 }
 
 /**
