@@ -408,7 +408,7 @@ const TaskRow = React.memo(function TaskRow({
                             border: '2px solid white'
                           }}
                         >
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value}>{value}</span>
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value}>{value}</span>
                           <ChevronDown
                             size={10}
                             style={{ color: '#000000', cursor: 'pointer' }}
@@ -469,7 +469,7 @@ const TaskRow = React.memo(function TaskRow({
                           border: '1px solid white'
                         }}
                       >
-                        <span>{value || '-'}</span>
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value || '-'}>{value || '-'}</span>
                         <ChevronDown
                           size={12}
                           style={{ color: '#9ca3af', cursor: 'pointer' }}
@@ -494,7 +494,7 @@ const TaskRow = React.memo(function TaskRow({
                             border: '2px solid white'
                           }}
                         >
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value}>{value}</span>
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value}>{value}</span>
                           <ChevronDown
                             size={10}
                             style={{ color: PILLBOX_COLORS[value]?.text || PILLBOX_COLORS['-'].text, cursor: 'pointer' }}
@@ -539,7 +539,7 @@ const TaskRow = React.memo(function TaskRow({
                           color: ESTIMATE_COLOR_MAP[value]?.text || 'inherit'
                         }}
                       >
-                        <span>{value || '-'}</span>
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value || '-'}>{value || '-'}</span>
                         <ChevronDown
                           size={12}
                           style={{ color: '#9ca3af', cursor: 'pointer' }}
