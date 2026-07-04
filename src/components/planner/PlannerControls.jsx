@@ -14,11 +14,11 @@ function PlannerControls({
         <button
           onClick={undo}
           disabled={undoStack.length === 0}
-          className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-            undoStack.length === 0
-              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              : 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
-          }`}
+          className="px-3 py-1 rounded text-sm font-medium transition-colors"
+          style={undoStack.length === 0
+            ? { background:'#e5e7eb', color:'#9ca3af', cursor:'not-allowed' }
+            : { background:'var(--brand-deep)', color:'#fff', cursor:'pointer' }
+          }
           title={`Undo (${undoStack.length === 0 ? 'No actions' : `${undoStack.length} action${undoStack.length > 1 ? 's' : ''}`})`}
         >
           ↶ Undo
@@ -26,11 +26,11 @@ function PlannerControls({
         <button
           onClick={redo}
           disabled={redoStack.length === 0}
-          className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-            redoStack.length === 0
-              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              : 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
-          }`}
+          className="px-3 py-1 rounded text-sm font-medium transition-colors"
+          style={redoStack.length === 0
+            ? { background:'#e5e7eb', color:'#9ca3af', cursor:'not-allowed' }
+            : { background:'var(--brand-deep)', color:'#fff', cursor:'pointer' }
+          }
           title={`Redo (${redoStack.length === 0 ? 'No actions' : `${redoStack.length} action${redoStack.length > 1 ? 's' : ''}`})`}
         >
           ↷ Redo

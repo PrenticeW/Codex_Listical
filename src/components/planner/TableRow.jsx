@@ -319,7 +319,7 @@ const TableRow = React.memo(function TableRow({
                     boxSizing: 'border-box',
                     position: 'sticky',
                     left: 0,
-                    backgroundColor: '#d9f6e0',
+                    backgroundColor: '#E8ECF5',
                     zIndex: rowNumZIndex,
                   }}
                   className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
@@ -332,7 +332,7 @@ const TableRow = React.memo(function TableRow({
                     }}
                     onDragEnd={handleDragEnd}
                     className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-grab active:cursor-grabbing`}
-                    style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? '#a7e8b8' : '#d9f6e0', color: '#065f46' }}
+                    style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
                     onClick={(e) => handleRowNumberClick(e, rowId)}
                     onContextMenu={(e) => handleCellContextMenu?.(e, rowId, 'rowNum')}
                     title="Drag to reorder"
@@ -863,11 +863,11 @@ const TableRow = React.memo(function TableRow({
           // Day of week row: #d9d9d9 for weekends, #efefef for weekdays
           bgColor = isWeekend ? '#d9d9d9' : '#efefef';
         } else if (isDailyMinRow) {
-          // Daily min row: pink
-          bgColor = '#ead1dc';
+          // Daily min row: light blue
+          bgColor = '#C8D8F0';
         } else if (isDailyMaxRow) {
-          // Daily max row: light pink
-          bgColor = '#f2e5eb';
+          // Daily max row: pale blue
+          bgColor = '#DCE8F8';
         } else {
           // Day number row: transparent to show borders
           bgColor = 'transparent';
@@ -927,7 +927,7 @@ const TableRow = React.memo(function TableRow({
                 boxSizing: 'border-box',
                 position: 'sticky',
                 left: 0,
-                backgroundColor: '#d9f6e0',
+                backgroundColor: '#E8ECF5',
                 zIndex: rowNumZIndex,
               }}
               className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
@@ -940,7 +940,7 @@ const TableRow = React.memo(function TableRow({
                 }}
                 onDragEnd={handleDragEnd}
                 className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-grab active:cursor-grabbing`}
-                style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? '#a7e8b8' : '#d9f6e0', color: '#065f46' }}
+                style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
                 onClick={(e) => handleRowNumberClick(e, rowId)}
                 onContextMenu={(e) => handleCellContextMenu?.(e, rowId, 'rowNum')}
                 title="Drag to reorder"
@@ -996,7 +996,7 @@ const TableRow = React.memo(function TableRow({
                 className="h-full flex items-center justify-end"
                 style={{
                   minHeight: `${rowHeight}px`,
-                  backgroundColor: row.index < 4 ? 'black' : '#ead1dc',
+                  backgroundColor: row.index < 4 ? 'black' : '#F0F4FC',
                   borderBottom: row.index < 4 ? '1px solid black' : '1px solid #d3d3d3',
                   borderLeft: (row.index < 4 && columnId === 'checkbox') ? '1px solid black' : 'none',
                   borderRight: columnId === 'timeValue' ? '1.5px solid black' : (row.index < 4 ? 'none' : '1px solid #d3d3d3'),
@@ -1010,7 +1010,7 @@ const TableRow = React.memo(function TableRow({
                       className="cursor-pointer"
                       onClick={filterClickHandler}
                       title={`Filter ${columnId}`}
-                      style={{ fill: '#065f46', stroke: '#065f46' }}
+                      style={{ fill: 'var(--brand-deep)', stroke: 'var(--brand-deep)' }}
                     />
                   ) : (
                     <ListFilter
@@ -1050,9 +1050,9 @@ const TableRow = React.memo(function TableRow({
               style={{
                 minHeight: `${rowHeight}px`,
                 fontSize: `${cellFontSize}px`,
-                backgroundColor: '#ead1dc',
-                borderBottom: '1px solid #d3d3d3',
-                borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3',
+                backgroundColor: '#F0F4FC',
+                borderBottom: '1px solid #D0D8E8',
+                borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #D0D8E8',
                 paddingLeft: '2px',
                 paddingRight: '2px',
               }}
@@ -1061,9 +1061,9 @@ const TableRow = React.memo(function TableRow({
               {isFilterActive ? (
                 <Filter
                   size={10}
-                  fill="#065f46"
+                  fill="var(--brand-deep)"
                   className="cursor-pointer transition-colors shrink-0"
-                  style={{ color: '#065f46' }}
+                  style={{ color: 'var(--brand-deep)' }}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (handleDayColumnFilterToggle) {

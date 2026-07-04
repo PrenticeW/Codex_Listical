@@ -58,8 +58,8 @@ Migrations written but not yet applied to the database. Apply as a batch.
 
 | Item | Detail |
 |---|---|
-| Configure custom SMTP | Supabase's built-in mailer is dev-only (roughly 2 auth emails/hour/project). Set up Resend, Postmark, or SendGrid under Auth → Emails → SMTP Settings before any public rollout. |
-| B3 end-to-end smoke test | Signup → "Check your inbox" card → email confirmation link → authenticated redirect. Was blocked on Supabase rate limit; unblocks once custom SMTP is configured. |
+| Configure custom SMTP | Done (June 2026) — Brevo configured via Auth → Emails → SMTP. Free tier supports 300 auth emails/day. If daily signups exceed that, upgrade Brevo or switch to Resend (requires a custom domain). |
+| B3 end-to-end smoke test | Done (June 2026) — invite email confirmed delivered. Lands in spam on the current shared Brevo domain; will improve once a custom domain is set up. |
 | OG card / brand asset | `index.html` references `/og-card.png` with a TODO comment. Needed before the app is publicly shareable. |
 
 ---

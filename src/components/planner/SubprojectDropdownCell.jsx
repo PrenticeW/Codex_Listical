@@ -121,11 +121,12 @@ function SubprojectDropdownCell({
     >
       <button
         ref={buttonRef}
-        className="w-full h-full px-1 border-2 border-blue-500 focus:outline-none flex items-center justify-between gap-1"
+        className="w-full h-full px-1 focus:outline-none flex items-center justify-between gap-1"
         style={{
           fontSize: `${cellFontSize}px`,
           backgroundColor: '#ffffff',
-          color: '#000000'
+          color: '#000000',
+          border: '2px solid var(--sel-ring)',
         }}
         onClick={() => setIsOpen(!isOpen)}
       >
@@ -137,29 +138,30 @@ function SubprojectDropdownCell({
 
       {isOpen && createPortal(
         <div
-          className="border border-gray-300 shadow-lg"
           style={{
             position: 'fixed',
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
             width: `${dropdownPosition.width}px`,
             backgroundColor: '#ffffff',
-            zIndex: 9999
+            border: '1px solid #e8e8e4',
+            borderRadius: 6,
+            boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 12px rgba(72,50,75,0.10)',
+            zIndex: 9999,
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
           {SUBPROJECT_OPTIONS.map((option, index) => (
             <div
               key={option}
-              className={`py-1 px-2 cursor-pointer ${
-                index === selectedIndex ? 'ring-2 ring-inset ring-black' : ''
-              } ${option === '-' ? 'text-left' : ''}`}
+              className={`py-1 px-2 cursor-pointer ${option === '-' ? 'text-left' : ''}`}
               style={{
                 fontSize: `${cellFontSize}px`,
                 minHeight: `${rowHeight}px`,
                 display: 'flex',
                 alignItems: 'center',
-                backgroundColor: index === selectedIndex ? '#fff5fc' : '#ffffff',
+                boxShadow: index === selectedIndex ? 'inset 0 0 0 2px var(--brand-deep)' : 'none',
+                backgroundColor: index === selectedIndex ? 'var(--sel-row)' : '#ffffff',
                 color: '#000000'
               }}
               onMouseDown={(e) => handleSelect(e, option)}

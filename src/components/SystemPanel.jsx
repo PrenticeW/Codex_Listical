@@ -15,6 +15,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import PanelShell from './PanelShell';
 import { useLocation } from 'react-router-dom';
 import { useSystemPanel } from '../contexts/SystemPanelContext';
 import { useTaskRowPanel } from '../contexts/TaskRowPanelContext';
@@ -51,15 +52,21 @@ const C = {
   textDim:     '#555',
   textFaint:   '#999',
   textLight:   '#bbb',
-  green:       '#1a7a5c',
-  greenDark:   '#1a5c3a',
+  green:       'var(--brand-deep)',
+  greenDark:   'var(--brand-ink)',
+  greenBg:     'var(--brand-tint)',
+  greenBorder: 'var(--brand-bd)',
 };
 
 const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
-const SECTION = {
-  borderBottom: `1px solid ${C.borderLight}`,
-  padding: '24px 26px',
+const BENTO_CARD = {
+  background: '#FFFFFF',
+  borderRadius: 12,
+  padding: '15px 16px',
+  margin: '0 11px 7px',
+  border: '1px solid #e8e8e4',
+  boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.07)',
 };
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
@@ -67,8 +74,11 @@ const SECTION = {
 function SectionLabel({ children }) {
   return (
     <div style={{
-      fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
-      textTransform: 'uppercase', color: C.textLight, marginBottom: 16,
+      fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
+      textTransform: 'uppercase', color: 'var(--brand-ink)',
+      paddingBottom: 9, borderBottom: '1px solid var(--brand-bd)',
+      marginBottom: 11,
+      fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
     }}>
       {children}
     </div>
@@ -94,13 +104,15 @@ function ActionBtn({ icon, label, disabled, onClick, rightSlot, style }) {
       }}
       onMouseEnter={e => {
         if (!disabled) {
-          e.currentTarget.style.borderColor = C.green;
-          e.currentTarget.style.color = C.green;
+          e.currentTarget.style.borderColor = 'var(--brand)';
+          e.currentTarget.style.color = 'var(--brand-deep)';
+          e.currentTarget.style.background = 'var(--brand-hover-bg)';
         }
       }}
       onMouseLeave={e => {
         e.currentTarget.style.borderColor = C.border;
         e.currentTarget.style.color = disabled ? C.textFaint : C.textDim;
+        e.currentTarget.style.background = 'none';
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -112,13 +124,16 @@ function ActionBtn({ icon, label, disabled, onClick, rightSlot, style }) {
   );
 }
 
-// Green flash checkmark — shown briefly after an action fires
+// Flash checkmark — shown briefly after an action fires (1200ms)
 function useConfirmFlash() {
   const [visible, setVisible] = useState(false);
+  const timerRef = useRef(null);
   const flash = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
     setVisible(true);
-    setTimeout(() => setVisible(false), 900);
+    timerRef.current = setTimeout(() => setVisible(false), 1200);
   }, []);
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
   return [visible, flash];
 }
 
@@ -126,14 +141,15 @@ function CheckBadge({ visible }) {
   return (
     <span style={{
       opacity: visible ? 1 : 0,
-      transition: 'opacity 0.2s',
-      width: 44, height: 26,
-      background: visible ? C.green : C.border,
-      borderRadius: 7,
+      transform: visible ? 'scale(1)' : 'scale(0.7)',
+      transition: 'opacity 0.2s, transform 0.2s',
+      width: 40, height: 24,
+      background: 'var(--brand-deep)',
+      borderRadius: 6,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      flexShrink: 0,
+      flexShrink: 0, pointerEvents: 'none',
     }}>
-      <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
+      <svg width="10" height="8" viewBox="0 0 12 10" fill="none">
         <path d="M1 5l3.5 3.5L11 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     </span>
@@ -163,7 +179,7 @@ function InsertControl({ inputId, value, onChange, onAdd }) {
           color: C.text, textAlign: 'center',
           background: '#fff', outline: 'none', padding: 0,
         }}
-        onFocus={e => e.target.style.borderColor = C.green}
+        onFocus={e => e.target.style.borderColor = 'var(--brand)'}
         onBlur={e => e.target.style.borderColor = C.border}
       />
       <button
@@ -171,7 +187,7 @@ function InsertControl({ inputId, value, onChange, onAdd }) {
         disabled={!active}
         style={{
           flex: 1, height: 26,
-          background: active ? C.greenDark : C.border,
+          background: active ? 'var(--brand-deep)' : C.border,
           border: 'none', borderRadius: 7,
           fontFamily: FONT, fontSize: 13, fontWeight: 500,
           color: '#fff', cursor: active ? 'pointer' : 'default',
@@ -190,10 +206,10 @@ function StatusChip({ label, checked, onChange }) {
     <label style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
       fontSize: 13,
-      color: checked ? '#1a5c3a' : C.textDim,
+      color: checked ? 'var(--brand-ink)' : C.textDim,
       cursor: 'pointer',
-      background: checked ? '#edf5f0' : C.bgBlock,
-      border: `1px solid ${checked ? '#a8d4be' : C.border}`,
+      background: checked ? 'var(--brand-tint)' : C.bgBlock,
+      border: `1px solid ${checked ? 'var(--brand-bd)' : C.border}`,
       borderRadius: 20, padding: '5px 10px',
       transition: 'background 0.15s, border-color 0.15s, color 0.15s',
       userSelect: 'none',
@@ -238,7 +254,7 @@ function InsertSection() {
   };
 
   return (
-    <div style={SECTION}>
+    <div style={BENTO_CARD}>
       <SectionLabel>Insert</SectionLabel>
 
       {/* Insert task rows — row-dependent */}
@@ -365,7 +381,7 @@ function SortSection() {
   };
 
   return (
-    <div style={SECTION}>
+    <div style={BENTO_CARD}>
       <SectionLabel>Sort</SectionLabel>
 
       <div style={{
@@ -412,7 +428,7 @@ function SortSection() {
               disabled={!anyChecked}
               style={{
                 marginTop: 10, width: '100%', height: 30,
-                background: anyChecked ? C.greenDark : C.border,
+                background: anyChecked ? 'var(--brand-deep)' : C.border,
                 border: 'none', borderRadius: 7,
                 fontFamily: FONT, fontSize: 13, fontWeight: 500,
                 color: '#fff', cursor: anyChecked ? 'pointer' : 'default',
@@ -434,7 +450,7 @@ function ArchiveSection() {
   const [showPrevFlash, flashShowPrev] = useConfirmFlash();
 
   return (
-    <div style={SECTION}>
+    <div style={BENTO_CARD}>
       <SectionLabel>Archive</SectionLabel>
 
       <ActionBtn
@@ -534,7 +550,7 @@ function PlanSection() {
   const [goalOpen, setGoalOpen] = useState(false);
 
   return (
-    <div style={SECTION}>
+    <div style={BENTO_CARD}>
       <SectionLabel>Plan</SectionLabel>
 
       {/* Filter by day */}
@@ -570,7 +586,7 @@ function PlanSection() {
                     style={{
                       padding: '5px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
                       fontFamily: FONT, fontSize: 13, fontWeight: isActive ? 600 : 400,
-                      background: isActive ? C.green : C.bgBlock,
+                      background: isActive ? 'var(--brand-deep)' : C.bgBlock,
                       color: isActive ? '#fff' : C.textDim,
                       transition: 'background 0.12s, color 0.12s',
                     }}
@@ -635,7 +651,7 @@ function PlanSection() {
                         style={{
                           padding: '5px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
                           fontFamily: FONT, fontSize: 13, fontWeight: isActive ? 600 : 400,
-                          background: isActive ? C.green : C.bgBlock,
+                          background: isActive ? 'var(--brand-deep)' : C.bgBlock,
                           color: isActive ? '#fff' : C.textDim,
                           transition: 'background 0.12s, color 0.12s',
                         }}
@@ -678,7 +694,7 @@ function PageSection() {
   }, []);
 
   return (
-    <div style={{ ...SECTION, borderBottom: 'none' }}>
+    <div style={{ ...BENTO_CARD, marginBottom: 11 }}>
       <SectionLabel>Page</SectionLabel>
 
       {/* Undo / Redo */}
@@ -711,7 +727,7 @@ function PageSection() {
               padding: '12px 16px', fontFamily: FONT, fontSize: 14, fontWeight: 400,
               color: C.textDim, cursor: 'pointer', transition: 'border-color 0.15s, color 0.15s',
             }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = C.green; e.currentTarget.style.color = C.green; }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--brand)'; e.currentTarget.style.color = 'var(--brand-deep)'; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; }}
             onClick={() => dispatchSystemAction(label.toLowerCase())}
           >
@@ -836,46 +852,37 @@ export default function SystemPanel() {
 
   const showTaskDetail = Boolean(selectedTask);
 
-  return createPortal(
-    <div
-      style={{
-        position: 'fixed', right: 0, top: navBottom, bottom: 0,
-        width: 480,
-        background: C.bg,
-        borderLeft: `1px solid ${C.border}`,
-        zIndex: 99994, // one below GearPanel so gear always wins if somehow both open
-        overflow: 'hidden',
-        transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
-        transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
-      }}
-    >
+  return (
+    <PanelShell isOpen={isOpen} navBottom={navBottom} width={480} zIndex={99994}>
       {/* ── Outer slide: system content ↔ task detail ── */}
       <div style={{
-        display: 'flex', width: 960, height: '100%',
-        transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
-        transform: showTaskDetail ? 'translateX(-480px)' : 'translateX(0)',
+        position: 'absolute', inset: 0, overflow: 'hidden',
+        display: 'flex', flexDirection: 'column',
       }}>
-
-        {/* System main content (320px, flex column so PageSection pins to bottom) */}
-        <div style={{ width: 480, flexShrink: 0, overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-            <InsertSection />
-            <SortSection />
-            <ArchiveSection />
-            <PlanSection />
+        <div style={{
+          display: 'flex', width: 960, height: '100%',
+          transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
+          transform: showTaskDetail ? 'translateX(-480px)' : 'translateX(0)',
+        }}>
+          {/* System main content */}
+          <div style={{ width: 480, flexShrink: 0, overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingTop: 20, paddingBottom: 24 }}>
+              <InsertSection />
+              <SortSection />
+              <ArchiveSection />
+              <PlanSection />
+            </div>
+            <div style={{ flexShrink: 0, borderTop: '1px solid var(--brand-bd)' }}>
+              <PageSection />
+            </div>
           </div>
-          <div style={{ flexShrink: 0, borderTop: `1px solid ${C.borderLight}` }}>
-            <PageSection />
+
+          {/* Task detail view */}
+          <div style={{ width: 480, flexShrink: 0, overflow: 'hidden', height: '100%' }}>
+            <TaskDetailContent selectedTask={selectedTask} onBack={closePanel} use24Hour={use24Hour} />
           </div>
         </div>
-
-        {/* Task detail view (320px, overflow hidden — inner slide handles its own scroll) */}
-        <div style={{ width: 480, flexShrink: 0, overflow: 'hidden', height: '100%' }}>
-          <TaskDetailContent selectedTask={selectedTask} onBack={closePanel} use24Hour={use24Hour} />
-        </div>
-
       </div>
-    </div>,
-    document.body
+    </PanelShell>
   );
 }

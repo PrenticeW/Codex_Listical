@@ -4454,7 +4454,9 @@ export default function TacticsPage() {
           <input
             ref={menuRenameInputRef}
             type="text"
-            className="w-full rounded border border-[#94a3b8] bg-white px-2 py-1 text-[11px] text-slate-800 outline-none focus:border-black"
+            style={{ width:'100%', border:'1px solid #e8e8e4', borderRadius:4, background:'#fff', padding:'4px 8px', fontSize:11, color:'#1A1A1A', outline:'none', fontFamily:"'Google Sans',-apple-system,sans-serif", transition:'border-color .15s' }}
+            onFocus={e=>e.target.style.borderColor='var(--brand)'}
+            onBlur={e=>e.target.style.borderColor='#e8e8e4'}
             value={menuRenamingLabel}
             onChange={(e) => setMenuRenamingLabel(e.target.value)}
             onKeyDown={(e) => {
@@ -4470,15 +4472,19 @@ export default function TacticsPage() {
     return (
       <div
         ref={cellMenuRef}
-        className="fixed rounded border border-[#94a3b8] shadow-2xl"
         style={{
+          position: 'fixed',
           ...(position?.openAbove
             ? { bottom: window.innerHeight - (position?.top ?? 0), top: 'auto' }
             : { top: position?.top ?? 0 }),
           left: position?.left ?? 0,
           minWidth: Math.max(position?.width ?? 0, 260),
-          backgroundColor: '#f8fafc',
+          backgroundColor: '#ffffff',
+          border: '1px solid #e8e8e4',
+          borderRadius: 8,
+          boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 16px rgba(72,50,75,0.12)',
           zIndex: 999999,
+          overflow: 'hidden',
         }}
       >
         {chipEditor ? (
@@ -4486,22 +4492,24 @@ export default function TacticsPage() {
         <div onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
-            className="flex w-full items-center gap-1.5 px-3 pt-2.5 pb-1.5 text-left text-[11px] font-semibold text-slate-600 hover:text-slate-900"
+            style={{ display:'flex', alignItems:'center', gap:7, width:'100%', padding:'10px 12px 8px', background:'none', border:'none', cursor:'pointer', fontFamily:"'Google Sans',-apple-system,sans-serif", fontSize:13, color:'var(--brand-ink)', textAlign:'left', transition:'color .15s' }}
+            onMouseEnter={e=>e.currentTarget.style.color='var(--brand-deep)'}
+            onMouseLeave={e=>e.currentTarget.style.color='var(--brand-ink)'}
             onClick={closeChipEditor}
           >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11.5 8a.5.5 0 0 0-.5-.5H4.707l2.147-2.146a.5.5 0 1 0-.708-.708l-3 3a.5.5 0 0 0 0 .708l3 3a.5.5 0 0 0 .708-.708L4.707 8.5H11a.5.5 0 0 0 .5-.5z"/></svg>
+            <svg width="7" height="11" viewBox="0 0 7 11" fill="none"><path d="M6 1L1 5.5 6 10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
             <span>Back</span>
           </button>
-          <div className="mx-3 mb-1 border-t border-[#e5e7eb]" />
+          <div style={{ height:1, background:'rgba(200,174,198,0.35)', margin:'0 0 4px' }} />
           <div className="px-3 pb-3">
             <div
-              className="mb-2.5 flex w-full items-center justify-center rounded-sm px-2 py-2.5 text-[11px] font-bold uppercase truncate"
+              style={{ marginBottom:10, display:'flex', width:'100%', alignItems:'center', justifyContent:'center', borderRadius:4, padding:'8px 12px', fontFamily:"'Google Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', minHeight:32 }}
               style={{ background: chipEditor.color, color: chipContrastColour(chipEditor.color) }}
             >
               {chipEditor.name || ' '}
             </div>
 
-            <div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400">Name</div>
+            <div style={{ fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', paddingBottom:3, marginBottom:6 }}>Name</div>
             <input
               type="text"
               autoFocus
@@ -4511,18 +4519,20 @@ export default function TacticsPage() {
                 if (e.key === 'Enter') { e.preventDefault(); commitChipEditor(); }
                 else if (e.key === 'Escape') { e.preventDefault(); closeChipEditor(); }
               }}
-              className="mb-2.5 w-full rounded-sm border border-slate-300 px-2 py-1.5 text-[11px] font-bold uppercase text-slate-800 outline-none focus:border-slate-500"
+              style={{ width:'100%', border:'1px solid #e8e8e4', borderRadius:4, padding:'5px 8px', fontFamily:"'Google Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', color:'#1A1A1A', outline:'none', boxSizing:'border-box', background:'#fff', marginBottom:10, transition:'border-color .15s' }}
+              onFocus={e=>e.target.style.borderColor='var(--brand)'}
+              onBlur={e=>e.target.style.borderColor='#e8e8e4'}
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             />
 
-            <div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400">Colour</div>
+            <div style={{ fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', paddingBottom:3, marginBottom:6 }}>Colour</div>
             <div className="mb-2 flex items-center gap-1.5">
               <button
                 type="button"
                 disabled={chipEditorSlide === 0}
                 onClick={() => setChipEditorSlide((s) => Math.max(0, s - 1))}
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-25"
+                style={{ display:'flex', width:24, height:24, flexShrink:0, alignItems:'center', justifyContent:'center', borderRadius:4, border:'1px solid #e8e8e4', background:'#fff', color:'#616161', cursor:'pointer', opacity: chipEditorSlide === 0 ? 0.25 : 1 }}
               >
                 <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg>
               </button>
@@ -4546,7 +4556,7 @@ export default function TacticsPage() {
                 type="button"
                 disabled={chipEditorSlide === CHIP_PALETTE_SLIDES.length - 1}
                 onClick={() => setChipEditorSlide((s) => Math.min(CHIP_PALETTE_SLIDES.length - 1, s + 1))}
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-25"
+                style={{ display:'flex', width:24, height:24, flexShrink:0, alignItems:'center', justifyContent:'center', borderRadius:4, border:'1px solid #e8e8e4', background:'#fff', color:'#616161', cursor:'pointer', opacity: chipEditorSlide === CHIP_PALETTE_SLIDES.length - 1 ? 0.25 : 1 }}
               >
                 <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg>
               </button>
@@ -4557,20 +4567,24 @@ export default function TacticsPage() {
                 type="button"
                 title="Pick colour from screen"
                 onClick={chipEditorEyedropper}
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
+                style={{ display:'flex', width:32, height:32, flexShrink:0, alignItems:'center', justifyContent:'center', borderRadius:4, border:'1px solid #e8e8e4', background:'#fff', color:'#616161', cursor:'pointer' }}
+                onMouseEnter={e=>{ e.currentTarget.style.background='rgba(43,89,182,0.05)'; e.currentTarget.style.borderColor='var(--brand-hover-bd)'; }}
+                onMouseLeave={e=>{ e.currentTarget.style.background='#fff'; e.currentTarget.style.borderColor='#e8e8e4'; }}
               >
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.354.646a1.207 1.207 0 0 0-1.708 0L8.5 3.793l-.646-.647a.5.5 0 1 0-.708.708L8.293 5l-7.147 7.146A.5.5 0 0 0 1 12.5v1.793l-.854.853a.5.5 0 1 0 .708.707L1.707 15H3.5a.5.5 0 0 0 .354-.146L11 7.707l1.146 1.147a.5.5 0 0 0 .708-.708l-.647-.646 3.147-3.146a1.207 1.207 0 0 0 0-1.708zM2 12.707l7-7L10.293 7l-7 7H2z"/></svg>
               </button>
               <label
                 title="Mix a custom colour"
-                className="relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
+                style={{ position:'relative', display:'flex', width:32, height:32, flexShrink:0, cursor:'pointer', alignItems:'center', justifyContent:'center', borderRadius:4, border:'1px solid #e8e8e4', background:'#fff', color:'#616161' }}
+                onMouseEnter={e=>{ e.currentTarget.style.background='rgba(43,89,182,0.05)'; e.currentTarget.style.borderColor='var(--brand-hover-bd)'; }}
+                onMouseLeave={e=>{ e.currentTarget.style.background='#fff'; e.currentTarget.style.borderColor='#e8e8e4'; }}
                 onClick={(e) => e.stopPropagation()}
               >
                 <input
                   type="color"
                   value={typeof chipEditor.color === 'string' && chipEditor.color.startsWith('#') ? chipEditor.color : '#ffffff'}
                   onInput={(e) => setChipEditorColour(e.target.value)}
-                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  style={{ position:'absolute', inset:0, width:'100%', height:'100%', cursor:'pointer', opacity:0 }}
                 />
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M6.192 2.78c-.458-.677-.927-1.248-1.35-1.643a3 3 0 0 0-.71-.515c-.217-.104-.56-.205-.882-.02-.367.213-.427.63-.43.896-.003.304.064.664.173 1.044.196.687.556 1.528 1.035 2.402L.752 8.22c-.277.277-.269.656-.218.918.055.283.187.593.36.903.348.627.92 1.361 1.626 2.068.707.707 1.441 1.278 2.068 1.626.31.173.62.305.903.36.262.05.64.059.918-.218l5.615-5.615c.118.257.092.512.05.939-.03.292-.068.665-.073 1.176v.123h.003a1 1 0 0 0 1.993 0H14v-.057a1 1 0 0 0-.004-.117c-.055-1.25-.7-2.738-1.86-3.494a4 4 0 0 0-.211-.434c-.349-.626-.92-1.36-1.627-2.067S8.857 3.052 8.23 2.704c-.31-.172-.62-.304-.903-.36-.262-.05-.64-.058-.918.219z"/></svg>
               </label>
@@ -4578,9 +4592,11 @@ export default function TacticsPage() {
                 type="button"
                 title="Confirm"
                 onClick={commitChipEditor}
-                className="flex h-8 w-11 items-center justify-center rounded-md border border-slate-400 bg-white text-slate-600 hover:bg-slate-100"
+                style={{ display:'flex', width:44, height:32, flexShrink:0, alignItems:'center', justifyContent:'center', borderRadius:4, border:'1px solid var(--brand-deep)', background:'var(--brand-deep)', color:'#fff', cursor:'pointer' }}
+                onMouseEnter={e=>e.currentTarget.style.opacity='0.85'}
+                onMouseLeave={e=>e.currentTarget.style.opacity='1'}
               >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
+                <svg width="12" height="10" viewBox="0 0 14 10" fill="none"><path d="M1 5l3.5 3.5L13 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
             </div>
           </div>
@@ -4588,7 +4604,7 @@ export default function TacticsPage() {
         ) : (
         <>
         {/* ── Default chips section (top) ───────────────────────── */}
-        <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+        <div style={{ fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', padding:'10px 12px 5px', marginBottom:4 }}>
           Default chips
         </div>
         {['sleep', 'rest', 'buffer'].map((defaultId) => {
@@ -4597,7 +4613,7 @@ export default function TacticsPage() {
             <div key={defaultId} className="flex items-center gap-1 px-2 py-1">
               <button
                 type="button"
-                className="flex-1 px-2 py-1.5 text-left text-[11px] font-bold uppercase rounded-sm hover:opacity-80 truncate"
+                style={{ flex:1, padding:'6px 10px', textAlign:'left', fontFamily:"'Google Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', borderRadius:4, border:'none', cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', transition:'opacity .1s' }}
                 style={{ backgroundColor: meta.color, color: chipContrastColour(meta.color) }}
                 onClick={() => handleProjectSelection(defaultId)}
               >
@@ -4606,7 +4622,7 @@ export default function TacticsPage() {
               <button
                 type="button"
                 title="Edit chip"
-                className="shrink-0 rounded p-1 text-slate-400 hover:text-slate-700"
+                style={{ width:26, height:26, border:'none', background:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#9E9E9E', borderRadius:4, flexShrink:0, transition:'color .1s, background .1s' }} onMouseEnter={e=>{ e.currentTarget.style.color='#1A1A1A'; e.currentTarget.style.background='#f0f0f0'; }} onMouseLeave={e=>{ e.currentTarget.style.color='#9E9E9E'; e.currentTarget.style.background='none'; }}
                 onClick={(e) => { e.stopPropagation(); openChipEditor('default', defaultId, meta.label, meta.color); }}
               >
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11.498 1.499a1.707 1.707 0 0 1 2.414 2.414l-9.5 9.5a1 1 0 0 1-.39.242l-3 1a1 1 0 0 1-1.268-1.268l1-3a1 1 0 0 1 .242-.39l9.502-9.498zm1 1-9.5 9.5-.646 1.94 1.94-.646 9.5-9.5a.707.707 0 0 0-1-1z"/></svg>
@@ -4615,10 +4631,10 @@ export default function TacticsPage() {
             </div>
           );
         })}
-        <div className="mx-3 my-1 border-t border-[#e5e7eb]" />
+        <div style={{ height:1, background:'rgba(200,174,198,0.35)', margin:'4px 0' }} />
 
         {/* ── Project chips section ─────────────────────────────── */}
-        <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+        <div style={{ fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', padding:'6px 12px 5px', marginBottom:4 }}>
           Project chips
         </div>
 
@@ -4634,7 +4650,7 @@ export default function TacticsPage() {
                   <div className="flex items-center gap-1 px-2 py-1">
                     <button
                       type="button"
-                      className="flex-1 px-2 py-1.5 text-left text-[11px] font-bold uppercase rounded-sm hover:opacity-80 truncate"
+                      style={{ flex:1, padding:'6px 10px', textAlign:'left', fontFamily:"'Google Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', borderRadius:4, border:'none', cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', transition:'opacity .1s' }}
                       style={{ backgroundColor: projColour, color: chipContrastColour(projColour) }}
                       onClick={() => handleProjectSelection(project.id)}
                     >
@@ -4643,7 +4659,7 @@ export default function TacticsPage() {
                     <button
                       type="button"
                       title="Edit chip"
-                      className="shrink-0 rounded p-1 text-slate-400 hover:text-slate-700"
+                      style={{ width:26, height:26, border:'none', background:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#9E9E9E', borderRadius:4, flexShrink:0, transition:'color .1s, background .1s' }} onMouseEnter={e=>{ e.currentTarget.style.color='#1A1A1A'; e.currentTarget.style.background='#f0f0f0'; }} onMouseLeave={e=>{ e.currentTarget.style.color='#9E9E9E'; e.currentTarget.style.background='none'; }}
                       onClick={(e) => { e.stopPropagation(); openChipEditor('project', project.id, chipName, projColour, projectChip?.id ?? null); }}
                     >
                       <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11.498 1.499a1.707 1.707 0 0 1 2.414 2.414l-9.5 9.5a1 1 0 0 1-.39.242l-3 1a1 1 0 0 1-1.268-1.268l1-3a1 1 0 0 1 .242-.39l9.502-9.498zm1 1-9.5 9.5-.646 1.94 1.94-.646 9.5-9.5a.707.707 0 0 0-1-1z"/></svg>
@@ -4655,12 +4671,12 @@ export default function TacticsPage() {
             })}
           </ul>
         ) : (
-          <div className="px-3 py-1 text-[11px] text-slate-400">No projects added to plan</div>
+          <div style={{ padding:'4px 12px 6px', fontSize:11, color:'#9E9E9E', fontFamily:"'Google Sans',-apple-system,sans-serif" }}>No projects added to plan</div>
         )}
 
         {/* ── Custom chips section ──────────────────────────────── */}
-        <div className="mx-3 my-1 border-t border-[#e5e7eb]" />
-        <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+        <div style={{ height:1, background:'rgba(200,174,198,0.35)', margin:'4px 0' }} />
+        <div style={{ fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', padding:'6px 12px 5px', marginBottom:4 }}>
           Custom chips
         </div>
         {customChips.length ? (
@@ -4672,7 +4688,7 @@ export default function TacticsPage() {
                   <div className="flex items-center gap-1 px-2 py-1">
                     <button
                       type="button"
-                      className="flex-1 px-2 py-1.5 text-left text-[11px] font-bold uppercase rounded-sm hover:opacity-80 truncate"
+                      style={{ flex:1, padding:'6px 10px', textAlign:'left', fontFamily:"'Google Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', borderRadius:4, border:'none', cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', transition:'opacity .1s' }}
                       style={{ backgroundColor: customColour, color: chipContrastColour(customColour) }}
                       onClick={() => handleProjectSelection(project.id)}
                     >
@@ -4681,7 +4697,7 @@ export default function TacticsPage() {
                     <button
                       type="button"
                       title="Edit chip"
-                      className="shrink-0 rounded p-1 text-slate-400 hover:text-slate-700"
+                      style={{ width:26, height:26, border:'none', background:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#9E9E9E', borderRadius:4, flexShrink:0, transition:'color .1s, background .1s' }} onMouseEnter={e=>{ e.currentTarget.style.color='#1A1A1A'; e.currentTarget.style.background='#f0f0f0'; }} onMouseLeave={e=>{ e.currentTarget.style.color='#9E9E9E'; e.currentTarget.style.background='none'; }}
                       onClick={(e) => { e.stopPropagation(); openChipEditor('custom', project.id, project.label, customColour); }}
                     >
                       <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11.498 1.499a1.707 1.707 0 0 1 2.414 2.414l-9.5 9.5a1 1 0 0 1-.39.242l-3 1a1 1 0 0 1-1.268-1.268l1-3a1 1 0 0 1 .242-.39l9.502-9.498zm1 1-9.5 9.5-.646 1.94 1.94-.646 9.5-9.5a.707.707 0 0 0-1-1z"/></svg>
@@ -4689,7 +4705,7 @@ export default function TacticsPage() {
                     <button
                       type="button"
                       title="Delete custom chip"
-                      className="shrink-0 rounded p-1 text-slate-300 hover:text-red-600"
+                      style={{ width:26, height:26, border:'none', background:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#C8C8C8', borderRadius:4, flexShrink:0, transition:'color .1s, background .1s' }} onMouseEnter={e=>{ e.currentTarget.style.color='#c0392b'; e.currentTarget.style.background='#fef2f2'; }} onMouseLeave={e=>{ e.currentTarget.style.color='#C8C8C8'; e.currentTarget.style.background='none'; }}
                       onClick={(e) => { e.stopPropagation(); handleDeleteCustomProject(project.id); }}
                     >
                       <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1zm1.958 1-.846 10.58a1 1 0 0 1-.997.92h-6.23a1 1 0 0 1-.997-.92L3.042 3.5z"/></svg>
@@ -4702,10 +4718,12 @@ export default function TacticsPage() {
         ) : null}
 
         {/* Add custom button */}
-        <div className="px-2 pb-2">
+        <div style={{ padding:'4px 8px 8px' }}>
           <button
             type="button"
-            className="w-full px-3 py-1.5 text-center text-[11px] font-semibold rounded-sm border border-dashed border-[#94a3b8] text-slate-500 hover:border-slate-400 hover:text-slate-700 hover:bg-slate-50"
+            style={{ width:'100%', padding:'7px 12px', background:'transparent', border:'1px solid transparent', borderRadius:8, cursor:'pointer', fontFamily:"'Google Sans',-apple-system,sans-serif", fontSize:13, fontWeight:400, color:'#616161', textAlign:'left', transition:'border-color .15s, color .15s, background .15s' }}
+            onMouseEnter={e=>{ e.currentTarget.style.borderColor='var(--brand-hover-bd)'; e.currentTarget.style.background='var(--brand-hover-bg)'; e.currentTarget.style.color='var(--brand-deep)'; }}
+            onMouseLeave={e=>{ e.currentTarget.style.borderColor='transparent'; e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#616161'; }}
             onClick={handleCreateCustomProject}
           >
             + Add custom
@@ -4729,14 +4747,16 @@ export default function TacticsPage() {
           const isRenaming = menuRenamingChipId === targetChip.id;
           return (
             <>
-              <div className="mx-3 my-1 border-t border-[#e5e7eb]" />
-              <div className="px-2 pb-1">
-                <div className="flex items-center gap-1 px-1 py-1">
-                  <span className="flex-1 px-1 text-[11px] text-slate-500 truncate">{currentLabel}</span>
+              <div style={{ height:1, background:'rgba(200,174,198,0.35)', margin:'4px 0' }} />
+              <div style={{ padding:'0 8px 4px' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 4px' }}>
+                  <span style={{ flex:1, paddingLeft:4, fontSize:11, color:'#9E9E9E', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentLabel}</span>
                   <button
                     type="button"
                     title="Rename chip"
-                    className={`shrink-0 rounded p-1 hover:text-slate-700 ${isRenaming ? 'text-blue-500' : 'text-slate-400'}`}
+                    style={{ width:26, height:26, border:'none', background:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color: isRenaming ? 'var(--brand-deep)' : '#9E9E9E', borderRadius:4, flexShrink:0, transition:'color .1s' }}
+                    onMouseEnter={e=>e.currentTarget.style.color='#1A1A1A'}
+                    onMouseLeave={e=>e.currentTarget.style.color= isRenaming ? 'var(--brand-deep)' : '#9E9E9E'}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (isRenaming) { handleMenuRenameConfirm(); }
@@ -4753,10 +4773,12 @@ export default function TacticsPage() {
         })() : null}
 
         {/* ── View Schedule Items footer link ───────────────────── */}
+        <div style={{ height:1, background:'rgba(200,174,198,0.35)', margin:'4px 0' }} />
         <button
           type="button"
-          className="mt-1 flex w-full items-center justify-between px-3 py-2.5 text-[11px] font-semibold text-[#33558a] hover:bg-[#dce6f4]"
-          style={{ backgroundColor: '#e8eef7' }}
+          style={{ display:'flex', width:'100%', alignItems:'center', justifyContent:'space-between', padding:'7px 12px', background:'transparent', border:'none', borderRadius:0, cursor:'pointer', fontFamily:"'Google Sans',-apple-system,sans-serif", fontSize:13, fontWeight:400, color:'#616161', transition:'background .15s, color .15s' }}
+          onMouseEnter={e=>{ e.currentTarget.style.background='var(--brand-hover-bg)'; e.currentTarget.style.color='var(--brand-deep)'; }}
+          onMouseLeave={e=>{ e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#616161'; }}
           onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent(PLAN_PANEL_NAV_EVENT, { detail: { view: 'schedule' } })); }}
         >
           <span>View Schedule Items</span>
@@ -4847,12 +4869,26 @@ export default function TacticsPage() {
 
   return (
     <div
-      className="w-full min-h-screen bg-gray-100 text-slate-800"
+      className="w-full min-h-screen text-slate-800"
       onDragOver={handleRootDragOver}
       onDrop={handleRootDrop}
+      style={{
+        backgroundColor: '#ffffff',
+        backgroundImage: [
+          'radial-gradient(ellipse 80% 60% at 105% -10%, rgba(130,155,210,0.45) 0%, transparent 62%)',
+          'radial-gradient(ellipse 60% 45% at -5% 110%, rgba(130,155,210,0.28) 0%, transparent 58%)',
+          'radial-gradient(ellipse 160% 65% at 95% 112%, rgba(130,155,210,0.38) 0%, transparent 60%)',
+          'radial-gradient(ellipse 140% 55% at 45% 112%, rgba(130,155,210,0.25) 0%, transparent 58%)',
+          'linear-gradient(rgba(130,155,210,0.50) 1px, transparent 1px)',
+          'linear-gradient(90deg, rgba(130,155,210,0.50) 1px, transparent 1px)',
+        ].join(','),
+        backgroundSize: '100% 100%, 100% 100%, 100% 100%, 100% 100%, 32px 32px, 32px 32px',
+        backgroundPosition: '0 0, 0 0, 0 0, 0 0, -1px -1px, -1px -1px',
+        backgroundAttachment: 'fixed',
+      }}
     >
       <div className="space-y-4">
-        <div ref={navBarRef} className="sticky top-0 z-20 bg-gray-100 px-4 pt-4 pb-4">
+        <div ref={navBarRef} className="sticky top-0 z-20 px-4 pt-4 pb-4" style={{ background: 'transparent' }}>
         <NavigationBar
           listicalButton={
             <span className="font-serif text-sm font-medium text-slate-900 select-none">Listical</span>

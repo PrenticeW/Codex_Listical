@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, X, AlertCircle } from 'lucide-react';
 
 /**
  * AddTasksModal Component
  *
  * Custom modal for adding multiple tasks to the planner.
  */
+
+const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
 export function AddTasksModal({ isOpen, onClose, onConfirm }) {
   const [count, setCount] = useState('5');
   const [error, setError] = useState('');
@@ -15,72 +17,67 @@ export function AddTasksModal({ isOpen, onClose, onConfirm }) {
     if (isOpen) {
       setCount('5');
       setError('');
-      // Focus input when modal opens
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
     const numCount = parseInt(count, 10);
-
-    // Validate input
     if (!Number.isFinite(numCount) || numCount <= 0) {
       setError('Please enter a valid positive number');
       return;
     }
-
     if (numCount > 100) {
       setError('Maximum 100 tasks allowed at once');
       return;
     }
-
-    // Call confirmation callback
     onConfirm(numCount);
     onClose();
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Escape') {
-      onClose();
-    }
+    if (e.key === 'Escape') onClose();
   };
 
   if (!isOpen) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      style={{ position:'fixed', inset:0, zIndex:50, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(31,31,31,0.32)', fontFamily:FONT }}
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-lg shadow-2xl border border-[#ced3d0] w-full max-w-md mx-4"
+        style={{ background:'#fff', borderRadius:12, border:'1px solid #e8e8e4', boxShadow:'0 1px 0 rgba(72,50,75,0.04), 0 4px 24px rgba(72,50,75,0.14)', width:'100%', maxWidth:440, margin:'0 16px' }}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#ced3d0]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#065f46] flex items-center justify-center">
-              <Plus className="w-5 h-5 text-white" />
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 20px', borderBottom:'1px solid var(--brand-bd)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ width:36, height:36, borderRadius:'50%', background:'var(--brand-deep)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
             </div>
-            <h2 className="text-lg font-bold text-slate-800">Add Tasks</h2>
+            <h2 style={{ fontSize:16, fontWeight:700, color:'#1F1F1F', margin:0 }}>Add Tasks</h2>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded hover:bg-slate-100"
+            style={{ width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center', border:'none', background:'transparent', borderRadius:6, cursor:'pointer', color:'#9E9E9E', transition:'color .1s, background .1s' }}
+            onMouseEnter={e=>{ e.currentTarget.style.color='#1F1F1F'; e.currentTarget.style.background='rgba(43,89,182,0.06)'; }}
+            onMouseLeave={e=>{ e.currentTarget.style.color='#9E9E9E'; e.currentTarget.style.background='transparent'; }}
             aria-label="Close modal"
           >
-            <X className="w-5 h-5" />
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z"/></svg>
           </button>
         </div>
 
         {/* Body */}
-        <form onSubmit={handleSubmit} className="px-6 py-5">
-          <div className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} style={{ padding:'20px' }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
             <div>
-              <label htmlFor="task-count" className="block text-sm font-semibold text-slate-700 mb-2">
+              <label htmlFor="task-count" style={{ display:'block', fontSize:13, fontWeight:600, color:'#383838', marginBottom:8 }}>
                 How many tasks would you like to add?
               </label>
               <input
@@ -90,42 +87,47 @@ export function AddTasksModal({ isOpen, onClose, onConfirm }) {
                 min="1"
                 max="100"
                 value={count}
-                onChange={(e) => {
-                  setCount(e.target.value);
-                  setError('');
-                }}
-                className="w-full rounded-lg border border-[#ced3d0] px-4 py-3 text-base text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#065f46]/30 focus:border-[#065f46] transition-all"
+                onChange={(e) => { setCount(e.target.value); setError(''); }}
+                style={{ width:'100%', border:'1px solid #e8e8e4', borderRadius:8, padding:'10px 14px', fontSize:14, color:'#1F1F1F', background:'#fff', outline:'none', boxSizing:'border-box', transition:'border-color .15s' }}
+                onFocus={e=>e.target.style.borderColor='var(--brand)'}
+                onBlur={e=>e.target.style.borderColor='#e8e8e4'}
                 placeholder="Enter number of tasks..."
               />
             </div>
 
             {error && (
-              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-red-700 font-medium">{error}</p>
+              <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:12, background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="1.8" strokeLinecap="round" style={{ flexShrink:0, marginTop:1 }}>
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <p style={{ fontSize:13, color:'#c0392b', fontWeight:500, margin:0 }}>{error}</p>
               </div>
             )}
 
-            <div className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3 border border-slate-200">
-              <p>Tasks will be added below the currently selected row, or at the end if no row is selected.</p>
+            <div style={{ fontSize:12, color:'#616161', background:'rgba(43,89,182,0.04)', borderRadius:8, padding:12, border:'1px solid var(--brand-bd)' }}>
+              Tasks will be added below the currently selected row, or at the end if no row is selected.
             </div>
           </div>
         </form>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#ced3d0] bg-slate-50">
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:10, padding:'12px 20px', borderTop:'1px solid var(--brand-bd)' }}>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
+            style={{ padding:'7px 16px', fontSize:13, fontWeight:500, color:'#616161', background:'transparent', border:'1px solid #e8e8e4', borderRadius:8, cursor:'pointer', fontFamily:FONT, transition:'background .1s' }}
+            onMouseEnter={e=>e.currentTarget.style.background='rgba(43,89,182,0.05)'}
+            onMouseLeave={e=>e.currentTarget.style.background='transparent'}
           >
             Cancel
           </button>
           <button
             type="submit"
             onClick={handleSubmit}
-            className="px-6 py-2 rounded-lg text-sm font-semibold text-white bg-[#065f46] hover:bg-[#047857] transition-colors shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={!count || count === '0'}
+            style={{ padding:'7px 18px', fontSize:13, fontWeight:600, color:'#fff', background:'var(--brand-deep)', border:'none', borderRadius:8, cursor: (!count || count === '0') ? 'not-allowed' : 'pointer', fontFamily:FONT, opacity: (!count || count === '0') ? 0.5 : 1, transition:'opacity .1s' }}
+            onMouseEnter={e=>{ if (count && count !== '0') e.currentTarget.style.opacity='0.85'; }}
+            onMouseLeave={e=>e.currentTarget.style.opacity= (!count || count === '0') ? '0.5' : '1'}
           >
             Add {count && count !== '0' ? count : ''} Task{count > 1 ? 's' : ''}
           </button>

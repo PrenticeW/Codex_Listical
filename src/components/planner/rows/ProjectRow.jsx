@@ -7,9 +7,9 @@ import { TASK_ROW_DETAIL_EVENT, TASK_ROW_PANEL_CLOSE_EVENT } from '../../../cont
  * Renders pink project header rows with aggregated totals and weekly quotas
  *
  * Row types:
- * - projectHeader: Main project row (#d5a6bd) - shows project name, total scheduled, and quota
- * - projectGeneral: Section row (#f2e5eb) - shows "General" label
- * - projectUnscheduled: Section row (#f2e5eb) - shows "Unscheduled" label
+ * - projectHeader: Main project row (#8BA8D8) - shows project name, total scheduled, and quota
+ * - projectGeneral: Section row (#DCE4F5) - shows "General" label
+ * - projectUnscheduled: Section row (#DCE4F5) - shows "Unscheduled" label
  */
 export default function ProjectRow({
   row,
@@ -67,7 +67,7 @@ export default function ProjectRow({
   // Determine row styling based on type and archived status
   const isHeader = rowType === 'projectHeader' || rowType === 'archivedProjectHeader';
   const isSubprojectHeader = rowType === 'subprojectHeader';
-  const bgColor = isHeader ? '#d5a6bd' : '#f2e5eb'; // Dark pink for project header, light pink for sections and subproject headers
+  const bgColor = isHeader ? '#8BA8D8' : '#DCE4F5'; // Blue project header, pale blue sections/subproject headers
 
   // Check if this project/subproject group is collapsed
   const isCollapsed = (isHeader || isSubprojectHeader) && groupId && collapsedGroups.has(groupId);
@@ -159,7 +159,7 @@ export default function ProjectRow({
                   boxSizing: 'border-box',
                   position: 'sticky',
                   left: 0,
-                  backgroundColor: '#d9f6e0',
+                  backgroundColor: '#E8ECF5',
                   zIndex: rowNumZIndex,
                 }}
                 className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
@@ -172,7 +172,7 @@ export default function ProjectRow({
                   }}
                   onDragEnd={handleDragEnd}
                   className="h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-grab active:cursor-grabbing"
-                  style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? '#a7e8b8' : '#d9f6e0', color: '#065f46' }}
+                  style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
                   onClick={(e) => {
                     handleRowNumberClick(e, rowId);
                     window.dispatchEvent(new CustomEvent(TASK_ROW_PANEL_CLOSE_EVENT));
@@ -270,7 +270,7 @@ export default function ProjectRow({
                       minHeight: `${rowHeight}px`,
                       // Inner div covers the <td>, so the row-selected pink has to be
                       // applied here rather than relying on `tr.selected-row td` CSS.
-                      backgroundColor: isRowSelected ? '#fff5fc' : bgColor,
+                      backgroundColor: isRowSelected ? 'var(--sel-row)' : bgColor,
                       borderBottom: '1px solid #d3d3d3',
                       borderRight: '1px solid #d3d3d3',
                       paddingLeft: '8px',
@@ -300,7 +300,7 @@ export default function ProjectRow({
                           right: chevronRight + 4,
                           top: '50%',
                           transform: 'translateY(-50%)',
-                          color: '#c9a8b8',
+                          color: '#8090A8',
                           display: 'flex',
                           alignItems: 'center',
                           cursor: 'pointer',
@@ -319,7 +319,7 @@ export default function ProjectRow({
                         right: chevronRight + 4,
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        color: '#c9a8b8',
+                        color: '#8090A8',
                         display: 'flex',
                         alignItems: 'center',
                         pointerEvents: 'none',
@@ -510,7 +510,7 @@ export default function ProjectRow({
                     minHeight: `${rowHeight}px`,
                     // Inner div covers the <td>, so the row-selected pink has to be
                     // applied here rather than relying on `tr.selected-row td` CSS.
-                    backgroundColor: isRowSelected ? '#fff5fc' : bgColor,
+                    backgroundColor: isRowSelected ? 'var(--sel-row)' : bgColor,
                     borderBottom: '1px solid #d3d3d3',
                     borderRight: '1px solid #d3d3d3',
                     paddingLeft: '8px',
@@ -615,7 +615,7 @@ export default function ProjectRow({
                 style={{
                   fontSize: `${cellFontSize}px`,
                   minHeight: `${rowHeight}px`,
-                  backgroundColor: isDayColumn ? 'transparent' : (isRowSelected ? '#fff5fc' : bgColor), // No background for day columns
+                  backgroundColor: isDayColumn ? 'transparent' : (isRowSelected ? 'var(--sel-row)' : bgColor), // No background for day columns
                   borderBottom: '1px solid #d3d3d3',
                   borderRight: borderRightStyle,
                   paddingLeft: '3px',

@@ -378,11 +378,11 @@ function PlannerTable({
         <div className="mt-1">
           <span>Editing: {editingCell ? `${editingCell.rowId} / ${editingCell.columnId}` : 'None'}</span>
           {' • '}
-          <span className={undoStack.length > 0 ? 'text-blue-600 font-semibold' : 'text-slate-400'}>
+          <span style={undoStack.length > 0 ? { color:'var(--brand-deep)', fontWeight:600 } : { color:'#94a3b8' }}>
             Undo: {undoStack.length}
           </span>
           {' • '}
-          <span className={redoStack.length > 0 ? 'text-blue-600 font-semibold' : 'text-slate-400'}>
+          <span style={redoStack.length > 0 ? { color:'var(--brand-deep)', fontWeight:600 } : { color:'#94a3b8' }}>
             Redo: {redoStack.length}
           </span>
         </div>

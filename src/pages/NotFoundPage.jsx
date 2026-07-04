@@ -9,21 +9,21 @@ import { Link } from 'react-router-dom';
  */
 export default function NotFoundPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-[#f2e5eb] px-4 py-12">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8 text-center">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-[#d5a6bd] rounded-2xl mb-4 shadow-lg">
-          <span className="text-white text-2xl font-semibold">404</span>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAF5EB', padding: '48px 16px', fontFamily: "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+      <div style={{ maxWidth: 448, width: '100%', background: '#fff', borderRadius: 12, border: '1px solid #e8e8e4', boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 16px rgba(72,50,75,0.12)', padding: 32, textAlign: 'center' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 64, height: 64, background: 'var(--brand-deep)', borderRadius: 12, marginBottom: 16, boxShadow: '0 4px 12px rgba(72,50,75,0.18)' }}>
+          <span style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 600 }}>404</span>
         </div>
-        <h1 className="text-xl font-semibold text-gray-900 mb-2">
+        <h1 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#111', marginBottom: 8 }}>
           Page not found
         </h1>
-        <p className="text-sm text-gray-600 mb-6">
+        <p style={{ fontSize: '0.875rem', color: '#616161', marginBottom: 24 }}>
           We could not find that page. It may have moved, or the link may be
           out of date.
         </p>
         <Link
           to="/"
-          className="inline-flex w-full justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-[#d5a6bd] hover:from-blue-700 hover:to-[#c494aa] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+          style={{ display: 'inline-flex', width: '100%', justifyContent: 'center', alignItems: 'center', padding: '10px 14px', border: 'none', borderRadius: 8, fontSize: '0.875rem', fontWeight: 600, color: '#fff', background: 'var(--brand-deep)', textDecoration: 'none', boxSizing: 'border-box' }}
         >
           Return to home
         </Link>

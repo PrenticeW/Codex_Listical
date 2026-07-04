@@ -82,8 +82,14 @@ function EditableCell({
       onChange={(e) => setLocalValue(e.target.value)}
       onBlur={handleBlur}
       onKeyDown={handleKeyDown}
-      className="w-full px-1 border-2 border-blue-500 focus:outline-none resize-none bg-white overflow-hidden"
       style={{
+        width: '100%',
+        padding: '0 4px',
+        border: '2px solid var(--brand)',
+        outline: 'none',
+        resize: 'none',
+        background: '#fff',
+        overflow: 'hidden',
         fontSize: `${cellFontSize}px`,
         position: 'absolute',
         top: 0,

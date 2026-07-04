@@ -11,28 +11,28 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { History, RotateCcw, X, AlertTriangle, Loader } from 'lucide-react';
+import { Loader } from 'lucide-react';
 import { loadSiteSnapshots, restoreSiteSnapshot } from '../../lib/snapshotStorage';
 import { useYear } from '../../contexts/YearContext';
 import { useNavigate } from 'react-router-dom';
 import { fmtTimestamp as formatTimestamp } from '../../utils/fmtTimestamp';
 
+const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const MONO = "'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace";
+
 function snapshotSummary(snapshot) {
   const parts = [];
 
-  // Goal: count shortlist projects
   const shortlistCount = snapshot.goal?.shortlist?.length ?? 0;
   if (shortlistCount > 0) {
     parts.push(`${shortlistCount} project${shortlistCount !== 1 ? 's' : ''}`);
   }
 
-  // Plan: count chips
   const chipCount = snapshot.plan?.chips?.projectChips?.length ?? 0;
   if (chipCount > 0) {
     parts.push(`${chipCount} chip${chipCount !== 1 ? 's' : ''}`);
   }
 
-  // System: count task rows (exclude calendar header rows)
   const allRows = snapshot.system?.taskRows ?? [];
   const taskCount = allRows.filter(
     (r) => r && r.__rowType !== 'header' && !r.isArchiveRow && !r.isCalendarHeader,
@@ -45,33 +45,71 @@ function snapshotSummary(snapshot) {
 }
 
 // ---------------------------------------------------------------------------
+// Restore button
+// ---------------------------------------------------------------------------
+
+function RestoreBtn({ onClick, disabled }) {
+  const [hov, setHov] = React.useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      onClick={disabled ? undefined : onClick}
+      style={{
+        fontSize: 11, fontFamily: FONT, fontWeight: 500,
+        color: hov ? 'var(--brand-deep)' : '#616161',
+        border: `1px solid ${hov ? 'rgba(43,89,182,0.3)' : '#e8e8e4'}`,
+        borderRadius: 6, padding: '4px 10px', flexShrink: 0,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        background: hov ? 'rgba(43,89,182,0.06)' : '#fff',
+        opacity: disabled ? 0.5 : 1,
+        transition: 'color .15s, border-color .15s, background .15s',
+        userSelect: 'none',
+      }}
+    >
+      Restore
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Confirm modal
 // ---------------------------------------------------------------------------
 
 function ConfirmRestoreModal({ snapshot, onConfirm, onCancel, isRestoring }) {
   return createPortal(
     <div
-      className="fixed inset-0 z-[1000000] flex items-center justify-center bg-black/40"
+      style={{ position:'fixed', inset:0, zIndex:1000001, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(31,31,31,0.32)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}
     >
-      <div className="bg-white rounded-xl border border-slate-200 shadow-2xl p-6 max-w-sm w-full mx-4">
-        <div className="flex items-start gap-3 mb-4">
-          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+      <div style={{
+        background:'#fff', borderRadius:12, border:'1px solid #e8e8e4',
+        boxShadow:'0 1px 0 rgba(72,50,75,0.04), 0 4px 24px rgba(72,50,75,0.14)',
+        padding:'24px', maxWidth:380, width:'calc(100% - 32px)', fontFamily:FONT,
+      }}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom:16 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0, marginTop:2 }}>
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="#d97706" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+            <line x1="12" y1="9" x2="12" y2="13" stroke="#d97706" strokeWidth="1.5" strokeLinecap="round"/>
+            <line x1="12" y1="17" x2="12.01" y2="17" stroke="#d97706" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
           <div>
-            <p className="text-sm font-semibold text-slate-800">Restore this version?</p>
-            <p className="text-sm text-slate-500 mt-1">
+            <p style={{ fontSize:14, fontWeight:600, color:'#1F1F1F', marginBottom:6 }}>Restore this version?</p>
+            <p style={{ fontSize:13, color:'#616161', lineHeight:1.5 }}>
               This will replace your Goal, Plan, and System pages with the version
-              from <span className="font-medium text-slate-700">{formatTimestamp(snapshot.created_at)}</span>.
+              from <span style={{ fontWeight:500, color:'#383838' }}>{formatTimestamp(snapshot.created_at)}</span>.
               This cannot be undone.
             </p>
           </div>
         </div>
-        <div className="flex items-center justify-end gap-2">
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:8 }}>
           <button
             type="button"
             onClick={onCancel}
             disabled={isRestoring}
-            className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+            style={{ padding:'7px 16px', fontSize:13, fontWeight:500, color:'#616161', background:'transparent', border:'1px solid #e8e8e4', borderRadius:8, cursor:'pointer', fontFamily:FONT, opacity: isRestoring ? 0.5 : 1, transition:'background .1s' }}
+            onMouseEnter={e=>e.currentTarget.style.background='rgba(43,89,182,0.05)'}
+            onMouseLeave={e=>e.currentTarget.style.background='transparent'}
           >
             Cancel
           </button>
@@ -79,10 +117,17 @@ function ConfirmRestoreModal({ snapshot, onConfirm, onCancel, isRestoring }) {
             type="button"
             onClick={onConfirm}
             disabled={isRestoring}
-            className="px-4 py-2 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+            style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 16px', fontSize:13, fontWeight:600, color:'#fff', background:'#c0392b', border:'none', borderRadius:8, cursor:'pointer', fontFamily:FONT, opacity: isRestoring ? 0.7 : 1, transition:'opacity .1s' }}
+            onMouseEnter={e=>e.currentTarget.style.opacity='0.85'}
+            onMouseLeave={e=>e.currentTarget.style.opacity= isRestoring ? '0.7' : '1'}
           >
-            {isRestoring && <Loader className="w-3.5 h-3.5 animate-spin" />}
-            {isRestoring ? 'Restoring...' : 'Restore'}
+            {isRestoring && (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ animation:'spin 1s linear infinite' }}>
+                <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="2.5"/>
+                <path d="M22 12a10 10 0 0 0-10-10" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
+              </svg>
+            )}
+            {isRestoring ? 'Restoring…' : 'Restore'}
           </button>
         </div>
       </div>
@@ -118,11 +163,8 @@ export default function VersionHistoryPanel({ onClose }) {
     }
   }, [currentYear]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  // Close on Escape
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handler);
@@ -136,9 +178,7 @@ export default function VersionHistoryPanel({ onClose }) {
       await restoreSiteSnapshot(confirmTarget, currentYear);
       setConfirmTarget(null);
       onClose();
-      // Navigate to System page so the user immediately sees the restored state.
       navigate('/');
-      // Force a full page reload so all in-memory state is replaced cleanly.
       window.location.reload();
     } catch {
       setIsRestoring(false);
@@ -151,45 +191,62 @@ export default function VersionHistoryPanel({ onClose }) {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-[999990] bg-black/30"
+        style={{ position:'fixed', inset:0, zIndex:999990, background:'rgba(31,31,31,0.32)' }}
         onMouseDown={onClose}
       />
 
       {/* Panel */}
-      <div className="fixed right-4 top-16 z-[999995] w-96 max-h-[80vh] bg-white rounded-xl border border-slate-200 shadow-2xl flex flex-col overflow-hidden">
+      <div style={{
+        position:'fixed', right:16, top:64, zIndex:999995,
+        width:384, maxHeight:'80vh',
+        background:'#fff',
+        borderRadius:12,
+        border:'1px solid #e8e8e4',
+        boxShadow:'0 1px 0 rgba(72,50,75,0.04), 0 4px 24px rgba(72,50,75,0.14)',
+        display:'flex', flexDirection:'column', overflow:'hidden',
+        fontFamily:FONT,
+      }}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 shrink-0">
-          <div className="flex items-center gap-2">
-            <History className="w-4 h-4 text-slate-500" />
-            <span className="text-sm font-semibold text-slate-800">Version History</span>
-            <span className="text-xs text-slate-400 font-normal">Year {currentYear}</span>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderBottom:'1px solid var(--brand-bd)', flexShrink:0 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <svg width="14" height="14" viewBox="0 0 13 13" fill="none" style={{ color:'#8090A8' }}>
+              <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" strokeWidth="1.2"/>
+              <path d="M6.5 4v3l2 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span style={{ fontSize:13, fontWeight:600, color:'#1F1F1F' }}>Version History</span>
+            <span style={{ fontSize:11, color:'#9E9E9E' }}>Year {currentYear}</span>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            style={{ width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center', border:'none', background:'transparent', borderRadius:6, cursor:'pointer', color:'#9E9E9E', transition:'color .1s, background .1s' }}
+            onMouseEnter={e=>{ e.currentTarget.style.color='#1F1F1F'; e.currentTarget.style.background='rgba(43,89,182,0.06)'; }}
+            onMouseLeave={e=>{ e.currentTarget.style.color='#9E9E9E'; e.currentTarget.style.background='transparent'; }}
           >
-            <X className="w-4 h-4" />
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z"/></svg>
           </button>
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto">
+        <div style={{ flex:1, overflowY:'auto' }}>
           {isLoading && (
-            <div className="flex items-center justify-center py-10 text-slate-400">
-              <Loader className="w-4 h-4 animate-spin mr-2" />
-              <span className="text-sm">Loading history...</span>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:'40px 16px', color:'#9E9E9E' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ marginRight:8, animation:'spin 1s linear infinite' }}>
+                <circle cx="12" cy="12" r="10" stroke="rgba(0,0,0,0.1)" strokeWidth="2.5"/>
+                <path d="M22 12a10 10 0 0 0-10-10" stroke="#9E9E9E" strokeWidth="2.5" strokeLinecap="round"/>
+              </svg>
+              <span style={{ fontSize:13 }}>Loading history…</span>
             </div>
           )}
 
           {!isLoading && error && (
-            <div className="px-4 py-6 text-center">
-              <p className="text-sm text-rose-600">{error}</p>
+            <div style={{ padding:'24px 16px', textAlign:'center' }}>
+              <p style={{ fontSize:13, color:'#c0392b', marginBottom:12 }}>{error}</p>
               <button
                 type="button"
                 onClick={load}
-                className="mt-3 text-xs text-slate-500 underline hover:text-slate-700"
+                style={{ fontSize:12, color:'#616161', textDecoration:'underline', background:'none', border:'none', cursor:'pointer' }}
               >
                 Try again
               </button>
@@ -197,39 +254,34 @@ export default function VersionHistoryPanel({ onClose }) {
           )}
 
           {!isLoading && !error && snapshots.length === 0 && (
-            <div className="px-4 py-10 text-center">
-              <p className="text-sm text-slate-500">No snapshots yet.</p>
-              <p className="text-xs text-slate-400 mt-1">
+            <div style={{ padding:'40px 16px', textAlign:'center' }}>
+              <p style={{ fontSize:13, color:'#616161', marginBottom:6 }}>No snapshots yet.</p>
+              <p style={{ fontSize:12, color:'#9E9E9E' }}>
                 Snapshots are captured automatically as you edit.
               </p>
             </div>
           )}
 
           {!isLoading && !error && snapshots.length > 0 && (
-            <ul className="divide-y divide-slate-50">
+            <ul style={{ listStyle:'none', margin:0, padding:0 }}>
               {snapshots.map((snap, idx) => (
-                <li key={snap.id} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-700 truncate">
-                      {formatTimestamp(snap.created_at)}
+                <li key={snap.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, padding:'12px 16px', borderBottom: idx < snapshots.length - 1 ? '1px solid rgba(130,155,210,0.18)' : 'none' }}>
+                  <div style={{ minWidth:0 }}>
+                    <p style={{ fontSize:13, fontWeight:500, color:'#1F1F1F', marginBottom:3, display:'flex', alignItems:'center', gap:6 }}>
+                      <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        {formatTimestamp(snap.created_at)}
+                      </span>
                       {idx === 0 && (
-                        <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                        <span style={{ fontSize:9, fontWeight:700, letterSpacing:'.08em', textTransform:'uppercase', color:'var(--brand-deep)', background:'var(--brand-tint)', padding:'2px 6px', borderRadius:4, flexShrink:0 }}>
                           Latest
                         </span>
                       )}
                     </p>
-                    <p className="text-xs text-slate-400 mt-0.5 truncate">
+                    <p style={{ fontSize:10.5, color:'#8090A8', fontFamily:MONO, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                       {snapshotSummary(snap)}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmTarget(snap)}
-                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 hover:border-slate-300 transition-colors"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    Restore
-                  </button>
+                  <RestoreBtn onClick={() => setConfirmTarget(snap)} disabled={isRestoring} />
                 </li>
               ))}
             </ul>
@@ -237,14 +289,13 @@ export default function VersionHistoryPanel({ onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-2.5 border-t border-slate-100 shrink-0">
-          <p className="text-xs text-slate-400">
+        <div style={{ padding:'8px 16px 10px', borderTop:'1px solid var(--brand-bd)', flexShrink:0 }}>
+          <p style={{ fontSize:11, color:'#9E9E9E' }}>
             Up to 50 snapshots are kept. Older ones are removed automatically.
           </p>
         </div>
       </div>
 
-      {/* Confirmation modal */}
       {confirmTarget && (
         <ConfirmRestoreModal
           snapshot={confirmTarget}

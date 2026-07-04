@@ -119,10 +119,11 @@ function EstimateDropdownCell({
     >
       <button
         ref={buttonRef}
-        className="w-full h-full px-1 border-2 border-blue-500 focus:outline-none flex items-center justify-between gap-1"
+        className="w-full h-full px-1 focus:outline-none flex items-center justify-between gap-1"
         style={{
           fontSize: `${cellFontSize}px`,
           backgroundColor: '#ffffff',
+          border: '2px solid var(--sel-ring)',
         }}
         onClick={() => setIsOpen(!isOpen)}
       >
@@ -134,16 +135,18 @@ function EstimateDropdownCell({
 
       {isOpen && createPortal(
         <div
-          className="border border-gray-300 shadow-lg"
           style={{
             position: 'fixed',
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
             width: `${dropdownPosition.width}px`,
             backgroundColor: '#ffffff',
+            border: '1px solid #e8e8e4',
+            borderRadius: 6,
+            boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 12px rgba(72,50,75,0.10)',
             zIndex: 9999,
             maxHeight: '300px',
-            overflowY: 'auto'
+            overflowY: 'auto',
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
@@ -153,15 +156,14 @@ function EstimateDropdownCell({
             return (
               <div
                 key={option}
-                className={`py-1 cursor-pointer ${
-                  isSelected ? 'ring-2 ring-inset ring-black' : ''
-                } ${option === '-' ? 'text-left' : ''}`}
+                className={`py-1 cursor-pointer ${option === '-' ? 'text-left' : ''}`}
                 style={{
                   fontSize: `${cellFontSize}px`,
                   minHeight: `${rowHeight}px`,
                   display: 'flex',
                   alignItems: 'center',
-                  backgroundColor: '#ffffff',
+                  boxShadow: isSelected ? 'inset 0 0 0 2px var(--brand-deep)' : 'none',
+                  backgroundColor: isSelected ? 'var(--sel-row)' : '#ffffff',
                   color: optionColor || 'inherit',
                   paddingLeft: '8px',
                   paddingRight: '8px'

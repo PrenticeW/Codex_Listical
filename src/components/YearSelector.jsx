@@ -75,17 +75,15 @@ export function YearSelector({ className = '' }) {
                 </div>
                 <button
                   onClick={() => handleYearSelect(activeYear.yearNumber)}
-                  className={`
-                    w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors
-                    ${currentYear === activeYear.yearNumber ? 'bg-blue-50' : ''}
-                  `}
+                  className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors"
+                  style={currentYear === activeYear.yearNumber ? { background:'var(--brand-tint)' } : {}}
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-gray-900">
                       Year {activeYear.yearNumber}
                     </span>
                     {currentYear === activeYear.yearNumber && (
-                      <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                      <span className="text-xs px-2 py-1 rounded" style={{ background:'var(--brand-tint)', color:'var(--brand-deep)' }}>
                         Current
                       </span>
                     )}
@@ -144,7 +142,10 @@ export function YearSelector({ className = '' }) {
               <div className="border-t border-gray-200">
                 <button
                   onClick={handleBackToActive}
-                  className="w-full text-left px-4 py-3 text-blue-600 hover:bg-blue-50 transition-colors font-medium"
+                  className="w-full text-left px-4 py-3 transition-colors font-medium"
+                  style={{ color:'var(--brand-deep)' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--brand-tint)'}
+                  onMouseLeave={e => e.currentTarget.style.background = ''}
                 >
                   Return to Active Year
                 </button>

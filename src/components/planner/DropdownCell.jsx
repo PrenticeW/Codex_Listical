@@ -149,14 +149,15 @@ function DropdownCell({
     >
       <button
         ref={buttonRef}
-        className={`${isPillbox ? 'py-0.5 rounded-full flex-1' : 'w-full h-full px-1'} border-2 border-blue-500 focus:outline-none flex items-center justify-between gap-1`}
+        className={`${isPillbox ? 'py-0.5 rounded-full flex-1' : 'w-full h-full px-1'} focus:outline-none flex items-center justify-between gap-1`}
         style={{
           fontSize: isPillbox ? `${cellFontSize}px` : `${cellFontSize}px`,
           backgroundColor: isPillbox && colors ? colors.bg : '#ffffff',
           color: isPillbox && colors ? colors.text : 'inherit',
           fontWeight: isPillbox ? '500' : 'normal',
           paddingLeft: isPillbox ? '8px' : undefined,
-          paddingRight: isPillbox ? '8px' : undefined
+          paddingRight: isPillbox ? '8px' : undefined,
+          border: '2px solid var(--sel-ring)',
         }}
         onClick={() => setIsOpen(!isOpen)}
       >
@@ -168,14 +169,16 @@ function DropdownCell({
 
       {isOpen && createPortal(
         <div
-          className="border border-gray-300 shadow-lg"
           style={{
             position: 'fixed',
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
             width: `${dropdownPosition.width}px`,
             backgroundColor: '#ffffff',
-            zIndex: 9999
+            border: '1px solid #e8e8e4',
+            borderRadius: 6,
+            boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 12px rgba(72,50,75,0.10)',
+            zIndex: 9999,
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
@@ -184,15 +187,14 @@ function DropdownCell({
             return (
               <div
                 key={option}
-                className={`py-1 cursor-pointer ${
-                  index === selectedIndex ? 'ring-2 ring-inset ring-black' : ''
-                } ${option === '-' ? 'text-left' : ''}`}
+                className={`py-1 cursor-pointer ${option === '-' ? 'text-left' : ''}`}
                 style={{
                   fontSize: `${cellFontSize}px`,
                   minHeight: `${rowHeight}px`,
                   display: 'flex',
                   alignItems: 'center',
-                  backgroundColor: isPillbox && optionColors ? optionColors.bg : (index === selectedIndex ? '#fff5fc' : '#ffffff'),
+                  boxShadow: (!isPillbox && index === selectedIndex) ? 'inset 0 0 0 2px var(--brand-deep)' : 'none',
+                  backgroundColor: isPillbox && optionColors ? optionColors.bg : (index === selectedIndex ? 'var(--sel-row)' : '#ffffff'),
                   color: isPillbox && optionColors ? optionColors.text : 'inherit',
                   borderRadius: isPillbox ? '9999px' : '0',
                   margin: isPillbox ? '2px 4px' : '0',

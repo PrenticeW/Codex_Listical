@@ -113,50 +113,82 @@ export default function LoginPage() {
     setOtpCode('');
   };
 
+  const inputStyle = {
+    display: 'block',
+    width: '100%',
+    paddingTop: '10px',
+    paddingBottom: '10px',
+    paddingLeft: '40px',
+    paddingRight: '14px',
+    border: '1px solid #e8e8e4',
+    borderRadius: 8,
+    color: '#111',
+    fontSize: '0.875rem',
+    outline: 'none',
+    fontFamily: "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    boxSizing: 'border-box',
+  };
+
+  const primaryBtnStyle = {
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: '10px 14px',
+    border: 'none',
+    borderRadius: 8,
+    fontSize: '0.875rem',
+    fontWeight: 600,
+    color: '#fff',
+    background: 'var(--brand-deep)',
+    cursor: 'pointer',
+    fontFamily: "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-[#f2e5eb] px-4 py-12">
-      <div className="max-w-md w-full">
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAF5EB', padding: '48px 16px', fontFamily: "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+      <div style={{ maxWidth: 448, width: '100%' }}>
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-[#d5a6bd] rounded-2xl mb-4 shadow-lg">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 64, height: 64, background: 'var(--brand-deep)', borderRadius: 12, marginBottom: 16, boxShadow: '0 4px 12px rgba(72,50,75,0.18)' }}>
+            <svg className="w-8 h-8" style={{ width: 32, height: 32, color: '#fff' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">
+          <h2 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#111', marginBottom: 8, margin: '0 0 8px' }}>
             Welcome Back
           </h2>
-          <p className="text-gray-600">
+          <p style={{ color: '#616161', margin: 0 }}>
             Sign in to continue to Listical GPS
           </p>
         </div>
 
         {/* Form Card */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e8e8e4', boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 16px rgba(72,50,75,0.12)', padding: 32 }}>
           {/* Error Display */}
           {error && (
-            <div className="rounded-lg bg-red-50 border border-red-200 p-4 mb-6">
-              <div className="flex items-center">
-                <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: 16, marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <svg style={{ width: 20, height: 20, color: '#c0392b', marginRight: 8, flexShrink: 0 }} fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                 </svg>
-                <p className="text-sm font-medium text-red-800">{error}</p>
+                <p style={{ fontSize: '0.875rem', fontWeight: 500, color: '#c0392b', margin: 0 }}>{error}</p>
               </div>
             </div>
           )}
 
           {!otpMode ? (
             /* Password Login Form */
-            <form className="space-y-6" onSubmit={handleSubmit}>
-              <div className="space-y-5">
+            <form style={{ display: 'flex', flexDirection: 'column', gap: 24 }} onSubmit={handleSubmit}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 {/* Email Field */}
                 <div>
-                  <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label htmlFor="email" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#374151', marginBottom: 8 }}>
                     Email Address
                   </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'absolute', top: 0, bottom: 0, left: 12, display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                      <svg style={{ width: 20, height: 20, color: '#9E9E9E' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
                       </svg>
                     </div>
@@ -168,7 +200,9 @@ export default function LoginPage() {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm"
+                      onFocus={(e) => { e.target.style.border = '1px solid var(--brand)'; }}
+                      onBlur={(e) => { e.target.style.border = '1px solid #e8e8e4'; }}
+                      style={inputStyle}
                       placeholder="you@example.com"
                     />
                   </div>
@@ -176,12 +210,12 @@ export default function LoginPage() {
 
                 {/* Password Field */}
                 <div>
-                  <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label htmlFor="password" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#374151', marginBottom: 8 }}>
                     Password
                   </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'absolute', top: 0, bottom: 0, left: 12, display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                      <svg style={{ width: 20, height: 20, color: '#9E9E9E' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                       </svg>
                     </div>
@@ -193,7 +227,9 @@ export default function LoginPage() {
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm"
+                      onFocus={(e) => { e.target.style.border = '1px solid var(--brand)'; }}
+                      onBlur={(e) => { e.target.style.border = '1px solid #e8e8e4'; }}
+                      style={inputStyle}
                       placeholder="Enter your password"
                     />
                   </div>
@@ -201,15 +237,15 @@ export default function LoginPage() {
               </div>
 
               {/* Forgot Password Link */}
-              <div className="flex items-center justify-between">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <button
                   type="button"
                   onClick={enterOtpMode}
-                  className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                  style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--brand-deep)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}
                 >
                   Sign in with email code
                 </button>
-                <Link to="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors">
+                <Link to="/forgot-password" style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--brand-deep)', textDecoration: 'none' }}>
                   Forgot password?
                 </Link>
               </div>
@@ -218,11 +254,11 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-[#d5a6bd] hover:from-blue-700 hover:to-[#c494aa] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                style={{ ...primaryBtnStyle, opacity: isLoading ? 0.5 : 1, cursor: isLoading ? 'not-allowed' : 'pointer' }}
               >
                 {isLoading ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin" style={{ marginLeft: -4, marginRight: 12, width: 20, height: 20, color: '#fff' }} fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
@@ -235,14 +271,14 @@ export default function LoginPage() {
             </form>
           ) : otpStep === 'email' ? (
             /* OTP Email Step */
-            <form className="space-y-6" onSubmit={handleSendOtp}>
+            <form style={{ display: 'flex', flexDirection: 'column', gap: 24 }} onSubmit={handleSendOtp}>
               <div>
-                <label htmlFor="otp-email" className="block text-sm font-semibold text-gray-700 mb-2">
+                <label htmlFor="otp-email" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#374151', marginBottom: 8 }}>
                   Email Address
                 </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div style={{ position: 'relative' }}>
+                  <div style={{ position: 'absolute', top: 0, bottom: 0, left: 12, display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                    <svg style={{ width: 20, height: 20, color: '#9E9E9E' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
                     </svg>
                   </div>
@@ -254,11 +290,13 @@ export default function LoginPage() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm"
+                    onFocus={(e) => { e.target.style.border = '1px solid var(--brand)'; }}
+                    onBlur={(e) => { e.target.style.border = '1px solid #e8e8e4'; }}
+                    style={inputStyle}
                     placeholder="you@example.com"
                   />
                 </div>
-                <p className="mt-2 text-sm text-gray-500">
+                <p style={{ marginTop: 8, fontSize: '0.875rem', color: '#616161' }}>
                   We'll send a code to your email
                 </p>
               </div>
@@ -267,11 +305,11 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-[#d5a6bd] hover:from-blue-700 hover:to-[#c494aa] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                style={{ ...primaryBtnStyle, opacity: isLoading ? 0.5 : 1, cursor: isLoading ? 'not-allowed' : 'pointer' }}
               >
                 {isLoading ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin" style={{ marginLeft: -4, marginRight: 12, width: 20, height: 20, color: '#fff' }} fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
@@ -283,13 +321,13 @@ export default function LoginPage() {
               </button>
 
               {/* Back to Password Link */}
-              <div className="text-center">
+              <div style={{ textAlign: 'center' }}>
                 <button
                   type="button"
                   onClick={exitOtpMode}
-                  className="inline-flex items-center text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                  style={{ display: 'inline-flex', alignItems: 'center', fontSize: '0.875rem', fontWeight: 500, color: '#616161', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}
                 >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg style={{ width: 16, height: 16, marginRight: 8 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                   </svg>
                   Back to password login
@@ -298,9 +336,9 @@ export default function LoginPage() {
             </form>
           ) : (
             /* OTP Code Verification Step */
-            <form className="space-y-6" onSubmit={handleVerifyOtp}>
+            <form style={{ display: 'flex', flexDirection: 'column', gap: 24 }} onSubmit={handleVerifyOtp}>
               <div>
-                <label htmlFor="otp-code" className="block text-sm font-semibold text-gray-700 mb-2">
+                <label htmlFor="otp-code" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#374151', marginBottom: 8 }}>
                   Verification Code
                 </label>
                 <input
@@ -312,10 +350,12 @@ export default function LoginPage() {
                   required
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                  className="block w-full px-3 py-3 border border-gray-300 rounded-lg placeholder-gray-400 text-gray-900 text-center text-xl tracking-wide font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  onFocus={(e) => { e.target.style.border = '1px solid var(--brand)'; }}
+                  onBlur={(e) => { e.target.style.border = '1px solid #e8e8e4'; }}
+                  style={{ display: 'block', width: '100%', padding: '10px 14px', border: '1px solid #e8e8e4', borderRadius: 8, color: '#111', fontSize: '1.25rem', textAlign: 'center', letterSpacing: '0.1em', fontFamily: 'monospace', outline: 'none', boxSizing: 'border-box' }}
                   placeholder="Enter code"
                 />
-                <p className="mt-2 text-sm text-gray-500">
+                <p style={{ marginTop: 8, fontSize: '0.875rem', color: '#616161' }}>
                   Enter the code sent to <strong>{email}</strong>
                 </p>
               </div>
@@ -324,11 +364,11 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isLoading || otpCode.length < 6}
-                className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-[#d5a6bd] hover:from-blue-700 hover:to-[#c494aa] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                style={{ ...primaryBtnStyle, opacity: (isLoading || otpCode.length < 6) ? 0.5 : 1, cursor: (isLoading || otpCode.length < 6) ? 'not-allowed' : 'pointer' }}
               >
                 {isLoading ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin" style={{ marginLeft: -4, marginRight: 12, width: 20, height: 20, color: '#fff' }} fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
@@ -340,13 +380,13 @@ export default function LoginPage() {
               </button>
 
               {/* Resend / Back Links */}
-              <div className="flex items-center justify-between">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <button
                   type="button"
                   onClick={backToEmailStep}
-                  className="inline-flex items-center text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                  style={{ display: 'inline-flex', alignItems: 'center', fontSize: '0.875rem', fontWeight: 500, color: '#616161', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}
                 >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg style={{ width: 16, height: 16, marginRight: 8 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                   </svg>
                   Change email
@@ -355,7 +395,7 @@ export default function LoginPage() {
                   type="button"
                   onClick={handleSendOtp}
                   disabled={isLoading}
-                  className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors disabled:opacity-50"
+                  style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--brand-deep)', background: 'none', border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', padding: 0, opacity: isLoading ? 0.5 : 1, fontFamily: 'inherit' }}
                 >
                   Resend code
                 </button>
@@ -365,9 +405,9 @@ export default function LoginPage() {
         </div>
 
         {/* Sign Up Link */}
-        <p className="mt-6 text-center text-sm text-gray-600">
+        <p style={{ marginTop: 24, textAlign: 'center', fontSize: '0.875rem', color: '#616161' }}>
           Don't have an account?{' '}
-          <Link to="/signup" className="font-semibold text-blue-600 hover:text-blue-700 transition-colors">
+          <Link to="/signup" style={{ fontWeight: 600, color: 'var(--brand-deep)', textDecoration: 'none' }}>
             Create an account
           </Link>
         </p>

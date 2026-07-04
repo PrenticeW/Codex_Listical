@@ -8,13 +8,13 @@ import { Link } from 'react-router-dom';
  */
 export default function AccountDeletedPage() {
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50">
-      <div className="max-w-md w-full mx-4">
-        <div className="bg-white rounded-lg shadow-md p-8 text-center">
-          <div className="mb-6">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#FAF5EB', fontFamily: "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+      <div style={{ maxWidth: 448, width: '100%', margin: '0 16px' }}>
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e8e8e4', boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 16px rgba(72,50,75,0.12)', padding: 32, textAlign: 'center' }}>
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ width: 64, height: 64, background: '#f5f5f5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
               <svg
-                className="w-8 h-8 text-gray-400"
+                style={{ width: 32, height: 32, color: '#9E9E9E' }}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -27,30 +27,30 @@ export default function AccountDeletedPage() {
                 />
               </svg>
             </div>
-            <h1 className="text-2xl font-semibold text-gray-900 mb-2">
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#111', marginBottom: 8 }}>
               Account Scheduled for Deletion
             </h1>
           </div>
 
-          <p className="text-gray-600 mb-6">
+          <p style={{ color: '#616161', marginBottom: 24 }}>
             Your account is scheduled for deletion and will be fully removed within 30 days.
           </p>
 
-          <p className="text-gray-600 mb-8">
+          <p style={{ color: '#616161', marginBottom: 32 }}>
             If this was a mistake, please contact{' '}
             <a
               href="mailto:support@codexlistical.com"
-              className="text-blue-600 hover:text-blue-700 underline"
+              style={{ color: 'var(--brand-deep)', textDecoration: 'underline' }}
             >
               support@codexlistical.com
             </a>{' '}
             within this period to cancel the deletion request.
           </p>
 
-          <div className="border-t pt-6">
+          <div style={{ borderTop: '1px solid #e8e8e4', paddingTop: 24 }}>
             <Link
               to="/login"
-              className="text-sm text-gray-500 hover:text-gray-700"
+              style={{ fontSize: '0.875rem', color: '#9E9E9E', textDecoration: 'none' }}
             >
               Return to login
             </Link>

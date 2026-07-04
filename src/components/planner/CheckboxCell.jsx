@@ -48,7 +48,7 @@ function CheckboxCell({
   };
 
   return (
-    <div className="w-full h-full flex items-center justify-center border-2 border-blue-500">
+    <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', border:'2px solid var(--brand)' }}>
       {/* Hidden input for copy/paste compatibility */}
       <input
         type="text"

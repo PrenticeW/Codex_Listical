@@ -138,7 +138,7 @@ const TaskRow = React.memo(function TaskRow({
                   boxSizing: 'border-box',
                   position: 'sticky',
                   left: 0,
-                  backgroundColor: '#d9f6e0',
+                  backgroundColor: '#E8ECF5',
                   zIndex: rowNumZIndex,
                 }}
                 className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
@@ -151,7 +151,7 @@ const TaskRow = React.memo(function TaskRow({
                   }}
                   onDragEnd={handleDragEnd}
                   className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-grab active:cursor-grabbing`}
-                  style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? '#a7e8b8' : '#d9f6e0', color: '#065f46' }}
+                  style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
                   onClick={(e) => {
                     handleRowNumberClick(e, rowId);
                     window.dispatchEvent(new CustomEvent(TASK_ROW_PANEL_CLOSE_EVENT));
@@ -251,7 +251,7 @@ const TaskRow = React.memo(function TaskRow({
             >
               <div
                 className={`h-full flex items-center w-full ${
-                  isCellDrop ? 'ring-2 ring-inset ring-black bg-[#fff5fc]' : ''
+                  isCellDrop ? 'ring-2 ring-inset ring-black bg-[#E8F0FC]' : ''
                 }`}
                 style={{
                   fontSize: `${cellFontSize}px`,
@@ -370,8 +370,8 @@ const TaskRow = React.memo(function TaskRow({
                           height: `${rowHeight - 12}px`,
                           minWidth: `${rowHeight - 12}px`,
                           minHeight: `${rowHeight - 12}px`,
-                          backgroundColor: (value === 'true' || value === true) ? '#52881c' : 'white',
-                          border: `2px solid ${(value === 'true' || value === true) ? '#52881c' : '#d1d5db'}`,
+                          backgroundColor: (value === 'true' || value === true) ? '#4A70C8' : 'white',
+                          border: `2px solid ${(value === 'true' || value === true) ? '#4A70C8' : '#D0D8E8'}`,
                           borderRadius: '3px',
                         }}
                       >

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Archive, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { useYear } from '../contexts/YearContext';
 import {
   performYearArchive,
@@ -12,6 +11,31 @@ import {
  *
  * Modal dialog for archiving the current year and starting a new one.
  */
+
+const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+function InfoBanner({ type, title, body }) {
+  const colors = {
+    error:   { bg:'#fef2f2', border:'#fca5a5', title:'#9b1c1c', body:'#c0392b', icon:'#c0392b' },
+    warning: { bg:'#fffbeb', border:'#fcd34d', title:'#78350f', body:'#92400e', icon:'#d97706' },
+    success: { bg:'#f0fdf4', border:'#86efac', title:'#14532d', body:'#166534', icon:'#16a34a' },
+  }[type] || {};
+
+  return (
+    <div style={{ display:'flex', alignItems:'flex-start', gap:12, padding:14, background:colors.bg, border:`1px solid ${colors.border}`, borderRadius:8, marginBottom:12 }}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={colors.icon} strokeWidth="1.8" strokeLinecap="round" style={{ flexShrink:0, marginTop:1 }}>
+        {type === 'success'
+          ? <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>
+          : <><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>}
+      </svg>
+      <div>
+        <p style={{ fontSize:13, fontWeight:600, color:colors.title, marginBottom:4 }}>{title}</p>
+        <p style={{ fontSize:13, color:colors.body }}>{body}</p>
+      </div>
+    </div>
+  );
+}
+
 export function ArchiveYearModal({ isOpen, onClose, yearNumber }) {
   const { refreshMetadata, draftYear } = useYear();
   const nextYearNumber = draftYear ? draftYear.yearNumber : yearNumber + 1;
@@ -21,19 +45,13 @@ export function ArchiveYearModal({ isOpen, onClose, yearNumber }) {
 
   useEffect(() => {
     if (isOpen && yearNumber) {
-      // Validate when modal opens (async since the Supabase port)
       let cancelled = false;
       (async () => {
         try {
           const validationResult = await validateYearReadyForArchive(yearNumber);
-          if (!cancelled) {
-            setValidation(validationResult);
-            setResult(null);
-          }
+          if (!cancelled) { setValidation(validationResult); setResult(null); }
         } catch (err) {
-          if (!cancelled) {
-            setValidation({ ready: false, reason: `Validation error: ${err.message}` });
-          }
+          if (!cancelled) { setValidation({ ready: false, reason: `Validation error: ${err.message}` }); }
         }
       })();
       return () => { cancelled = true; };
@@ -42,42 +60,25 @@ export function ArchiveYearModal({ isOpen, onClose, yearNumber }) {
 
   const handleArchive = async () => {
     if (!validation?.ready) return;
-
     setIsArchiving(true);
     setResult(null);
-
     try {
       const archiveResult = await performYearArchive(yearNumber);
-
       setResult(archiveResult);
-
       if (archiveResult.success) {
-        // Refresh year metadata in context
         refreshMetadata();
-
-        // Auto-close after success (with delay for user to see message)
-        setTimeout(() => {
-          onClose();
-          setIsArchiving(false);
-          setResult(null);
-        }, 2000);
+        setTimeout(() => { onClose(); setIsArchiving(false); setResult(null); }, 2000);
       } else {
         setIsArchiving(false);
       }
     } catch (error) {
-      setResult({
-        success: false,
-        error: error.message,
-      });
+      setResult({ success: false, error: error.message });
       setIsArchiving(false);
     }
   };
 
   const handleCancel = () => {
-    if (!isArchiving) {
-      onClose();
-      setResult(null);
-    }
+    if (!isArchiving) { onClose(); setResult(null); }
   };
 
   if (!isOpen) return null;
@@ -86,83 +87,45 @@ export function ArchiveYearModal({ isOpen, onClose, yearNumber }) {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black backdrop-blur-sm"
-        style={{
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          zIndex: 1000020
-        }}
+        style={{ position:'fixed', inset:0, background:'rgba(31,31,31,0.32)', zIndex:1000020 }}
         onClick={handleCancel}
       />
 
-      {/* Modal Container */}
+      {/* Modal */}
       <div
-        className="fixed inset-0 flex items-center justify-center p-4 pointer-events-none"
-        style={{ zIndex: 1000021 }}
+        style={{ position:'fixed', inset:0, display:'flex', alignItems:'center', justifyContent:'center', padding:16, pointerEvents:'none', zIndex:1000021 }}
       >
-        {/* Modal */}
-        <div className="relative bg-white rounded-lg shadow-2xl max-w-md w-full p-6 pointer-events-auto">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 bg-amber-100 rounded-lg">
-            <Archive className="w-6 h-6 text-amber-600" />
+        <div style={{ background:'#fff', borderRadius:12, border:'1px solid #e8e8e4', boxShadow:'0 1px 0 rgba(72,50,75,0.04), 0 4px 24px rgba(72,50,75,0.14)', maxWidth:440, width:'100%', padding:24, pointerEvents:'auto', fontFamily:FONT }}>
+
+          {/* Header */}
+          <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
+            <div style={{ width:36, height:36, borderRadius:8, background:'#fffbeb', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>
+              </svg>
+            </div>
+            <h2 style={{ fontSize:17, fontWeight:600, color:'#1F1F1F', margin:0 }}>Archive Year {yearNumber}?</h2>
           </div>
-          <h2 className="text-xl font-semibold text-gray-900">
-            Archive Year {yearNumber}?
-          </h2>
-        </div>
 
-        {/* Content */}
-        <div className="space-y-4">
-          {/* Validation/Warning messages */}
+          {/* Status banners */}
           {validation && !validation.ready && (
-            <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-red-900">Cannot Archive</p>
-                <p className="text-sm text-red-700 mt-1">{validation.reason}</p>
-              </div>
-            </div>
+            <InfoBanner type="error" title="Cannot Archive" body={validation.reason} />
           )}
-
           {validation?.warning && (
-            <div className="flex items-start gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-yellow-900">Warning</p>
-                <p className="text-sm text-yellow-700 mt-1">{validation.warning}</p>
-              </div>
-            </div>
+            <InfoBanner type="warning" title="Warning" body={validation.warning} />
           )}
-
-          {/* Success message */}
           {result?.success && (
-            <div className="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-green-900">Archive Complete!</p>
-                <p className="text-sm text-green-700 mt-1">
-                  Year {result.archivedYear} has been archived. Starting Year {result.newYear}...
-                </p>
-              </div>
-            </div>
+            <InfoBanner type="success" title="Archive Complete!" body={`Year ${result.archivedYear} has been archived. Starting Year ${result.newYear}…`} />
           )}
-
-          {/* Error message */}
           {result?.success === false && (
-            <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-red-900">Archive Failed</p>
-                <p className="text-sm text-red-700 mt-1">{result.error}</p>
-              </div>
-            </div>
+            <InfoBanner type="error" title="Archive Failed" body={result.error} />
           )}
 
-          {/* Information */}
+          {/* Body copy */}
           {!result && validation?.ready && (
-            <div className="text-sm text-gray-600 space-y-2">
-              <p className="font-medium text-gray-900">This will:</p>
-              <ul className="list-disc list-inside space-y-1 ml-2">
+            <div style={{ fontSize:13, color:'#616161', lineHeight:1.6 }}>
+              <p style={{ fontWeight:600, color:'#383838', marginBottom:8 }}>This will:</p>
+              <ul style={{ paddingLeft:20, margin:'0 0 14px', lineHeight:1.8 }}>
                 <li>Archive all {validation.weeksCompleted || 0} completed weeks ({validation.totalHours || 0}h total)</li>
                 {draftYear
                   ? <li>Activate Year {nextYearNumber} (your planned draft)</li>
@@ -170,36 +133,39 @@ export function ArchiveYearModal({ isOpen, onClose, yearNumber }) {
                 }
                 {!draftYear && <li>Carry forward recurring tasks (reset to "Not Scheduled")</li>}
               </ul>
-              <p className="mt-3 text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
+              <p style={{ fontSize:12, color:'#92400e', background:'#fffbeb', border:'1px solid #fcd34d', borderRadius:6, padding:'10px 12px' }}>
                 <strong>Note:</strong> Year {yearNumber} will become read-only and accessible via History.
               </p>
             </div>
           )}
-        </div>
 
-        {/* Actions */}
-        <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
-          <button
-            onClick={handleCancel}
-            disabled={isArchiving}
-            className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleArchive}
-            disabled={!validation?.ready || isArchiving || result?.success}
-            className="
-              px-4 py-2 text-sm font-medium text-white rounded-lg
-              bg-amber-600 hover:bg-amber-700
-              disabled:opacity-50 disabled:cursor-not-allowed
-              flex items-center gap-2
-            "
-          >
-            {isArchiving && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isArchiving ? 'Archiving...' : `Archive & Start Year ${nextYearNumber}`}
-          </button>
-        </div>
+          {/* Actions */}
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:10, marginTop:20, paddingTop:16, borderTop:'1px solid var(--brand-bd)' }}>
+            <button
+              onClick={handleCancel}
+              disabled={isArchiving}
+              style={{ padding:'7px 16px', fontSize:13, fontWeight:500, color:'#616161', background:'transparent', border:'1px solid #e8e8e4', borderRadius:8, cursor: isArchiving ? 'not-allowed' : 'pointer', fontFamily:FONT, opacity: isArchiving ? 0.5 : 1, transition:'background .1s' }}
+              onMouseEnter={e=>{ if (!isArchiving) e.currentTarget.style.background='rgba(43,89,182,0.05)'; }}
+              onMouseLeave={e=>e.currentTarget.style.background='transparent'}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleArchive}
+              disabled={!validation?.ready || isArchiving || result?.success}
+              style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 16px', fontSize:13, fontWeight:600, color:'#fff', background:'#d97706', border:'none', borderRadius:8, cursor: (!validation?.ready || isArchiving || result?.success) ? 'not-allowed' : 'pointer', fontFamily:FONT, opacity: (!validation?.ready || isArchiving || result?.success) ? 0.5 : 1, transition:'opacity .1s' }}
+              onMouseEnter={e=>{ if (validation?.ready && !isArchiving) e.currentTarget.style.opacity='0.85'; }}
+              onMouseLeave={e=>e.currentTarget.style.opacity= (!validation?.ready || isArchiving || result?.success) ? '0.5' : '1'}
+            >
+              {isArchiving && (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ animation:'spin 1s linear infinite' }}>
+                  <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="2.5"/>
+                  <path d="M22 12a10 10 0 0 0-10-10" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
+                </svg>
+              )}
+              {isArchiving ? 'Archiving…' : `Archive & Start Year ${nextYearNumber}`}
+            </button>
+          </div>
         </div>
       </div>
     </>,

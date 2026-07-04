@@ -20,6 +20,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
+import PanelShell from './PanelShell';
 import { usePlanPanel } from '../contexts/PlanPanelContext';
 import usePageSize from '../hooks/usePageSize';
 import { parseEstimateLabelToMinutes } from '../utils/staging/planTableHelpers';
@@ -60,10 +61,10 @@ const C = {
   textDim:     '#555',
   textFaint:   '#999',
   textLight:   '#bbb',
-  green:       '#1a7a5c',
-  greenDark:   '#1a5c3a',
-  greenBg:     '#edf5f0',
-  greenBorder: '#a8d4be',
+  green:       'var(--brand-deep)',
+  greenDark:   'var(--brand-ink)',
+  greenBg:     'var(--brand-tint)',
+  greenBorder: 'var(--brand-bd)',
   danger:      '#c0392b',
   dangerBg:    '#fef2f2',
   dangerBorder:'#fca5a5',
@@ -74,11 +75,13 @@ const C = {
 
 const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
-const SECTION = {
-  borderBottom: `1px solid ${C.borderLight}`,
-  padding: '24px 26px',
-  flexShrink: 0,
-  background: C.bg,
+const BENTO_CARD = {
+  background: '#FFFFFF',
+  borderRadius: 12,
+  padding: '15px 16px',
+  margin: '0 11px 7px',
+  border: '1px solid #e8e8e4',
+  boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.07)',
 };
 
 // ─── Schedule view constants ──────────────────────────────────────────────────
@@ -120,8 +123,12 @@ function FitText({ text, maxFontSize = 14, minFontSize = 7 }) {
 function SectionLabel({ children, style }) {
   return (
     <div style={{
-      fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
-      textTransform: 'uppercase', color: C.textLight, marginBottom: 14,
+      fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
+      fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
+      textTransform: 'uppercase', color: 'var(--brand-ink)',
+      marginBottom: 14,
+      borderBottom: '1px solid var(--brand-bd)',
+      paddingBottom: 6,
       ...style,
     }}>
       {children}
@@ -139,12 +146,13 @@ function ActionBtn({ icon, label, onClick, style }) {
       onMouseLeave={() => setHovered(false)}
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: 'none', border: `1px solid ${hovered ? C.green : C.border}`,
+        background: hovered ? 'var(--brand-hover-bg)' : 'transparent',
+        border: `1px solid ${hovered ? 'var(--brand-hover-bd)' : C.border}`,
         borderRadius: 10, padding: '13px 16px',
         fontFamily: FONT, fontSize: 14, fontWeight: 400,
         color: hovered ? C.green : C.textDim,
         cursor: 'pointer', width: '100%', textAlign: 'left',
-        transition: 'border-color 0.15s, color 0.15s',
+        transition: 'border-color 0.15s, color 0.15s, background 0.15s',
         ...style,
       }}
     >
@@ -1181,7 +1189,7 @@ function ScheduleView({ scheduleData, onDragStartRef, onAddChipRef, onBack }) {
 
 function UpdateSection({ isUpToDate, onSendToSystem }) {
   return (
-    <div style={SECTION}>
+    <div style={BENTO_CARD}>
       <SectionLabel>Update</SectionLabel>
       {isUpToDate ? (
         <div style={{
@@ -1215,7 +1223,7 @@ function ScheduleLinkSection({ onViewSchedule, onAddChip }) {
   }, [onAddChip]);
 
   return (
-    <div style={SECTION}>
+    <div style={BENTO_CARD}>
       <SectionLabel>Add</SectionLabel>
       <ActionBtn
         icon={ICON.calendar}
@@ -1250,7 +1258,7 @@ function ChipSection({ chip, onOpenColour, onNameChange, onGoalChange }) {
   const templateColour = template?.colour ?? chip.colour;
 
   return (
-    <div style={SECTION}>
+    <div style={BENTO_CARD}>
       <SectionLabel>Chip</SectionLabel>
 
       {/* Goal row — always shown; lets user switch the chip type */}
@@ -1375,7 +1383,7 @@ function TimeSection({ chip, onStartMinutes, onEndMinutes, onDurationChange, onT
   const endMins = chip.endMinutes ?? (chip.startMinutes != null && chip.durationMinutes != null ? chip.startMinutes + chip.durationMinutes : null);
 
   return (
-    <div style={SECTION}>
+    <div style={BENTO_CARD}>
       <SectionLabel>Time</SectionLabel>
 
       <FieldRow
@@ -1417,7 +1425,7 @@ function TimeSection({ chip, onStartMinutes, onEndMinutes, onDurationChange, onT
 function RemoveSection({ onRemove, disabled }) {
   const [hovered, setHovered] = useState(false);
   return (
-    <div style={SECTION}>
+    <div style={{ ...BENTO_CARD, marginBottom: 11 }}>
       <button
         onClick={onRemove}
         disabled={disabled}
@@ -1462,7 +1470,7 @@ function PageFooter() {
 
   return (
     <div style={{
-      borderTop: `1px solid ${C.borderLight}`,
+      borderTop: '1px solid var(--brand-bd)',
       padding: '20px 22px',
       flexShrink: 0, background: C.bg,
     }}>
@@ -1518,7 +1526,7 @@ function MainView({
   return (
     <div style={{ width: 480, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Scrollable body */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, overflowY: 'auto', paddingTop: 20, paddingBottom: 8 }}>
         <UpdateSection isUpToDate={isUpToDate} onSendToSystem={onSendToSystem} />
         {!hasChip ? (
           <>
@@ -1760,68 +1768,59 @@ export default function PlanPanel() {
 
   const isSlid = panelView !== 'main';
 
-  return createPortal(
-    <div
-      style={{
-        position: 'fixed', right: 0, top: navBottom, bottom: 0,
-        width: 480,
-        background: C.bg,
-        borderLeft: `1px solid ${C.border}`,
-        zIndex: 99994,
-        overflow: 'hidden',
-        transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
-        transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      {/* Horizontal slider track: 960 px wide, two 480 px views */}
-      <div
-        style={{
-          display: 'flex',
-          width: 960,
-          flex: 1,
-          minHeight: 0,
-          transform: isSlid ? 'translateX(-480px)' : 'translateX(0)',
-          transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
-        }}
-      >
-        {/* View 1 — Main */}
-        <MainView
-          selectedChip={selectedChip}
-          isUpToDate={isUpToDate}
-          onSendToSystem={handleSendToSystem}
-          onViewSchedule={openScheduleView}
-          onAddChip={handleAddChip}
-          onOpenColour={openColourView}
-          onNameChange={handleNameChange}
-          onGoalChange={handleGoalChange}
-          onStartMinutes={handleStartMinutes}
-          onEndMinutes={handleEndMinutes}
-          onDurationChange={handleDurationChange}
-          onToggleChipDuration={handleToggleChipDuration}
-          onRemoveChip={handleRemoveChip}
-        />
+  return (
+    <>
+      <PanelShell isOpen={isOpen} navBottom={navBottom} width={480} zIndex={99994}>
+        {/* Horizontal slider track: 960 px wide, two 480 px views */}
+        <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div
+            style={{
+              display: 'flex',
+              width: 960,
+              flex: 1,
+              minHeight: 0,
+              transform: isSlid ? 'translateX(-480px)' : 'translateX(0)',
+              transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
+            }}
+          >
+            {/* View 1 — Main */}
+            <MainView
+              selectedChip={selectedChip}
+              isUpToDate={isUpToDate}
+              onSendToSystem={handleSendToSystem}
+              onViewSchedule={openScheduleView}
+              onAddChip={handleAddChip}
+              onOpenColour={openColourView}
+              onNameChange={handleNameChange}
+              onGoalChange={handleGoalChange}
+              onStartMinutes={handleStartMinutes}
+              onEndMinutes={handleEndMinutes}
+              onDurationChange={handleDurationChange}
+              onToggleChipDuration={handleToggleChipDuration}
+              onRemoveChip={handleRemoveChip}
+            />
 
-        {/* View 2 — Colour, Schedule, or Time picker */}
-        {secondSlotView === 'schedule' ? (
-          <ScheduleView
-            scheduleData={scheduleData}
-            onDragStartRef={onDragStartRef}
-            onAddChipRef={onAddChipRef}
-            onBack={goToMain}
-          />
-        ) : (
-          <ColourView
-            chipName={selectedChip?.name}
-            chipColour={selectedChip?.colour ?? '#c9daf8'}
-            onBack={goToMain}
-            onConfirm={handleColourConfirm}
-          />
-        )}
-      </div>
+            {/* View 2 — Colour or Schedule */}
+            {secondSlotView === 'schedule' ? (
+              <ScheduleView
+                scheduleData={scheduleData}
+                onDragStartRef={onDragStartRef}
+                onAddChipRef={onAddChipRef}
+                onBack={goToMain}
+              />
+            ) : (
+              <ColourView
+                chipName={selectedChip?.name}
+                chipColour={selectedChip?.colour ?? '#c9daf8'}
+                onBack={goToMain}
+                onConfirm={handleColourConfirm}
+              />
+            )}
+          </div>
+        </div>
+      </PanelShell>
 
-      {/* Goal picker floating dropdown — chip-edit flow */}
+      {/* Goal picker floating dropdowns — portaled by GoalDropdown itself */}
       {goalAnchorRect && (
         <GoalDropdown
           allChips={selectedChip?.allChips}
@@ -1831,8 +1830,6 @@ export default function PlanPanel() {
           onClose={() => setGoalAnchorRect(null)}
         />
       )}
-
-      {/* Goal picker floating dropdown — add new chip flow */}
       {addChipAnchorRect && (
         <GoalDropdown
           allChips={allChips}
@@ -1842,7 +1839,6 @@ export default function PlanPanel() {
           onClose={() => setAddChipAnchorRect(null)}
         />
       )}
-    </div>,
-    document.body
+    </>
   );
 }

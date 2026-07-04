@@ -980,7 +980,10 @@ export default function StagingPageV2() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style={{ animation:'spin 1s linear infinite', margin:'0 auto 16px' }}>
+            <circle cx="12" cy="12" r="10" stroke="rgba(43,89,182,0.15)" strokeWidth="2.5"/>
+            <path d="M22 12a10 10 0 0 0-10-10" stroke="var(--brand-deep)" strokeWidth="2.5" strokeLinecap="round"/>
+          </svg>
           <p className="text-gray-600">Loading...</p>
         </div>
       </div>
@@ -1085,9 +1088,22 @@ export default function StagingPageV2() {
 
   return (
     <>
-      <div className="h-screen overflow-y-auto bg-gray-100 text-slate-800">
+      <div className="h-screen overflow-y-auto text-slate-800" style={{
+        backgroundColor: '#ffffff',
+        backgroundImage: [
+          'radial-gradient(ellipse 80% 60% at 105% -10%, rgba(130,155,210,0.45) 0%, transparent 62%)',
+          'radial-gradient(ellipse 60% 45% at -5% 110%, rgba(130,155,210,0.28) 0%, transparent 58%)',
+          'radial-gradient(ellipse 160% 65% at 95% 112%, rgba(130,155,210,0.38) 0%, transparent 60%)',
+          'radial-gradient(ellipse 140% 55% at 45% 112%, rgba(130,155,210,0.25) 0%, transparent 58%)',
+          'linear-gradient(rgba(130,155,210,0.50) 1px, transparent 1px)',
+          'linear-gradient(90deg, rgba(130,155,210,0.50) 1px, transparent 1px)',
+        ].join(','),
+        backgroundSize: '100% 100%, 100% 100%, 100% 100%, 100% 100%, 32px 32px, 32px 32px',
+        backgroundPosition: '0 0, 0 0, 0 0, 0 0, -1px -1px, -1px -1px',
+        backgroundAttachment: 'fixed',
+      }}>
         <div
-          className="sticky top-0 z-20 bg-gray-100 px-4 pt-4 pb-4"
+          className="sticky top-0 z-20 px-4 pt-4 pb-4" style={{ background: 'transparent' }}
         >
           <NavigationBar
             listicalButton={
@@ -1110,7 +1126,7 @@ export default function StagingPageV2() {
                   handleAdd();
                 }
               }}
-              className="w-full rounded border border-[#ced3d0] px-3 py-2 text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-black"
+              className="w-full rounded border border-[#ced3d0] px-3 py-2 text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5A84D8] focus:border-[#5A84D8]"
               style={{ fontSize: `${Math.round(18 * textSizeScale)}px` }}
               placeholder="What would you like to get done?"
             />

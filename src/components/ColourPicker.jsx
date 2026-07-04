@@ -182,7 +182,9 @@ export default function ColourPicker({ value, onChange, defaultOpen = false }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full rounded border border-[#ced3d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+        className="w-full rounded border border-[#ced3d0] focus:outline-none"
+        onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--brand)'}
+        onBlur={e => e.target.style.boxShadow = 'none'}
         style={{ backgroundColor: previewBg, height: '2.25rem' }}
         aria-expanded={open}
       />
@@ -312,7 +314,10 @@ export default function ColourPicker({ value, onChange, defaultOpen = false }) {
               <button
                 type="button"
                 onClick={handleEyedropper}
-                className="rounded p-1 text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                className="rounded p-1 text-slate-500 hover:text-slate-800 focus:outline-none"
+                style={{ outline:'none' }}
+                onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--brand)'}
+                onBlur={e => e.target.style.boxShadow = 'none'}
                 aria-label="Pick from screen"
               >
                 <Pipette size={20} />
@@ -321,7 +326,10 @@ export default function ColourPicker({ value, onChange, defaultOpen = false }) {
             <button
               type="button"
               onClick={() => customInputRef.current?.click()}
-              className="rounded p-1 text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              className="rounded p-1 text-slate-500 hover:text-slate-800 focus:outline-none"
+              style={{ outline:'none' }}
+              onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--brand)'}
+              onBlur={e => e.target.style.boxShadow = 'none'}
               aria-label="Custom colour"
             >
               <PaintBucket size={20} />
@@ -329,7 +337,10 @@ export default function ColourPicker({ value, onChange, defaultOpen = false }) {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="rounded border border-[#ced3d0] bg-white p-1 text-slate-600 shadow-sm hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              className="rounded border border-[#ced3d0] bg-white p-1 text-slate-600 shadow-sm hover:bg-slate-50 hover:text-slate-900 focus:outline-none"
+              style={{ outline:'none' }}
+              onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--brand)'}
+              onBlur={e => e.target.style.boxShadow = 'none'}
               aria-label="Confirm colour"
             >
               <Check size={20} />

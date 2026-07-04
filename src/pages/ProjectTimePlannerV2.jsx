@@ -2948,9 +2948,22 @@ export default function ProjectTimePlannerV2() {
   }, [rowHeight, rowVirtualizer]);
 
   return (
-    <div className="w-full h-screen flex flex-col bg-gray-100 overflow-hidden">
+    <div className="w-full h-screen flex flex-col overflow-hidden" style={{
+      backgroundColor: '#ffffff',
+      backgroundImage: [
+        'radial-gradient(ellipse 80% 60% at 105% -10%, rgba(130,155,210,0.45) 0%, transparent 62%)',
+        'radial-gradient(ellipse 60% 45% at -5% 110%, rgba(130,155,210,0.28) 0%, transparent 58%)',
+        'radial-gradient(ellipse 160% 65% at 95% 112%, rgba(130,155,210,0.38) 0%, transparent 60%)',
+        'radial-gradient(ellipse 140% 55% at 45% 112%, rgba(130,155,210,0.25) 0%, transparent 58%)',
+        'linear-gradient(rgba(130,155,210,0.50) 1px, transparent 1px)',
+        'linear-gradient(90deg, rgba(130,155,210,0.50) 1px, transparent 1px)',
+      ].join(','),
+      backgroundSize: '100% 100%, 100% 100%, 100% 100%, 100% 100%, 32px 32px, 32px 32px',
+      backgroundPosition: '0 0, 0 0, 0 0, 0 0, -1px -1px, -1px -1px',
+      backgroundAttachment: 'fixed',
+    }}>
       {/* Nav bar — always visible at top */}
-      <div className="sticky top-0 z-20 bg-gray-100 px-4 pt-4 pb-4 shrink-0">
+      <div className="sticky top-0 z-20 px-4 pt-4 pb-4 shrink-0" style={{ background: 'transparent' }}>
         <NavigationBar
         listicalButton={
           <span className="font-serif text-sm font-medium text-slate-900 select-none">Listical</span>

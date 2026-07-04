@@ -1,5 +1,4 @@
 import React from 'react';
-import { Copy, Clipboard, Trash2, Plus, CornerDownRight, FolderPlus, PlusCircle } from 'lucide-react';
 
 /**
  * Context menu for spreadsheet cells and rows.
@@ -7,6 +6,55 @@ import { Copy, Clipboard, Trash2, Plus, CornerDownRight, FolderPlus, PlusCircle 
  * contextType === 'cell'  → copy / paste actions only
  * contextType === 'row'   → full row actions (duplicate, delete, insert, etc.)
  */
+
+const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const MONO = "'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace";
+
+const BENTO_SHELL = {
+  background: '#ffffff',
+  borderRadius: 12,
+  padding: '11px 13px',
+  border: '1px solid #e8e8e4',
+  boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 12px rgba(72,50,75,0.10)',
+  minWidth: 200,
+  userSelect: 'none',
+  fontFamily: FONT,
+};
+
+const DIVIDER = {
+  height: 1,
+  background: 'rgba(200,174,198,0.35)',
+  margin: '6px 0',
+};
+
+function MenuItem({ label, onClick, danger, hint, style }) {
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        width: '100%', padding: '5px 2px',
+        background: hovered ? 'rgba(43,89,182,0.05)' : 'transparent',
+        border: 'none', cursor: 'pointer', textAlign: 'left',
+        fontFamily: FONT, fontSize: 13, fontWeight: 400,
+        color: danger ? '#c0392b' : '#1F1F1F',
+        borderRadius: 6,
+        transition: 'background 0.1s',
+        ...style,
+      }}
+    >
+      <span>{label}</span>
+      {hint && (
+        <span style={{ fontSize: 11, color: '#9E9E9E', fontFamily: MONO, marginLeft: 12 }}>{hint}</span>
+      )}
+    </button>
+  );
+}
+
 export default function ContextMenu({
   contextMenu,
   onClose,
@@ -29,110 +77,64 @@ export default function ContextMenu({
   const fitsBelow = y + MENU_HEIGHT < window.innerHeight - 8;
   const clampedTop = fitsBelow ? y : Math.max(8, y - MENU_HEIGHT);
 
-  const menuStyle = { position: 'fixed', left: `${clampedLeft}px`, top: `${clampedTop}px`, zIndex: 9999 };
-
+  const posStyle = { position: 'fixed', left: `${clampedLeft}px`, top: `${clampedTop}px`, zIndex: 9999 };
   const handleAction = (action) => { action(); onClose(); };
 
   // ── Cell context: copy / paste only ──────────────────────────────────────
   if (contextType === 'cell') {
     return (
       <div
-        className="bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[160px]"
-        style={menuStyle}
+        style={{ ...posStyle, ...BENTO_SHELL, minWidth: 160 }}
         onClick={(e) => e.stopPropagation()}
         onContextMenu={(e) => e.preventDefault()}
       >
-        <button
-          onClick={() => handleAction(onCopy)}
-          className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-        >
-          <Copy className="w-4 h-4" />
-          Copy
-          <span className="ml-auto text-xs text-gray-400">⌘C</span>
-        </button>
-        <button
-          onClick={() => handleAction(onPaste)}
-          className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-        >
-          <Clipboard className="w-4 h-4" />
-          Paste
-          <span className="ml-auto text-xs text-gray-400">⌘V</span>
-        </button>
+        <MenuItem label="Copy" hint="⌘C" onClick={() => handleAction(onCopy)} />
+        <MenuItem label="Paste" hint="⌘V" onClick={() => handleAction(onPaste)} />
       </div>
     );
   }
 
   // ── Row context: full row actions ─────────────────────────────────────────
+  const isMulti = hasSelectedRows && selectedRowsCount > 1;
+  const rowLabel = `Row${isMulti ? 's' : ''}`;
+
   return (
     <div
-      className="bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[200px]"
-      style={menuStyle}
+      style={{ ...posStyle, ...BENTO_SHELL }}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
     >
       {hasSelectedRows && (
+        <div style={{
+          fontSize: 9, fontWeight: 700, letterSpacing: '.1em',
+          textTransform: 'uppercase', color: '#9E9E9E',
+          fontFamily: MONO, marginBottom: 8, paddingBottom: 6,
+          borderBottom: '1px solid rgba(200,174,198,0.35)',
+        }}>
+          {selectedRowsCount} row{selectedRowsCount > 1 ? 's' : ''} selected
+        </div>
+      )}
+      {rowId && !isMulti && (
         <>
-          <div className="px-3 py-1.5 text-xs text-gray-500 font-medium border-b border-gray-100">
-            {selectedRowsCount} row{selectedRowsCount > 1 ? 's' : ''} selected
-          </div>
-          <button
-            onClick={() => handleAction(onDuplicateRow)}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-          >
-            <Copy className="w-4 h-4" />
-            Duplicate Row{selectedRowsCount > 1 ? 's' : ''}
-          </button>
-          <button
-            onClick={() => handleAction(onDeleteRows)}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete Row{selectedRowsCount > 1 ? 's' : ''}
-            <span className="ml-auto text-xs text-gray-400">Del</span>
-          </button>
-          <div className="border-t border-gray-100 my-1" />
+          <MenuItem label="Insert Row Above" onClick={() => handleAction(onInsertRowAbove)} />
+          <MenuItem label="Insert Row Below" onClick={() => handleAction(onInsertRowBelow)} />
+          <div style={DIVIDER} />
         </>
       )}
-      {rowId && (
+      {!isMulti && (
         <>
-          <button
-            onClick={() => handleAction(onInsertRowAbove)}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-          >
-            <Plus className="w-4 h-4" />
-            Insert Row Above
-          </button>
-          <button
-            onClick={() => handleAction(onInsertRowBelow)}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-          >
-            <CornerDownRight className="w-4 h-4" />
-            Insert Row Below
-          </button>
-          <div className="border-t border-gray-100 my-1" />
+          <MenuItem label="Add Tasks" onClick={() => handleAction(onAddTasks)} />
+          <MenuItem label="Add Subproject" onClick={() => handleAction(onAddSubproject)} />
+          <div style={DIVIDER} />
         </>
       )}
-      <button
-        onClick={() => handleAction(onAddTasks)}
-        className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-      >
-        <PlusCircle className="w-4 h-4" />
-        Add Tasks
-      </button>
-      <button
-        onClick={() => handleAction(onAddSubproject)}
-        className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-      >
-        <FolderPlus className="w-4 h-4" />
-        Add Subproject
-      </button>
-      <button
-        onClick={() => handleAction(onDuplicateRow)}
-        className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-      >
-        <Copy className="w-4 h-4" />
-        Duplicate
-      </button>
+      <MenuItem label={`Duplicate ${rowLabel}`} onClick={() => handleAction(onDuplicateRow)} />
+      <MenuItem
+        label={`Delete ${rowLabel}`}
+        danger
+        hint="Del"
+        onClick={() => handleAction(onDeleteRows)}
+      />
     </div>
   );
 }

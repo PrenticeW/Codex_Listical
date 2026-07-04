@@ -33,14 +33,14 @@ function MonthRow({
           boxSizing: 'border-box',
           position: 'sticky',
           left: 0,
-          backgroundColor: '#d9f6e0',
+          backgroundColor: '#E8ECF5',
           zIndex: rowNumZIndex,
         }}
         className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
       >
         <div
           className="h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-pointer"
-          style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#d9f6e0', color: '#065f46' }}
+          style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#E8ECF5', color: '#6A7A9E' }}
           onClick={(e) => handleRowNumberClick(e, rowId)}
         >
           <div

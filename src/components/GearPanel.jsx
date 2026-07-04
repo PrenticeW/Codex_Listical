@@ -12,6 +12,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import PanelShell from './PanelShell';
 import { useNavigate } from 'react-router-dom';
 import { useGearPanel } from '../contexts/GearPanelContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -52,18 +53,25 @@ const C = {
   textDim:      '#555',
   textFaint:    '#999',
   textLight:    '#bbb',
-  green:        '#1a7a5c',
-  greenDark:    '#1a5c3a',
+  green:        'var(--brand-deep)',
+  greenDark:    'var(--brand-ink)',
+  greenBg:      'var(--brand-tint)',
+  greenBorder:  'var(--brand-bd)',
   danger:       '#c0392b',
-  dangerBg:     '#fdf0ef',
-  dangerBorder: '#f0c0c0',
+  dangerBg:     '#fef2f2',
+  dangerBorder: '#fca5a5',
 };
 
 const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
-const SECTION = {
-  borderBottom: `1px solid ${C.borderLight}`,
-  padding: '24px 32px 24px 26px',
+// BentoCard — white elevated card wrapping each section
+const BENTO_CARD = {
+  background: '#FFFFFF',
+  borderRadius: 12,
+  padding: '15px 16px',
+  margin: '0 11px 7px',
+  border: '1px solid #e8e8e4',
+  boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.07)',
 };
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
@@ -71,8 +79,11 @@ const SECTION = {
 function SectionLabel({ children }) {
   return (
     <div style={{
-      fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
-      textTransform: 'uppercase', color: C.textLight, marginBottom: 18,
+      fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
+      textTransform: 'uppercase', color: 'var(--brand-ink)',
+      paddingBottom: 9, borderBottom: '1px solid var(--brand-bd)',
+      marginBottom: 11,
+      fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
     }}>
       {children}
     </div>
@@ -90,7 +101,7 @@ function Toggle({ checked, onChange }) {
       />
       <div style={{
         position: 'absolute', inset: 0,
-        background: checked ? C.green : '#ddd',
+        background: checked ? 'var(--brand-deep)' : '#D9D5E2',
         borderRadius: 20, transition: 'background 0.2s',
       }} />
       <div style={{
@@ -158,7 +169,7 @@ function PanelDropdown({ value, options, onChange }) {
               onClick={() => { onChange(opt); setOpen(false); }}
               style={{
                 padding: '10px 16px', fontSize: 14,
-                color: opt === value ? C.green : C.textMed,
+                color: opt === value ? 'var(--brand-deep)' : C.textMed,
                 fontWeight: opt === value ? 500 : 400,
                 cursor: 'pointer',
               }}
@@ -332,11 +343,11 @@ function TimeCarousel({ value, onChange, incrementMinutes = 60 }) {
           <button
             onClick={confirm}
             style={{
-              height: 26, padding: '0 10px', background: C.greenDark, border: 'none',
+              height: 26, padding: '0 10px', background: 'var(--brand-deep)', border: 'none',
               borderRadius: 6, fontSize: 12, fontWeight: 500, color: '#fff', cursor: 'pointer',
             }}
-            onMouseEnter={e => e.currentTarget.style.background = C.green}
-            onMouseLeave={e => e.currentTarget.style.background = C.greenDark}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--brand)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'var(--brand-deep)'}
           >
             Set
           </button>
@@ -459,7 +470,7 @@ function YourYearSection() {
   const valueStyle = { fontSize: 14, fontWeight: 500, color: C.text };
 
   return (
-    <div style={SECTION}>
+    <div style={BENTO_CARD}>
       <SectionLabel>Your Year</SectionLabel>
 
       {/* Viewing year selector — WIRED to YearContext */}
@@ -494,7 +505,7 @@ function YourYearSection() {
       >
         <div style={metaStyle}>Cycle start</div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ ...valueStyle, color: isDateDirty ? C.green : C.text }}>
+          <span style={{ ...valueStyle, color: isDateDirty ? 'var(--brand-deep)' : C.text }}>
             {formatDate(pendingDate)}
           </span>
           <input
@@ -510,13 +521,13 @@ function YourYearSection() {
               disabled={isSavingDate}
               style={{
                 height: 24, padding: '0 10px',
-                background: isSavingDate ? C.textLight : C.greenDark,
+                background: isSavingDate ? C.textLight : 'var(--brand-deep)',
                 border: 'none', borderRadius: 6,
                 fontSize: 11, fontWeight: 500, color: '#fff',
                 cursor: isSavingDate ? 'default' : 'pointer', flexShrink: 0,
               }}
-              onMouseEnter={e => { if (!isSavingDate) e.currentTarget.style.background = C.green; }}
-              onMouseLeave={e => { if (!isSavingDate) e.currentTarget.style.background = C.greenDark; }}
+              onMouseEnter={e => { if (!isSavingDate) e.currentTarget.style.background = 'var(--brand)'; }}
+              onMouseLeave={e => { if (!isSavingDate) e.currentTarget.style.background = 'var(--brand-deep)'; }}
             >
               {isSavingDate ? 'Saving…' : 'Set'}
             </button>
@@ -538,7 +549,7 @@ function YourYearSection() {
             cursor: isCreating ? 'default' : 'pointer',
             width: '100%', textAlign: 'left', opacity: isCreating ? 0.6 : 1,
           }}
-          onMouseEnter={e => { if (!isCreating) { e.currentTarget.style.borderColor = C.green; e.currentTarget.style.color = C.green; } }}
+          onMouseEnter={e => { if (!isCreating) { e.currentTarget.style.borderColor = 'var(--brand)'; e.currentTarget.style.color = 'var(--brand-deep)'; } }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = isCreating ? C.textLight : C.textDim; }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -642,12 +653,12 @@ function TimelineSection({ onShowHistory }) {
   };
 
   return (
-    <div style={SECTION}>
+    <div style={BENTO_CARD}>
       <SectionLabel>Timeline</SectionLabel>
       <button
         style={btnStyle}
         onClick={onShowHistory}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = C.green; e.currentTarget.style.color = C.green; }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--brand)'; e.currentTarget.style.color = 'var(--brand-deep)'; }}
         onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -691,7 +702,7 @@ function SystemSettingsSection() {
   const labelStyle = { fontSize: 13, color: C.textMed };
 
   return (
-    <div style={SECTION}>
+    <div style={BENTO_CARD}>
       <SectionLabel>System page settings</SectionLabel>
       <div style={rowStyle}>
         <span style={labelStyle}>Show recurring</span>
@@ -746,7 +757,7 @@ function PlanSettingsSection() {
   const labelStyle = { fontSize: 13, color: C.textMed };
 
   return (
-    <div style={SECTION}>
+    <div style={BENTO_CARD}>
       <SectionLabel>Plan page settings</SectionLabel>
       <div style={rowStyle}>
         <span style={labelStyle}>Clock format</span>
@@ -798,7 +809,7 @@ function AccountSection({ onClose }) {
   };
 
   return (
-    <div style={{ ...SECTION, borderBottom: 'none' }}>
+    <div style={{ ...BENTO_CARD, marginBottom: 11 }}>
       <SectionLabel>Account</SectionLabel>
       <div style={{ fontSize: 12, color: C.textFaint, marginBottom: 4 }}>Signed in as</div>
       <div style={{ fontSize: 14, color: C.text, fontWeight: 500, marginBottom: 14 }}>{user?.email ?? ''}</div>
@@ -951,8 +962,8 @@ function HistoryView({ onBack, isActive, use24Hour }) {
       {/* Sticky header */}
       <div style={{
         display: 'flex', flexDirection: 'column', gap: 10,
-        padding: '20px 28px 16px 22px', borderBottom: `1px solid ${C.borderLight}`,
-        position: 'sticky', top: 0, background: C.bg, zIndex: 2,
+        padding: '16px 18px 12px', borderBottom: '1px solid var(--brand-bd)',
+        position: 'sticky', top: 0, background: 'rgba(255,255,255,0.92)', zIndex: 2,
       }}>
         <button
           onClick={onBack}
@@ -999,7 +1010,7 @@ function HistoryView({ onBack, isActive, use24Hour }) {
               <div style={{ fontSize: 13, color: '#333' }}>
                 {fmtTimestamp(snap.created_at, { use24Hour })}
                 {idx === 0 && (
-                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.green, background: '#e8f5f0', padding: '2px 7px', borderRadius: 4, marginLeft: 7, verticalAlign: 'middle' }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--brand-deep)', background: 'var(--brand-tint)', padding: '2px 7px', borderRadius: 4, marginLeft: 7, verticalAlign: 'middle' }}>
                     Latest
                   </span>
                 )}
@@ -1092,22 +1103,10 @@ export default function GearPanel() {
     return () => window.removeEventListener('keydown', handler);
   }, [isOpen, close]);
 
-  return createPortal(
-    <div
-        style={{
-          position: 'fixed', right: 0, top: navBottom, bottom: 0,
-          width: 480,
-          background: C.bg,
-          borderLeft: `1px solid ${C.border}`,
-          zIndex: 99996, // above page panels (99994) and ScheduleItemPanel (99995)
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-          transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
-          transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
-        }}
-      >
-        {/* Two-view slider */}
+  return (
+    <PanelShell isOpen={isOpen} navBottom={navBottom} width={480} zIndex={99996}>
+      {/* Two-view slider */}
+      <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div
           style={{
             display: 'flex',
@@ -1119,7 +1118,7 @@ export default function GearPanel() {
           }}
         >
           {/* Main view */}
-          <div style={{ width: 480, flexShrink: 0, overflowY: 'auto' }}>
+          <div style={{ width: 480, flexShrink: 0, overflowY: 'auto', paddingTop: 20, paddingBottom: 24 }}>
             <YourYearSection />
             <TimelineSection onShowHistory={() => setShowHistory(true)} />
             <SystemSettingsSection />
@@ -1132,7 +1131,7 @@ export default function GearPanel() {
             <HistoryView onBack={() => setShowHistory(false)} isActive={showHistory && isOpen} use24Hour={use24Hour} />
           </div>
         </div>
-      </div>,
-    document.body
+      </div>
+    </PanelShell>
   );
 }

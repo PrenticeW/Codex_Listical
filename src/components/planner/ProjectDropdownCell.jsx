@@ -130,14 +130,15 @@ function ProjectDropdownCell({
     >
       <button
         ref={buttonRef}
-        className="py-0.5 rounded-full flex-1 border-2 border-blue-500 focus:outline-none flex items-center justify-between gap-1"
+        className="py-0.5 rounded-full flex-1 focus:outline-none flex items-center justify-between gap-1"
         style={{
           fontSize: `${cellFontSize}px`,
           backgroundColor: currentColors.bg,
           color: currentColors.text,
           fontWeight: '500',
           paddingLeft: '8px',
-          paddingRight: '8px'
+          paddingRight: '8px',
+          border: '2px solid var(--sel-ring)',
         }}
         onClick={() => setIsOpen(!isOpen)}
       >
@@ -149,14 +150,16 @@ function ProjectDropdownCell({
 
       {isOpen && createPortal(
         <div
-          className="border border-gray-300 shadow-lg"
           style={{
             position: 'fixed',
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
             width: `${dropdownPosition.width}px`,
             backgroundColor: '#ffffff',
-            zIndex: 9999
+            border: '1px solid #e8e8e4',
+            borderRadius: 6,
+            boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 12px rgba(72,50,75,0.10)',
+            zIndex: 9999,
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
@@ -165,9 +168,7 @@ function ProjectDropdownCell({
             return (
               <div
                 key={option}
-                className={`py-1 cursor-pointer ${
-                  index === selectedIndex ? 'ring-2 ring-inset ring-black' : ''
-                } ${option === '-' ? 'text-left' : ''}`}
+                className={`py-1 cursor-pointer ${option === '-' ? 'text-left' : ''}`}
                 style={{
                   fontSize: `${cellFontSize}px`,
                   minHeight: `${rowHeight}px`,

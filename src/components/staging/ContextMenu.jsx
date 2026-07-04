@@ -1,10 +1,59 @@
 import React from 'react';
-import { Trash2, Plus, CornerDownRight, Copy, Target, CheckSquare, ListTodo, Calendar, FolderKanban, Calculator } from 'lucide-react';
 
 /**
  * Context menu for staging table cells and rows
  * Shows different actions based on what's selected
  */
+
+const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const MONO = "'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace";
+
+const BENTO_SHELL = {
+  background: '#ffffff',
+  borderRadius: 12,
+  padding: '11px 13px',
+  border: '1px solid #e8e8e4',
+  boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 12px rgba(72,50,75,0.10)',
+  minWidth: 220,
+  userSelect: 'none',
+  fontFamily: FONT,
+};
+
+const DIVIDER = {
+  height: 1,
+  background: 'rgba(200,174,198,0.35)',
+  margin: '6px 0',
+};
+
+function MenuItem({ label, onClick, danger, hint, disabled }) {
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        width: '100%', padding: '5px 2px',
+        background: hovered && !disabled ? 'rgba(43,89,182,0.05)' : 'transparent',
+        border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', textAlign: 'left',
+        fontFamily: FONT, fontSize: 13, fontWeight: 400,
+        color: disabled ? '#C0C0C0' : danger ? '#c0392b' : '#1F1F1F',
+        borderRadius: 6,
+        transition: 'background 0.1s',
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      <span>{label}</span>
+      {hint && (
+        <span style={{ fontSize: 11, color: '#9E9E9E', fontFamily: MONO, marginLeft: 12 }}>{hint}</span>
+      )}
+    </button>
+  );
+}
+
 export default function ContextMenu({
   contextMenu,
   onClose,
@@ -33,63 +82,28 @@ export default function ContextMenu({
     selectedRowsCount,
   } = contextMenu;
 
-  // Define section-specific row type options based on the actual template structure
-  // Template uses:
-  // - 'prompt' rows: darker grey background, text in column 1 (index 1)
-  // - 'response' rows: lighter grey background, text in column 2 (index 2)
-  // - 'data' rows: white background, all cells editable
-  //
-  // Outcomes section template: prompt ("Outcome") -> response ("Measurable Outcome")
-  // Actions section template: prompt ("Measurable Outcome") -> response ("Action")
+  // Define section-specific row type options
   const getSectionInsertOptions = () => {
     switch (sectionType) {
-      case 'Reasons':
-        return [
-          { label: 'Add Reason', type: 'prompt', icon: Target },
-        ];
-      case 'Outcomes':
-        return [
-          { label: 'Add Outcome', type: 'prompt', icon: Target },
-          { label: 'Add Measurable Outcome', type: 'response', icon: CheckSquare },
-        ];
-      case 'Actions':
-        return [
-          { label: 'Add Measurable Outcome', type: 'prompt', icon: CheckSquare },
-          { label: 'Add Action', type: 'response', icon: ListTodo },
-        ];
-      case 'Subprojects':
-        return [
-          { label: 'Add Subproject', type: 'prompt', icon: FolderKanban },
-        ];
-      case 'Schedule':
-        return [
-          { label: 'Add Schedule Item', type: 'prompt', icon: Calendar },
-        ];
-      default:
-        return [];
+      case 'Reasons':    return [{ label: 'Add Reason', type: 'prompt' }];
+      case 'Outcomes':   return [{ label: 'Add Outcome', type: 'prompt' }, { label: 'Add Measurable Outcome', type: 'response' }];
+      case 'Actions':    return [{ label: 'Add Measurable Outcome', type: 'prompt' }, { label: 'Add Action', type: 'response' }];
+      case 'Subprojects': return [{ label: 'Add Subproject', type: 'prompt' }];
+      case 'Schedule':   return [{ label: 'Add Schedule Item', type: 'prompt' }];
+      default:           return [];
     }
   };
 
   const sectionOptions = getSectionInsertOptions();
 
-  // Position the menu, ensuring it doesn't go off-screen and doesn't open below the cursor when near the bottom
   const MENU_WIDTH = 220;
   const MENU_HEIGHT = 300;
   const clampedLeft = Math.min(x, window.innerWidth - MENU_WIDTH - 8);
   const fitsBelow = y + MENU_HEIGHT < window.innerHeight - 8;
   const clampedTop = fitsBelow ? y : Math.max(8, y - MENU_HEIGHT);
 
-  const menuStyle = {
-    position: 'fixed',
-    left: `${clampedLeft}px`,
-    top: `${clampedTop}px`,
-    zIndex: 9999,
-  };
-
-  const handleAction = (action) => {
-    action();
-    onClose();
-  };
+  const posStyle = { position: 'fixed', left: `${clampedLeft}px`, top: `${clampedTop}px`, zIndex: 9999 };
+  const handleAction = (action) => { action(); onClose(); };
 
   const hasRowContext = itemId != null && rowIdx != null;
   const isMultiRow = selectedRowsCount > 1;
@@ -98,113 +112,82 @@ export default function ContextMenu({
 
   return (
     <div
-      className="bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[200px]"
-      style={menuStyle}
+      style={{ ...posStyle, ...BENTO_SHELL }}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* Selection info */}
+      {/* Selection info header */}
       {(hasSelectedRows || hasSelectedCells) && (
-        <div className="px-3 py-1.5 text-xs text-gray-500 font-medium border-b border-gray-100">
+        <div style={{
+          fontSize: 9, fontWeight: 700, letterSpacing: '.1em',
+          textTransform: 'uppercase', color: '#9E9E9E',
+          fontFamily: MONO, marginBottom: 8, paddingBottom: 6,
+          borderBottom: '1px solid rgba(200,174,198,0.35)',
+        }}>
           {hasSelectedRows
             ? `${selectedRowsCount} row${selectedRowsCount > 1 ? 's' : ''} selected`
             : `${selectedCellsCount} cell${selectedCellsCount > 1 ? 's' : ''} selected`}
         </div>
       )}
 
-      {/* Row actions - always show when right-clicking on a row */}
+      {/* Row actions */}
       {hasRowContext && (
         <>
-          {/* Section-specific insert options */}
           {!isMultiRow && sectionOptions.length > 0 && (
             <>
-              {sectionOptions.map((option, index) => {
-                const IconComponent = option.icon;
-                return (
-                  <button
-                    key={`${option.type}-${index}`}
-                    onClick={() => handleAction(() => onInsertRowType(option.type))}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-                  >
-                    <IconComponent className="w-4 h-4" />
-                    {option.label}
-                  </button>
-                );
-              })}
-              <div className="border-t border-gray-100 my-1" />
+              {sectionOptions.map((option, index) => (
+                <MenuItem
+                  key={`${option.type}-${index}`}
+                  label={option.label}
+                  onClick={() => handleAction(() => onInsertRowType(option.type))}
+                />
+              ))}
+              <div style={DIVIDER} />
             </>
           )}
-          {/* Toggle totals for the entire Actions section */}
           {!isMultiRow && !isHeader && sectionType === 'Actions' && rowType === 'prompt' && (
             <>
-              <button
+              <MenuItem
+                label={showOutcomeTotals ? 'Hide Totals' : 'Show Totals'}
                 onClick={() => handleAction(onToggleOutcomeTotals)}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-              >
-                <Calculator className="w-4 h-4" />
-                {showOutcomeTotals ? 'Hide Totals' : 'Show Totals'}
-              </button>
-              <div className="border-t border-gray-100 my-1" />
+              />
+              <div style={DIVIDER} />
             </>
           )}
-          {/* Generic row operations */}
           {!isMultiRow && (
             <>
-              <button
-                onClick={() => handleAction(onInsertRowAbove)}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-              >
-                <Plus className="w-4 h-4" />
-                Insert Row Above
-              </button>
-              <button
-                onClick={() => handleAction(onInsertRowBelow)}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-              >
-                <CornerDownRight className="w-4 h-4" />
-                Insert Row Below
-              </button>
+              <MenuItem label="Insert Row Above" onClick={() => handleAction(onInsertRowAbove)} />
+              <MenuItem label="Insert Row Below" onClick={() => handleAction(onInsertRowBelow)} />
             </>
           )}
-          <button
-            onClick={() => handleAction(onDuplicateRow)}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-          >
-            <Copy className="w-4 h-4" />
-            Duplicate {rowLabel}
-          </button>
-          <div className="border-t border-gray-100 my-1" />
+          <MenuItem label={`Duplicate ${rowLabel}`} onClick={() => handleAction(onDuplicateRow)} />
+          <div style={DIVIDER} />
           {!isHeader && (
-            <button
-              onClick={() => !isFirstOfType && handleAction(onDeleteRows)}
+            <MenuItem
+              label={`Delete ${rowLabel}`}
+              danger
               disabled={isFirstOfType}
-              className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${isFirstOfType ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-gray-50 text-red-600'}`}
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete {rowLabel}
-            </button>
+              onClick={() => !isFirstOfType && handleAction(onDeleteRows)}
+            />
           )}
         </>
       )}
 
-      {/* Cell actions when cells are selected */}
+      {/* Cell clear action */}
       {hasSelectedCells && (
         <>
-          <div className="border-t border-gray-100 my-1" />
-          <button
+          {hasRowContext && <div style={DIVIDER} />}
+          <MenuItem
+            label={`Clear Cell${selectedCellsCount > 1 ? 's' : ''}`}
+            hint="Del"
             onClick={() => handleAction(onClearCells)}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-          >
-            <Trash2 className="w-4 h-4" />
-            Clear Cell{selectedCellsCount > 1 ? 's' : ''}
-            <span className="ml-auto text-xs text-gray-400">Del</span>
-          </button>
+          />
         </>
       )}
 
       {/* No context fallback */}
       {!hasRowContext && !hasSelectedCells && !hasSelectedRows && (
-        <div className="px-3 py-2 text-sm text-gray-400 italic">
+        <div style={{ fontSize: 12, color: '#9E9E9E', fontStyle: 'italic', padding: '2px 2px' }}>
           Right-click on a row for options
         </div>
       )}

@@ -1,5 +1,39 @@
 @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
+
+:root {
+  /* ── Brand (blue theme) ── */
+  --brand:          #5A84D8;
+  --brand-deep:     #2B59B6;
+  --brand-tint:     #E8F0FC;
+  --brand-ink:      #1E3F8A;
+  --brand-bd:       rgba(90,132,216,0.18);
+  --brand-hover-bg: rgba(43,89,182,0.06);
+  --brand-hover-bd: rgba(43,89,182,0.22);
+
+  /* ── Selection ── */
+  --sel-ring:          #2B59B6;
+  --sel-row:           #E8F0FC;
+  --sel-gutter:        #8090A8;
+  --sel-row-overlay:   rgba(43,89,182,0.12);
+
+  /* ── Page grid ── */
+  --grid-line: rgba(130,155,210,0.50);
+
+  /* ── Type ── */
+  --font-sans: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace;
+
+  /* ── Ink ── */
+  --ink:       #1F1F1F;
+  --ink-soft:  #383838;
+  --ink-mute:  #616161;
+  --ink-faint: #9E9E9E;
+
+  /* ── Paper ── */
+  --paper: #FAF5EB;
+}
 
 html, body, #root {
   font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -34,7 +68,7 @@ table td.selected-cell::after {
   content: '';
   position: absolute;
   inset: 0;
-  border: 2px solid #cf7d9a;
+  border: 2px solid var(--sel-ring);
   pointer-events: none;
   z-index: 10;
 }
@@ -48,7 +82,7 @@ table td select {
 
 /* Row selection styling - Google Sheets style */
 tr.selected-row {
-  background-color: #fff5fc !important;
+  background-color: var(--sel-row) !important;
   user-select: none !important;
   cursor: grab !important;
 }
@@ -58,7 +92,7 @@ tr.selected-row:active {
 }
 
 tr.selected-row td {
-  background-color: #fff5fc !important;
+  background-color: var(--sel-row) !important;
 }
 
 /* Allow interaction with inputs, selects, and textareas in selected rows */
@@ -73,9 +107,10 @@ tr.selected-row td button {
 
 /* Row number cell when row is selected */
 tr.selected-row td.selected-cell {
-  background-color: #f0d5ec !important;
+  background-color: var(--sel-gutter) !important;
   font-weight: 700 !important;
   cursor: grab !important;
+  color: #fff !important;
 }
 
 tr.selected-row td.selected-cell:active {
@@ -198,11 +233,11 @@ option.estimate-highlight {
 }
 
 .check-cell:has(input:checked) {
-  background-color: #e4f5e9;
+  background-color: #E0E8F5;
 }
 
 .check-cell input:checked {
-  accent-color: #1b7a3a;
+  accent-color: #4A70C8;
 }
 
 .status-pill-select:focus {

@@ -10,8 +10,8 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
+import PanelShell from './PanelShell';
 import { useGoalPanel } from '../contexts/GoalPanelContext';
 import { useYear } from '../contexts/YearContext';
 import usePageSize from '../hooks/usePageSize';
@@ -40,15 +40,21 @@ const C = {
   textDim:     '#555',
   textFaint:   '#999',
   textLight:   '#bbb',
-  green:       '#1a7a5c',
-  greenDark:   '#1a5c3a',
+  green:       'var(--brand-deep)',
+  greenDark:   'var(--brand-ink)',
+  greenBg:     'var(--brand-tint)',
+  greenBorder: 'var(--brand-bd)',
 };
 
 const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
-const SECTION = {
-  borderBottom: `1px solid ${C.borderLight}`,
-  padding: '24px 26px',
+const BENTO_CARD = {
+  background: '#FFFFFF',
+  borderRadius: 12,
+  padding: '15px 16px',
+  margin: '0 11px 7px',
+  border: '1px solid #e8e8e4',
+  boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.07)',
 };
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
@@ -56,22 +62,46 @@ const SECTION = {
 function SectionLabel({ children }) {
   return (
     <div style={{
-      fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
-      textTransform: 'uppercase', color: C.textLight, marginBottom: 16,
+      fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
+      fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
+      textTransform: 'uppercase', color: 'var(--brand-ink)',
+      marginBottom: 14,
+      borderBottom: '1px solid var(--brand-bd)',
+      paddingBottom: 6,
     }}>
       {children}
     </div>
   );
 }
 
-function ActionBtn({ icon, label, disabled, onClick, danger, hoverIcon, hoverLabel, hoverDanger, style }) {
+// Flash checkmark badge — active when action is staged/confirmed
+function ConfirmBadge({ active }) {
+  return (
+    <span style={{
+      opacity: active ? 1 : 0,
+      transform: active ? 'scale(1)' : 'scale(0.7)',
+      transition: 'opacity 0.2s, transform 0.2s',
+      width: 40, height: 24,
+      background: 'var(--brand-deep)',
+      borderRadius: 6,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexShrink: 0, pointerEvents: 'none',
+    }}>
+      <svg width="10" height="8" viewBox="0 0 12 10" fill="none">
+        <path d="M1 5l3.5 3.5L11 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    </span>
+  );
+}
+
+function ActionBtn({ icon, label, disabled, onClick, danger, hoverIcon, hoverLabel, hoverDanger, rightSlot, style }) {
   const [hovered, setHovered] = useState(false);
   // hoverDanger: button looks neutral at rest but previews a destructive
   // action on hover (e.g. "Added to Plan" → "Remove from Plan")
   const isDanger = danger || hoverDanger;
   const hoverColor = isDanger ? '#c0392b' : C.green;
   const hoverBorder = isDanger ? '#fca5a5' : C.green;
-  const hoverBg = isDanger ? '#fef2f2' : 'none';
+  const hoverBg = isDanger ? '#fef2f2' : 'var(--brand-hover-bg)';
   const showHoverContent = hovered && !disabled;
 
   return (
@@ -81,9 +111,9 @@ function ActionBtn({ icon, label, disabled, onClick, danger, hoverIcon, hoverLab
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        display: 'flex', alignItems: 'center', gap: 8,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         width: '100%',
-        background: hovered && !disabled ? hoverBg : 'none',
+        background: hovered && !disabled ? hoverBg : 'transparent',
         border: `1px solid ${hovered && !disabled ? hoverBorder : C.border}`,
         borderRadius: 10,
         padding: '12px 16px',
@@ -96,8 +126,11 @@ function ActionBtn({ icon, label, disabled, onClick, danger, hoverIcon, hoverLab
         ...style,
       }}
     >
-      {showHoverContent && hoverIcon ? hoverIcon : icon}
-      {showHoverContent && hoverLabel ? hoverLabel : label}
+      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {showHoverContent && hoverIcon ? hoverIcon : icon}
+        {showHoverContent && hoverLabel ? hoverLabel : label}
+      </span>
+      {rightSlot}
     </button>
   );
 }
@@ -118,6 +151,7 @@ function ConfirmActionBtn({ icon, label, confirmLabel, onConfirm, style }) {
       icon={icon}
       label={armed ? confirmLabel : label}
       danger
+      rightSlot={<ConfirmBadge active={armed} />}
       onClick={() => {
         if (!armed) {
           setArmed(true);
@@ -547,7 +581,7 @@ function RowSection({ row }) {
   const timesDisabled  = allDisabled || !(row?.sectionType === 'Actions' && row?.rowType === 'response');
 
   return (
-    <div style={{ ...SECTION }}>
+    <div style={BENTO_CARD}>
       <SectionLabel>Row Actions</SectionLabel>
 
       <ActionBtn
@@ -601,7 +635,7 @@ function GoalSection({ goal, onOpenColour }) {
 
   if (!goal) {
     return (
-      <div style={{ ...SECTION }}>
+      <div style={BENTO_CARD}>
         <SectionLabel>Goal Info</SectionLabel>
         <p style={{ fontFamily: FONT, fontSize: 13, color: C.textFaint, fontStyle: 'italic' }}>
           Click a goal to select it
@@ -649,7 +683,7 @@ function GoalSection({ goal, onOpenColour }) {
 
   return (
     <div>
-    <div style={{ ...SECTION }}>
+    <div style={BENTO_CARD}>
       <SectionLabel>Goal Info</SectionLabel>
 
       {/* Colour */}
@@ -788,7 +822,7 @@ function GoalSection({ goal, onOpenColour }) {
     </div>
 
     {/* Goal Actions section */}
-    <div style={{ ...SECTION }}>
+    <div style={BENTO_CARD}>
       <SectionLabel>Goal Actions</SectionLabel>
 
       {/* Plan toggle */}
@@ -859,7 +893,7 @@ function PageSection() {
   const displayScale = Math.round(sizeScale * 10);
 
   return (
-    <div style={{ ...SECTION, borderBottom: 'none' }}>
+    <div style={{ ...BENTO_CARD, marginBottom: 11 }}>
       <SectionLabel>Page</SectionLabel>
 
       <ButtonPair
@@ -986,44 +1020,31 @@ export default function GoalPanel() {
     return () => window.removeEventListener('keydown', handler);
   }, [isOpen, close]);
 
-  const panelStyle = {
-    position: 'fixed', right: 0, top: navBottom, bottom: 0,
-    width: 480,
-    background: C.bg,
-    borderLeft: `1px solid ${C.border}`,
-    zIndex: 99994,
-    overflow: 'hidden',
-    transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
-    display: 'flex',
-    flexDirection: 'column',
-  };
-
   // Page panels are mounted globally in Layout; render only on the Goal
   // page so panels never stack across page switches. Open state is kept,
   // so the panel is still there when the user returns.
   if (pathname !== '/staging') return null;
 
-  return createPortal(
-    <>
-      {/* ── Main panel ── */}
-      <div style={{ ...panelStyle, transform: isOpen ? 'translateX(0)' : 'translateX(100%)' }}>
-        {/* Scrollable goal + row sections */}
-        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+  return (
+    <PanelShell isOpen={isOpen} navBottom={navBottom} width={480} zIndex={99994}>
+      {/* Scrollable content + pinned footer */}
+      <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingTop: 20, paddingBottom: 24 }}>
           <GoalSection goal={selectedGoal} onOpenColour={() => setColourViewOpen(true)} />
           <RowSection row={selectedRow} />
         </div>
-        {/* Page actions pinned to bottom */}
-        <div style={{ flexShrink: 0, borderTop: `1px solid ${C.borderLight}` }}>
+        <div style={{ flexShrink: 0, borderTop: '1px solid var(--brand-bd)' }}>
           <PageSection />
         </div>
       </div>
 
-      {/* ── Colour picker overlay — slides in on top of the main panel ── */}
+      {/* Colour picker overlay — slides in from the right on top */}
       <div style={{
-        ...panelStyle,
-        zIndex: 99995,
-        transform: (isOpen && colourViewOpen) ? 'translateX(0)' : 'translateX(100%)',
+        position: 'absolute', inset: 0,
+        background: 'rgba(255,255,255,0.98)',
         overflowY: 'auto',
+        transform: colourViewOpen ? 'translateX(0)' : 'translateX(100%)',
+        transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
       }}>
         {selectedGoal && (
           <ColourView
@@ -1035,7 +1056,6 @@ export default function GoalPanel() {
           />
         )}
       </div>
-    </>,
-    document.body
+    </PanelShell>
   );
 }
