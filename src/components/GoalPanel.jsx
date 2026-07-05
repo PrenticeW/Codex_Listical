@@ -46,7 +46,7 @@ const C = {
   greenBorder: 'var(--brand-bd)',
 };
 
-const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 const BENTO_CARD = {
   background: '#FFFFFF',
@@ -332,7 +332,7 @@ function isActiveEntry([h, s, l], value) {
 }
 
 const EYEDROPPER_SUPPORTED = typeof window !== 'undefined' && 'EyeDropper' in window;
-const MONO_FONT = "'Google Sans Mono', 'Roboto Mono', 'Courier New', monospace";
+const MONO_FONT = "'DM Sans Mono', 'Roboto Mono', 'Courier New', monospace";
 
 // ─── HSB canvas colour picker ─────────────────────────────────────────────────
 function ColourPicker({ currentColor, onSelect, onConfirm }) {
@@ -601,8 +601,9 @@ function ColourView({ currentColor, onSelect, onBack, customColors = [], onAddCu
       {JUNE_GROUPS.map(({ label, families }) => (
         <div key={label} style={{ ...BENTO_CARD, margin: '8px 12px 0', padding: '10px 12px' }}>
           <div style={{
-            fontFamily: FONT, fontSize: 10, fontWeight: 700,
-            letterSpacing: '0.08em', textTransform: 'uppercase', color: C.textLight,
+            fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
+            fontSize: 10, fontWeight: 700,
+            letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--brand-ink)',
             marginBottom: 2,
           }}>
             {label}
@@ -614,8 +615,9 @@ function ColourView({ currentColor, onSelect, onBack, customColors = [], onAddCu
       {/* Custom */}
       <div style={{ ...BENTO_CARD, margin: '8px 12px 12px', padding: '10px 12px' }}>
         <div style={{
-          fontFamily: FONT, fontSize: 10, fontWeight: 700,
-          letterSpacing: '0.08em', textTransform: 'uppercase', color: C.textLight,
+          fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
+          fontSize: 10, fontWeight: 700,
+          letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--brand-ink)',
           marginBottom: 6,
         }}>
           Custom

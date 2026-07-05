@@ -15,7 +15,7 @@ const PANEL_STYLE = {
   fontSize: 12,
 };
 
-const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 function FilterItem({ name, isSelected, onClick }) {
   const [hovered, setHovered] = React.useState(false);

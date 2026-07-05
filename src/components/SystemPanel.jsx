@@ -58,7 +58,7 @@ const C = {
   greenBorder: 'var(--brand-bd)',
 };
 
-const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 const BENTO_CARD = {
   background: '#FFFFFF',

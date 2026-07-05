@@ -50,7 +50,11 @@ const DAYS_OF_WEEK = [
   'Saturday',
 ];
 const MINUTES_IN_DAY = 24 * 60;
-const DAY_COLUMN_COUNT = 8;
+// Number of real day columns (Sun–Sat window), not counting the leading
+// hour/time label column. The calendar grid itself renders 1 + DAY_COLUMN_COUNT
+// columns; the totals/summary section below it renders one further trailing
+// "Total" column (1 + DAY_COLUMN_COUNT + 1).
+const DAY_COLUMN_COUNT = 7;
 const SLEEP_DRAG_TYPE = 'application/x-sleep-day';
 const buildInitialSleepBlocks = (days) =>
   days.map((day, index) => ({
@@ -64,29 +68,98 @@ const buildInitialSleepBlocks = (days) =>
 const DEFAULT_SLEEP_CELL_HEIGHT = 16;
 let chipSequence = 0;
 
-// ── Cell-dropdown colour carousel palette (ported from the Plan-page mockup) ──
-// 3 slides of 30 hue families x 4 lightness rows, plus a neutrals slide.
-const CHIP_PALETTE_LIGHTNESS = [68, 60, 52, 44];
-const CHIP_PALETTE_SLIDES = (() => {
-  const slides = [];
-  for (let g = 0; g < 3; g += 1) {
-    const slide = [];
-    for (const l of CHIP_PALETTE_LIGHTNESS) {
-      for (let c = 0; c < 10; c += 1) {
-        const h = (g * 10 + c) * 12;
-        slide.push(`hsl(${h}, 65%, ${l}%)`);
-      }
-    }
-    slides.push(slide);
+// ── Chip editor colour palette (from design handover reference/ChipEditorUI.jsx) ──
+// Grouped hue families x 6 shades each, matching the "June palette" spec.
+const CHIP_EDITOR_GROUPS = [
+  { label: 'Purples & Pinks', families: [
+    { name: 'purple', shades: [[272, 72, 76], [272, 72, 68], [272, 72, 60], [272, 72, 52], [272, 72, 44], [272, 72, 36]] },
+    { name: 'plum', shades: [[290, 56, 76], [290, 58, 68], [290, 60, 60], [290, 62, 52], [290, 64, 44], [290, 66, 36]] },
+    { name: 'pink', shades: [[326, 72, 76], [326, 72, 68], [326, 72, 60], [326, 72, 52], [326, 72, 44], [326, 72, 36]] },
+  ] },
+  { label: 'Reds', families: [
+    { name: 'rose', shades: [[348, 77, 76], [348, 74, 68], [348, 70, 60], [348, 64, 52], [348, 59, 44], [348, 54, 36]] },
+    { name: 'red', shades: [[2, 72, 76], [2, 72, 68], [2, 72, 60], [2, 72, 52], [2, 72, 44], [2, 72, 36]] },
+    { name: 'scarlet', shades: [[12, 77, 76], [12, 72, 68], [12, 68, 60], [12, 62, 52], [12, 57, 44], [12, 52, 36]] },
+  ] },
+  { label: 'Oranges', families: [
+    { name: 'tangerine', shades: [[22, 100, 76], [22, 100, 68], [22, 100, 60], [22, 100, 52], [22, 100, 44], [22, 100, 36]] },
+    { name: 'orange', shades: [[28, 90, 76], [28, 90, 68], [28, 90, 60], [28, 90, 52], [28, 90, 44], [28, 90, 36]] },
+    { name: 'amber', shades: [[36, 80, 76], [36, 80, 68], [36, 80, 60], [36, 80, 52], [36, 80, 44], [36, 80, 36]] },
+  ] },
+  { label: 'Yellows', families: [
+    { name: 'gold', shades: [[54, 85, 76], [54, 85, 68], [54, 85, 60], [54, 85, 52], [54, 85, 44], [54, 85, 36]] },
+    { name: 'yellow', shades: [[58, 90, 76], [58, 90, 68], [58, 90, 60], [58, 90, 52], [58, 90, 44], [58, 90, 36]] },
+    { name: 'chartreuse', shades: [[62, 85, 76], [62, 85, 68], [62, 85, 60], [62, 85, 52], [62, 85, 44], [62, 85, 36]] },
+  ] },
+  { label: 'Greens', families: [
+    { name: 'lime', shades: [[82, 72, 76], [82, 72, 68], [82, 72, 60], [82, 72, 52], [82, 72, 44], [82, 72, 36]] },
+    { name: 'green', shades: [[110, 72, 76], [110, 72, 68], [110, 72, 60], [110, 72, 52], [110, 72, 44], [110, 72, 36]] },
+    { name: 'sage', shades: [[155, 34, 76], [155, 42, 68], [155, 50, 60], [155, 58, 52], [155, 66, 44], [155, 74, 36]] },
+  ] },
+  { label: 'Teals & Aquas', families: [
+    { name: 'teal', shades: [[173, 57, 76], [173, 60, 68], [173, 62, 60], [173, 65, 52], [173, 68, 44], [173, 71, 36]] },
+    { name: 'aqua', shades: [[188, 34, 76], [188, 42, 68], [188, 50, 60], [188, 58, 52], [188, 66, 44], [188, 74, 36]] },
+    { name: 'sky', shades: [[200, 72, 76], [200, 72, 68], [200, 72, 60], [200, 72, 52], [200, 72, 44], [200, 72, 36]] },
+  ] },
+  { label: 'Blues & Indigos', families: [
+    { name: 'blue', shades: [[217, 56, 76], [217, 58, 68], [217, 60, 60], [217, 62, 52], [217, 64, 44], [217, 66, 36]] },
+    { name: 'cobalt', shades: [[232, 34, 76], [232, 42, 68], [232, 50, 60], [232, 58, 52], [232, 66, 44], [232, 74, 36]] },
+    { name: 'indigo', shades: [[252, 72, 76], [252, 72, 68], [252, 72, 60], [252, 72, 52], [252, 72, 44], [252, 72, 36]] },
+  ] },
+  { label: 'Neutrals', families: [
+    { name: 'neutral', shades: [[0, 0, 100], [0, 0, 96], [0, 0, 72], [0, 0, 44], [0, 0, 25], [0, 0, 6]] },
+  ] },
+];
+const chipEditorIsActiveShade = (h, s, l, colour) => {
+  if (typeof colour !== 'string') return false;
+  const match = colour.match(/hsl\(\s*([\d.]+)[,\s]+([\d.]+)%?[,\s]+([\d.]+)%?\s*\)/i);
+  if (!match) return false;
+  return Math.abs(h - Number(match[1])) < 1 && Math.abs(s - Number(match[2])) < 2 && Math.abs(l - Number(match[3])) < 2;
+};
+
+// ── Chip editor "Custom" colour mixer helpers (HSB canvas + hue slider) ──
+const chipEditorHexToRgb = (hex) => {
+  const match = hex.replace('#', '').match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  return match ? match.slice(1).map((v) => parseInt(v, 16)) : [0, 0, 0];
+};
+const chipEditorRgbToHsb = (r, g, b) => {
+  const rr = r / 255, gg = g / 255, bb = b / 255;
+  const mx = Math.max(rr, gg, bb), mn = Math.min(rr, gg, bb), d = mx - mn;
+  let h = 0;
+  if (d) {
+    if (mx === rr) h = 60 * (((gg - bb) / d) % 6);
+    else if (mx === gg) h = 60 * ((bb - rr) / d + 2);
+    else h = 60 * ((rr - gg) / d + 4);
   }
-  slides.push([
-    'hsl(0,0%,100%)', 'hsl(35,20%,97%)', 'hsl(0,0%,88%)', 'hsl(0,0%,78%)', 'hsl(0,0%,62%)', 'hsl(0,0%,50%)', 'hsl(0,0%,38%)', 'hsl(0,0%,22%)', 'hsl(0,0%,12%)', 'hsl(0,0%,4%)',
-    'hsl(40,60%,95%)', 'hsl(35,30%,88%)', 'hsl(38,35%,78%)', 'hsl(35,30%,65%)', 'hsl(33,35%,52%)', 'hsl(25,40%,35%)', 'hsl(22,45%,22%)', 'hsl(35,8%,72%)', 'hsl(35,8%,50%)', 'hsl(35,8%,30%)',
-    'hsl(210,30%,97%)', 'hsl(215,18%,82%)', 'hsl(215,16%,68%)', 'hsl(215,14%,55%)', 'hsl(215,14%,42%)', 'hsl(218,18%,30%)', 'hsl(220,20%,20%)', 'hsl(222,25%,12%)', 'hsl(225,30%,6%)', null,
-    'hsl(340,18%,88%)', 'hsl(340,18%,72%)', 'hsl(300,12%,62%)', 'hsl(265,18%,78%)', 'hsl(240,18%,72%)', 'hsl(140,14%,72%)', 'hsl(160,16%,78%)', 'hsl(185,18%,78%)', 'hsl(48,30%,82%)', 'hsl(20,35%,82%)',
-  ]);
-  return slides;
-})();
+  return { h: ((h % 360) + 360) % 360, s: mx ? d / mx : 0, b: mx };
+};
+const chipEditorHslToHsb = (h, s, l) => {
+  const s01 = s / 100;
+  const l01 = l / 100;
+  const bv = l01 + s01 * Math.min(l01, 1 - l01);
+  return { h, s: bv === 0 ? 0 : 2 * (1 - l01 / bv), b: bv };
+};
+const chipEditorParseToHsb = (colour) => {
+  if (typeof colour !== 'string') return { h: 0, s: 1, b: 1 };
+  const hslMatch = colour.match(/hsl\(\s*([\d.]+)[,\s]+([\d.]+)%?[,\s]+([\d.]+)%?\s*\)/i);
+  if (hslMatch) return chipEditorHslToHsb(Number(hslMatch[1]), Number(hslMatch[2]), Number(hslMatch[3]));
+  if (colour.startsWith('#') && colour.length >= 7) {
+    const [r, g, b] = chipEditorHexToRgb(colour);
+    return chipEditorRgbToHsb(r, g, b);
+  }
+  return { h: 0, s: 1, b: 1 };
+};
+const chipEditorHsbToHex = (h, s, b) => {
+  const i = Math.floor(h / 60) % 6;
+  const f = h / 60 - Math.floor(h / 60);
+  const p = b * (1 - s);
+  const q = b * (1 - f * s);
+  const t = b * (1 - (1 - f) * s);
+  const [r, g, bb] = [[b, t, p], [q, b, p], [p, b, t], [p, q, b], [t, p, b], [b, p, q]][i].map((v) =>
+    Math.round(v * 255)
+  );
+  return '#' + [r, g, bb].map((v) => v.toString(16).padStart(2, '0')).join('');
+};
 
 // Pick black/white text for a chip background by relative luminance.
 function chipContrastColour(colour) {
@@ -559,28 +632,10 @@ export default function TacticsPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [columnRects, setColumnRects] = useState([]);
   const [stagingProjects, setStagingProjects] = useState(() => cachedShortlist ?? []);
-  const highlightedProjectsCount = useMemo(
-    () =>
-      stagingProjects.filter((project) => {
-        const colorValue = typeof project?.color === 'string' ? project.color.trim() : '';
-        if (!colorValue) return false;
-        return colorValue.toLowerCase() !== '#f3f4f6';
-      }).length,
-    [stagingProjects]
-  );
-  const stagingColumnCount = highlightedProjectsCount + 1;
-  const maxChipColumnIndex = useMemo(
-    () =>
-      projectChips.reduce(
-        (maxValue, chip) =>
-          Number.isFinite(chip?.columnIndex) && chip.columnIndex > maxValue
-            ? chip.columnIndex
-            : maxValue,
-        -1
-      ),
-    [projectChips]
-  );
-  const totalColumnCount = Math.max(DAY_COLUMN_COUNT + stagingColumnCount, maxChipColumnIndex + 1);
+  // The grid is a fixed 8-column layout: 1 hour/time column + 7 day
+  // columns. Projects added to plan on the Goal page no longer get their
+  // own column in this table — that behavior has been removed.
+  const totalColumnCount = DAY_COLUMN_COUNT;
   const [selectedSummaryRowId, setSelectedSummaryRowId] = useState(null);
   useEffect(() => {
     const handler = (e) => {
@@ -2328,10 +2383,13 @@ export default function TacticsPage() {
   // ── Unified chip editor sub-view (default / project / custom chips) ──
   // chipEditor: null | { kind: 'default'|'project'|'custom', id, name, color }
   const [chipEditor, setChipEditor] = useState(null);
-  const [chipEditorSlide, setChipEditorSlide] = useState(0);
+  const [chipEditorCustomOpen, setChipEditorCustomOpen] = useState(false);
+  const [chipEditorHsb, setChipEditorHsb] = useState({ h: 0, s: 1, b: 1 });
+  const chipEditorSbRef = useRef(null);
+  const chipEditorHueRef = useRef(null);
   const openChipEditor = useCallback((kind, id, name, color, chipId = null) => {
     setChipEditor({ kind, id, name: name ?? '', color: color || '#8a7fd6', chipId });
-    setChipEditorSlide(0);
+    setChipEditorCustomOpen(false);
   }, []);
   const closeChipEditor = useCallback(() => setChipEditor(null), []);
   const setChipEditorName = useCallback((value) => {
@@ -2345,10 +2403,63 @@ export default function TacticsPage() {
     try {
       const result = await new window.EyeDropper().open();
       setChipEditorColour(result.sRGBHex);
+      setChipEditorHsb(chipEditorParseToHsb(result.sRGBHex));
     } catch {
       /* cancelled */
     }
   }, [setChipEditorColour]);
+  const toggleChipEditorCustom = useCallback(() => {
+    setChipEditorCustomOpen((open) => {
+      const next = !open;
+      if (next) {
+        setChipEditorHsb(chipEditorParseToHsb(chipEditor?.color));
+      }
+      return next;
+    });
+  }, [chipEditor]);
+  const updateChipEditorSb = useCallback((event) => {
+    const canvas = chipEditorSbRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const s = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const b = Math.max(0, Math.min(1, 1 - (event.clientY - rect.top) / rect.height));
+    setChipEditorHsb((prev) => {
+      const next = { ...prev, s, b };
+      setChipEditorColour(chipEditorHsbToHex(next.h, next.s, next.b));
+      return next;
+    });
+  }, [setChipEditorColour]);
+  const updateChipEditorHue = useCallback((event) => {
+    const track = chipEditorHueRef.current;
+    if (!track) return;
+    const rect = track.getBoundingClientRect();
+    const h = Math.max(0, Math.min(360, ((event.clientX - rect.left) / rect.width) * 360));
+    setChipEditorHsb((prev) => {
+      const next = { ...prev, h };
+      setChipEditorColour(chipEditorHsbToHex(next.h, next.s, next.b));
+      return next;
+    });
+  }, [setChipEditorColour]);
+  // Redraw the saturation/brightness canvas whenever the mixer is open or hue changes.
+  useEffect(() => {
+    if (!chipEditorCustomOpen) return;
+    const canvas = chipEditorSbRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const { width: w, height: h } = canvas;
+    ctx.fillStyle = `hsl(${chipEditorHsb.h}, 100%, 50%)`;
+    ctx.fillRect(0, 0, w, h);
+    const whiteGradient = ctx.createLinearGradient(0, 0, w, 0);
+    whiteGradient.addColorStop(0, 'rgba(255,255,255,1)');
+    whiteGradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = whiteGradient;
+    ctx.fillRect(0, 0, w, h);
+    const blackGradient = ctx.createLinearGradient(0, 0, 0, h);
+    blackGradient.addColorStop(0, 'rgba(0,0,0,0)');
+    blackGradient.addColorStop(1, 'rgba(0,0,0,1)');
+    ctx.fillStyle = blackGradient;
+    ctx.fillRect(0, 0, w, h);
+  }, [chipEditorCustomOpen, chipEditorHsb.h]);
   const handleCreateCustomProject = useCallback(() => {
     customSequenceRef.current += 1;
     const customId = `custom-${Date.now()}-${customSequenceRef.current}`;
@@ -2554,26 +2665,43 @@ export default function TacticsPage() {
     if (!menuHeight) return;
     const { position } = cellMenu;
     if (!position) return;
+    const stickyHeaderBottom = navBarRef.current
+      ? navBarRef.current.getBoundingClientRect().bottom
+      : 0;
+    // Full on-screen vertical range the menu is allowed to occupy.
+    const availableTop = stickyHeaderBottom + VIEWPORT_PADDING;
+    const availableBottom = window.innerHeight - VIEWPORT_PADDING;
+    const availableSpace = availableBottom - availableTop;
+    // If the menu is taller than the entire available viewport, it can never be
+    // fully on screen without its own scroll — fall back to a single contained
+    // scrollbar on the whole popover (rather than letting it spill off-screen).
+    const overflowsViewport = menuHeight > availableSpace;
+    const maxHeight = overflowsViewport ? availableSpace : undefined;
+
+    let clampedTop;
     if (position.openAbove) {
-      const menuTop = position.top - menuHeight;
-      const stickyHeaderBottom = navBarRef.current
-        ? navBarRef.current.getBoundingClientRect().bottom
-        : 0;
-      if (menuTop < stickyHeaderBottom + VIEWPORT_PADDING) {
-        const clampedTop = stickyHeaderBottom + VIEWPORT_PADDING + menuHeight;
-        setCellMenu((prev) => prev ? { ...prev, position: { ...prev.position, top: clampedTop, clamped: true } } : prev);
+      // `top` in this mode is the menu's *bottom* edge (anchored via CSS `bottom`).
+      if (overflowsViewport) {
+        clampedTop = availableBottom;
       } else {
-        setCellMenu((prev) => prev ? { ...prev, position: { ...prev.position, clamped: true } } : prev);
+        const desiredMenuTop = position.top - menuHeight;
+        if (desiredMenuTop < availableTop) {
+          clampedTop = availableTop + menuHeight;
+        } else if (position.top > availableBottom) {
+          clampedTop = availableBottom;
+        } else {
+          clampedTop = position.top;
+        }
       }
+    } else if (overflowsViewport) {
+      clampedTop = availableTop;
     } else {
-      const menuBottom = position.top + menuHeight;
-      if (menuBottom > window.innerHeight - VIEWPORT_PADDING) {
-        const clampedTop = window.innerHeight - VIEWPORT_PADDING - menuHeight;
-        setCellMenu((prev) => prev ? { ...prev, position: { ...prev.position, top: clampedTop, clamped: true } } : prev);
-      } else {
-        setCellMenu((prev) => prev ? { ...prev, position: { ...prev.position, clamped: true } } : prev);
-      }
+      clampedTop = Math.min(Math.max(position.top, availableTop), availableBottom - menuHeight);
     }
+
+    setCellMenu((prev) =>
+      prev ? { ...prev, position: { ...prev.position, top: clampedTop, maxHeight, clamped: true } } : prev
+    );
   }, [cellMenu]);
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -2998,16 +3126,34 @@ export default function TacticsPage() {
       }),
     [highlightedProjects, projectColumnTotals, visibleColumnCount]
   );
-  const orderedProjectSummaries = useMemo(() => {
-    if (!summaryRowOrder || summaryRowOrder.length === 0) return projectSummaries;
+  // Every row in the Totals table — Sleep, each project, Buffer, Rest — is
+  // user-reorderable via drag handle, per the design handoff. Sleep/Buffer/Rest
+  // are fixed-content "kinds" alongside the dynamic per-project rows, all
+  // sharing the same summaryRowOrder persistence used for the project rows.
+  const allSummaryRows = useMemo(() => {
+    const rows = [
+      { id: 'sleep-summary', kind: 'sleep', label: 'Sleep', columnTotals: sleepColumnTotals, totalMinutes: totalSleepMinutes },
+      ...projectSummaries.map((summary) => ({ ...summary, kind: 'project' })),
+      { id: 'buffer-summary', kind: 'buffer', label: 'Buffer', columnTotals: bufferColumnTotals, totalMinutes: totalBufferMinutes },
+      { id: 'rest-summary', kind: 'rest', label: 'REST', columnTotals: restColumnTotals, totalMinutes: totalRestMinutes },
+    ];
+    if (!summaryRowOrder || summaryRowOrder.length === 0) return rows;
     const indexMap = new Map(summaryRowOrder.map((id, i) => [id, i]));
-    const sorted = [...projectSummaries].sort((a, b) => {
+    return [...rows].sort((a, b) => {
       const ai = indexMap.has(a.id) ? indexMap.get(a.id) : Infinity;
       const bi = indexMap.has(b.id) ? indexMap.get(b.id) : Infinity;
       return ai - bi;
     });
-    return sorted;
-  }, [projectSummaries, summaryRowOrder]);
+  }, [
+    projectSummaries,
+    sleepColumnTotals,
+    totalSleepMinutes,
+    bufferColumnTotals,
+    totalBufferMinutes,
+    restColumnTotals,
+    totalRestMinutes,
+    summaryRowOrder,
+  ]);
   // Debounced autosave of live tactics metrics. Plan-page metric recomputes
   // fire on every chip drag / settings tweak; without debounce each one is
   // a Supabase round-trip. 500ms idle window matches the staging autosave.
@@ -3197,17 +3343,11 @@ export default function TacticsPage() {
     chipTimeOverrides,
   ]);
 
-  const stagingColumnConfigs = useMemo(() => {
-    const columns = [{ id: 'extra-empty', type: 'empty' }];
-    highlightedProjects.forEach((project) => {
-      columns.push({
-        id: `project-${project.id}`,
-        type: 'project',
-        project,
-      });
-    });
-    return columns;
-  }, [highlightedProjects]);
+  // Projects added to plan no longer get their own grid column — the table
+  // is fixed at 1 hour column + 7 day columns. This always resolves to an
+  // empty array; `highlightedProjects` is still used elsewhere (e.g. the
+  // per-project summary rows), just not to grow the grid.
+  const stagingColumnConfigs = useMemo(() => [], []);
   const stagingColumnConfigsRef = useRef(stagingColumnConfigs);
   stagingColumnConfigsRef.current = stagingColumnConfigs;
   const extendedStagingColumnConfigs = useMemo(() => {
@@ -3908,20 +4048,30 @@ export default function TacticsPage() {
     return Math.ceil(maxText + padding);
   }, [textSizeScale, projectSummaries, hourRows, use24Hour, showAmPm, startHour]);
 
-  const { gridTemplateColumns, col0Width, tableWidth } = useMemo(() => {
-    // Build grid template with specific pixel widths from columnWidths state, scaled by textSizeScale
+  const { gridTemplateColumns, tableWidth, calendarGridTemplateColumns, calendarTableWidth } = useMemo(() => {
+    // Build grid template with specific pixel widths from columnWidths state, scaled by textSizeScale.
+    // Tracks: 1 label column + totalColumnCount day columns + 1 trailing Total
+    // column (used by the totals/min-max rows further down the table).
+    // The calendar itself has no Total column, so it uses a narrower version
+    // of this same grid (all tracks except the trailing one) — otherwise it
+    // ends up with an extra unused column-width of dead space on the right.
     const columns = [];
-    let firstColWidth = 0;
+    let calendarTotal = 0;
     let total = 0;
-    for (let i = 0; i <= totalColumnCount; i++) {
+    for (let i = 0; i <= totalColumnCount + 1; i++) {
       const baseWidth = columnWidths[i] || (i === 0 ? 120 : 140);
       const scaled = Math.round(baseWidth * textSizeScale);
       const width = i === 0 ? Math.max(scaled, col0MinWidth) : scaled;
-      if (i === 0) firstColWidth = width;
       total += width;
+      if (i <= totalColumnCount) calendarTotal += width;
       columns.push(`${width}px`);
     }
-    return { gridTemplateColumns: columns.join(' '), col0Width: firstColWidth, tableWidth: total };
+    return {
+      gridTemplateColumns: columns.join(' '),
+      tableWidth: total,
+      calendarGridTemplateColumns: columns.slice(0, totalColumnCount + 1).join(' '),
+      calendarTableWidth: calendarTotal,
+    };
   }, [totalColumnCount, columnWidths, textSizeScale, col0MinWidth]);
 
   // Column resize handler
@@ -3957,7 +4107,7 @@ export default function TacticsPage() {
     (rowKey, showHeaderLabel = false) =>
       extendedStagingColumnConfigs.map((column, extraIndex) => {
         const baseClass =
-          'border border-[#e5e7eb] px-3 py-px text-center overflow-visible';
+          'border border-[var(--line-soft)] px-3 py-px text-center overflow-visible';
         // The grid has 9 columns before extra columns (0-8), so project columns start at index 9
         const columnIndex = 9 + extraIndex;
 
@@ -4193,6 +4343,7 @@ export default function TacticsPage() {
           className="absolute left-0 top-0 flex w-full justify-center"
           style={{
             height: `${blockHeight}px`,
+            padding: '2px 3px',
             zIndex: isActive || isEditing ? 11 : 10,
             pointerEvents: 'auto',
           }}
@@ -4220,7 +4371,7 @@ export default function TacticsPage() {
           }}
         >
             <div
-              className={`relative flex h-full w-full cursor-move select-none items-center justify-center rounded border border-transparent px-2 py-1 text-center font-semibold shadow-sm ${
+              className={`relative flex h-full w-full cursor-move select-none items-center justify-center px-2 py-1 text-center font-semibold ${
                 isActive ? 'outline outline-[2px]' : ''
               }`}
               style={{
@@ -4228,7 +4379,9 @@ export default function TacticsPage() {
               backgroundColor,
               color: textColor,
               fontWeight,
-              border: isCovering ? '2px dashed #f97316' : '1px solid #ffffff',
+              border: isCovering ? '2px dashed #f97316' : 'none',
+              borderRadius: 6,
+              boxShadow: 'var(--sh-1)',
               fontSize: `${14 * textSizeScale}px`,
               ...(isActive ? { outlineColor: '#cf7d9a', outlineOffset: 0 } : null),
             }}
@@ -4454,16 +4607,15 @@ export default function TacticsPage() {
           <input
             ref={menuRenameInputRef}
             type="text"
-            style={{ width:'100%', border:'1px solid #e8e8e4', borderRadius:4, background:'#fff', padding:'4px 8px', fontSize:11, color:'#1A1A1A', outline:'none', fontFamily:"'Google Sans',-apple-system,sans-serif", transition:'border-color .15s' }}
+            style={{ width:'100%', border:'1px solid #e8e8e4', borderRadius:4, background:'#fff', padding:'4px 8px', fontSize:11, color:'#1A1A1A', outline:'none', fontFamily:"'DM Sans',-apple-system,sans-serif", transition:'border-color .15s' }}
             onFocus={e=>e.target.style.borderColor='var(--brand)'}
-            onBlur={e=>e.target.style.borderColor='#e8e8e4'}
             value={menuRenamingLabel}
             onChange={(e) => setMenuRenamingLabel(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') { e.preventDefault(); handleMenuRenameConfirm(); }
               else if (e.key === 'Escape') { e.preventDefault(); setMenuRenamingChipId(null); setMenuRenamingLabel(''); }
             }}
-            onBlur={handleMenuRenameConfirm}
+            onBlur={(e) => { e.target.style.borderColor = '#e8e8e4'; handleMenuRenameConfirm(); }}
           />
         </div>
       );
@@ -4484,7 +4636,9 @@ export default function TacticsPage() {
           borderRadius: 8,
           boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 16px rgba(72,50,75,0.12)',
           zIndex: 999999,
-          overflow: 'hidden',
+          overflowX: 'hidden',
+          overflowY: position?.maxHeight ? 'auto' : 'hidden',
+          ...(position?.maxHeight ? { maxHeight: position.maxHeight } : {}),
         }}
       >
         {chipEditor ? (
@@ -4492,7 +4646,7 @@ export default function TacticsPage() {
         <div onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
-            style={{ display:'flex', alignItems:'center', gap:7, width:'100%', padding:'10px 12px 8px', background:'none', border:'none', cursor:'pointer', fontFamily:"'Google Sans',-apple-system,sans-serif", fontSize:13, color:'var(--brand-ink)', textAlign:'left', transition:'color .15s' }}
+            style={{ display:'flex', alignItems:'center', gap:7, width:'100%', padding:'10px 12px 8px', background:'none', border:'none', cursor:'pointer', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:13, color:'var(--brand-ink)', textAlign:'left', transition:'color .15s' }}
             onMouseEnter={e=>e.currentTarget.style.color='var(--brand-deep)'}
             onMouseLeave={e=>e.currentTarget.style.color='var(--brand-ink)'}
             onClick={closeChipEditor}
@@ -4503,8 +4657,7 @@ export default function TacticsPage() {
           <div style={{ height:1, background:'rgba(200,174,198,0.35)', margin:'0 0 4px' }} />
           <div className="px-3 pb-3">
             <div
-              style={{ marginBottom:10, display:'flex', width:'100%', alignItems:'center', justifyContent:'center', borderRadius:4, padding:'8px 12px', fontFamily:"'Google Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', minHeight:32 }}
-              style={{ background: chipEditor.color, color: chipContrastColour(chipEditor.color) }}
+              style={{ marginBottom:10, display:'flex', width:'100%', alignItems:'center', justifyContent:'center', borderRadius:4, padding:'8px 12px', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', minHeight:32, background: chipEditor.color, color: chipContrastColour(chipEditor.color) }}
             >
               {chipEditor.name || ' '}
             </div>
@@ -4519,7 +4672,7 @@ export default function TacticsPage() {
                 if (e.key === 'Enter') { e.preventDefault(); commitChipEditor(); }
                 else if (e.key === 'Escape') { e.preventDefault(); closeChipEditor(); }
               }}
-              style={{ width:'100%', border:'1px solid #e8e8e4', borderRadius:4, padding:'5px 8px', fontFamily:"'Google Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', color:'#1A1A1A', outline:'none', boxSizing:'border-box', background:'#fff', marginBottom:10, transition:'border-color .15s' }}
+              style={{ width:'100%', border:'1px solid #e8e8e4', borderRadius:4, padding:'5px 8px', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', color:'#1A1A1A', outline:'none', boxSizing:'border-box', background:'#fff', marginBottom:10, transition:'border-color .15s' }}
               onFocus={e=>e.target.style.borderColor='var(--brand)'}
               onBlur={e=>e.target.style.borderColor='#e8e8e4'}
               onMouseDown={(e) => e.stopPropagation()}
@@ -4527,78 +4680,128 @@ export default function TacticsPage() {
             />
 
             <div style={{ fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', paddingBottom:3, marginBottom:6 }}>Colour</div>
-            <div className="mb-2 flex items-center gap-1.5">
-              <button
-                type="button"
-                disabled={chipEditorSlide === 0}
-                onClick={() => setChipEditorSlide((s) => Math.max(0, s - 1))}
-                style={{ display:'flex', width:24, height:24, flexShrink:0, alignItems:'center', justifyContent:'center', borderRadius:4, border:'1px solid #e8e8e4', background:'#fff', color:'#616161', cursor:'pointer', opacity: chipEditorSlide === 0 ? 0.25 : 1 }}
-              >
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg>
-              </button>
-              <div className="grid flex-1 grid-cols-10 gap-[3px]">
-                {CHIP_PALETTE_SLIDES[chipEditorSlide].map((colour, idx) =>
-                  colour ? (
-                    <button
-                      key={idx}
-                      type="button"
-                      title={colour}
-                      onClick={() => setChipEditorColour(colour)}
-                      className="aspect-square rounded-sm transition-transform hover:scale-110"
-                      style={{ background: colour }}
-                    />
-                  ) : (
-                    <div key={idx} className="aspect-square" />
-                  )
-                )}
-              </div>
-              <button
-                type="button"
-                disabled={chipEditorSlide === CHIP_PALETTE_SLIDES.length - 1}
-                onClick={() => setChipEditorSlide((s) => Math.min(CHIP_PALETTE_SLIDES.length - 1, s + 1))}
-                style={{ display:'flex', width:24, height:24, flexShrink:0, alignItems:'center', justifyContent:'center', borderRadius:4, border:'1px solid #e8e8e4', background:'#fff', color:'#616161', cursor:'pointer', opacity: chipEditorSlide === CHIP_PALETTE_SLIDES.length - 1 ? 0.25 : 1 }}
-              >
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg>
-              </button>
+            <div style={{ marginBottom:8 }} onClick={(e) => e.stopPropagation()}>
+              {CHIP_EDITOR_GROUPS.map(({ label: groupLabel, families }) => (
+                <div key={groupLabel} style={{ marginBottom:4 }}>
+                  <div style={{ fontSize:8, fontWeight:700, letterSpacing:'.1em', textTransform:'uppercase', color:'var(--brand-ink)', marginBottom:3, fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" }}>{groupLabel}</div>
+                  {families.map(({ name: familyName, shades }) => (
+                    <div key={familyName} style={{ display:'flex', gap:2, marginBottom:2 }}>
+                      {shades.map(([h, s, l], idx) => {
+                        const bg = `hsl(${h}, ${s}%, ${l}%)`;
+                        const isActive = chipEditorIsActiveShade(h, s, l, chipEditor.color);
+                        const pale = l >= 95 ? { border: `1px solid ${isActive ? 'rgba(255,255,255,0.6)' : '#d0d0d0'}` } : {};
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            title={`${familyName} ${idx + 1}`}
+                            onClick={() => setChipEditorColour(bg)}
+                            style={{ flex:1, height:14, border: isActive ? '1.5px solid #fff' : '1px solid transparent', borderRadius:1, background:bg, cursor:'pointer', padding:0, position:'relative', boxShadow: isActive ? '0 0 0 1.5px #1a1a1a' : 'none', transition:'transform .08s', ...pale }}
+                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.12)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                          >
+                            {isActive && (
+                              <span style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
+                                <svg width="7" height="6" viewBox="0 0 9 7" fill="none"><path d="M1 3.5l2 2L8 1" stroke={l < 50 ? 'rgba(255,255,255,0.95)' : 'rgba(0,0,0,0.7)'} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
 
-            <div className="flex items-center justify-center gap-2.5">
-              <button
-                type="button"
-                title="Pick colour from screen"
-                onClick={chipEditorEyedropper}
-                style={{ display:'flex', width:32, height:32, flexShrink:0, alignItems:'center', justifyContent:'center', borderRadius:4, border:'1px solid #e8e8e4', background:'#fff', color:'#616161', cursor:'pointer' }}
-                onMouseEnter={e=>{ e.currentTarget.style.background='rgba(43,89,182,0.05)'; e.currentTarget.style.borderColor='var(--brand-hover-bd)'; }}
-                onMouseLeave={e=>{ e.currentTarget.style.background='#fff'; e.currentTarget.style.borderColor='#e8e8e4'; }}
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.354.646a1.207 1.207 0 0 0-1.708 0L8.5 3.793l-.646-.647a.5.5 0 1 0-.708.708L8.293 5l-7.147 7.146A.5.5 0 0 0 1 12.5v1.793l-.854.853a.5.5 0 1 0 .708.707L1.707 15H3.5a.5.5 0 0 0 .354-.146L11 7.707l1.146 1.147a.5.5 0 0 0 .708-.708l-.647-.646 3.147-3.146a1.207 1.207 0 0 0 0-1.708zM2 12.707l7-7L10.293 7l-7 7H2z"/></svg>
-              </button>
-              <label
-                title="Mix a custom colour"
-                style={{ position:'relative', display:'flex', width:32, height:32, flexShrink:0, cursor:'pointer', alignItems:'center', justifyContent:'center', borderRadius:4, border:'1px solid #e8e8e4', background:'#fff', color:'#616161' }}
-                onMouseEnter={e=>{ e.currentTarget.style.background='rgba(43,89,182,0.05)'; e.currentTarget.style.borderColor='var(--brand-hover-bd)'; }}
-                onMouseLeave={e=>{ e.currentTarget.style.background='#fff'; e.currentTarget.style.borderColor='#e8e8e4'; }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <input
-                  type="color"
-                  value={typeof chipEditor.color === 'string' && chipEditor.color.startsWith('#') ? chipEditor.color : '#ffffff'}
-                  onInput={(e) => setChipEditorColour(e.target.value)}
-                  style={{ position:'absolute', inset:0, width:'100%', height:'100%', cursor:'pointer', opacity:0 }}
-                />
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M6.192 2.78c-.458-.677-.927-1.248-1.35-1.643a3 3 0 0 0-.71-.515c-.217-.104-.56-.205-.882-.02-.367.213-.427.63-.43.896-.003.304.064.664.173 1.044.196.687.556 1.528 1.035 2.402L.752 8.22c-.277.277-.269.656-.218.918.055.283.187.593.36.903.348.627.92 1.361 1.626 2.068.707.707 1.441 1.278 2.068 1.626.31.173.62.305.903.36.262.05.64.059.918-.218l5.615-5.615c.118.257.092.512.05.939-.03.292-.068.665-.073 1.176v.123h.003a1 1 0 0 0 1.993 0H14v-.057a1 1 0 0 0-.004-.117c-.055-1.25-.7-2.738-1.86-3.494a4 4 0 0 0-.211-.434c-.349-.626-.92-1.36-1.627-2.067S8.857 3.052 8.23 2.704c-.31-.172-.62-.304-.903-.36-.262-.05-.64-.058-.918.219z"/></svg>
-              </label>
-              <button
-                type="button"
-                title="Confirm"
-                onClick={commitChipEditor}
-                style={{ display:'flex', width:44, height:32, flexShrink:0, alignItems:'center', justifyContent:'center', borderRadius:4, border:'1px solid var(--brand-deep)', background:'var(--brand-deep)', color:'#fff', cursor:'pointer' }}
-                onMouseEnter={e=>e.currentTarget.style.opacity='0.85'}
-                onMouseLeave={e=>e.currentTarget.style.opacity='1'}
-              >
-                <svg width="12" height="10" viewBox="0 0 14 10" fill="none"><path d="M1 5l3.5 3.5L13 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </button>
+            {/* ── Custom colour mixer ─────────────────────────────── */}
+            <div style={{ borderTop:'1px solid var(--brand-bd)', paddingTop:8 }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ fontSize:8, fontWeight:700, letterSpacing:'.1em', textTransform:'uppercase', color:'var(--brand-ink)', marginBottom:3, fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" }}>Custom</div>
+              <div style={{ display:'flex', gap:2 }}>
+                <button
+                  type="button"
+                  title="Pick colour from screen"
+                  onClick={chipEditorEyedropper}
+                  style={{ width:24, height:22, borderRadius:2, display:'flex', alignItems:'center', justifyContent:'center', background:'#f7f7f5', border:'1px solid #e0e0e0', cursor:'pointer', color:'#b0b0b0', flexShrink:0, transition:'color .15s,border-color .15s,background .15s' }}
+                  onMouseEnter={e=>{ e.currentTarget.style.color='#333'; e.currentTarget.style.borderColor='#aaa'; e.currentTarget.style.background='#ececea'; }}
+                  onMouseLeave={e=>{ e.currentTarget.style.color='#b0b0b0'; e.currentTarget.style.borderColor='#e0e0e0'; e.currentTarget.style.background='#f7f7f5'; }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/>
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  title="Mix a custom colour"
+                  onClick={toggleChipEditorCustom}
+                  style={{ width:24, height:22, borderRadius:2, display:'flex', alignItems:'center', justifyContent:'center', background: chipEditorCustomOpen ? 'var(--brand-hover-bg)' : '#f7f7f5', border: chipEditorCustomOpen ? '1px solid var(--brand-hover-bd)' : '1px solid #e0e0e0', cursor:'pointer', color: chipEditorCustomOpen ? 'var(--brand-ink)' : '#b0b0b0', flexShrink:0, transition:'color .15s,border-color .15s,background .15s' }}
+                  onMouseEnter={e=>{ if(!chipEditorCustomOpen){ e.currentTarget.style.color='#333'; e.currentTarget.style.borderColor='#aaa'; e.currentTarget.style.background='#ececea'; } }}
+                  onMouseLeave={e=>{ if(!chipEditorCustomOpen){ e.currentTarget.style.color='#b0b0b0'; e.currentTarget.style.borderColor='#e0e0e0'; e.currentTarget.style.background='#f7f7f5'; } }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 11l-8-8-8.5 8.5a5.5 5.5 0 007.78 7.78L19 11z"/><path d="M20 23a2 2 0 001.4-3.4L16 14"/><line x1="3.5" y1="11.5" x2="13" y2="2"/>
+                  </svg>
+                </button>
+              </div>
+
+              {chipEditorCustomOpen ? (
+                <>
+                  <div
+                    style={{ position:'relative', borderRadius:4, overflow:'hidden', cursor:'crosshair', touchAction:'none', marginTop:8 }}
+                    onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); updateChipEditorSb(e); }}
+                    onPointerMove={(e) => { if (e.buttons) updateChipEditorSb(e); }}
+                  >
+                    <canvas ref={chipEditorSbRef} width={220} height={96} style={{ display:'block', width:'100%', height:96 }} />
+                    <div
+                      style={{
+                        position:'absolute',
+                        left:`${chipEditorHsb.s * 100}%`,
+                        top:`${(1 - chipEditorHsb.b) * 100}%`,
+                        transform:'translate(-50%,-50%)',
+                        width:10, height:10, borderRadius:'50%',
+                        border:'2px solid #fff',
+                        boxShadow:'0 0 0 1px rgba(0,0,0,.3)',
+                        pointerEvents:'none',
+                        background: chipEditor.color,
+                      }}
+                    />
+                  </div>
+                  <div
+                    ref={chipEditorHueRef}
+                    style={{ height:10, borderRadius:5, cursor:'pointer', position:'relative', touchAction:'none', marginTop:8, background:'linear-gradient(to right,#f00 0%,#ff0 17%,#0f0 33%,#0ff 50%,#00f 67%,#f0f 83%,#f00 100%)' }}
+                    onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); updateChipEditorHue(e); }}
+                    onPointerMove={(e) => { if (e.buttons) updateChipEditorHue(e); }}
+                  >
+                    <div
+                      style={{
+                        position:'absolute',
+                        left:`${(chipEditorHsb.h / 360) * 100}%`,
+                        top:'50%',
+                        transform:'translate(-50%,-50%)',
+                        width:16, height:16, borderRadius:'50%',
+                        background:`hsl(${chipEditorHsb.h},100%,50%)`,
+                        border:'2.5px solid #fff',
+                        boxShadow:'0 0 0 1px rgba(0,0,0,.2)',
+                        pointerEvents:'none',
+                        boxSizing:'border-box',
+                      }}
+                    />
+                  </div>
+                </>
+              ) : null}
             </div>
+
+            <button
+              type="button"
+              title="Confirm"
+              onClick={commitChipEditor}
+              style={{ marginTop:10, width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'7px 0', background:'var(--brand-deep)', color:'#fff', border:'1px solid var(--brand-deep)', borderRadius:4, cursor:'pointer', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', transition:'opacity .1s' }}
+              onMouseEnter={e=>e.currentTarget.style.opacity='0.85'}
+              onMouseLeave={e=>e.currentTarget.style.opacity='1'}
+            >
+              <svg width="11" height="9" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              Confirm
+            </button>
           </div>
         </div>
         ) : (
@@ -4613,8 +4816,7 @@ export default function TacticsPage() {
             <div key={defaultId} className="flex items-center gap-1 px-2 py-1">
               <button
                 type="button"
-                style={{ flex:1, padding:'6px 10px', textAlign:'left', fontFamily:"'Google Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', borderRadius:4, border:'none', cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', transition:'opacity .1s' }}
-                style={{ backgroundColor: meta.color, color: chipContrastColour(meta.color) }}
+                style={{ flex:1, padding:'6px 10px', textAlign:'left', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', borderRadius:4, border:'none', cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', transition:'opacity .1s', backgroundColor: meta.color, color: chipContrastColour(meta.color) }}
                 onClick={() => handleProjectSelection(defaultId)}
               >
                 {meta.label}
@@ -4650,8 +4852,7 @@ export default function TacticsPage() {
                   <div className="flex items-center gap-1 px-2 py-1">
                     <button
                       type="button"
-                      style={{ flex:1, padding:'6px 10px', textAlign:'left', fontFamily:"'Google Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', borderRadius:4, border:'none', cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', transition:'opacity .1s' }}
-                      style={{ backgroundColor: projColour, color: chipContrastColour(projColour) }}
+                      style={{ flex:1, padding:'6px 10px', textAlign:'left', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', borderRadius:4, border:'none', cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', transition:'opacity .1s', backgroundColor: projColour, color: chipContrastColour(projColour) }}
                       onClick={() => handleProjectSelection(project.id)}
                     >
                       {project.label}
@@ -4671,7 +4872,7 @@ export default function TacticsPage() {
             })}
           </ul>
         ) : (
-          <div style={{ padding:'4px 12px 6px', fontSize:11, color:'#9E9E9E', fontFamily:"'Google Sans',-apple-system,sans-serif" }}>No projects added to plan</div>
+          <div style={{ padding:'4px 12px 6px', fontSize:11, color:'#9E9E9E', fontFamily:"'DM Sans',-apple-system,sans-serif" }}>No projects added to plan</div>
         )}
 
         {/* ── Custom chips section ──────────────────────────────── */}
@@ -4688,8 +4889,7 @@ export default function TacticsPage() {
                   <div className="flex items-center gap-1 px-2 py-1">
                     <button
                       type="button"
-                      style={{ flex:1, padding:'6px 10px', textAlign:'left', fontFamily:"'Google Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', borderRadius:4, border:'none', cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', transition:'opacity .1s' }}
-                      style={{ backgroundColor: customColour, color: chipContrastColour(customColour) }}
+                      style={{ flex:1, padding:'6px 10px', textAlign:'left', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', borderRadius:4, border:'none', cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', transition:'opacity .1s', backgroundColor: customColour, color: chipContrastColour(customColour) }}
                       onClick={() => handleProjectSelection(project.id)}
                     >
                       {project.label.toUpperCase()}
@@ -4721,7 +4921,7 @@ export default function TacticsPage() {
         <div style={{ padding:'4px 8px 8px' }}>
           <button
             type="button"
-            style={{ width:'100%', padding:'7px 12px', background:'transparent', border:'1px solid transparent', borderRadius:8, cursor:'pointer', fontFamily:"'Google Sans',-apple-system,sans-serif", fontSize:13, fontWeight:400, color:'#616161', textAlign:'left', transition:'border-color .15s, color .15s, background .15s' }}
+            style={{ width:'100%', padding:'7px 12px', background:'transparent', border:'1px solid transparent', borderRadius:8, cursor:'pointer', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:13, fontWeight:400, color:'#616161', textAlign:'left', transition:'border-color .15s, color .15s, background .15s' }}
             onMouseEnter={e=>{ e.currentTarget.style.borderColor='var(--brand-hover-bd)'; e.currentTarget.style.background='var(--brand-hover-bg)'; e.currentTarget.style.color='var(--brand-deep)'; }}
             onMouseLeave={e=>{ e.currentTarget.style.borderColor='transparent'; e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#616161'; }}
             onClick={handleCreateCustomProject}
@@ -4772,18 +4972,23 @@ export default function TacticsPage() {
           );
         })() : null}
 
-        {/* ── View Schedule Items footer link ───────────────────── */}
+        {/* ── Schedule chips section ────────────────────────────── */}
         <div style={{ height:1, background:'rgba(200,174,198,0.35)', margin:'4px 0' }} />
-        <button
-          type="button"
-          style={{ display:'flex', width:'100%', alignItems:'center', justifyContent:'space-between', padding:'7px 12px', background:'transparent', border:'none', borderRadius:0, cursor:'pointer', fontFamily:"'Google Sans',-apple-system,sans-serif", fontSize:13, fontWeight:400, color:'#616161', transition:'background .15s, color .15s' }}
-          onMouseEnter={e=>{ e.currentTarget.style.background='var(--brand-hover-bg)'; e.currentTarget.style.color='var(--brand-deep)'; }}
-          onMouseLeave={e=>{ e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#616161'; }}
-          onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent(PLAN_PANEL_NAV_EVENT, { detail: { view: 'schedule' } })); }}
-        >
-          <span>View Schedule Items</span>
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/></svg>
-        </button>
+        <div style={{ fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', padding:'6px 12px 5px', marginBottom:4 }}>
+          Schedule chips
+        </div>
+        <div style={{ padding:'3px 8px 7px' }}>
+          <button
+            type="button"
+            style={{ display:'flex', width:'100%', alignItems:'center', gap:8, padding:'7px 12px', background:'transparent', border:'1px solid transparent', borderRadius:8, cursor:'pointer', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:13, fontWeight:400, color:'#616161', transition:'border-color .15s, color .15s, background .15s' }}
+            onMouseEnter={e=>{ e.currentTarget.style.borderColor='var(--brand-hover-bd)'; e.currentTarget.style.background='var(--brand-hover-bg)'; e.currentTarget.style.color='var(--brand-deep)'; }}
+            onMouseLeave={e=>{ e.currentTarget.style.borderColor='transparent'; e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#616161'; }}
+            onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent(PLAN_PANEL_NAV_EVENT, { detail: { view: 'schedule' } })); }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            View Items
+          </button>
+        </div>
         </>
         )}
       </div>
@@ -4806,12 +5011,16 @@ export default function TacticsPage() {
     scheduleLayout,
     projectMetadata,
     chipEditor,
-    chipEditorSlide,
+    chipEditorCustomOpen,
+    chipEditorHsb,
     openChipEditor,
     closeChipEditor,
     setChipEditorName,
     setChipEditorColour,
     chipEditorEyedropper,
+    toggleChipEditorCustom,
+    updateChipEditorSb,
+    updateChipEditorHue,
     commitChipEditor,
   ]);
 
@@ -4888,38 +5097,88 @@ export default function TacticsPage() {
       }}
     >
       <div className="space-y-4">
-        <div ref={navBarRef} className="sticky top-0 z-20 px-4 pt-4 pb-4" style={{ background: 'transparent' }}>
+        <div
+          ref={navBarRef}
+          className="sticky top-0 z-20 px-4 pt-4 pb-4"
+          style={{
+            backgroundColor: '#ffffff',
+            backgroundImage: [
+              'radial-gradient(ellipse 80% 60% at 105% -10%, rgba(130,155,210,0.45) 0%, transparent 62%)',
+              'radial-gradient(ellipse 60% 45% at -5% 110%, rgba(130,155,210,0.28) 0%, transparent 58%)',
+              'radial-gradient(ellipse 160% 65% at 95% 112%, rgba(130,155,210,0.38) 0%, transparent 60%)',
+              'radial-gradient(ellipse 140% 55% at 45% 112%, rgba(130,155,210,0.25) 0%, transparent 58%)',
+              'linear-gradient(rgba(130,155,210,0.50) 1px, transparent 1px)',
+              'linear-gradient(90deg, rgba(130,155,210,0.50) 1px, transparent 1px)',
+            ].join(','),
+            backgroundSize: '100% 100%, 100% 100%, 100% 100%, 100% 100%, 32px 32px, 32px 32px',
+            backgroundPosition: '0 0, 0 0, 0 0, 0 0, -1px -1px, -1px -1px',
+            backgroundAttachment: 'fixed',
+          }}
+        >
         <NavigationBar
           onRevertArchive={!draftYear && allYears.some(y => y.status === 'archived') ? handleRevertArchive : null}
         />
         </div>
-        <div className="rounded border border-[#ced3d0] bg-white shadow-sm mx-4 mb-4">
-          {/* Sticky header row — outside the horizontal scroll container so it can stick vertically */}
+        <div
+          className="mx-4 mb-4"
+          style={{
+            // The sticky header and the scrollable body below it must stay
+            // flush (they're two halves of one calendar box) — no gap here.
+            // The 14px gaps between calendar/totals/min-max are applied
+            // inside the scrollable container instead, further down.
+            display: 'flex',
+            flexDirection: 'column',
+            // Flex columns default to align-items: stretch, which would force
+            // the calendar box (narrower — no Total column) to stretch to the
+            // width of the totals/min-max boxes below it, leaving dead space
+            // to the right of Saturday. flex-start makes each child size to
+            // its own content instead.
+            alignItems: 'flex-start',
+            // Size the layout to the table's actual rendered width instead of
+            // stretching full-bleed. Still capped at the available width so
+            // it doesn't overflow the page; the inner container's horizontal
+            // scroll handles anything wider.
+            width: `${tableWidth}px`,
+            maxWidth: '100%',
+          }}
+        >
+          {/* Sticky header row — outside the horizontal scroll container so it can stick vertically.
+              NOTE: deliberately no `overflow: hidden` on this row's own ancestors above — that
+              would clip the containing block and break `position: sticky` (it would stop sticking
+              to the viewport and instead render at its normal document-flow position). This row
+              supplies the top/left/right border of the calendar box; the scrollable body below
+              supplies the bottom/left/right border and bottom corners, forming one visual box. */}
           <div
             style={{
               position: 'sticky',
               top: navBarHeight,
               zIndex: 12,
-              backgroundColor: 'white',
+              backgroundColor: '#F5F7FA',
+              border: '1.5px solid #1A1A1A',
+              borderBottom: '1.5px solid #1A1A1A',
+              borderTopLeftRadius: 10,
+              borderTopRightRadius: 10,
+              overflow: 'hidden',
+              boxShadow: 'var(--sh-1)',
             }}
           >
             <div
               ref={headerContainerRef}
-              style={{ overflowX: 'hidden', paddingRight: `calc(100vw - ${col0Width}px)`, userSelect: 'none' }}
+              style={{ overflowX: 'hidden', userSelect: 'none' }}
             >
             <table
-              className="border-collapse text-[11px] text-slate-800"
-              style={{ display: 'table', width: `${tableWidth}px`, minWidth: `${tableWidth}px`, userSelect: 'none' }}
+              className="plan-numerals border-collapse text-[11px] text-slate-800"
+              style={{ display: 'table', width: `${calendarTableWidth}px`, minWidth: `${calendarTableWidth}px`, userSelect: 'none' }}
             >
               <tbody>
-                <tr className="grid text-sm" style={{ gridTemplateColumns }}>
-                {Array.from({ length: 9 }, (_, index) => {
-                  if (index === 0 || index === 8) {
+                <tr className="grid text-sm" style={{ gridTemplateColumns: calendarGridTemplateColumns }}>
+                {Array.from({ length: 8 }, (_, index) => {
+                  if (index === 0) {
                     return (
                       <td
                         key={`blank-${index}`}
-                        className="border border-[#e5e7eb] px-3 py-px text-center font-semibold"
-                        style={index === 0 ? { position: 'sticky', left: 0, zIndex: 11, backgroundColor: 'white' } : { position: 'relative' }}
+                        className="px-3 py-px text-center font-semibold"
+                        style={{ position: 'sticky', left: 0, zIndex: 11, backgroundColor: 'var(--n-ice)', borderRight: '1.5px solid #1A1A1A' }}
                       >
                         {/* Add resize handle */}
                         <div
@@ -4952,7 +5211,7 @@ export default function TacticsPage() {
                   }
                   if (index === 1) {
                     return (
-                      <td key="selector" className="border border-[#e5e7eb] px-3 py-px text-center font-semibold" style={{ position: 'relative' }}>
+                      <td key="selector" className="border border-[var(--n-lt-slate)] px-3 py-px text-center font-semibold" style={{ position: 'relative' }}>
                         {startDay}
                         {/* Add resize handle */}
                         <div
@@ -4985,7 +5244,7 @@ export default function TacticsPage() {
                   }
                   const dayIndex = index - 2;
                       return (
-                        <td key={`day-${index}`} className="border border-[#e5e7eb] px-3 py-px text-center font-semibold" style={{ position: 'relative' }}>
+                        <td key={`day-${index}`} className="border border-[var(--n-lt-slate)] px-3 py-px text-center font-semibold" style={{ position: 'relative' }}>
                           {sequence[dayIndex] ?? ''}
                           {/* Add resize handle */}
                           <div
@@ -5022,25 +5281,39 @@ export default function TacticsPage() {
             </table>
             </div>
           </div>
-          {/* Scrollable body — horizontal scroll only */}
+          {/* Scrollable body — horizontal scroll only. Holds all three boxes
+              (calendar, totals, min/max) so they scroll left/right together
+              and stay column-aligned; each box below has its own border. */}
           <div
             ref={tableContainerRef}
             onDrop={handleTableDrop}
             onDragOver={handleTableDragOver}
-            style={{ display: 'block', paddingBottom: '440px', paddingRight: `calc(100vw - ${col0Width}px)`, overflowX: 'auto', userSelect: 'none' }}
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 14, overflowX: 'auto', userSelect: 'none' }}
           >
           {renderDragOutline()}
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              border: '1.5px solid #1A1A1A',
+              borderTop: 'none',
+              borderBottomLeftRadius: 10,
+              borderBottomRightRadius: 10,
+              overflow: 'hidden',
+              boxShadow: 'var(--sh-1)',
+              flexShrink: 0,
+            }}
+          >
           <table
             ref={tableElementRef}
-            className="border-collapse text-[11px] text-slate-800"
-            style={{ display: 'table', width: `${tableWidth}px`, minWidth: `${tableWidth}px`, userSelect: 'none' }}
+            className="plan-numerals border-collapse text-[11px] text-slate-800"
+            style={{ display: 'table', width: `${calendarTableWidth}px`, minWidth: `${calendarTableWidth}px`, userSelect: 'none' }}
           >
             <tbody>
-              <tr className="grid" style={{ gridTemplateColumns }}>
+              <tr className="grid" style={{ gridTemplateColumns: calendarGridTemplateColumns }}>
                 <td
-                  className="border border-[#e5e7eb] px-3 py-px font-semibold text-center"
+                  className="border border-[var(--n-lt-slate)] px-3 py-px font-normal text-center"
                   data-row-id-anchor="sleep-start"
-                  style={{ fontSize: `${14 * textSizeScale}px`, position: 'sticky', left: 0, zIndex: 11, backgroundColor: 'white' }}
+                  style={{ fontSize: `${14 * textSizeScale}px`, color: 'var(--ink-mute)', position: 'sticky', left: 0, zIndex: 11, backgroundColor: 'var(--n-ice)', borderRight: '1.5px solid #1A1A1A' }}
                 >
                   {(() => {
                     if (!startHour) return '—';
@@ -5084,7 +5357,7 @@ export default function TacticsPage() {
                   return (
                     <td
                       key={`time-row-${index}`}
-                      className={`relative border border-[#e5e7eb] px-3 py-px text-center overflow-visible ${
+                      className={`relative border border-[var(--line-soft)] px-3 py-px text-center overflow-visible ${
                         cellSelected ? 'selected-cell' : ''
                       }`}
                       style={Object.keys(cellStyle).length ? cellStyle : undefined}
@@ -5109,11 +5382,11 @@ export default function TacticsPage() {
                 })}
               </tr>
               {hourRows.map((hourValue) => (
-                <tr key={`hour-row-${hourValue}`} className="grid" style={{ gridTemplateColumns }}>
+                <tr key={`hour-row-${hourValue}`} className="grid" style={{ gridTemplateColumns: calendarGridTemplateColumns }}>
                   <td
-                    className="border border-[#e5e7eb] px-3 py-px font-semibold text-center"
+                    className="border border-[var(--n-lt-slate)] px-3 py-px font-normal text-center"
                     data-row-id-anchor={`hour-${hourValue}`}
-                    style={{ fontSize: `${14 * textSizeScale}px`, position: 'sticky', left: 0, zIndex: 11, backgroundColor: 'white' }}
+                    style={{ fontSize: `${14 * textSizeScale}px`, color: 'var(--ink-mute)', position: 'sticky', left: 0, zIndex: 11, backgroundColor: 'var(--n-ice)', borderRight: '1.5px solid #1A1A1A' }}
                   >
                     {formatTime(hourValue, '00', { use24Hour, showAmPm })}
                   </td>
@@ -5153,7 +5426,7 @@ export default function TacticsPage() {
                     return (
                       <td
                         key={`hour-${hourValue}-${index}`}
-                        className={`relative border border-[#e5e7eb] px-3 py-px text-center overflow-visible ${
+                        className={`relative border border-[var(--line-soft)] px-3 py-px text-center overflow-visible ${
                           cellSelected ? 'selected-cell' : ''
                         }`}
                         style={Object.keys(cellStyle).length ? cellStyle : undefined}
@@ -5178,11 +5451,11 @@ export default function TacticsPage() {
                   })}
                 </tr>
               ))}
-              <tr className="grid" style={{ gridTemplateColumns }}>
+              <tr className="grid" style={{ gridTemplateColumns: calendarGridTemplateColumns }}>
                 <td
-                  className="border border-[#e5e7eb] px-3 py-px font-semibold text-center"
+                  className="border border-[var(--n-lt-slate)] px-3 py-px font-normal text-center"
                   data-row-id-anchor="sleep-end"
-                  style={{ fontSize: `${14 * textSizeScale}px`, position: 'sticky', left: 0, zIndex: 11, backgroundColor: 'white' }}
+                  style={{ fontSize: `${14 * textSizeScale}px`, color: 'var(--ink-mute)', position: 'sticky', left: 0, zIndex: 11, backgroundColor: 'var(--n-ice)', borderRight: '1.5px solid #1A1A1A' }}
                 >
                   {(() => {
                     if (!startMinute) return '—';
@@ -5226,7 +5499,7 @@ export default function TacticsPage() {
                   return (
                     <td
                       key={`minute-row-${index}`}
-                      className={`relative border border-[#e5e7eb] px-3 py-px text-center overflow-visible ${
+                      className={`relative border border-[var(--line-soft)] px-3 py-px text-center overflow-visible ${
                         cellSelected ? 'selected-cell' : ''
                       }`}
                       style={Object.keys(cellStyle).length ? cellStyle : undefined}
@@ -5251,11 +5524,11 @@ export default function TacticsPage() {
                 })}
               </tr>
               {trailingMinuteRows.map((minutesValue, rowIdx) => (
-                <tr key={`trailing-row-${rowIdx}`} className="grid" style={{ gridTemplateColumns }}>
+                <tr key={`trailing-row-${rowIdx}`} className="grid" style={{ gridTemplateColumns: calendarGridTemplateColumns }}>
                   <td
-                    className="border border-[#e5e7eb] px-3 py-px font-semibold text-center"
+                    className="border border-[var(--n-lt-slate)] px-3 py-px font-normal text-center"
                     data-row-id-anchor={`trailing-${rowIdx}`}
-                    style={{ fontSize: `${14 * textSizeScale}px`, position: 'sticky', left: 0, zIndex: 11, backgroundColor: 'white' }}
+                    style={{ fontSize: `${14 * textSizeScale}px`, color: 'var(--ink-mute)', position: 'sticky', left: 0, zIndex: 11, backgroundColor: 'var(--n-ice)', borderRight: '1.5px solid #1A1A1A' }}
                   >
                     {formatTime(
                       Math.floor(minutesValue / 60),
@@ -5299,7 +5572,7 @@ export default function TacticsPage() {
                     return (
                       <td
                         key={`trailing-${rowIdx}-${index}`}
-                        className={`relative border border-[#e5e7eb] px-3 py-px text-center overflow-visible ${
+                        className={`relative border border-[var(--line-soft)] px-3 py-px text-center overflow-visible ${
                           cellSelected ? 'selected-cell' : ''
                         }`}
                         style={Object.keys(cellStyle).length ? cellStyle : undefined}
@@ -5324,94 +5597,137 @@ export default function TacticsPage() {
                   })}
                 </tr>
               ))}
-              <tr>
+            </tbody>
+          </table>
+          </div>
+          {/* Totals box — a separate table/card from the calendar above it, with its
+              own border and rounded corners, but sharing the same gridTemplateColumns/
+              tableWidth so its columns line up, and living in the same scrollable
+              container so horizontal scroll stays in sync. */}
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              border: '1.5px solid #1A1A1A',
+              borderRadius: 10,
+              overflow: 'hidden',
+              boxShadow: 'var(--sh-1)',
+              flexShrink: 0,
+            }}
+          >
+          <table
+            className="plan-numerals border-collapse text-[11px] text-slate-800"
+            style={{ display: 'table', width: `${tableWidth}px`, minWidth: `${tableWidth}px`, userSelect: 'none' }}
+          >
+            <tbody>
+              {/* Totals card header — repeats the day names above the summary rows, mirroring the
+                  calendar's own header, so the totals block reads as its own framed section. */}
+              <tr className="grid" style={{ gridTemplateColumns, backgroundColor: 'var(--n-ice)' }}>
                 <td
-                  colSpan={1 + totalColumnCount}
-                  className="px-3 py-2 text-[11px]"
-                  style={{ height: '14px', backgroundColor: '#000' }}
-                ></td>
+                  className="px-3 py-px text-center"
+                  style={{
+                    backgroundColor: 'var(--n-ice)',
+                    position: 'sticky',
+                    left: 0,
+                    zIndex: 11,
+                    borderRight: '1.5px solid #1A1A1A',
+                    borderTop: '1.5px solid #1A1A1A',
+                    borderBottom: '1.5px solid #1A1A1A',
+                  }}
+                />
+                {displayedWeekDays.map((day, idx) => (
+                  <td
+                    key={`totals-head-${day}-${idx}`}
+                    className="border border-[var(--n-lt-slate)] px-3 py-px text-center font-semibold"
+                    style={{
+                      backgroundColor: 'var(--n-ice)',
+                      color: 'var(--ink-soft)',
+                      fontSize: `${12 * textSizeScale}px`,
+                      borderTop: '1.5px solid #1A1A1A',
+                      borderBottom: '1.5px solid #1A1A1A',
+                    }}
+                  >
+                    {day}
+                  </td>
+                ))}
+                <td
+                  className="px-3 py-px text-center font-semibold"
+                  style={{
+                    backgroundColor: 'var(--n-lt-slate)',
+                    color: 'var(--ink-soft)',
+                    fontSize: `${12 * textSizeScale}px`,
+                    borderTop: '1.5px solid #1A1A1A',
+                    borderBottom: '1.5px solid #1A1A1A',
+                    borderLeft: '2px solid rgba(0,0,0,.1)',
+                  }}
+                >
+                  Total
+                </td>
+                {renderExtraColumnCells('summary-head')}
               </tr>
-              <tr
-                data-summary-row
-                className={`grid text-sm cursor-pointer ${
-                  selectedSummaryRowId === 'sleep-summary' ? 'outline outline-[2px]' : ''
-                }`}
-                style={
-                  selectedSummaryRowId === 'sleep-summary'
-                    ? { gridTemplateColumns, outlineColor: '#cf7d9a', outlineOffset: 0 }
-                    : { gridTemplateColumns }
+              {/* Every row here — Sleep, each project, Buffer, Rest — is a uniformly
+                  draggable "summary row" with a handle, per the design handoff.
+                  Sleep/Buffer/Rest are fixed-content kinds mixed into the same
+                  reorderable list as the dynamic per-project rows. */}
+              {allSummaryRows.map((row) => {
+                const rowSelected = selectedSummaryRowId === row.id;
+                const isDragOver = summaryDragOverId === row.id;
+                let labelBg;
+                let labelColor;
+                let rowStyleExtra = {};
+                let totalCellColor;
+                let totalCellFontWeight;
+                if (row.kind === 'sleep') {
+                  const meta = projectMetadata.get('sleep');
+                  labelBg = meta?.color || '#d9d9d9';
+                  labelColor = meta?.textColor ?? getContrastTextColor(labelBg);
+                } else if (row.kind === 'buffer') {
+                  const meta = projectMetadata.get('buffer');
+                  labelBg = meta?.color || '#fe8afe';
+                  labelColor = meta?.textColor ?? getContrastTextColor(labelBg);
+                } else if (row.kind === 'rest') {
+                  const meta = projectMetadata.get('rest');
+                  labelBg = meta?.color || '#666666';
+                  labelColor = meta?.textColor ?? getContrastTextColor(labelBg);
+                  rowStyleExtra = { backgroundColor: labelBg, color: labelColor, fontWeight: 700 };
+                  totalCellColor = '#1A1A1A';
+                  totalCellFontWeight = 700;
+                } else {
+                  labelBg = row.color || '#0f172a';
+                  labelColor = '#ffffff';
                 }
-                tabIndex={0}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => toggleSummaryRowSelection('sleep-summary')}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    toggleSummaryRowSelection('sleep-summary');
-                  }
-                }}
-              >
-                <td
-                  className="border border-[#e5e7eb] px-3 py-px text-center"
-                  style={{ backgroundColor: '#d9d9d9', color: '#000', fontWeight: 700, fontSize: `${14 * textSizeScale}px`, position: 'sticky', left: 0, zIndex: 11 }}
-                >
-                  Sleep
-                </td>
-                {displayedWeekDays.map((day, idx) => {
-                  const minutes = sleepColumnTotals[idx] ?? 0;
-                  return (
-                    <td
-                      key={`sleep-row-${day}-${idx}`}
-                      className="border border-[#e5e7eb] px-3 py-px text-center"
-                      style={{ backgroundColor: '#efefef', fontSize: `${14 * textSizeScale}px` }}
-                    >
-                      {formatDuration(minutes)}
-                    </td>
-                  );
-                })}
-                <td
-                  className="border border-[#e5e7eb] px-3 py-px text-center font-semibold"
-                  style={{ backgroundColor: '#efefef', fontSize: `${14 * textSizeScale}px` }}
-                >
-                  {formatDuration(totalSleepMinutes)}
-                </td>
-                {renderExtraColumnCells('summary-sleep')}
-              </tr>
-              {orderedProjectSummaries.map((summary) => {
-                const rowSelected = selectedSummaryRowId === summary.id;
-                const isDragOver = summaryDragOverId === summary.id;
                 return (
                   <tr
-                    key={`project-summary-${summary.id}`}
+                    key={`summary-row-${row.id}`}
                     data-summary-row
                     className={`grid text-sm cursor-pointer ${
                       rowSelected ? 'outline outline-[2px]' : ''
                     }`}
-                    style={
-                      rowSelected
-                        ? { gridTemplateColumns, outlineColor: '#cf7d9a', outlineOffset: 0 }
-                        : { gridTemplateColumns }
-                    }
+                    style={{
+                      gridTemplateColumns,
+                      ...rowStyleExtra,
+                      ...(rowSelected ? { outlineColor: '#cf7d9a', outlineOffset: 0 } : {}),
+                    }}
                     tabIndex={0}
                     draggable
-                    onDragStart={(e) => handleSummaryDragStart(e, summary.id)}
-                    onDragOver={(e) => handleSummaryDragOver(e, summary.id)}
+                    onDragStart={(e) => handleSummaryDragStart(e, row.id)}
+                    onDragOver={(e) => handleSummaryDragOver(e, row.id)}
                     onDragLeave={handleSummaryDragLeave}
-                    onDrop={(e) => handleSummaryDrop(e, summary.id, orderedProjectSummaries.map((s) => s.id))}
-                    onClick={() => toggleSummaryRowSelection(summary.id)}
+                    onDrop={(e) => handleSummaryDrop(e, row.id, allSummaryRows.map((r) => r.id))}
+                    onClick={() => toggleSummaryRowSelection(row.id)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
-                        toggleSummaryRowSelection(summary.id);
+                        toggleSummaryRowSelection(row.id);
                       }
                     }}
                   >
                     <td
-                      className="border border-[#e5e7eb] py-px text-center"
+                      className="border border-[#D4D4D8] py-px text-center uppercase"
                       style={{
-                        backgroundColor: summary.color || '#0f172a',
-                        color: '#ffffff',
+                        backgroundColor: labelBg,
+                        color: labelColor,
                         fontWeight: 700,
+                        letterSpacing: '.01em',
                         fontSize: `${14 * textSizeScale}px`,
                         position: 'sticky',
                         left: 0,
@@ -5421,101 +5737,78 @@ export default function TacticsPage() {
                         alignItems: 'center',
                         cursor: 'grab',
                         paddingRight: '12px',
+                        borderRight: '1.5px solid #1A1A1A',
                         ...(isDragOver ? { borderTop: '2px solid #111111' } : {}),
                       }}
                     >
                       <span style={{ opacity: 0.45, fontSize: '11px', lineHeight: 1, userSelect: 'none', textAlign: 'center' }}>⠿</span>
-                      <span style={{ textAlign: 'center' }}>{summary.label}</span>
+                      <span style={{ textAlign: 'center' }}>{row.label}</span>
                     </td>
                     {displayedWeekDays.map((day, idx) => {
-                      const val = summary.columnTotals[idx] ?? 0;
-                      const hasValue = val > 0;
+                      const val = row.columnTotals[idx] ?? 0;
+                      let cellStyle = { fontSize: `${14 * textSizeScale}px` };
+                      if (row.kind === 'project') {
+                        const hasValue = val > 0;
+                        cellStyle = {
+                          ...cellStyle,
+                          backgroundColor: hasValue ? '#f5f5f5' : '#ffffff',
+                          fontWeight: hasValue ? 700 : 400,
+                          color: hasValue ? '#111111' : '#9ca3af',
+                        };
+                      } else if (row.kind === 'rest') {
+                        cellStyle = { ...cellStyle, backgroundColor: labelBg, color: labelColor, fontWeight: 700 };
+                      } else {
+                        cellStyle = { ...cellStyle, backgroundColor: '#ffffff' };
+                      }
+                      if (isDragOver) cellStyle.borderTop = '2px solid #111111';
                       return (
                         <td
-                          key={`project-${summary.id}-${day}-${idx}`}
-                          className="border border-[#e5e7eb] px-3 py-px text-center"
-                          style={{
-                            backgroundColor: hasValue ? '#f5f5f5' : '#ffffff',
-                            fontWeight: hasValue ? 700 : 400,
-                            color: hasValue ? '#111111' : '#9ca3af',
-                            fontSize: `${14 * textSizeScale}px`,
-                            ...(isDragOver ? { borderTop: '2px solid #111111' } : {}),
-                          }}
+                          key={`summary-${row.id}-${day}-${idx}`}
+                          className="border border-[#D4D4D8] px-3 py-px text-center"
+                          style={cellStyle}
                         >
                           {formatDuration(val)}
                         </td>
                       );
                     })}
                     <td
-                      className="border border-[#e5e7eb] px-3 py-px text-center font-semibold"
-                      style={{ backgroundColor: '#ffffff', fontSize: `${14 * textSizeScale}px`, ...(isDragOver ? { borderTop: '2px solid #111111' } : {}) }}
+                      className="border border-[#D4D4D8] px-3 py-px text-center font-semibold"
+                      style={{
+                        backgroundColor: 'var(--n-ice)',
+                        color: totalCellColor,
+                        fontWeight: totalCellFontWeight,
+                        fontSize: `${14 * textSizeScale}px`,
+                        borderLeft: '2px solid rgba(0,0,0,.1)',
+                        ...(isDragOver ? { borderTop: '2px solid #111111' } : {}),
+                      }}
                     >
-                      {formatDuration(summary.totalMinutes)}
+                      {formatDuration(row.totalMinutes)}
                     </td>
-                    {renderExtraColumnCells(`summary-${summary.id}`)}
+                    {renderExtraColumnCells(`summary-${row.id}`)}
                   </tr>
                 );
               })}
-              <tr
-                data-summary-row
-                className={`grid text-sm cursor-pointer ${
-                  selectedSummaryRowId === 'rest-summary' ? 'outline outline-[2px]' : ''
-                }`}
-                style={{
-                  gridTemplateColumns,
-                  backgroundColor: '#666666',
-                  color: '#ffffff',
-                  fontWeight: 700,
-                  ...(selectedSummaryRowId === 'rest-summary'
-                    ? { outlineColor: '#cf7d9a', outlineOffset: 0 }
-                    : null),
-                }}
-                tabIndex={0}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => toggleSummaryRowSelection('rest-summary')}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    toggleSummaryRowSelection('rest-summary');
-                  }
-                }}
-              >
-                <td
-                  className="border border-[#e5e7eb] px-3 py-px text-center"
-                  style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700, fontSize: `${14 * textSizeScale}px`, position: 'sticky', left: 0, zIndex: 11 }}
-                >
-                  REST
-                </td>
-                {displayedWeekDays.map((day, idx) => (
-                  <td
-                    key={`rest-row-${day}-${idx}`}
-                    className="border border-[#e5e7eb] px-3 py-px text-center"
-                    style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700, fontSize: `${14 * textSizeScale}px` }}
-                  >
-                    {formatDuration(restColumnTotals[idx] ?? 0)}
-                  </td>
-                ))}
-                <td
-                  className="border border-[#e5e7eb] px-3 py-px text-center font-semibold"
-                  style={{ backgroundColor: '#666666', color: '#ffffff', fontWeight: 700, fontSize: `${14 * textSizeScale}px` }}
-                >
-                  {formatDuration(totalRestMinutes)}
-                </td>
-                {renderExtraColumnCells('summary-rest')}
-              </tr>
-              <tr
-                className="grid"
-                style={{ gridTemplateColumns, backgroundColor: '#ffffff', height: '14px' }}
-              >
-                {Array.from({ length: 1 + DAY_COLUMN_COUNT }, (_, cellIndex) => (
-                  <td
-                    key={`spacer-${cellIndex}`}
-                    className="px-1"
-                    style={{ border: 0, backgroundColor: '#ffffff' }}
-                  />
-                ))}
-                {renderExtraColumnCells('summary-spacer')}
-              </tr>
+            </tbody>
+          </table>
+          </div>
+          {/* Min/Max box — a separate constraint card below Totals, per the design
+              handoff. No repeated day-name header row here (unlike Totals above);
+              it's just the two constraint rows, min first then max. */}
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              border: '1.5px solid #1A1A1A',
+              borderRadius: 10,
+              overflow: 'hidden',
+              boxShadow: 'var(--sh-1)',
+              flexShrink: 0,
+            }}
+          >
+          <table
+            className="plan-numerals border-collapse text-[11px] text-slate-800"
+            style={{ display: 'table', width: `${tableWidth}px`, minWidth: `${tableWidth}px`, userSelect: 'none' }}
+          >
+            <tbody>
               <tr
                 data-summary-row
                 className={`grid text-sm cursor-pointer ${
@@ -5537,86 +5830,39 @@ export default function TacticsPage() {
                 }}
               >
                 <td
-                  className="border border-[#e5e7eb] px-3 py-px text-center"
+                  className="px-3 py-px text-center uppercase"
                   style={{
-                    backgroundColor: '#b6d7a8',
-                    color: '#0f172a',
+                    backgroundColor: '#F0F0EE',
+                    color: 'var(--ink-soft)',
                     fontWeight: 700,
+                    letterSpacing: '.01em',
                     fontSize: `${14 * textSizeScale}px`,
                     position: 'sticky',
                     left: 0,
                     zIndex: 11,
+                    borderRight: '1.5px solid #1A1A1A',
+                    borderBottom: '1px solid var(--line)',
                   }}
                 >
-                  Working Hours
+                  Min
                 </td>
                 {displayedWeekDays.map((day, idx) => (
                   <td
                     key={`working-row-${day}-${idx}`}
-                    className="border border-[#e5e7eb] px-3 py-px text-center"
-                    style={{ backgroundColor: '#d9ead3', fontSize: `${14 * textSizeScale}px` }}
+                    className="px-3 py-px text-center"
+                    style={{ backgroundColor: '#ffffff', fontSize: `${14 * textSizeScale}px`, borderBottom: '1px solid var(--line)' }}
                   >
                     {formatDuration(workingColumnTotals[idx] ?? 0)}
                   </td>
                 ))}
                 <td
-                  className="border border-[#e5e7eb] px-3 py-px text-center font-semibold"
-                  style={{ backgroundColor: '#d9ead3', fontSize: `${14 * textSizeScale}px` }}
+                  className="px-3 py-px text-center font-semibold"
+                  style={{ backgroundColor: 'var(--n-ice)', fontSize: `${14 * textSizeScale}px`, borderLeft: '2px solid rgba(0,0,0,.1)', borderBottom: '1px solid var(--line)' }}
                   >
                     {formatDuration(totalWorkingMinutes)}
                   </td>
                   {renderExtraColumnCells('summary-working')}
                 </tr>
-              <tr
-                data-summary-row
-                className={`grid text-sm cursor-pointer ${
-                  selectedSummaryRowId === 'buffer-summary' ? 'outline outline-[2px]' : ''
-                }`}
-                style={
-                  selectedSummaryRowId === 'buffer-summary'
-                    ? { gridTemplateColumns, outlineColor: '#cf7d9a', outlineOffset: 0 }
-                    : { gridTemplateColumns }
-                }
-                tabIndex={0}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => toggleSummaryRowSelection('buffer-summary')}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    toggleSummaryRowSelection('buffer-summary');
-                  }
-                }}
-              >
-                  <td
-                    className="border border-[#e5e7eb] px-3 py-px text-center text-[#000000]"
-                    style={{
-                      backgroundColor: '#ffffff',
-                      fontWeight: 700,
-                      fontSize: `${14 * textSizeScale}px`,
-                      position: 'sticky',
-                      left: 0,
-                      zIndex: 11,
-                    }}
-                  >
-                    Buffer
-                  </td>
-                {displayedWeekDays.map((day, idx) => (
-                  <td
-                    key={`buffer-row-${day}-${idx}`}
-                    className="border border-[#e5e7eb] px-3 py-px text-center"
-                    style={{ backgroundColor: '#ffffff', fontSize: `${14 * textSizeScale}px` }}
-                  >
-                    {formatDuration(bufferColumnTotals[idx] ?? 0)}
-                  </td>
-                ))}
-                <td
-                  className="border border-[#e5e7eb] px-3 py-px text-center font-semibold"
-                  style={{ backgroundColor: '#ffffff', fontSize: `${14 * textSizeScale}px` }}
-                >
-                  {formatDuration(totalBufferMinutes)}
-                </td>
-                {renderExtraColumnCells('summary-buffer')}
-              </tr>
               <tr
                 data-summary-row
                 className={`grid text-sm cursor-pointer ${
@@ -5638,23 +5884,23 @@ export default function TacticsPage() {
                 }}
               >
                 <td
-                  className="border border-[#e5e7eb] px-3 py-px text-center"
-                  style={{ backgroundColor: '#ffffff', color: '#000000', fontWeight: 700, fontSize: `${14 * textSizeScale}px`, position: 'sticky', left: 0, zIndex: 11 }}
+                  className="px-3 py-px text-center uppercase"
+                  style={{ backgroundColor: '#F0F0EE', color: 'var(--ink-soft)', fontWeight: 700, letterSpacing: '.01em', fontSize: `${14 * textSizeScale}px`, position: 'sticky', left: 0, zIndex: 11, borderRight: '1.5px solid #1A1A1A' }}
                 >
-                  Available Hours
+                  Max
                 </td>
                 {displayedWeekDays.map((day, idx) => (
                   <td
                     key={`available-row-${day}-${idx}`}
-                    className="border border-[#e5e7eb] px-3 py-px text-center"
+                    className="px-3 py-px text-center"
                     style={{ backgroundColor: '#ffffff', fontSize: `${14 * textSizeScale}px` }}
                   >
                     {formatDuration(availableColumnTotals[idx] ?? 0)}
                   </td>
                 ))}
               <td
-                className="border border-[#e5e7eb] px-3 py-px text-center font-semibold"
-                style={{ backgroundColor: '#ffffff', fontSize: `${14 * textSizeScale}px` }}
+                className="px-3 py-px text-center font-semibold"
+                style={{ backgroundColor: 'var(--n-ice)', fontSize: `${14 * textSizeScale}px`, borderLeft: '2px solid rgba(0,0,0,.1)' }}
               >
                 {formatDuration(totalAvailableMinutes)}
               </td>
@@ -5662,6 +5908,7 @@ export default function TacticsPage() {
             </tr>
           </tbody>
         </table>
+        </div>
           </div>
         {cellMenu ? createPortal(renderCellProjectMenu(), document.body) : null}
         </div>

@@ -73,7 +73,17 @@ const C = {
   blueBgHover: '#dce6f4',
 };
 
-const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+// PanelShell renders at PANEL_WIDTH (320) but insets its frosted tray by 7px
+// on every side, so the tray's actual usable width is PANEL_WIDTH - 14 = 306.
+// The sliding views inside must be sized to that inner width, not the outer
+// panel width — otherwise their rightmost ~14px (including a BentoCard's own
+// right margin) gets clipped by the tray's overflow:hidden, making cards and
+// chips look flush against the right edge instead of having breathing room.
+const PANEL_WIDTH = 320;
+const TRAY_INSET = 7;
+const VIEW_WIDTH = PANEL_WIDTH - TRAY_INSET * 2;
 
 const BENTO_CARD = {
   background: '#FFFFFF',
@@ -648,7 +658,7 @@ function ColourView({ chipName, chipColour, onBack, onConfirm }) {
   }, [pendingColour, onConfirm]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: 320, flexShrink: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: VIEW_WIDTH, flexShrink: 0, minHeight: 0 }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
@@ -694,8 +704,9 @@ function ColourView({ chipName, chipColour, onBack, onConfirm }) {
           <div key={gi}>
             <div style={{
               padding: '8px 22px 2px',
+              fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
               fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
-              textTransform: 'uppercase', color: C.textLight,
+              textTransform: 'uppercase', color: 'var(--brand-ink)',
             }}>
               {PANEL_PALETTE_LABELS[gi]}
             </div>
@@ -734,8 +745,9 @@ function ColourView({ chipName, chipColour, onBack, onConfirm }) {
           margin: '6px 22px 0', padding: '2px 0 14px',
         }}>
           <div style={{
+            fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
             fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
-            textTransform: 'uppercase', color: C.textLight, marginBottom: 6,
+            textTransform: 'uppercase', color: 'var(--brand-ink)', marginBottom: 6,
           }}>
             Custom
           </div>
@@ -792,13 +804,20 @@ function BackBtn({ onClick }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        background: 'none', border: 'none', cursor: 'pointer',
-        color: hovered ? C.text : C.textLight,
-        display: 'flex', alignItems: 'center', padding: 0,
-        transition: 'color 0.15s',
+        display: 'inline-flex', alignItems: 'center', gap: 8,
+        padding: '6px 11px',
+        background: hovered ? C.greenBg : C.bg,
+        border: `1px solid ${hovered ? C.green : C.border}`,
+        borderRadius: 8,
+        boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.07)',
+        cursor: 'pointer',
+        color: hovered ? C.greenDark : C.textDim,
+        fontFamily: FONT, fontSize: 13, fontWeight: 500,
+        transition: 'border-color 0.15s, color 0.15s, background 0.15s',
       }}
     >
       {ICON.back}
+      Back
     </button>
   );
 }
@@ -863,8 +882,10 @@ function GoalDropdown({ allChips, currentProjectId, anchorRect, onSelect, onClos
     return (
       <>
         <div style={{
-          padding: '6px 12px 2px', fontSize: 10, fontWeight: 600,
-          letterSpacing: '0.08em', textTransform: 'uppercase', color: '#94a3b8',
+          padding: '6px 12px 2px',
+          fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
+          fontSize: 10, fontWeight: 600,
+          letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--brand-ink)',
         }}>
           {label}
         </div>
@@ -945,7 +966,7 @@ function TimePickerView({ label, initialMinutes, incrementMinutes, onBack, onCon
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: 320, flexShrink: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: VIEW_WIDTH, flexShrink: 0, minHeight: 0 }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '12px 22px 10px', borderBottom: `1px solid ${C.borderLight}`,
@@ -1066,23 +1087,18 @@ function ScheduleView({ scheduleData, onDragStartRef, onAddChipRef, onBack }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: 320, flexShrink: 0 }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '12px 22px 10px', borderBottom: `1px solid ${C.borderLight}`,
-        flexShrink: 0, background: C.bg,
-      }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: VIEW_WIDTH, flexShrink: 0, minHeight: 0 }}>
+      {/* Header — just the back button, no title bar (matches the design's
+          bare BackBtn treatment for this sub-view). */}
+      <div style={{ padding: '16px 18px 8px', flexShrink: 0 }}>
         <BackBtn onClick={onBack} />
-        <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: C.text }}>
-          Schedule items
-        </span>
       </div>
 
-      {/* Scrollable body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
+      {/* Scrollable body — no horizontal padding here; BENTO_CARD's own
+          margin insets each card from the tray edges, matching MainView. */}
+      <div style={{ flex: 1, overflowY: 'auto', paddingTop: 20, paddingBottom: 8 }}>
         {!hasAnyItems ? (
-          <p style={{ fontFamily: FONT, fontSize: 13, color: C.textFaint, fontStyle: 'italic', paddingTop: 8, paddingLeft: 8 }}>
+          <p style={{ fontFamily: FONT, fontSize: 13, color: C.textFaint, fontStyle: 'italic', padding: '8px 22px 0' }}>
             No schedule items defined. Add them on the Goal page.
           </p>
         ) : (
@@ -1099,16 +1115,17 @@ function ScheduleView({ scheduleData, onDragStartRef, onAddChipRef, onBack }) {
             const fg = project.textColor || '#000000';
 
             return (
-              <div key={project.id} style={{ marginBottom: 16 }}>
+              <div key={project.id} style={BENTO_CARD}>
                 {/* Project header */}
                 <div style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  marginBottom: 8, paddingBottom: 4,
+                  marginBottom: 10, paddingBottom: 6,
                   borderBottom: `2px solid ${bg}`,
                 }}>
                   <span style={{
-                    fontFamily: FONT, fontSize: 11, fontWeight: 600,
-                    textTransform: 'uppercase', color: C.textDim,
+                    fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
+                    fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
+                    textTransform: 'uppercase', color: 'var(--brand-ink)',
                   }}>
                     {project.label}
                   </span>
@@ -1129,13 +1146,13 @@ function ScheduleView({ scheduleData, onDragStartRef, onAddChipRef, onBack }) {
                   const baseName = (item.name ?? '').trim() || project.label;
 
                   return (
-                    <div key={itemIdx} style={{ marginBottom: 4 }}>
+                    <div key={itemIdx} style={{ marginBottom: 8 }}>
                       {/* One greyed chip per already-placed instance */}
                       {instances.map((instance) => (
-                        <div key={instance.id} style={{ height: `${heightPx}px`, marginBottom: 2 }}>
+                        <div key={instance.id} style={{ height: `${heightPx}px`, marginBottom: 4 }}>
                           <div
                             style={{
-                              height: '100%', borderRadius: 3,
+                              height: '100%', borderRadius: 4,
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                               padding: '0 8px', overflow: 'hidden',
                               fontFamily: FONT, fontWeight: 700,
@@ -1152,11 +1169,11 @@ function ScheduleView({ scheduleData, onDragStartRef, onAddChipRef, onBack }) {
                       ))}
                       {/* One active chip for remaining unplaced time */}
                       {remainingMinutes > 0 && (
-                        <div style={{ height: `${heightPx}px`, marginBottom: 2 }}>
+                        <div style={{ height: `${heightPx}px`, marginBottom: 4 }}>
                           <div
                             draggable
                             style={{
-                              height: '100%', borderRadius: 3,
+                              height: '100%', borderRadius: 4,
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                               padding: '0 8px', overflow: 'hidden',
                               fontFamily: FONT, fontWeight: 700,
@@ -1524,7 +1541,7 @@ function MainView({
   const hasChip = selectedChip != null;
 
   return (
-    <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div style={{ width: VIEW_WIDTH, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Scrollable body */}
       <div style={{ flex: 1, overflowY: 'auto', paddingTop: 20, paddingBottom: 8 }}>
         <UpdateSection isUpToDate={isUpToDate} onSendToSystem={onSendToSystem} />
@@ -1770,16 +1787,19 @@ export default function PlanPanel() {
 
   return (
     <>
-      <PanelShell isOpen={isOpen} navBottom={navBottom} width={320} zIndex={99994}>
-        {/* Horizontal slider track: 640 px wide, two 320 px views */}
+      <PanelShell isOpen={isOpen} navBottom={navBottom} width={PANEL_WIDTH} zIndex={99994}>
+        {/* Horizontal slider track: two VIEW_WIDTH-wide views, sized to the
+            tray's actual inner width (see VIEW_WIDTH above), not the outer
+            panel width — otherwise the right edge of whichever view is
+            showing gets clipped by the tray's overflow:hidden. */}
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <div
             style={{
               display: 'flex',
-              width: 640,
+              width: VIEW_WIDTH * 2,
               flex: 1,
               minHeight: 0,
-              transform: isSlid ? 'translateX(-320px)' : 'translateX(0)',
+              transform: isSlid ? `translateX(-${VIEW_WIDTH}px)` : 'translateX(0)',
               transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
             }}
           >

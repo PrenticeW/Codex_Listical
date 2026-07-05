@@ -194,7 +194,7 @@ export default function SignupPage() {
     justifyContent: 'center',
     background: '#FAF5EB',
     padding: '48px 16px',
-    fontFamily: "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   };
 
   const cardStyle = {
@@ -217,7 +217,7 @@ export default function SignupPage() {
     color: '#111',
     fontSize: '0.875rem',
     outline: 'none',
-    fontFamily: "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     boxSizing: 'border-box',
   };
 
@@ -230,7 +230,7 @@ export default function SignupPage() {
     color: '#111',
     fontSize: '0.875rem',
     outline: 'none',
-    fontFamily: "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     boxSizing: 'border-box',
     background: '#fff',
   };
@@ -248,7 +248,7 @@ export default function SignupPage() {
     color: '#fff',
     background: 'var(--brand-deep)',
     cursor: 'pointer',
-    fontFamily: "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   };
 
   // Post-signup confirmation pending state.

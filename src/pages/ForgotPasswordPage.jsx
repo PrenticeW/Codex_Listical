@@ -49,7 +49,7 @@ export default function ForgotPasswordPage() {
     color: '#111',
     fontSize: '0.875rem',
     outline: 'none',
-    fontFamily: "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     boxSizing: 'border-box',
   };
 
@@ -66,11 +66,11 @@ export default function ForgotPasswordPage() {
     color: '#fff',
     background: 'var(--brand-deep)',
     cursor: 'pointer',
-    fontFamily: "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAF5EB', padding: '48px 16px', fontFamily: "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FAF5EB', padding: '48px 16px', fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
       <div style={{ maxWidth: 448, width: '100%' }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>

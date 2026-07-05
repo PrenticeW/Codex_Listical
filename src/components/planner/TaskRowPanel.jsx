@@ -25,11 +25,13 @@ const C = {
   textMid:     '#777',
   textFaint:   '#999',
   textLight:   '#bbb',
-  green:       '#1a7a5c',
-  greenDark:   '#1a5c3a',
+  // Theme brand colours (blue), not old pre-redesign green — matches the
+  // other panels (GearPanel/SystemPanel/GoalPanel/PlanPanel).
+  green:       'var(--brand-deep)',
+  greenDark:   'var(--brand-ink)',
 };
 
-const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 // ─── Status chip colours — derived from PILLBOX_COLORS so panel and table stay in sync
 
@@ -78,8 +80,12 @@ function getStructuralRowMessage(task) {
 function SectionLabel({ children }) {
   return (
     <div style={{
-      fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
-      textTransform: 'uppercase', color: C.textLight, marginBottom: 16,
+      fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
+      fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
+      textTransform: 'uppercase', color: 'var(--brand-ink)',
+      marginBottom: 14,
+      borderBottom: '1px solid var(--brand-bd)',
+      paddingBottom: 6,
     }}>
       {children}
     </div>
@@ -536,7 +542,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
             </div>
           </div>
           <div style={{ padding: '24px 26px' }}>
-            <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, color: C.textFaint, fontStyle: 'italic', margin: 0 }}>
+            <p style={{ fontFamily: FONT, fontSize: 13, color: C.textFaint, fontStyle: 'italic', margin: 0 }}>
               {message}
             </p>
           </div>

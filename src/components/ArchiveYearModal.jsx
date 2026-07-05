@@ -12,7 +12,7 @@ import {
  * Modal dialog for archiving the current year and starting a new one.
  */
 
-const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 function InfoBanner({ type, title, body }) {
   const colors = {

@@ -7,7 +7,7 @@ import React from 'react';
  * contextType === 'row'   → full row actions (duplicate, delete, insert, etc.)
  */
 
-const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const MONO = "'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace";
 
 const BENTO_SHELL = {

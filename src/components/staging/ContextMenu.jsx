@@ -5,7 +5,7 @@ import React from 'react';
  * Shows different actions based on what's selected
  */
 
-const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const MONO = "'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace";
 
 const BENTO_SHELL = {

@@ -36,7 +36,7 @@ const NAV_BG_STYLE = {
   borderBottom: '1px solid rgba(130,155,210,0.3)',
 };
 
-const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 export default function NavigationBar({
   listicalButton = null,

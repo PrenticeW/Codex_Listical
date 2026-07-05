@@ -62,7 +62,7 @@ const C = {
   dangerBorder: '#fca5a5',
 };
 
-const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 // BentoCard — white elevated card wrapping each section
 const BENTO_CARD = {
@@ -466,7 +466,7 @@ function YourYearSection() {
     background: C.bgBlock, border: `1px solid ${C.border}`,
     borderRadius: 10, padding: '11px 14px', marginBottom: 8,
   };
-  const metaStyle  = { fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.textLight, marginBottom: 4 };
+  const metaStyle  = { fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.textLight, marginBottom: 4 };
   const valueStyle = { fontSize: 14, fontWeight: 500, color: C.text };
 
   return (

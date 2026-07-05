@@ -9,7 +9,7 @@ import { requestAccountDeletion } from '../lib/api/accountDeletion';
  * Confirmation modal for account deletion with password verification.
  */
 
-const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 export function DeleteAccountModal({ isOpen, onClose }) {
   const navigate = useNavigate();

@@ -40,7 +40,7 @@ class ErrorBoundary extends Component {
     }
 
     return (
-      <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#FAF5EB', padding:'48px 16px', fontFamily:"'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+      <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#FAF5EB', padding:'48px 16px', fontFamily:"'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
         <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8 text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 shadow-lg" style={{ background:'var(--brand-deep)', borderRadius:12 }}>
             <span className="text-white text-2xl font-semibold">!</span>

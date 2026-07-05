@@ -6,7 +6,7 @@ import React, { useState, useEffect, useRef } from 'react';
  * Custom modal for adding multiple tasks to the planner.
  */
 
-const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 export function AddTasksModal({ isOpen, onClose, onConfirm }) {
   const [count, setCount] = useState('5');

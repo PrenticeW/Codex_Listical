@@ -17,7 +17,7 @@ import { useYear } from '../../contexts/YearContext';
 import { useNavigate } from 'react-router-dom';
 import { fmtTimestamp as formatTimestamp } from '../../utils/fmtTimestamp';
 
-const FONT = "'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const MONO = "'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace";
 
 function snapshotSummary(snapshot) {
