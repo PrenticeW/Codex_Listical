@@ -338,8 +338,8 @@ function SubprojectHeaderPanel({ selectedTask, onBack }) {
   const rowLabel = selectedTask?.subprojectName || selectedTask?.subproject || '—';
 
   return (
-    <div style={{ display: 'flex', width: 960, height: '100%' }}>
-      <div style={{ width: 480, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', width: 640, height: '100%' }}>
+      <div style={{ width: 320, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
         {/* Sticky header */}
         <div style={{ padding: '20px 26px 16px', borderBottom: `1px solid ${C.borderLight}`, position: 'sticky', top: 0, background: C.bg, zIndex: 2 }}>
           <div style={{ marginBottom: 18 }}>
@@ -522,9 +522,9 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
   if (structuralMessage || isBlankRow) {
     const message = structuralMessage ?? 'Empty row — add a task name to get started';
     return (
-      <div style={{ display: 'flex', width: 960, height: '100%' }}>
+      <div style={{ display: 'flex', width: 640, height: '100%' }}>
         <div style={{
-          width: 480, flexShrink: 0, height: '100%', display: 'flex', flexDirection: 'column',
+          width: 320, flexShrink: 0, height: '100%', display: 'flex', flexDirection: 'column',
         }}>
           <div style={{
             padding: '20px 26px 16px',
@@ -558,14 +558,14 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
   return (
     // Inner slide: 640px wide, clips at 320px via parent overflow:hidden
     <div style={{
-      display: 'flex', width: 960, height: '100%',
+      display: 'flex', width: 640, height: '100%',
       transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
-      transform: showHistory ? 'translateX(-480px)' : 'translateX(0)',
+      transform: showHistory ? 'translateX(-320px)' : 'translateX(0)',
     }}>
 
       {/* ── Task detail main view ── */}
       <div style={{
-        width: 480, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden',
+        width: 320, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden',
         height: '100%', display: 'flex', flexDirection: 'column',
       }}>
         {/* Sticky header */}
@@ -650,7 +650,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
 
       {/* ── History sub-view ── */}
       <div style={{
-        width: 480, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden',
+        width: 320, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden',
         height: '100%', display: 'flex', flexDirection: 'column',
       }}>
         <div style={{

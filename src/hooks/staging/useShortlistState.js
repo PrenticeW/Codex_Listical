@@ -68,28 +68,26 @@ const createResponseRow = (placeholder = '') => {
  */
 const createSimpleTable = () => {
   const rows = [
-    // Reasons section
+    // 01 Reasons — prompt (reason) + response (detail)
     createRow(SECTION_CONFIG.Reasons.header, ROW_TYPE.HEADER, 'Reasons'),
-    createPromptRow(SECTION_CONFIG.Reasons.prompt),
-    createRow('', ROW_TYPE.DATA),
-    // Outcomes section
+    createPromptRow(''),
+    createResponseRow(''),
+    // 02 Outcomes — two prompt+response pairs
     createRow(SECTION_CONFIG.Outcomes.header, ROW_TYPE.HEADER, 'Outcomes'),
-    createPromptRow(SECTION_CONFIG.Outcomes.prompt),
-    createResponseRow(SECTION_CONFIG.Outcomes.placeholder),
-    createRow('', ROW_TYPE.DATA),
-    // Actions section
+    createPromptRow(''),
+    createResponseRow(''),
+    createPromptRow(''),
+    createResponseRow(''),
+    // 03 Actions — prompt (action) + response (sub + time)
     createRow(SECTION_CONFIG.Actions.header, ROW_TYPE.HEADER, 'Actions'),
-    createPromptRow(SECTION_CONFIG.Actions.prompt),
-    createResponseRow(SECTION_CONFIG.Actions.placeholder),
-    createRow('', ROW_TYPE.DATA),
-    // Subprojects section
+    createPromptRow(''),
+    createResponseRow(''),
+    // Subprojects — panel-managed, hidden from table render
     createRow(SECTION_CONFIG.Subprojects.header, ROW_TYPE.HEADER, 'Subprojects'),
-    createPromptRow(SECTION_CONFIG.Subprojects.prompt),
-    createRow('', ROW_TYPE.DATA),
-    // Schedule section
+    createPromptRow(''),
+    // 04 Schedule — prompt rows only (time + estimate)
     createRow(SECTION_CONFIG.Schedule.header, ROW_TYPE.HEADER, 'Schedule'),
-    createSchedulePromptRow(SECTION_CONFIG.Schedule.prompt),
-    createRow('', ROW_TYPE.DATA),
+    createSchedulePromptRow(''),
   ];
   return rows;
 };

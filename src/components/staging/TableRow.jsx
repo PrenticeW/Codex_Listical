@@ -2,13 +2,48 @@ import React from 'react';
 import {
   DragHandleCell,
   TextInputCell,
-  StaticTextCell,
   EstimateSelectCell,
   TimeValueCell,
-  EmptyCell,
 } from './TableCells';
 import { PLAN_TABLE_COLS, formatMinutesToHHmm } from '../../utils/staging/planTableHelpers';
 import { SECTION_CONFIG, getSectionGhost } from '../../utils/staging/sectionConfig';
+
+/**
+ * Convert HSL to RGB (all values 0–255).
+ */
+function hslToRgb(h, s, l) {
+  s /= 100; l /= 100;
+  const k = (n) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
+}
+
+/**
+ * Return the prompt-row background: color-mix(in srgb, goalColor 12%, white).
+ * Keeps the row in the same hue family as the header but very pale.
+ */
+function getPromptBg(color) {
+  if (!color) return '#FAF9F7';
+
+  // hsl(h, s%, l%) — the format pickProjectColour produces
+  const hslMatch = color.match(/hsl\(\s*([\d.]+)[,\s]+([\d.]+)%[,\s]+([\d.]+)%/i);
+  if (hslMatch) {
+    const [r, g, b] = hslToRgb(parseFloat(hslMatch[1]), parseFloat(hslMatch[2]), parseFloat(hslMatch[3]));
+    return `rgb(${Math.round(r * 0.12 + 255 * 0.88)},${Math.round(g * 0.12 + 255 * 0.88)},${Math.round(b * 0.12 + 255 * 0.88)})`;
+  }
+
+  // Fallback for hex colors from the custom color picker
+  const hex = color.replace('#', '');
+  if (hex.length === 6) {
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return `rgb(${Math.round(r * 0.12 + 255 * 0.88)},${Math.round(g * 0.12 + 255 * 0.88)},${Math.round(b * 0.12 + 255 * 0.88)})`;
+  }
+
+  return '#FAF9F7';
+}
 
 // ─── Row action buttons (shells — not yet wired to commands) ──────────────────
 
@@ -148,6 +183,9 @@ export default function TableRow({
   const hasTimeElements = (sectionType === 'Actions' && showActionTimes) || sectionType === 'Schedule';
   const isSchedulePrompt = rowType === 'prompt' && sectionType === 'Schedule';
 
+  // L68 swatch from the same palette family as the goal's header color.
+  const promptBg = getPromptBg(item.color);
+
   // Common row props for drag and drop
   const rowProps = {
     draggable: true,
@@ -184,51 +222,78 @@ export default function TableRow({
   const cellMouseDown = (e, col) => onCellMouseDown(e, item.id, rowIdx, col, PLAN_TABLE_COLS);
   const cellMouseEnter = (col) => onCellMouseEnter(item.id, rowIdx, col, PLAN_TABLE_COLS);
 
-  // HEADER ROW
+  // HEADER ROW — dark chapter header matching design spec
   if (rowType === 'header') {
-    const isActionsHeader = sectionType === 'Actions';
-    const showOutcomeTotals = item.showOutcomeTotals || false;
-    const showSectionTotal = isActionsHeader && showOutcomeTotals;
+    const showSectionTotal = false;
+
+    const SECTION_NUMBERS = { Reasons: '01', Outcomes: '02', Actions: '03', Schedule: '04' };
+    const sectionNum = SECTION_NUMBERS[sectionType] ?? '';
+    const sectionLabel = sectionType?.toUpperCase() ?? '';
+    const questionText = rowValues[0] || '';
 
     return (
-      <tr key={`${item.id}-row-${rowIdx}`} {...rowProps}>
-        <DragHandleCell
-          isRowSelected={isRowSelected}
-          isDropTarget={isDropTarget}
-          rowType="header"
-          onClick={(e) => onHandleClick(e, item.id, rowIdx)}
-        />
+      <tr key={`${item.id}-row-${rowIdx}`} style={{ opacity: isDragged ? 0.5 : 1 }}>
+        {/* Section number */}
+        <td
+          style={{
+            width: 36, minWidth: 36, height: 44,
+            background: '#24252B',
+            borderRight: '1px solid rgba(255,255,255,.06)',
+            verticalAlign: 'middle',
+            textAlign: 'center',
+            padding: 0,
+          }}
+        >
+          <span style={{
+            fontFamily: 'var(--font-sans)',
+            fontSize: 22, fontWeight: 700,
+            color: 'rgba(255,255,255,.18)',
+            lineHeight: 1,
+          }}>{sectionNum}</span>
+        </td>
+        {/* Section label + question */}
         <td
           colSpan={showSectionTotal ? PLAN_TABLE_COLS - 1 : PLAN_TABLE_COLS}
-          className={`border border-[#e5e7eb] py-0.5${isCellSelected(item.id, rowIdx, 0) ? ' selected-cell' : ''}`}
           style={{
-            // Default header background; `tr.selected-row td` overrides to pink.
-            backgroundColor: '#b7b7b7',
-            borderTop: isDropTarget ? '2px solid #000000' : undefined,
-            paddingLeft: '12px',
+            height: 44,
+            background: '#24252B',
+            padding: '10px 14px 0',
+            verticalAlign: 'top',
+            borderRight: isDropTarget ? '2px solid #fff' : undefined,
           }}
           onMouseDown={(e) => cellMouseDown(e, 0)}
           onMouseEnter={() => cellMouseEnter(0)}
         >
-          <input
-            type="text"
-            value={rowValues[0] || ''}
-            onChange={(e) => onCellChange(item.id, rowIdx, 0, e.target.value)}
-            onMouseDown={(e) => cellMouseDown(e, 0)}
-            onFocus={onInputFocus}
-            className="w-full bg-transparent focus:outline-none border-none font-semibold text-gray-800"
-            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-            {...dataAttrs(0)}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <span style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 8.5,
+              letterSpacing: '.12em',
+              textTransform: 'uppercase',
+              color: 'rgba(255,255,255,.55)',
+              lineHeight: 1,
+            }}>{sectionLabel}</span>
+            <span style={{
+              fontFamily: 'var(--font-sans)',
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: 'rgba(255,255,255,.95)',
+              lineHeight: 1.15,
+            }}>{questionText}</span>
+          </div>
         </td>
         {showSectionTotal && (
           <td
-            className="border border-[#e5e7eb] py-0.5 text-right pr-2 font-semibold text-gray-800"
             style={{
-              backgroundColor: '#b7b7b7',
-              width: '70px',
-              minWidth: '60px',
-              fontSize: `${Math.round(14 * textSizeScale)}px`,
+              height: 44,
+              background: '#24252B',
+              width: 70, minWidth: 60,
+              textAlign: 'right',
+              paddingRight: 8,
+              fontFamily: "'Mulish', sans-serif",
+              fontSize: `${Math.round(13 * textSizeScale)}px`,
+              color: 'rgba(255,255,255,.7)',
+              verticalAlign: 'middle',
             }}
           >
             {formatMinutesToHHmm(outcomeSectionTotal)}
@@ -261,6 +326,7 @@ export default function TableRow({
           isSelected={isCellSelected(item.id, rowIdx, 0)}
           isDropTarget={isDropTarget}
           rowType="prompt"
+          promptBg={promptBg}
           textSizeScale={textSizeScale}
           width="120px"
           minWidth="80px"
@@ -286,6 +352,7 @@ export default function TableRow({
           isSelected={isCellSelected(item.id, rowIdx, 2)}
           isDropTarget={isDropTarget}
           rowType="prompt"
+          promptBg={promptBg}
           textSizeScale={textSizeScale}
           colSpan={3}
           minWidth={`${Math.round(380 * textSizeScale)}px`}
@@ -299,6 +366,7 @@ export default function TableRow({
           isSelected={isCellSelected(item.id, rowIdx, 4)}
           isDropTarget={isDropTarget}
           rowType="prompt"
+          promptBg={promptBg}
           textSizeScale={textSizeScale}
           dataAttributes={dataAttrs(4)}
         />
@@ -311,6 +379,7 @@ export default function TableRow({
           isSelected={isCellSelected(item.id, rowIdx, 5)}
           isDropTarget={isDropTarget}
           rowType="prompt"
+          promptBg={promptBg}
           textSizeScale={textSizeScale}
           readOnly={!isCustomEstimate}
           dataAttributes={dataAttrs(5)}
@@ -344,6 +413,7 @@ export default function TableRow({
           isSelected={isCellSelected(item.id, rowIdx, 0)}
           isDropTarget={isDropTarget}
           rowType="prompt"
+          promptBg={promptBg}
           textSizeScale={textSizeScale}
           width="120px"
           minWidth="80px"
@@ -369,6 +439,7 @@ export default function TableRow({
           isSelected={isCellSelected(item.id, rowIdx, 1)}
           isDropTarget={isDropTarget}
           rowType="prompt"
+          promptBg={promptBg}
           textSizeScale={textSizeScale}
           colSpan={showTotal ? PLAN_TABLE_COLS - 2 : PLAN_TABLE_COLS - 1}
           minWidth={`${Math.round(380 * textSizeScale)}px`}
@@ -376,12 +447,19 @@ export default function TableRow({
         />
         {showTotal && (
           <td
-            className="border border-[#e5e7eb] py-0.5 text-right pr-2 font-semibold"
             style={{
-              backgroundColor: '#d4d4d4',
-              width: '70px',
-              minWidth: '60px',
-              fontSize: `${Math.round(14 * textSizeScale)}px`,
+              backgroundColor: promptBg,
+              width: 70, minWidth: 60,
+              height: 24,
+              borderBottom: '1px solid #DAD8C8',
+              borderRight: '1px solid #DAD8C8',
+              textAlign: 'right',
+              paddingRight: 8,
+              fontFamily: "'Mulish', sans-serif",
+              fontSize: `${Math.round(12.5 * textSizeScale)}px`,
+              fontWeight: 600,
+              color: '#1F1F1F',
+              verticalAlign: 'middle',
             }}
           >
             {formatMinutesToHHmm(outcomeTotal)}
@@ -404,42 +482,35 @@ export default function TableRow({
           rowType="response"
           onClick={(e) => onHandleClick(e, item.id, rowIdx)}
         />
-        <TextInputCell
-          value={rowValues[0]}
-          onChange={(val) => onCellChange(item.id, rowIdx, 0, val)}
+        {/* Button cell */}
+        <td
+          className="group/cell"
+          colSpan={2}
+          style={{
+            width: 123, minWidth: 80,
+            height: 24,
+            backgroundColor: isDropTarget ? '#fff5fc' : '#ffffff',
+            borderBottom: '1px solid #DAD8C8',
+            borderRight: '1px solid #DAD8C8',
+            borderTop: isDropTarget ? '2px solid #1A1A1A' : 'none',
+            padding: '0 4px',
+            verticalAlign: 'middle',
+            boxSizing: 'border-box',
+          }}
           onMouseDown={(e) => cellMouseDown(e, 0)}
           onMouseEnter={() => cellMouseEnter(0)}
-          onFocus={onInputFocus}
-          isSelected={isCellSelected(item.id, rowIdx, 0)}
-          isDropTarget={isDropTarget}
-          rowType="response"
-          textSizeScale={textSizeScale}
-          width="120px"
-          minWidth="80px"
-          dataAttributes={dataAttrs(0)}
-        />
-        <TextInputCell
-          value={rowValues[1]}
-          onChange={(val) => onCellChange(item.id, rowIdx, 1, val)}
-          onMouseDown={(e) => cellMouseDown(e, 1)}
-          onMouseEnter={() => cellMouseEnter(1)}
-          onFocus={onInputFocus}
-          isSelected={isCellSelected(item.id, rowIdx, 1)}
-          isDropTarget={isDropTarget}
-          rowType="response"
-          textSizeScale={textSizeScale}
-          width="120px"
-          minWidth="80px"
-          dataAttributes={dataAttrs(1)}
-          trailing={(
-            <RowShellButtons
-              rowType="response"
-              sectionType={sectionType}
-              onAddRow={() => onAddRowBelow?.(item.id, rowIdx, 'response', sectionType)}
-              onSendToActions={() => onSendToActions?.(item.id, rowIdx)}
-            />
-          )}
-        />
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+            <div onMouseDown={(e) => e.stopPropagation()}>
+              <RowShellButtons
+                rowType="response"
+                sectionType={sectionType}
+                onAddRow={() => onAddRowBelow?.(item.id, rowIdx, 'response', sectionType)}
+                onSendToActions={() => onSendToActions?.(item.id, rowIdx)}
+              />
+            </div>
+          </div>
+        </td>
         <TextInputCell
           value={rowValues[2]}
           onChange={(val) => onCellChange(item.id, rowIdx, 2, val)}
@@ -494,42 +565,35 @@ export default function TableRow({
           rowType="response"
           onClick={(e) => onHandleClick(e, item.id, rowIdx)}
         />
-        <TextInputCell
-          value={rowValues[0]}
-          onChange={(val) => onCellChange(item.id, rowIdx, 0, val)}
+        {/* Button cell */}
+        <td
+          className="group/cell"
+          colSpan={2}
+          style={{
+            width: 123, minWidth: 80,
+            height: 24,
+            backgroundColor: isDropTarget ? '#fff5fc' : '#ffffff',
+            borderBottom: '1px solid #DAD8C8',
+            borderRight: '1px solid #DAD8C8',
+            borderTop: isDropTarget ? '2px solid #1A1A1A' : 'none',
+            padding: '0 4px',
+            verticalAlign: 'middle',
+            boxSizing: 'border-box',
+          }}
           onMouseDown={(e) => cellMouseDown(e, 0)}
           onMouseEnter={() => cellMouseEnter(0)}
-          onFocus={onInputFocus}
-          isSelected={isCellSelected(item.id, rowIdx, 0)}
-          isDropTarget={isDropTarget}
-          rowType="response"
-          textSizeScale={textSizeScale}
-          width="120px"
-          minWidth="80px"
-          dataAttributes={dataAttrs(0)}
-        />
-        <TextInputCell
-          value={rowValues[1]}
-          onChange={(val) => onCellChange(item.id, rowIdx, 1, val)}
-          onMouseDown={(e) => cellMouseDown(e, 1)}
-          onMouseEnter={() => cellMouseEnter(1)}
-          onFocus={onInputFocus}
-          isSelected={isCellSelected(item.id, rowIdx, 1)}
-          isDropTarget={isDropTarget}
-          rowType="response"
-          textSizeScale={textSizeScale}
-          width="120px"
-          minWidth="80px"
-          dataAttributes={dataAttrs(1)}
-          trailing={(
-            <RowShellButtons
-              rowType="response"
-              sectionType={sectionType}
-              onAddRow={() => onAddRowBelow?.(item.id, rowIdx, 'response', sectionType)}
-              onSendToActions={() => onSendToActions?.(item.id, rowIdx)}
-            />
-          )}
-        />
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+            <div onMouseDown={(e) => e.stopPropagation()}>
+              <RowShellButtons
+                rowType="response"
+                sectionType={sectionType}
+                onAddRow={() => onAddRowBelow?.(item.id, rowIdx, 'response', sectionType)}
+                onSendToActions={() => onSendToActions?.(item.id, rowIdx)}
+              />
+            </div>
+          </div>
+        </td>
         <TextInputCell
           value={rowValues[2]}
           onChange={(val) => onCellChange(item.id, rowIdx, 2, val)}

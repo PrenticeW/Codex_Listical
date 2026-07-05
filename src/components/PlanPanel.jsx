@@ -648,7 +648,7 @@ function ColourView({ chipName, chipColour, onBack, onConfirm }) {
   }, [pendingColour, onConfirm]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: 480, flexShrink: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: 320, flexShrink: 0 }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
@@ -945,7 +945,7 @@ function TimePickerView({ label, initialMinutes, incrementMinutes, onBack, onCon
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: 480, flexShrink: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: 320, flexShrink: 0 }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '12px 22px 10px', borderBottom: `1px solid ${C.borderLight}`,
@@ -1066,7 +1066,7 @@ function ScheduleView({ scheduleData, onDragStartRef, onAddChipRef, onBack }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: 480, flexShrink: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: 320, flexShrink: 0 }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
@@ -1524,7 +1524,7 @@ function MainView({
   const hasChip = selectedChip != null;
 
   return (
-    <div style={{ width: 480, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Scrollable body */}
       <div style={{ flex: 1, overflowY: 'auto', paddingTop: 20, paddingBottom: 8 }}>
         <UpdateSection isUpToDate={isUpToDate} onSendToSystem={onSendToSystem} />
@@ -1770,16 +1770,16 @@ export default function PlanPanel() {
 
   return (
     <>
-      <PanelShell isOpen={isOpen} navBottom={navBottom} width={480} zIndex={99994}>
-        {/* Horizontal slider track: 960 px wide, two 480 px views */}
+      <PanelShell isOpen={isOpen} navBottom={navBottom} width={320} zIndex={99994}>
+        {/* Horizontal slider track: 640 px wide, two 320 px views */}
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <div
             style={{
               display: 'flex',
-              width: 960,
+              width: 640,
               flex: 1,
               minHeight: 0,
-              transform: isSlid ? 'translateX(-480px)' : 'translateX(0)',
+              transform: isSlid ? 'translateX(-320px)' : 'translateX(0)',
               transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
             }}
           >

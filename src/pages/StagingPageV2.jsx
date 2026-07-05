@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { getContrastTextColor } from '../utils/colorUtils';
-import { SquarePlus, CalendarCheck } from 'lucide-react';
+import { SquarePlus } from 'lucide-react';
 import { GOAL_PANEL_ACTION_EVENT, GOAL_PANEL_STATE_EVENT, GOAL_PANEL_SELECTION_EVENT, GOAL_PANEL_ROW_SELECTION_EVENT } from '../components/GoalPanel';
 import { useGoalPanel } from '../contexts/GoalPanelContext';
 import { useYear } from '../contexts/YearContext';
@@ -1023,11 +1023,20 @@ export default function StagingPageV2() {
     const outcomeSectionTotal = calculateOutcomeSectionTotal(entries, outcomeTotals);
 
     return (
-      <div className="rounded border border-dashed border-[#ced3d0] bg-white p-3">
+      <div style={{ border: '1.5px solid #1A1A1A', borderTop: 'none', borderRadius: '0 0 8px 8px', background: '#fff', overflow: 'hidden' }}>
         <table
           className="w-full border-collapse text-left"
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+          style={{ fontSize: `${Math.round(14 * textSizeScale)}px`, tableLayout: 'fixed' }}
         >
+          <colgroup>
+            <col style={{ width: 36 }} />   {/* col 0: gutter / section number */}
+            <col style={{ width: 92 }} />   {/* col 1: prompt button cell */}
+            <col style={{ width: 31 }} />   {/* col 2: response button extension — col1+col2=123px */}
+            <col />                          {/* col 3: flex content */}
+            <col />                          {/* col 4: flex content */}
+            <col style={{ width: 140 }} />  {/* col 5: estimate */}
+            <col style={{ width: 120 }} />  {/* col 6: time value */}
+          </colgroup>
           <tbody>
             {entries.map((rowValues, rowIdx) => {
               const rowType = rowValues.__rowType || 'data';
@@ -1086,34 +1095,47 @@ export default function StagingPageV2() {
     );
   };
 
+  const PAGE_BG = {
+    backgroundColor: '#ffffff',
+    backgroundImage: [
+      'radial-gradient(ellipse 80% 60% at 105% -10%, rgba(130,155,210,0.45) 0%, transparent 62%)',
+      'radial-gradient(ellipse 60% 45% at -5% 110%, rgba(130,155,210,0.28) 0%, transparent 58%)',
+      'radial-gradient(ellipse 160% 65% at 95% 112%, rgba(130,155,210,0.38) 0%, transparent 60%)',
+      'radial-gradient(ellipse 140% 55% at 45% 112%, rgba(130,155,210,0.25) 0%, transparent 58%)',
+      'linear-gradient(rgba(130,155,210,0.50) 1px, transparent 1px)',
+      'linear-gradient(90deg, rgba(130,155,210,0.50) 1px, transparent 1px)',
+    ].join(','),
+    backgroundSize: '100% 100%, 100% 100%, 100% 100%, 100% 100%, 32px 32px, 32px 32px',
+    backgroundPosition: '0 0, 0 0, 0 0, 0 0, -1px -1px, -1px -1px',
+    backgroundAttachment: 'fixed',
+  };
+
   return (
     <>
-      <div className="h-screen overflow-y-auto text-slate-800" style={{
-        backgroundColor: '#ffffff',
-        backgroundImage: [
-          'radial-gradient(ellipse 80% 60% at 105% -10%, rgba(130,155,210,0.45) 0%, transparent 62%)',
-          'radial-gradient(ellipse 60% 45% at -5% 110%, rgba(130,155,210,0.28) 0%, transparent 58%)',
-          'radial-gradient(ellipse 160% 65% at 95% 112%, rgba(130,155,210,0.38) 0%, transparent 60%)',
-          'radial-gradient(ellipse 140% 55% at 45% 112%, rgba(130,155,210,0.25) 0%, transparent 58%)',
-          'linear-gradient(rgba(130,155,210,0.50) 1px, transparent 1px)',
-          'linear-gradient(90deg, rgba(130,155,210,0.50) 1px, transparent 1px)',
-        ].join(','),
-        backgroundSize: '100% 100%, 100% 100%, 100% 100%, 100% 100%, 32px 32px, 32px 32px',
-        backgroundPosition: '0 0, 0 0, 0 0, 0 0, -1px -1px, -1px -1px',
-        backgroundAttachment: 'fixed',
-      }}>
+      <div className="h-screen overflow-y-auto text-slate-800" style={{...PAGE_BG}}>
         <div
-          className="sticky top-0 z-20 px-4 pt-4 pb-4" style={{ background: 'transparent' }}
+          className="sticky top-0 z-20 px-4 pt-4 pb-4" style={{...PAGE_BG}}
         >
           <NavigationBar
-            listicalButton={
-              <span className="font-serif text-sm font-medium text-slate-900 select-none">Listical</span>
-            }
             onRevertArchive={!draftYear && allYears.some(y => y.status === 'archived') ? handleRevertArchive : null}
           />
           <div
-            className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm mt-2"
-            style={{ maxWidth: 'calc(100% - 496px)', minWidth: boxMinWidth ?? undefined }}
+            style={{
+              maxWidth: 'calc(100% - 372px)',
+              minWidth: boxMinWidth ? boxMinWidth - 36 : undefined,
+              marginLeft: 36,
+              background: '#fff',
+              border: '1.5px solid #1A1A1A',
+              borderRadius: 10,
+              padding: '0 16px',
+              height: 50,
+              marginTop: 8,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+              boxSizing: 'border-box',
+            }}
           >
             <input
               id="staging-input"
@@ -1126,20 +1148,36 @@ export default function StagingPageV2() {
                   handleAdd();
                 }
               }}
-              className="w-full rounded border border-[#ced3d0] px-3 py-2 text-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5A84D8] focus:border-[#5A84D8]"
-              style={{ fontSize: `${Math.round(18 * textSizeScale)}px` }}
+              style={{
+                flex: 1,
+                border: 'none',
+                outline: 'none',
+                background: 'transparent',
+                fontSize: `${Math.round(14 * textSizeScale)}px`,
+                fontFamily: 'var(--font-sans)',
+                color: '#1F1F1F',
+              }}
               placeholder="What would you like to get done?"
             />
+            <span style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              letterSpacing: '.08em',
+              textTransform: 'uppercase',
+              color: '#9E9E9E',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}>
+              ↵ to create
+            </span>
           </div>
         </div>
 
         <div className="px-4 pb-4" style={{ isolation: 'isolate' }}>
           <div
             ref={tableCardRef}
-            className="rounded border border-[#ced3d0] bg-white p-4 shadow-sm"
-            style={{ maxWidth: 'calc(100% - 496px)', minWidth: boxMinWidth ?? undefined }}
+            style={{ maxWidth: 'calc(100% - 336px)', minWidth: boxMinWidth ?? undefined, display: 'flex', flexDirection: 'column', gap: 8 }}
           >
-            <div className="grid gap-[5px]">
               {shortlist.map((item) => {
                 const planEntries = clonePlanTableEntries(item.planTableEntries);
                 const { projectTotal } = calculateTimeTotals(planEntries);
@@ -1171,11 +1209,16 @@ export default function StagingPageV2() {
                       </div>
                       <div className="flex-1 space-y-2">
                         <div
-                          className="relative grid rounded border border-[#ced3d0] pr-3 py-2 shadow-inner"
                           style={{
+                            position: 'relative',
+                            display: 'grid',
                             backgroundColor: headerBackground,
                             color: headerTextColor,
+                            border: '1.5px solid #1A1A1A',
+                            borderRadius: (item.planTableVisible && !item.planTableCollapsed) ? '8px 8px 0 0' : '8px',
+                            height: 40,
                             paddingLeft: '12px',
+                            paddingRight: '12px',
                             fontWeight: 600,
                             gridTemplateColumns: '1fr auto 140px 24px 80px',
                             alignItems: 'center',
@@ -1183,6 +1226,7 @@ export default function StagingPageV2() {
                             cursor: 'pointer',
                             outline: selectedGoalId === item.id ? '2px solid rgba(0,0,0,0.25)' : 'none',
                             outlineOffset: '-2px',
+                            boxSizing: 'border-box',
                           }}
                           onClick={() => {
                             setSelectedGoalId(item.id);
@@ -1218,9 +1262,18 @@ export default function StagingPageV2() {
                             className="flex items-center justify-end"
                           >
                             {item.addedToPlan && (
-                              <div title="Added to scheduling plan">
-                                <CalendarCheck size={20} strokeWidth={2.5} color="#ffffff" />
-                              </div>
+                              <span style={{
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: 9,
+                                color: '#1A1A1A',
+                                background: 'rgba(255,255,255,0.88)',
+                                borderRadius: 999,
+                                padding: '2px 8px',
+                                textTransform: 'uppercase',
+                                letterSpacing: '.05em',
+                                flexShrink: 0,
+                                whiteSpace: 'nowrap',
+                              }}>On Plan</span>
                             )}
                           </div>
                           <div
@@ -1242,7 +1295,6 @@ export default function StagingPageV2() {
                   </div>
                 );
               })}
-            </div>
           </div>
         </div>
       </div>

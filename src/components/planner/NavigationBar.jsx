@@ -194,20 +194,6 @@ export default function NavigationBar({
             }}>
               Year {currentYear ?? 1}
             </span>
-            {/* Active page badge showing current page in mono */}
-            <span style={{
-              fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
-              fontSize: 10, fontWeight: 500,
-              letterSpacing: '0.05em', textTransform: 'uppercase',
-              color: 'var(--brand-ink)',
-              background: 'var(--brand-tint)',
-              borderRadius: 8,
-              padding: '5px 12px',
-              marginRight: 4,
-              whiteSpace: 'nowrap',
-            }}>
-              {currentPageConfig.name}
-            </span>
             {/* Tab buttons */}
             <div style={{
               display: 'inline-flex', gap: 3,

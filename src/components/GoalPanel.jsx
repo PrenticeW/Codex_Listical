@@ -275,84 +275,275 @@ function FieldRow({ label, children }) {
 
 // ─── Colour picker sub-view ───────────────────────────────────────────────────
 
-// Build the same group structure as ColourPicker: 30 hue families sorted by
-// hue ascending, split into 3 groups of 10. Each family has 4 lightness steps
-// sorted l:68 (light) → l:44 (dark). Grid renders row-first: 10 cols × 4 rows.
-function buildColourGroups() {
-  const sorted = [...PALETTE].sort((a, b) => a.h - b.h);
-  const families = [];
-  for (let i = 0; i < sorted.length; i += 4) {
-    const family = sorted.slice(i, i + 4);
-    family.sort((a, b) => b.l - a.l); // l:68 first
-    families.push(family);
-  }
-  return [families.slice(0, 10), families.slice(10, 20), families.slice(20, 30)];
-}
-
-const COLOUR_GROUPS = buildColourGroups();
-const COLOUR_GROUP_LABELS = ['Warm tones', 'Cool tones', 'Blues & purples'];
-const COLOUR_ROWS = 4;
-
-// Neutrals — same as ColourPicker
-const NEUTRALS = [
-  { name: 'white',      h: 0,   s: 0,  l: 100 },
-  { name: 'white warm', h: 35,  s: 20, l: 97  },
-  { name: 'silver',     h: 0,   s: 0,  l: 88  },
-  { name: 'lt grey',    h: 0,   s: 0,  l: 78  },
-  { name: 'grey',       h: 0,   s: 0,  l: 62  },
-  { name: 'mid grey',   h: 0,   s: 0,  l: 50  },
-  { name: 'dk grey',    h: 0,   s: 0,  l: 38  },
-  { name: 'charcoal',   h: 0,   s: 0,  l: 22  },
-  { name: 'near black', h: 0,   s: 0,  l: 12  },
-  { name: 'black',      h: 0,   s: 0,  l: 4   },
-  { name: 'cream',      h: 40,  s: 60, l: 95  },
-  { name: 'beige',      h: 35,  s: 30, l: 88  },
-  { name: 'sand',       h: 38,  s: 35, l: 78  },
-  { name: 'tan',        h: 35,  s: 30, l: 65  },
-  { name: 'camel',      h: 33,  s: 35, l: 52  },
-  { name: 'brown',      h: 25,  s: 40, l: 35  },
-  { name: 'dk brown',   h: 22,  s: 45, l: 22  },
-  { name: 'warm grey',  h: 35,  s: 8,  l: 72  },
-  { name: 'warm mid',   h: 35,  s: 8,  l: 50  },
-  { name: 'warm dark',  h: 35,  s: 8,  l: 30  },
-  { name: 'ice',        h: 210, s: 30, l: 97  },
-  { name: 'lt slate',   h: 215, s: 18, l: 82  },
-  { name: 'slate',      h: 215, s: 16, l: 68  },
-  { name: 'mid slate',  h: 215, s: 14, l: 55  },
-  { name: 'steel',      h: 215, s: 14, l: 42  },
-  { name: 'dk slate',   h: 218, s: 18, l: 30  },
-  { name: 'navy grey',  h: 220, s: 20, l: 20  },
-  { name: 'blue black', h: 222, s: 25, l: 12  },
-  { name: 'ink',        h: 225, s: 30, l: 6   },
-  null, // empty placeholder (row 2 col 9)
-  { name: 'blush mist', h: 340, s: 18, l: 88  },
-  { name: 'dusty rose', h: 340, s: 18, l: 72  },
-  { name: 'mauve',      h: 300, s: 12, l: 62  },
-  { name: 'lavender',   h: 265, s: 18, l: 78  },
-  { name: 'periwinkle', h: 240, s: 18, l: 72  },
-  { name: 'sage mist',  h: 140, s: 14, l: 72  },
-  { name: 'mint mist',  h: 160, s: 16, l: 78  },
-  { name: 'duck egg',   h: 185, s: 18, l: 78  },
-  { name: 'straw',      h: 48,  s: 30, l: 82  },
-  { name: 'peach',      h: 20,  s: 35, l: 82  },
+// 8 named colour groups — each group has hue families, each family has 6 shades
+// as [h, s, l] arrays from light (L76) to dark (L36).
+const JUNE_GROUPS = [
+  { label: 'Purples & Pinks', families: [
+    { name: 'purple',     shades: [[272,72,76],[272,72,68],[272,72,60],[272,72,52],[272,72,44],[272,72,36]] },
+    { name: 'plum',       shades: [[290,56,76],[290,58,68],[290,60,60],[290,62,52],[290,64,44],[290,66,36]] },
+    { name: 'pink',       shades: [[326,72,76],[326,72,68],[326,72,60],[326,72,52],[326,72,44],[326,72,36]] },
+  ]},
+  { label: 'Reds', families: [
+    { name: 'rose',       shades: [[348,77,76],[348,74,68],[348,70,60],[348,64,52],[348,59,44],[348,54,36]] },
+    { name: 'red',        shades: [[2,72,76],[2,72,68],[2,72,60],[2,72,52],[2,72,44],[2,72,36]] },
+    { name: 'scarlet',    shades: [[12,77,76],[12,72,68],[12,68,60],[12,62,52],[12,57,44],[12,52,36]] },
+  ]},
+  { label: 'Oranges', families: [
+    { name: 'tangerine',  shades: [[22,100,76],[22,100,68],[22,100,60],[22,100,52],[22,100,44],[22,100,36]] },
+    { name: 'orange',     shades: [[28,90,76],[28,90,68],[28,90,60],[28,90,52],[28,90,44],[28,90,36]] },
+    { name: 'amber',      shades: [[36,80,76],[36,80,68],[36,80,60],[36,80,52],[36,80,44],[36,80,36]] },
+  ]},
+  { label: 'Yellows', families: [
+    { name: 'gold',       shades: [[54,85,76],[54,85,68],[54,85,60],[54,85,52],[54,85,44],[54,85,36]] },
+    { name: 'yellow',     shades: [[58,90,76],[58,90,68],[58,90,60],[58,90,52],[58,90,44],[58,90,36]] },
+    { name: 'chartreuse', shades: [[62,85,76],[62,85,68],[62,85,60],[62,85,52],[62,85,44],[62,85,36]] },
+  ]},
+  { label: 'Greens', families: [
+    { name: 'lime',       shades: [[82,72,76],[82,72,68],[82,72,60],[82,72,52],[82,72,44],[82,72,36]] },
+    { name: 'green',      shades: [[110,72,76],[110,72,68],[110,72,60],[110,72,52],[110,72,44],[110,72,36]] },
+    { name: 'sage',       shades: [[155,34,76],[155,42,68],[155,50,60],[155,58,52],[155,66,44],[155,74,36]] },
+  ]},
+  { label: 'Teals & Aquas', families: [
+    { name: 'teal',       shades: [[173,57,76],[173,60,68],[173,62,60],[173,65,52],[173,68,44],[173,71,36]] },
+    { name: 'aqua',       shades: [[188,34,76],[188,42,68],[188,50,60],[188,58,52],[188,66,44],[188,74,36]] },
+    { name: 'sky',        shades: [[200,72,76],[200,72,68],[200,72,60],[200,72,52],[200,72,44],[200,72,36]] },
+  ]},
+  { label: 'Blues & Indigos', families: [
+    { name: 'blue',       shades: [[217,56,76],[217,58,68],[217,60,60],[217,62,52],[217,64,44],[217,66,36]] },
+    { name: 'cobalt',     shades: [[232,34,76],[232,42,68],[232,50,60],[232,58,52],[232,66,44],[232,74,36]] },
+    { name: 'indigo',     shades: [[252,72,76],[252,72,68],[252,72,60],[252,72,52],[252,72,44],[252,72,36]] },
+  ]},
+  { label: 'Neutrals', families: [
+    { name: 'neutral',    shades: [[0,0,100],[0,0,96],[0,0,72],[0,0,44],[0,0,25],[0,0,6]] },
+  ]},
 ];
 
-function hslStr(entry) {
-  return `hsl(${entry.h}, ${entry.s}%, ${entry.l}%)`;
+// hsl string from [h, s, l] array
+function hslStr([h, s, l]) {
+  return `hsl(${h}, ${s}%, ${l}%)`;
 }
 
-function isActiveEntry(entry, value) {
-  if (!value || !entry) return false;
+// Active check: compare [h,s,l] array against a stored hsl() string
+function isActiveEntry([h, s, l], value) {
+  if (!value) return false;
   const m = value.match(/hsl\(\s*([\d.]+)[,\s]+([\d.]+)%?[,\s]+([\d.]+)%?\s*\)/i);
   if (!m) return false;
-  const { h, s, l } = { h: parseFloat(m[1]), s: parseFloat(m[2]), l: parseFloat(m[3]) };
-  return Math.abs(entry.h - h) < 1 && Math.abs(entry.s - s) < 2 && Math.abs(entry.l - l) < 2;
+  return Math.abs(h - +m[1]) < 1 && Math.abs(s - +m[2]) < 2 && Math.abs(l - +m[3]) < 2;
 }
 
 const EYEDROPPER_SUPPORTED = typeof window !== 'undefined' && 'EyeDropper' in window;
+const MONO_FONT = "'Google Sans Mono', 'Roboto Mono', 'Courier New', monospace";
+
+// ─── HSB canvas colour picker ─────────────────────────────────────────────────
+function ColourPicker({ currentColor, onSelect, onConfirm }) {
+  const [h, setH]       = useState(0);
+  const [s, setS]       = useState(1);
+  const [br, setBr]     = useState(1);
+  const [hexVal, setHexVal] = useState('');
+  const sbRef  = useRef(null);
+  const hueRef = useRef(null);
+
+  const hsbToRgb = (hh, ss, bb) => {
+    const i = Math.floor(hh / 60) % 6, f = hh / 60 - Math.floor(hh / 60);
+    const p = bb * (1 - ss), q = bb * (1 - f * ss), t = bb * (1 - (1 - f) * ss);
+    return [[bb,t,p],[q,bb,p],[p,bb,t],[p,q,bb],[t,p,bb],[bb,p,q]][i].map(v => Math.round(v * 255));
+  };
+  const toHex    = (r, g, b) => '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+  const hexToRgb = hex => {
+    const m = hex.replace('#', '').match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+    return m ? m.slice(1).map(v => parseInt(v, 16)) : null;
+  };
+  const rgbToHsb = (r, g, b) => {
+    const [rr, gg, bb] = [r / 255, g / 255, b / 255];
+    const mx = Math.max(rr, gg, bb), mn = Math.min(rr, gg, bb), d = mx - mn;
+    let hh = 0;
+    if (d) {
+      if (mx === rr) hh = 60 * (((gg - bb) / d) % 6);
+      else if (mx === gg) hh = 60 * ((bb - rr) / d + 2);
+      else hh = 60 * ((rr - gg) / d + 4);
+    }
+    return [((hh % 360) + 360) % 360, mx ? d / mx : 0, mx];
+  };
+  const parseToHex = str => {
+    try {
+      const c = document.createElement('canvas').getContext('2d');
+      c.fillStyle = str;
+      return c.fillStyle;
+    } catch { return '#1a1a1a'; }
+  };
+
+  // Initialise from currentColor on mount
+  useEffect(() => {
+    const hex = parseToHex(currentColor || '#1a1a1a');
+    const rgb = hexToRgb(hex);
+    if (!rgb) return;
+    const [hh, ss, bb] = rgbToHsb(...rgb);
+    setH(hh); setS(ss); setBr(bb);
+    setHexVal(hex.slice(1).toUpperCase());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Redraw SB canvas when hue changes
+  useEffect(() => {
+    const canvas = sbRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const { width: w, height: ht } = canvas;
+    ctx.fillStyle = `hsl(${h}, 100%, 50%)`;
+    ctx.fillRect(0, 0, w, ht);
+    const wg = ctx.createLinearGradient(0, 0, w, 0);
+    wg.addColorStop(0, 'rgba(255,255,255,1)');
+    wg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = wg; ctx.fillRect(0, 0, w, ht);
+    const bg = ctx.createLinearGradient(0, 0, 0, ht);
+    bg.addColorStop(0, 'rgba(0,0,0,0)');
+    bg.addColorStop(1, 'rgba(0,0,0,1)');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, w, ht);
+  }, [h]);
+
+  const curHex = toHex(...hsbToRgb(h, s, br));
+
+  const updateSB = e => {
+    const rect = sbRef.current.getBoundingClientRect();
+    const ns = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const nb = Math.max(0, Math.min(1, 1 - (e.clientY - rect.top) / rect.height));
+    setS(ns); setBr(nb);
+    const hex = toHex(...hsbToRgb(h, ns, nb));
+    setHexVal(hex.slice(1).toUpperCase());
+    onSelect(hex);
+  };
+  const updateHue = e => {
+    const rect = hueRef.current.getBoundingClientRect();
+    const nh = Math.max(0, Math.min(360, ((e.clientX - rect.left) / rect.width) * 360));
+    setH(nh);
+    const hex = toHex(...hsbToRgb(nh, s, br));
+    setHexVal(hex.slice(1).toUpperCase());
+    onSelect(hex);
+  };
+  const applyHex = () => {
+    const rgb = hexToRgb('#' + hexVal);
+    if (!rgb) return;
+    const [hh, ss, bb] = rgbToHsb(...rgb);
+    setH(hh); setS(ss); setBr(bb);
+    onSelect(toHex(...rgb));
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+      {/* Saturation / brightness canvas */}
+      <div
+        style={{ position: 'relative', borderRadius: 6, overflow: 'hidden', cursor: 'crosshair', touchAction: 'none' }}
+        onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); updateSB(e); }}
+        onPointerMove={e => { if (e.buttons) updateSB(e); }}
+      >
+        <canvas ref={sbRef} width={232} height={120} style={{ display: 'block', width: '100%', height: 120 }} />
+        {/* Crosshair */}
+        <div style={{
+          position: 'absolute',
+          left: `${s * 100}%`, top: `${(1 - br) * 100}%`,
+          transform: 'translate(-50%, -50%)',
+          width: 12, height: 12, borderRadius: '50%',
+          border: '2.5px solid #fff',
+          boxShadow: '0 0 0 1px rgba(0,0,0,0.3)',
+          pointerEvents: 'none', boxSizing: 'border-box',
+          background: curHex,
+        }} />
+      </div>
+
+      {/* Hue slider */}
+      <div
+        ref={hueRef}
+        style={{
+          height: 12, borderRadius: 6, cursor: 'pointer', position: 'relative', touchAction: 'none',
+          background: 'linear-gradient(to right,#f00 0%,#ff0 17%,#0f0 33%,#0ff 50%,#00f 67%,#f0f 83%,#f00 100%)',
+        }}
+        onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); updateHue(e); }}
+        onPointerMove={e => { if (e.buttons) updateHue(e); }}
+      >
+        <div style={{
+          position: 'absolute',
+          left: `${(h / 360) * 100}%`, top: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 18, height: 18, borderRadius: '50%',
+          background: `hsl(${h}, 100%, 50%)`,
+          border: '2.5px solid #fff',
+          boxShadow: '0 0 0 1px rgba(0,0,0,0.2)',
+          pointerEvents: 'none', boxSizing: 'border-box',
+        }} />
+      </div>
+
+      {/* Preview + hex input + confirm */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+        <div style={{ width: 28, height: 28, borderRadius: 5, flexShrink: 0, background: curHex, border: '1px solid rgba(0,0,0,0.1)' }} />
+        <div style={{
+          display: 'flex', alignItems: 'center', flex: 1,
+          border: `1px solid ${C.border}`, borderRadius: 6, height: 28, overflow: 'hidden',
+        }}>
+          <span style={{ padding: '0 4px 0 8px', fontFamily: MONO_FONT, fontSize: 12, color: C.textFaint, userSelect: 'none' }}>#</span>
+          <input
+            type="text"
+            value={hexVal}
+            onChange={e => setHexVal(e.target.value.replace(/[^0-9a-fA-F]/g, '').slice(0, 6).toUpperCase())}
+            onKeyDown={e => e.key === 'Enter' && applyHex()}
+            onBlur={applyHex}
+            maxLength={6}
+            style={{
+              flex: 1, border: 'none', outline: 'none',
+              fontFamily: MONO_FONT, fontSize: 12, color: C.text,
+              background: 'transparent', padding: '0 8px 0 0', height: '100%',
+            }}
+          />
+        </div>
+        <button
+          onClick={() => onConfirm && onConfirm(curHex)}
+          style={{
+            width: 28, height: 28, borderRadius: 5, flexShrink: 0,
+            background: '#1a1a1a', border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', transition: 'opacity 0.15s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.opacity = '0.75'}
+          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+        >
+          <svg width="11" height="9" viewBox="0 0 12 10" fill="none">
+            <path d="M1 5l3.5 3.5L11 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function BackButton({ onClick }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 8,
+        padding: '6px 11px',
+        background: hov ? C.greenBg : C.bg,
+        border: `1px solid ${hov ? C.greenBorder : C.border}`,
+        borderRadius: 8,
+        boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.07)',
+        cursor: 'pointer',
+        color: hov ? C.greenDark : C.textDim,
+        fontFamily: FONT, fontSize: 13, fontWeight: 500,
+        transition: 'all 0.15s',
+      }}
+    >
+      <svg width="5" height="9" viewBox="0 0 5 9" fill="none">
+        <path d="M4.5 1L1 4.5l3.5 3.5" stroke={C.green} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      Back
+    </button>
+  );
+}
 
 function ColourView({ currentColor, onSelect, onBack, customColors = [], onAddCustomColor }) {
-  const customInputRef = useRef(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   // Swatch clicks apply immediately
   const handleSwatchSelect = (color) => { onSelect(color); };
@@ -372,40 +563,28 @@ function ColourView({ currentColor, onSelect, onBack, customColors = [], onAddCu
     } catch { /* cancelled */ }
   };
 
-  const renderGrid = (cells, keyPrefix) => (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 2, padding: '10px 22px' }}>
-      {cells.map((entry, idx) => {
-        if (!entry) return <div key={`${keyPrefix}-empty-${idx}`} style={{ aspectRatio: '1' }} />;
-        const bg = hslStr(entry);
-        const active = isActiveEntry(entry, currentColor);
-        const paleBorder = entry.l >= 95 ? { border: '0.5px solid #ccc' } : {};
+  // Render a single family's 6 shades as a horizontal strip
+  const renderFamilyRow = (shades, keyPrefix) => (
+    <div style={{ display: 'flex', gap: 2, marginTop: 4 }}>
+      {shades.map((hsl, idx) => {
+        const bg = hslStr(hsl);
+        const active = isActiveEntry(hsl, currentColor);
+        const paleBorder = hsl[2] >= 95 ? { outline: '0.5px solid #ddd', outlineOffset: -1 } : {};
         return (
           <button
             key={`${keyPrefix}-${idx}`}
             onClick={() => handleSwatchSelect(bg)}
-            title={`${entry.name}`}
             style={{
-              aspectRatio: '1', borderRadius: 2, background: bg,
+              flex: 1, height: 14, borderRadius: 2, background: bg,
               border: 'none', cursor: 'pointer', padding: 0, position: 'relative',
               transition: 'transform 0.1s',
+              outline: active ? '2px solid rgba(0,0,0,0.35)' : 'none',
+              outlineOffset: -1,
               ...paleBorder,
             }}
-            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.2)'}
+            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.12)'}
             onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-          >
-            {active && (
-              <span style={{
-                position: 'absolute', inset: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <span style={{
-                  width: '55%', height: '55%', borderRadius: 2,
-                  border: '2px solid rgba(255,255,255,0.9)',
-                  boxShadow: '0 0 0 1px rgba(0,0,0,0.25)',
-                }} />
-              </span>
-            )}
-          </button>
+          />
         );
       })}
     </div>
@@ -413,79 +592,41 @@ function ColourView({ currentColor, onSelect, onBack, customColors = [], onAddCu
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* Sticky header — back button + title only */}
-      <div style={{
-        position: 'sticky', top: 0, background: C.bg, zIndex: 2,
-        borderBottom: `1px solid ${C.borderLight}`,
-      }}>
-        <div style={{ padding: '20px 22px 16px' }}>
-          <button
-            onClick={onBack}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: C.textLight, display: 'flex', alignItems: 'center',
-              padding: 0, marginBottom: 10, transition: 'color 0.15s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.color = C.text}
-            onMouseLeave={e => e.currentTarget.style.color = C.textLight}
-          >
-            <svg width="9" height="14" viewBox="0 0 7 11" fill="none">
-              <path d="M6 1L1 5.5 6 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-          <span style={{ fontFamily: FONT, fontWeight: 600, fontSize: 14, color: C.text }}>Colour</span>
-        </div>
+      {/* Back button — bento card style */}
+      <div style={{ padding: '16px 12px 8px', flexShrink: 0 }}>
+        <BackButton onClick={onBack} />
       </div>
 
-      {/* Palette sections — swatches apply immediately */}
-      {COLOUR_GROUPS.map((group, gi) => {
-        // Build a flat row-first array: 4 rows × 10 cols
-        const cells = Array.from({ length: COLOUR_ROWS }, (_, row) =>
-          group.map(family => family[row])
-        ).flat();
-        return (
-          <div key={gi}>
-            <div style={{
-              padding: '12px 22px 4px',
-              fontFamily: FONT, fontSize: 10, fontWeight: 700,
-              letterSpacing: '0.08em', textTransform: 'uppercase', color: C.textLight,
-            }}>
-              {COLOUR_GROUP_LABELS[gi]}
-            </div>
-            {renderGrid(cells, `group-${gi}`)}
+      {/* Palette sections — one card per JUNE_GROUPS entry */}
+      {JUNE_GROUPS.map(({ label, families }) => (
+        <div key={label} style={{ ...BENTO_CARD, margin: '8px 12px 0', padding: '10px 12px' }}>
+          <div style={{
+            fontFamily: FONT, fontSize: 10, fontWeight: 700,
+            letterSpacing: '0.08em', textTransform: 'uppercase', color: C.textLight,
+            marginBottom: 2,
+          }}>
+            {label}
           </div>
-        );
-      })}
-
-      {/* Neutrals */}
-      <div>
-        <div style={{
-          padding: '12px 22px 4px',
-          fontFamily: FONT, fontSize: 10, fontWeight: 700,
-          letterSpacing: '0.08em', textTransform: 'uppercase', color: C.textLight,
-        }}>
-          Neutrals
+          {families.map(({ name, shades }) => renderFamilyRow(shades, `${label}-${name}`))}
         </div>
-        {renderGrid(NEUTRALS, 'neutrals')}
-      </div>
+      ))}
 
       {/* Custom */}
-      <div style={{ borderTop: `1px solid ${C.borderLight}` }}>
+      <div style={{ ...BENTO_CARD, margin: '8px 12px 12px', padding: '10px 12px' }}>
         <div style={{
-          padding: '12px 22px 4px',
           fontFamily: FONT, fontSize: 10, fontWeight: 700,
           letterSpacing: '0.08em', textTransform: 'uppercase', color: C.textLight,
+          marginBottom: 6,
         }}>
           Custom
         </div>
-        {/* Picker icons row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 2, padding: '10px 22px 0' }}>
+        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
           {EYEDROPPER_SUPPORTED && (
             <button
               onClick={handleEyedropper}
               title="Pick from screen"
               style={{
-                aspectRatio: '1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 26, height: 26, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 background: '#f7f7f5', border: `1px solid ${C.border}`,
                 cursor: 'pointer', color: C.textFaint,
                 transition: 'color 0.15s, border-color 0.15s, background 0.15s',
@@ -493,73 +634,65 @@ function ColourView({ currentColor, onSelect, onBack, customColors = [], onAddCu
               onMouseEnter={e => { e.currentTarget.style.color = C.text; e.currentTarget.style.borderColor = '#aaa'; e.currentTarget.style.background = C.borderLight; }}
               onMouseLeave={e => { e.currentTarget.style.color = C.textFaint; e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = '#f7f7f5'; }}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
                 <path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/>
               </svg>
             </button>
           )}
-          <label
+          <button
             title="Custom colour mixer"
+            onClick={() => setPickerOpen(v => !v)}
             style={{
-              aspectRatio: '1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: '#f7f7f5', border: `1px solid ${C.border}`,
-              cursor: 'pointer', color: C.textFaint,
+              width: 26, height: 26, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: pickerOpen ? C.borderLight : '#f7f7f5',
+              border: `1px solid ${pickerOpen ? '#aaa' : C.border}`,
+              cursor: 'pointer', color: pickerOpen ? C.text : C.textFaint,
               transition: 'color 0.15s, border-color 0.15s, background 0.15s',
             }}
             onMouseEnter={e => { e.currentTarget.style.color = C.text; e.currentTarget.style.borderColor = '#aaa'; e.currentTarget.style.background = C.borderLight; }}
-            onMouseLeave={e => { e.currentTarget.style.color = C.textFaint; e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = '#f7f7f5'; }}
+            onMouseLeave={e => {
+              if (!pickerOpen) {
+                e.currentTarget.style.color = C.textFaint;
+                e.currentTarget.style.borderColor = C.border;
+                e.currentTarget.style.background = '#f7f7f5';
+              }
+            }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 11l-8-8-8.5 8.5a5.5 5.5 0 007.78 7.78L19 11z"/>
               <path d="M20 23a2 2 0 001.4-3.4L16 14"/>
               <line x1="3.5" y1="11.5" x2="13" y2="2"/>
             </svg>
-            <input
-              ref={customInputRef}
-              type="color"
-              style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
-              onChange={e => handleCustomPick(e.target.value)}
-            />
-          </label>
+          </button>
+          {customColors.map((color, i) => {
+            const active = color === currentColor;
+            const isVeryLight = color.startsWith('#fff') || color === '#ffffff';
+            return (
+              <button
+                key={i}
+                onClick={() => handleSwatchSelect(color)}
+                title={color}
+                style={{
+                  width: 26, height: 26, borderRadius: 4,
+                  background: color, cursor: 'pointer', padding: 0,
+                  border: isVeryLight ? '0.5px solid #ccc' : 'none',
+                  outline: active ? '2px solid rgba(0,0,0,0.35)' : 'none',
+                  outlineOffset: -1,
+                  transition: 'transform 0.1s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.15)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+              />
+            );
+          })}
         </div>
-
-        {/* Saved custom swatches — separate grid row below the icons */}
-        {customColors.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 2, padding: '2px 22px 10px' }}>
-            {customColors.map((color, i) => {
-              const active = color === currentColor;
-              const isVeryLight = color.startsWith('#fff') || color === '#ffffff';
-              return (
-                <button
-                  key={i}
-                  onClick={() => handleSwatchSelect(color)}
-                  title={color}
-                  style={{
-                    aspectRatio: '1', borderRadius: 2,
-                    background: color, cursor: 'pointer', padding: 0, position: 'relative',
-                    border: isVeryLight ? '0.5px solid #ccc' : 'none',
-                    transition: 'transform 0.1s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.2)'}
-                  onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                >
-                  {active && (
-                    <span style={{
-                      position: 'absolute', inset: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <span style={{
-                        width: '55%', height: '55%', borderRadius: 2,
-                        border: '2px solid rgba(255,255,255,0.9)',
-                        boxShadow: '0 0 0 1px rgba(0,0,0,0.25)',
-                      }} />
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+        {pickerOpen && (
+          <ColourPicker
+            currentColor={currentColor}
+            onSelect={onSelect}
+            onConfirm={c => { handleCustomPick(c); setPickerOpen(false); }}
+          />
         )}
       </div>
     </div>
@@ -893,7 +1026,7 @@ function PageSection() {
   const displayScale = Math.round(sizeScale * 10);
 
   return (
-    <div style={{ ...BENTO_CARD, marginBottom: 11 }}>
+    <div style={{ ...BENTO_CARD, margin: '11px 11px 11px' }}>
       <SectionLabel>Page</SectionLabel>
 
       <ButtonPair
@@ -1026,7 +1159,7 @@ export default function GoalPanel() {
   if (pathname !== '/staging') return null;
 
   return (
-    <PanelShell isOpen={isOpen} navBottom={navBottom} width={480} zIndex={99994}>
+    <PanelShell isOpen={isOpen} navBottom={navBottom} width={320} zIndex={99994}>
       {/* Scrollable content + pinned footer */}
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingTop: 20, paddingBottom: 24 }}>

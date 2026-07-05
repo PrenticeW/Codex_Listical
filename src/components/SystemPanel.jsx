@@ -694,7 +694,7 @@ function PageSection() {
   }, []);
 
   return (
-    <div style={{ ...BENTO_CARD, marginBottom: 11 }}>
+    <div style={{ ...BENTO_CARD, margin: '11px 11px 11px' }}>
       <SectionLabel>Page</SectionLabel>
 
       {/* Undo / Redo */}
@@ -853,19 +853,19 @@ export default function SystemPanel() {
   const showTaskDetail = Boolean(selectedTask);
 
   return (
-    <PanelShell isOpen={isOpen} navBottom={navBottom} width={480} zIndex={99994}>
+    <PanelShell isOpen={isOpen} navBottom={navBottom} width={320} zIndex={99994}>
       {/* ── Outer slide: system content ↔ task detail ── */}
       <div style={{
         position: 'absolute', inset: 0, overflow: 'hidden',
         display: 'flex', flexDirection: 'column',
       }}>
         <div style={{
-          display: 'flex', width: 960, height: '100%',
+          display: 'flex', width: 640, height: '100%',
           transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
-          transform: showTaskDetail ? 'translateX(-480px)' : 'translateX(0)',
+          transform: showTaskDetail ? 'translateX(-320px)' : 'translateX(0)',
         }}>
           {/* System main content */}
-          <div style={{ width: 480, flexShrink: 0, overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ width: 320, flexShrink: 0, overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingTop: 20, paddingBottom: 24 }}>
               <InsertSection />
               <SortSection />
@@ -878,7 +878,7 @@ export default function SystemPanel() {
           </div>
 
           {/* Task detail view */}
-          <div style={{ width: 480, flexShrink: 0, overflow: 'hidden', height: '100%' }}>
+          <div style={{ width: 320, flexShrink: 0, overflow: 'hidden', height: '100%' }}>
             <TaskDetailContent selectedTask={selectedTask} onBack={closePanel} use24Hour={use24Hour} />
           </div>
         </div>

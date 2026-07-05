@@ -2965,9 +2965,6 @@ export default function ProjectTimePlannerV2() {
       {/* Nav bar — always visible at top */}
       <div className="sticky top-0 z-20 px-4 pt-4 pb-4 shrink-0" style={{ background: 'transparent' }}>
         <NavigationBar
-        listicalButton={
-          <span className="font-serif text-sm font-medium text-slate-900 select-none">Listical</span>
-        }
         onRevertArchive={!draftYear && allYears.some(y => y.status === 'archived') ? handleRevertArchive : null}
       />
       </div>

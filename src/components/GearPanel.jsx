@@ -1104,21 +1104,21 @@ export default function GearPanel() {
   }, [isOpen, close]);
 
   return (
-    <PanelShell isOpen={isOpen} navBottom={navBottom} width={480} zIndex={99996}>
+    <PanelShell isOpen={isOpen} navBottom={navBottom} width={320} zIndex={99996}>
       {/* Two-view slider */}
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div
           style={{
             display: 'flex',
-            width: 960,
+            width: 640,
             flex: 1,
             minHeight: 0,
-            transform: showHistory ? 'translateX(-480px)' : 'translateX(0)',
+            transform: showHistory ? 'translateX(-320px)' : 'translateX(0)',
             transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
           }}
         >
           {/* Main view */}
-          <div style={{ width: 480, flexShrink: 0, overflowY: 'auto', paddingTop: 20, paddingBottom: 24 }}>
+          <div style={{ width: 320, flexShrink: 0, overflowY: 'auto', paddingTop: 20, paddingBottom: 24 }}>
             <YourYearSection />
             <TimelineSection onShowHistory={() => setShowHistory(true)} />
             <SystemSettingsSection />
@@ -1127,7 +1127,7 @@ export default function GearPanel() {
           </div>
 
           {/* History view */}
-          <div style={{ width: 480, flexShrink: 0, overflowY: 'auto' }}>
+          <div style={{ width: 320, flexShrink: 0, overflowY: 'auto' }}>
             <HistoryView onBack={() => setShowHistory(false)} isActive={showHistory && isOpen} use24Hour={use24Hour} />
           </div>
         </div>

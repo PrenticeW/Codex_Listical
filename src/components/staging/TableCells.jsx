@@ -12,38 +12,29 @@ import { PLAN_ESTIMATE_OPTIONS } from '../../utils/staging/planTableHelpers';
  * These helpers only resolve the *default* background per row type and the
  * drop-target pink. Anything selection-related lives in CSS.
  */
-const getCellBackground = ({ isDropTarget, rowType }) => {
-  if (isDropTarget) return '#fff5fc';
+// Design tokens
+const BENTO_LINE = '#DAD8C8';
+const GUT_BG    = '#D2D7E1';
+const GUT_LINE  = '#C9C5BC';
+const CELL_HEIGHT = 24; // matches design GV_RH
 
+const getCellBackground = ({ isDropTarget, rowType, promptBg }) => {
+  if (isDropTarget) return '#fff5fc';
   switch (rowType) {
-    case 'header':
-      return '#b7b7b7';
-    case 'prompt':
-      return '#d9d9d9';
-    case 'response':
-      return '#f3f3f3';
-    default:
-      return '#ffffff';
+    case 'header':   return '#24252B';
+    case 'prompt':   return promptBg || '#EEF0F5';
+    case 'response': return '#ffffff';
+    default:         return '#ffffff';
   }
 };
 
 const getHandleBackground = ({ isDropTarget, rowType }) => {
   if (isDropTarget) return '#fff5fc';
-
-  switch (rowType) {
-    case 'header':
-      return '#b7b7b7';
-    case 'prompt':
-      return '#d9d9d9';
-    case 'response':
-      return '#f3f3f3';
-    default:
-      return '#f9fafb';
-  }
+  if (rowType === 'header') return '#24252B';
+  return GUT_BG;
 };
 
-const cellClassName = (isSelected) =>
-  `border border-[#e5e7eb] px-3 py-0.5${isSelected ? ' selected-cell' : ''}`;
+const cellClassName = (isSelected) => isSelected ? 'selected-cell' : '';
 
 /**
  * Drag handle cell - first column with grip icon
@@ -54,21 +45,26 @@ export function DragHandleCell({
   rowType,
   onClick,
 }) {
+  const bg = getHandleBackground({ isDropTarget, rowType });
+  const isHeader = rowType === 'header';
   return (
     <td
-      className="drag-handle border border-[#e5e7eb] px-1 py-0.5 text-center"
+      className="drag-handle"
       style={{
-        width: '24px',
-        minWidth: '24px',
-        backgroundColor: getHandleBackground({ isDropTarget, rowType }),
-        borderTop: isDropTarget ? '2px solid #000000' : undefined,
+        width: 24, minWidth: 24,
+        height: isHeader ? 44 : CELL_HEIGHT,
+        backgroundColor: bg,
+        borderRight: isHeader ? '1px solid rgba(255,255,255,.06)' : `1px solid ${GUT_LINE}`,
+        borderBottom: isHeader ? 'none' : `1px solid ${BENTO_LINE}`,
+        borderTop: isDropTarget ? '2px solid #1A1A1A' : 'none',
         cursor: 'grab',
+        textAlign: 'center',
+        verticalAlign: 'middle',
+        padding: 0,
       }}
       onClick={onClick}
     >
-      <span style={{ fontSize: '10px', color: isRowSelected ? '#ffffff' : rowType === 'header' ? '#6b7280' : '#9ca3af' }}>
-        ⋮⋮
-      </span>
+      <span style={{ fontSize: 9, color: isHeader ? 'rgba(255,255,255,.3)' : isRowSelected ? '#ffffff' : '#8A8278' }}>⠿</span>
     </td>
   );
 }
@@ -87,6 +83,7 @@ export function TextInputCell({
   isSelected,
   isDropTarget,
   rowType,
+  promptBg,
   textSizeScale,
   colSpan,
   width,
@@ -101,9 +98,16 @@ export function TextInputCell({
   // after the input inside the same cell
   trailing,
 }) {
+  const bg = getCellBackground({ isDropTarget, rowType, promptBg });
+  const isHeader = rowType === 'header';
   const style = {
-    backgroundColor: getCellBackground({ isDropTarget, rowType }),
-    borderTop: isDropTarget ? '2px solid #000000' : undefined,
+    backgroundColor: bg,
+    height: isHeader ? 44 : CELL_HEIGHT,
+    borderBottom: `1px solid ${BENTO_LINE}`,
+    borderRight: `1px solid ${BENTO_LINE}`,
+    borderTop: isDropTarget ? '2px solid #1A1A1A' : 'none',
+    padding: '0 8px',
+    verticalAlign: 'middle',
   };
 
   if (width) style.width = width;
@@ -112,9 +116,17 @@ export function TextInputCell({
   if (paddingLeft) style.paddingLeft = paddingLeft;
   if (paddingRight) style.paddingRight = paddingRight;
 
-  const inputClassName = `w-full bg-transparent focus:outline-none border-none placeholder:italic placeholder:text-[#aaa] ${
-    fontWeight === 'semibold' ? 'font-semibold' : ''
-  } ${textColor || 'text-slate-800'}`;
+  const inkColor = rowType === 'response' ? '#616161' : '#1F1F1F';
+  const inputStyle = {
+    fontSize: `${Math.round(12.5 * textSizeScale)}px`,
+    fontFamily: 'var(--font-sans)',
+    color: textColor || inkColor,
+    fontWeight: fontWeight === 'semibold' ? 600 : 400,
+    width: '100%',
+    background: 'transparent',
+    border: 'none',
+    outline: 'none',
+  };
 
   return (
     <td
@@ -125,7 +137,7 @@ export function TextInputCell({
       onMouseEnter={onMouseEnter}
     >
       {trailing ? (
-        <div className="flex items-center gap-1">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <input
             type="text"
             size={1}
@@ -135,12 +147,11 @@ export function TextInputCell({
             onFocus={onFocus}
             onMouseDown={onMouseDown}
             placeholder={placeholder}
-            className={`${inputClassName} min-w-0 flex-1`}
-            style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+            style={{ ...inputStyle, flex: 1, minWidth: 0 }}
             {...dataAttributes}
           />
           <div
-            className="flex flex-shrink-0 items-center"
+            style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}
             onMouseDown={(e) => e.stopPropagation()}
           >
             {trailing}
@@ -156,8 +167,7 @@ export function TextInputCell({
           onFocus={onFocus}
           onMouseDown={onMouseDown}
           placeholder={placeholder}
-          className={inputClassName}
-          style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
+          style={inputStyle}
           {...dataAttributes}
         />
       )}
@@ -220,37 +230,42 @@ export function EstimateSelectCell({
   isSelected,
   isDropTarget,
   rowType,
+  promptBg,
   textSizeScale,
   dataAttributes,
 }) {
-  const style = {
-    width: '140px',
-    // Floor sized so the longest option ("55 Minutes") plus the dropdown
-    // chevron always fits — scales with the text size setting.
-    minWidth: `${Math.round(118 * textSizeScale)}px`,
-    backgroundColor: getCellBackground({ isDropTarget, rowType }),
-    borderTop: isDropTarget ? '2px solid #000000' : undefined,
-  };
-
   return (
     <td
       className={cellClassName(isSelected)}
-      style={style}
+      style={{
+        width: 140,
+        minWidth: `${Math.round(118 * textSizeScale)}px`,
+        height: CELL_HEIGHT,
+        backgroundColor: getCellBackground({ isDropTarget, rowType, promptBg }),
+        borderBottom: `1px solid ${BENTO_LINE}`,
+        borderRight: `1px solid ${BENTO_LINE}`,
+        borderTop: isDropTarget ? '2px solid #1A1A1A' : 'none',
+        padding: '0 8px',
+        verticalAlign: 'middle',
+      }}
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
     >
       <select
-        className="w-full bg-transparent focus:outline-none border-none"
-        style={{ fontSize: `${Math.round(14 * textSizeScale)}px`, paddingRight: '16px' }}
+        style={{
+          width: '100%', background: 'transparent', border: 'none', outline: 'none',
+          fontSize: `${Math.round(12 * textSizeScale)}px`,
+          fontFamily: "'Mulish', sans-serif",
+          color: '#616161',
+          paddingRight: 16,
+        }}
         value={value || '-'}
         onMouseDown={(e) => { onMouseDown(e); e.stopPropagation(); }}
         onChange={(e) => onChange(e.target.value)}
         {...dataAttributes}
       >
         {PLAN_ESTIMATE_OPTIONS.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
+          <option key={option} value={option}>{option}</option>
         ))}
       </select>
     </td>
@@ -269,23 +284,25 @@ export function TimeValueCell({
   isSelected,
   isDropTarget,
   rowType,
+  promptBg,
   textSizeScale,
   readOnly,
   dataAttributes,
 }) {
-  const style = {
-    width: '120px',
-    minWidth: '60px',
-    textAlign: 'right',
-    paddingRight: '10px',
-    backgroundColor: getCellBackground({ isDropTarget, rowType }),
-    borderTop: isDropTarget ? '2px solid #000000' : undefined,
-  };
-
   return (
     <td
       className={cellClassName(isSelected)}
-      style={style}
+      style={{
+        width: 120, minWidth: 60,
+        height: CELL_HEIGHT,
+        backgroundColor: getCellBackground({ isDropTarget, rowType, promptBg }),
+        borderBottom: `1px solid ${BENTO_LINE}`,
+        borderRight: `1px solid ${BENTO_LINE}`,
+        borderTop: isDropTarget ? '2px solid #1A1A1A' : 'none',
+        padding: '0 8px',
+        verticalAlign: 'middle',
+        textAlign: 'right',
+      }}
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
     >
@@ -293,49 +310,21 @@ export function TimeValueCell({
         type="text"
         size={1}
         value={value || '0.00'}
-        onChange={(e) => {
-          if (!readOnly) onChange(e.target.value);
-        }}
+        onChange={(e) => { if (!readOnly) onChange(e.target.value); }}
         onMouseDown={onMouseDown}
         onFocus={onFocus}
         readOnly={readOnly}
-        className="w-full bg-transparent text-right focus:outline-none border-none"
-        style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
         placeholder="0.00"
+        style={{
+          width: '100%', background: 'transparent', border: 'none', outline: 'none',
+          textAlign: 'right',
+          fontFamily: "'Mulish', sans-serif",
+          fontSize: `${Math.round(12.5 * textSizeScale)}px`,
+          color: '#1F1F1F',
+          fontVariantNumeric: 'tabular-nums',
+        }}
         {...dataAttributes}
       />
-    </td>
-  );
-}
-
-/**
- * Delete button cell
- */
-export function DeleteButtonCell({
-  onClick,
-  rowType,
-  textSizeScale,
-  label = 'Delete row',
-}) {
-  return (
-    <td
-      className="border border-[#e5e7eb] px-3 py-0.5"
-      style={{
-        width: '32px',
-        minWidth: '32px',
-        textAlign: 'center',
-        backgroundColor: rowType === 'prompt' ? '#d9d9d9' : '#f3f3f3',
-      }}
-    >
-      <button
-        type="button"
-        aria-label={label}
-        className="font-semibold text-slate-800"
-        style={{ fontSize: `${Math.round(14 * textSizeScale)}px` }}
-        onClick={onClick}
-      >
-        X
-      </button>
     </td>
   );
 }
@@ -349,13 +338,19 @@ export function EmptyCell({
   isSelected,
   isDropTarget,
   rowType,
+  promptBg,
   width,
   minWidth,
   colSpan,
 }) {
   const style = {
-    backgroundColor: getCellBackground({ isDropTarget, rowType }),
-    borderTop: isDropTarget ? '2px solid #000000' : undefined,
+    backgroundColor: getCellBackground({ isDropTarget, rowType, promptBg }),
+    height: CELL_HEIGHT,
+    borderBottom: `1px solid ${BENTO_LINE}`,
+    borderRight: `1px solid ${BENTO_LINE}`,
+    borderTop: isDropTarget ? '2px solid #1A1A1A' : 'none',
+    padding: 0,
+    verticalAlign: 'middle',
   };
 
   if (width) style.width = width;
@@ -369,41 +364,5 @@ export function EmptyCell({
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
     />
-  );
-}
-
-/**
- * Header cell - full width spanning cell for section headers
- */
-export function HeaderCell({
-  text,
-  isDropTarget,
-  textSizeScale,
-  colSpan,
-  paddingLeft,
-  rightContent,
-}) {
-  const style = {
-    backgroundColor: '#b7b7b7',
-    color: '#1f2937',
-    fontSize: `${Math.round(14 * textSizeScale)}px`,
-    borderTop: isDropTarget ? '2px solid #000000' : undefined,
-  };
-
-  if (paddingLeft) style.paddingLeft = paddingLeft;
-
-  if (rightContent) {
-    // Header with right-aligned content (like time total)
-    return null; // This case is handled separately in the parent
-  }
-
-  return (
-    <td
-      colSpan={colSpan}
-      className="border border-[#e5e7eb] px-3 py-0.5 text-left font-semibold"
-      style={style}
-    >
-      {text}
-    </td>
   );
 }
