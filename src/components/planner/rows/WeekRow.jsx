@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { GripVertical } from 'lucide-react';
 
 /**
  * WeekRow Component
@@ -59,7 +58,8 @@ function WeekRow({
 
   return (
     <>
-      {/* Row number cell */}
+      {/* Row-number gutter cell — no number for this pinned header row (see
+          MonthRow.jsx), filled black to match the rest of this row. */}
       <td
         key="rowNum"
         style={{
@@ -71,31 +71,23 @@ function WeekRow({
           boxSizing: 'border-box',
           position: 'sticky',
           left: 0,
-          backgroundColor: '#E8ECF5',
+          backgroundColor: 'black',
           zIndex: rowNumZIndex,
         }}
-        className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
+        className="p-0"
       >
         <div
-          className="h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-pointer"
-          style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#E8ECF5', color: '#6A7A9E' }}
+          className="h-full flex items-center justify-between"
+          style={{
+            minHeight: `${rowHeight}px`,
+            backgroundColor: 'black',
+            // Match the merged-fixed-cols cell's borders below so both
+            // cells render at the same height and don't overhang each other.
+            borderTop: '1px solid black',
+            borderBottom: '1px solid black',
+          }}
           onClick={(e) => handleRowNumberClick(e, rowId)}
-        >
-          <div
-            draggable
-            onDragStart={(e) => {
-              e.stopPropagation();
-              handleDragStart(e, rowId);
-            }}
-            onDragEnd={handleDragEnd}
-            className="cursor-grab active:cursor-grabbing flex items-center"
-            title="Drag to reorder"
-          >
-            <GripVertical size={gripIconSize} className="text-gray-400 hover:text-gray-600" />
-          </div>
-          <span>{row.index + 1}</span>
-          <div style={{ width: `${gripIconSize}px` }} />
-        </div>
+        />
       </td>
 
       {/* Merged cell for columns A-H */}

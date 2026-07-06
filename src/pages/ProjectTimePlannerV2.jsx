@@ -26,7 +26,7 @@ import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import { revertArchive } from '../utils/planner/revertArchive';
 import { importTasksForDraftYear } from '../utils/planner/importTasksFromYear';
 import { placeImportedTasks } from '../utils/planner/placeImportedTasks';
-import { isEditableRow } from '../utils/planner/rowTypeChecks';
+import { isEditableRow, isSpecialRow } from '../utils/planner/rowTypeChecks';
 import usePlannerFilters from '../hooks/planner/usePlannerFilters';
 import { useFilteredData, useFilterValues } from '../hooks/planner/useFilteredData';
 import { useProjectTotals, useDailyTotals } from '../hooks/planner/useTotalsCalculation';
@@ -646,6 +646,42 @@ export default function ProjectTimePlannerV2() {
     projectFilter,
   });
 
+  // Sequential number shown in the left gutter column. Skips rows that
+  // don't get a gutter number: the 7 pinned header rows (Month/Week/Day/
+  // Day-of-week/Daily Min/Daily Max/Filter), the Inbox divider row, and the
+  // Archive section divider (legacy `_isArchiveRow`) plus its section-title
+  // header row (`_rowType === 'archiveHeader'`) — all structural rows, not
+  // real task/project data. The Archive section's per-week divider row
+  // (`_rowType === 'archiveRow'`, editable week label + weekly total) DOES
+  // get numbered, same as a task row. Every other row (regular tasks,
+  // project/subproject rows, archived project/task rows, inbox task rows)
+  // gets the next sequential number, so the true first data row (now row 9,
+  // after the Filter row split added the Daily Total row) displays "1" and
+  // the numbering has no gaps at the skipped rows.
+  const numberedData = useMemo(() => {
+    let counter = 0;
+    return filteredData.map((row) => {
+      const skipsGutterNumber = (
+        row._isMonthRow ||
+        row._isWeekRow ||
+        row._isDayRow ||
+        row._isDayOfWeekRow ||
+        row._isDailyMinRow ||
+        row._isDailyMaxRow ||
+        row._isDailyTotalRow ||
+        row._isFilterRow ||
+        row._isInboxRow ||
+        row._isArchiveRow ||
+        row._rowType === 'archiveHeader'
+      );
+      if (skipsGutterNumber) {
+        return row._gutterNumber === undefined ? row : { ...row, _gutterNumber: undefined };
+      }
+      counter += 1;
+      return row._gutterNumber === counter ? row : { ...row, _gutterNumber: counter };
+    });
+  }, [filteredData]);
+
   // Sync the task row detail panel when filteredData changes so the status chip
   // always reflects the computed status shown in the table. Also write a task
   // event for computed status changes (chip-task rows whose status is derived
@@ -827,16 +863,16 @@ export default function ProjectTimePlannerV2() {
       let result = prevData;
       let changed = false;
 
-      // --- Filter row: update daily column totals ---
+      // --- Daily Total row: update daily column totals ---
       if (dailyTotals) {
-        const filterRow = result.find(row => row._isFilterRow);
-        if (filterRow) {
+        const dailyTotalRow = result.find(row => row._isDailyTotalRow);
+        if (dailyTotalRow) {
           let filterChanged = false;
           forEachDayColumn(totalDays, (dayColumnId) => {
-            if (filterRow[dayColumnId] !== dailyTotals[dayColumnId]) filterChanged = true;
+            if (dailyTotalRow[dayColumnId] !== dailyTotals[dayColumnId]) filterChanged = true;
           });
           if (filterChanged) {
-            result = result.map(row => (row._isFilterRow ? { ...row, ...dailyTotals } : row));
+            result = result.map(row => (row._isDailyTotalRow ? { ...row, ...dailyTotals } : row));
             changed = true;
           }
         }
@@ -867,11 +903,17 @@ export default function ProjectTimePlannerV2() {
           const hasMinRow = result.some(row => row._isDailyMinRow);
           const hasMaxRow = result.some(row => row._isDailyMaxRow);
           if (!hasMinRow || !hasMaxRow) {
+            // Insert right before the Daily Total row (not the Filter row —
+            // the Filter row split moved the Daily Total row to sit between
+            // Daily Max and Filter, so anchoring on Filter here would
+            // misorder Daily Min/Max after Daily Total).
+            const dailyTotalRowIndex = result.findIndex(row => row._isDailyTotalRow);
             const filterRowIndex = result.findIndex(row => row._isFilterRow);
-            if (filterRowIndex !== -1) {
+            const anchorIndex = dailyTotalRowIndex !== -1 ? dailyTotalRowIndex : filterRowIndex;
+            if (anchorIndex !== -1) {
               const newData = [...result];
               if (!hasMinRow) {
-                newData.splice(filterRowIndex, 0, {
+                newData.splice(anchorIndex, 0, {
                   id: 'daily-min', _isDailyMinRow: true,
                   rowNum: '', checkbox: false, project: 'Daily Min', subproject: '',
                   status: '', task: '', recurring: '', estimate: '', timeValue: '',
@@ -879,7 +921,7 @@ export default function ProjectTimePlannerV2() {
                 });
               }
               if (!hasMaxRow) {
-                const insertIndex = hasMinRow ? filterRowIndex : filterRowIndex + 1;
+                const insertIndex = hasMinRow ? anchorIndex : anchorIndex + 1;
                 newData.splice(insertIndex, 0, {
                   id: 'daily-max', _isDailyMaxRow: true,
                   rowNum: '', checkbox: false, project: 'Daily Max', subproject: '',
@@ -1724,48 +1766,6 @@ export default function ProjectTimePlannerV2() {
   // Calculate number of weeks
   const weeksCount = Math.ceil(totalDays / 7);
 
-  // Build timeline header rows - just column letters
-  const timelineHeaderRows = useMemo(() => {
-    const headerRows = [];
-
-    // Column letters row (A, B, C, etc.)
-    const mainHeaderRow = {
-      id: 'main-header',
-      cells: [
-        { id: 'header-rowNum', columnKey: 'rowNum', content: '#' },
-        { id: 'header-checkbox', columnKey: 'checkbox', content: 'A' },
-        { id: 'header-project', columnKey: 'project', content: 'B' },
-        { id: 'header-subproject', columnKey: 'subproject', content: 'C' },
-        { id: 'header-status', columnKey: 'status', content: 'D' },
-        { id: 'header-task', columnKey: 'task', content: 'E' },
-        { id: 'header-recurring', columnKey: 'recurring', content: 'F' },
-        { id: 'header-estimate', columnKey: 'estimate', content: 'G' },
-        { id: 'header-timeValue', columnKey: 'timeValue', content: 'H' },
-        ...dates.map((_, i) => {
-          // Day columns start from I (index 8)
-          const letterIndex = i + 8; // Start after H (8 columns before day columns)
-          let columnLetter = '';
-          let index = letterIndex;
-
-          // Convert number to Excel-style column letters
-          while (index >= 0) {
-            columnLetter = String.fromCharCode(65 + (index % 26)) + columnLetter;
-            index = Math.floor(index / 26) - 1;
-          }
-
-          return {
-            id: `header-day-${i}`,
-            columnKey: `day-${i}`,
-            content: columnLetter,
-          };
-        }),
-      ],
-    };
-    headerRows.push(mainHeaderRow);
-
-    return headerRows;
-  }, [dates]);
-
   // Calculate sizes based on scale (normalized to 14px base like other pages)
   const rowHeight = Math.round(24 * sizeScale);
   const cellFontSize = Math.round(14 * sizeScale);
@@ -2510,7 +2510,7 @@ export default function ProjectTimePlannerV2() {
 
     const SKIP_TYPES = new Set([
       '_isMonthRow', '_isWeekRow', '_isDayRow', '_isDayOfWeekRow',
-      '_isDailyMinRow', '_isDailyMaxRow', '_isFilterRow', '_isInboxRow', '_isArchiveRow',
+      '_isDailyMinRow', '_isDailyMaxRow', '_isDailyTotalRow', '_isFilterRow', '_isInboxRow', '_isArchiveRow',
     ]);
 
     const duplicatedRows = selectedEntries
@@ -2594,7 +2594,7 @@ export default function ProjectTimePlannerV2() {
     // Don't duplicate auto-generated structural rows (calendar rows, filters, archive)
     if (selectedRow._isMonthRow || selectedRow._isWeekRow || selectedRow._isDayRow ||
         selectedRow._isDayOfWeekRow || selectedRow._isDailyMinRow || selectedRow._isDailyMaxRow ||
-        selectedRow._isFilterRow || selectedRow._isInboxRow || selectedRow._isArchiveRow ||
+        selectedRow._isDailyTotalRow || selectedRow._isFilterRow || selectedRow._isInboxRow || selectedRow._isArchiveRow ||
         selectedRow._rowType === 'archiveHeader') {
       return;
     }
@@ -2849,8 +2849,20 @@ export default function ProjectTimePlannerV2() {
   const handleInsertRowAbove = useCallback(() => {
     if (!contextMenu.rowId) return;
 
-    const rowIndex = data.findIndex(r => r.id === contextMenu.rowId);
-    if (rowIndex === -1) return;
+    const clickedIndex = data.findIndex(r => r.id === contextMenu.rowId);
+    if (clickedIndex === -1) return;
+
+    // Never insert inside the pinned calendar-header block (Month through
+    // Filter). If the clicked row is one of those structural rows, "insert
+    // above" has no sensible position within the headers, so redirect to
+    // the very start of the real data rows (i.e. right after the Filter
+    // row) instead of splicing a task row in between two header rows.
+    const clickedRow = data[clickedIndex];
+    let rowIndex = clickedIndex;
+    if (isSpecialRow(clickedRow)) {
+      const firstDataIndex = data.findIndex(r => !isSpecialRow(r));
+      rowIndex = firstDataIndex === -1 ? data.length : firstDataIndex;
+    }
 
     const newRow = createEmptyTaskRows(1, totalDays)[0];
 
@@ -2877,8 +2889,20 @@ export default function ProjectTimePlannerV2() {
   const handleInsertRowBelow = useCallback(() => {
     if (!contextMenu.rowId) return;
 
-    const rowIndex = data.findIndex(r => r.id === contextMenu.rowId);
-    if (rowIndex === -1) return;
+    const clickedIndex = data.findIndex(r => r.id === contextMenu.rowId);
+    if (clickedIndex === -1) return;
+
+    // Same guard as handleInsertRowAbove: never let a task row land inside
+    // the header block. If the clicked row is a header row, redirect to
+    // right after the Filter row (the natural start of the data rows).
+    // Inserting below the Filter row itself already resolves to this same
+    // position, so no special-casing is needed there.
+    const clickedRow = data[clickedIndex];
+    let rowIndex = clickedIndex;
+    if (isSpecialRow(clickedRow)) {
+      const firstDataIndex = data.findIndex(r => !isSpecialRow(r));
+      rowIndex = (firstDataIndex === -1 ? data.length : firstDataIndex) - 1;
+    }
 
     const newRow = createEmptyTaskRows(1, totalDays)[0];
 
@@ -2909,7 +2933,7 @@ export default function ProjectTimePlannerV2() {
   const columns = usePlannerColumns({ totalDays });
 
   const table = useReactTable({
-    data: filteredData,
+    data: numberedData,
     columns,
     getCoreRowModel: getCoreRowModel(),
     enableColumnResizing: true,
@@ -2989,7 +3013,6 @@ export default function ProjectTimePlannerV2() {
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-4 pb-4" style={{ paddingRight: isSystemPanelOpen ? 336 : undefined }}>
         <PlannerTable
           tableBodyRef={tableBodyRef}
-        timelineHeaderRows={timelineHeaderRows}
         table={table}
         rowHeight={rowHeight}
         headerFontSize={headerFontSize}

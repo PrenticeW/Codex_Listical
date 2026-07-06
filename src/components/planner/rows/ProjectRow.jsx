@@ -60,8 +60,8 @@ export default function ProjectRow({
   const isDragging = Array.isArray(draggedRowId) && draggedRowId.includes(rowId);
   const isDropTarget = dropTargetRowId === rowId;
 
-  // Check if this is a pinned row (first 7 rows)
-  const isPinnedRow = row.index < 7;
+  // Check if this is a pinned row (first 8 rows)
+  const isPinnedRow = row.index < 8;
   const rowNumZIndex = isPinnedRow ? 15 : 10;
 
   // Determine row styling based on type and archived status
@@ -109,9 +109,12 @@ export default function ProjectRow({
   const style = {
     display: 'flex',
     position: 'absolute',
-    top: 0,
+    // `top` instead of `transform: translateY(...)` — a transform here
+    // would break `position: sticky` on the row-number gutter cell below
+    // (any ancestor transform disqualifies sticky descendants from
+    // tracking the scroll container).
+    top: `${virtualRow.start}px`,
     left: 0,
-    transform: `translateY(${virtualRow.start}px)`,
     width: '100%',
     opacity: isDragging ? 0.5 : 1,
     gap: 0,
@@ -183,7 +186,10 @@ export default function ProjectRow({
                   <div className="flex items-center">
                     <GripVertical size={gripIconSize} className="text-gray-400 hover:text-gray-600" />
                   </div>
-                  <span>{row.index + 1}</span>
+                  {/* Precomputed sequential number (see ProjectTimePlannerV2's
+                      _gutterNumber pass) that skips the 7 pinned header rows
+                      and the Inbox/Archive divider rows. */}
+                  <span>{row.original._gutterNumber}</span>
                   <div style={{ width: `${gripIconSize}px` }} />
                 </div>
               </td>

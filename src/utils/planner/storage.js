@@ -8,7 +8,7 @@
  *                      columns, collapsed groups). Shared with helper #4,
  *                      which owns send_to_system_at on the same row.
  *   planner_rows       many rows per (user_id, year_id), one per task. The
- *                      seven calendar header rows are NOT persisted; they are
+ *                      eight calendar header rows are NOT persisted; they are
  *                      reconstructed on read from years.start_date,
  *                      years.total_days, and the daily bounds.
  *   archived_weeks     many rows per (user_id, year_id), one per Archive
@@ -24,10 +24,10 @@
  * unchanged so existing call sites only need `await` plus the gate pattern.
  *
  * Calendar header row reconstruction: readTaskRows returns the flat array
- * the consuming code expects, which starts with the seven calendar header
- * rows (month, week, day, dayofweek, daily-min, daily-max, filter) followed
- * by the user's task rows and any archive-week snapshots interleaved by
- * display_order. saveTaskRows strips the calendar headers before writing,
+ * the consuming code expects, which starts with the eight calendar header
+ * rows (month, week, day, dayofweek, daily-min, daily-max, daily-total,
+ * filter) followed by the user's task rows and any
+ * archive-week snapshots interleaved by display_order. saveTaskRows strips the calendar headers before writing,
  * splits archive-week rows out to archived_weeks, and writes the rest as
  * planner_rows.
  *
@@ -757,7 +757,7 @@ export const saveWeekNames = async (
 // On read the helper:
 //   1. Reads planner_rows and archived_weeks
 //   2. Reads daily_bounds from tactics_metrics for the daily min/max rows
-//   3. Builds the seven calendar headers using createInitialData and the
+//   3. Builds the nine calendar headers using createInitialData and the
 //      daily bounds
 //   4. Interleaves archive weeks back into the row list by display_order
 //   5. Returns the flat array the consuming code expects
@@ -769,6 +769,7 @@ const CALENDAR_HEADER_IDS = new Set([
   'dayofweek-row',
   'daily-min-row',
   'daily-max-row',
+  'daily-total-row',
   'filter-row',
 ]);
 
@@ -782,6 +783,7 @@ const isCalendarHeaderRow = (row) => {
     row._isDayOfWeekRow ||
     row._isDailyMinRow ||
     row._isDailyMaxRow ||
+    row._isDailyTotalRow ||
     row._isFilterRow,
   );
 };
@@ -1018,12 +1020,12 @@ export const readTaskRows = async (
     const startDate = yearRow.start_date || todayIso();
     const taskCount = (tasksRes.data || []).length;
 
-    // Build the seven calendar header rows from scratch. createInitialData
+    // Build the eight calendar header rows from scratch. createInitialData
     // produces both headers and a configurable number of blank rows; we
-    // discard the blank rows and keep only the seven headers, then overlay
+    // discard the blank rows and keep only the eight headers, then overlay
     // the daily bounds from tactics_metrics.
     const initial = createInitialData(0, totalDays, startDate);
-    const headers = initial.slice(0, 7);
+    const headers = initial.slice(0, 8);
     applyDailyBoundsToHeaders(
       headers,
       metrics?.dailyBounds || metrics?.daily_bounds || [],
@@ -1037,7 +1039,7 @@ export const readTaskRows = async (
     if (taskCount === 0 && archiveRows.length === 0) {
       // If there are no task rows and no archive rows we still return at least
       // some blank rows so the table renders the empty grid the user expects.
-      result = [...headers, ...createInitialData(100, totalDays, startDate).slice(7)];
+      result = [...headers, ...createInitialData(100, totalDays, startDate).slice(8)];
     } else {
       // Archive rows are appended after the live task rows. The original code
       // interleaved them inline based on `archive-week-*` ids in `task-rows`;

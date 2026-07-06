@@ -226,7 +226,7 @@ export const collectTasksForArchive = (data, filterFn) => {
     // Exclude special header rows, but INCLUDE subproject section rows
     if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
         row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
-        row._isFilterRow || row._isInboxRow || row._isArchiveRow) {
+        row._isDailyTotalRow || row._isFilterRow || row._isInboxRow || row._isArchiveRow) {
       return false;
     }
 

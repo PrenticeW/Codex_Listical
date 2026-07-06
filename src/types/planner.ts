@@ -26,6 +26,7 @@ export interface PlannerRow {
   _isDayOfWeekRow?: boolean;
   _isDailyMinRow?: boolean;
   _isDailyMaxRow?: boolean;
+  _isDailyTotalRow?: boolean;
   _isFilterRow?: boolean;
   _isInboxRow?: boolean;
   _isArchiveRow?: boolean;

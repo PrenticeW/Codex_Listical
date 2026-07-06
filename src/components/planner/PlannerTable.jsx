@@ -7,7 +7,6 @@ import TableRow from './TableRow';
  */
 function PlannerTable({
   tableBodyRef,
-  timelineHeaderRows,
   table,
   rowHeight,
   headerFontSize,
@@ -74,139 +73,41 @@ function PlannerTable({
         style={{ position: 'relative' }}
         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
       >
-        <table className="border-collapse" style={{ display: 'grid', borderSpacing: 0 }}>
-          <thead className="sticky top-0 bg-slate-50 z-10" style={{ display: 'grid', position: 'sticky', top: 0, zIndex: 1 }}>
-            {timelineHeaderRows.map((headerRow) => (
-              <tr key={headerRow.id} style={{ display: 'flex', height: `${rowHeight}px`, gap: 0 }}>
-                {headerRow.cells.map((cell) => {
-                  const column = table.getColumn(cell.columnKey);
-
-                  // Skip rendering header for hidden columns
-                  if (!column || !column.getIsVisible()) {
-                    return null;
-                  }
-
-                  const cellWidth = column.getSize();
-                  const isPinned = column.getIsPinned();
-                  const pinnedOffset = isPinned ? column.getStart('left') : undefined;
-
-                  return (
-                    <th
-                      key={cell.id}
-                      style={{
-                        width: `${cellWidth}px`,
-                        minWidth: `${cellWidth}px`,
-                        maxWidth: `${cellWidth}px`,
-                        flexShrink: 0,
-                        flexGrow: 0,
-                        boxSizing: 'border-box',
-                        fontSize: `${headerFontSize}px`,
-                        position: isPinned ? 'sticky' : 'relative',
-                        left: isPinned ? `${pinnedOffset}px` : undefined,
-                        backgroundColor: '#f1f5f9',
-                        color: '#334155',
-                        zIndex: isPinned ? 20 : 1,
-                        borderRight: '1px solid #e2e8f0',
-                        borderBottom: '1px solid #e2e8f0',
-                        paddingTop: '0.375rem',
-                        paddingBottom: '0.375rem',
-                        paddingLeft: '0.25rem',
-                        paddingRight: '0.25rem',
-                        textAlign: 'center',
-                        fontWeight: 600,
-                      }}
-                      className=""
-                    >
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        height: '100%',
-                        position: 'relative',
-                      }}>
-                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {cell.content}
-                        </span>
-
-                        {/* Add resize handle for resizable columns */}
-                        {(() => {
-                          const canResize = column?.getCanResize?.();
-                          return canResize;
-                        })() && (
-                          <div
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-
-                              const startX = e.clientX;
-                              const startWidth = column.getSize();
-
-                              const handleMouseMove = (moveEvent) => {
-                                moveEvent.preventDefault();
-                                const diff = moveEvent.clientX - startX;
-                                const minSize = column.columnDef.minSize || 30;
-                                const newWidth = Math.max(minSize, startWidth + diff);
-
-                                table.setColumnSizing(prev => ({
-                                  ...prev,
-                                  [column.id]: newWidth
-                                }));
-                              };
-
-                              const handleMouseUp = () => {
-                                document.removeEventListener('mousemove', handleMouseMove);
-                                document.removeEventListener('mouseup', handleMouseUp);
-                                document.body.style.cursor = '';
-                                document.body.style.userSelect = '';
-                              };
-
-                              document.addEventListener('mousemove', handleMouseMove);
-                              document.addEventListener('mouseup', handleMouseUp);
-                              document.body.style.cursor = 'col-resize';
-                              document.body.style.userSelect = 'none';
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = '#000000';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = 'transparent';
-                            }}
-                            className="column-resizer"
-                            style={{
-                              position: 'absolute',
-                              right: '-2px',
-                              top: 0,
-                              bottom: 0,
-                              width: '10px',
-                              cursor: 'col-resize',
-                              userSelect: 'none',
-                              touchAction: 'none',
-                              backgroundColor: 'transparent',
-                              zIndex: 10000,
-                              pointerEvents: 'all',
-                            }}
-                            title="Drag to resize column"
-                          />
-                        )}
-                      </div>
-                    </th>
-                  );
-                })}
-              </tr>
-            ))}
-          </thead>
-          {/* Pinned tbody for first 7 rows */}
+        <table
+          className="border-collapse"
+          style={{
+            display: 'grid',
+            borderSpacing: 0,
+            // Explicit width matching the sum of every column's size. Rows
+            // are rendered as position: absolute <tr>s (for virtualization),
+            // which take them out of normal flow, so nothing forces this
+            // table (or its <tbody>s) to size themselves to the true content
+            // width otherwise -- they'd default to the width of the
+            // scrolling container instead. That undersized containing block
+            // is what let sticky cells like the row-number gutter detach
+            // and fly off-screen once you scrolled past that (too narrow)
+            // width, since position: sticky can't stick beyond the bounds
+            // of its own containing block.
+            width: `${table.getTotalSize()}px`,
+          }}
+        >
+          {/* No column-letter <thead> — removed per redesign; that row
+              wasn't needed. Column resizing now lives on the Filter row
+              (TableRow.jsx) instead. The pinned tbody below is now the
+              very top of the table, so it sticks to top: 0. */}
+          {/* Pinned tbody for first 8 rows */}
           <tbody
             style={{
               display: 'grid',
               position: 'sticky',
-              top: `${rowHeight}px`, // Position below the header
+              top: 0,
               zIndex: 4,
               backgroundColor: 'white',
-              height: `${7 * rowHeight}px`,
+              height: `${8 * rowHeight}px`,
+              width: `${table.getTotalSize()}px`,
             }}
           >
-            {table.getRowModel().rows.slice(0, 7).map((row, index) => {
+            {table.getRowModel().rows.slice(0, 8).map((row, index) => {
               const rowId = row.original.id;
               const isRowSelected = selectedRows.has(rowId);
 
@@ -279,26 +180,27 @@ function PlannerTable({
               );
             })}
           </tbody>
-          {/* Main virtualized tbody for rows 7+ */}
+          {/* Main virtualized tbody for rows 8+ */}
           <tbody
             style={{
               display: 'grid',
-              height: `${rowVirtualizer.getTotalSize() - (7 * rowHeight)}px`,
+              height: `${rowVirtualizer.getTotalSize() - (8 * rowHeight)}px`,
               position: 'relative',
+              width: `${table.getTotalSize()}px`,
             }}
           >
             {rowVirtualizer.getVirtualItems().map(virtualRow => {
-              // Skip first 7 rows as they're in the pinned tbody
-              if (virtualRow.index < 7) return null;
+              // Skip first 8 rows as they're in the pinned tbody
+              if (virtualRow.index < 8) return null;
 
               const row = table.getRowModel().rows[virtualRow.index];
               const rowId = row.original.id;
               const isRowSelected = selectedRows.has(rowId);
 
-              // Adjust virtualRow start to account for the 7 pinned rows
+              // Adjust virtualRow start to account for the 8 pinned rows
               const adjustedVirtualRow = {
                 ...virtualRow,
-                start: virtualRow.start - (7 * rowHeight),
+                start: virtualRow.start - (8 * rowHeight),
               };
 
               return (

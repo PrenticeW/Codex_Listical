@@ -58,7 +58,7 @@ export default function useDragAndDropRows({
       if (targetRow && (
         targetRow._isMonthRow || targetRow._isWeekRow || targetRow._isDayRow ||
         targetRow._isDayOfWeekRow || targetRow._isDailyMinRow ||
-        targetRow._isDailyMaxRow || targetRow._isFilterRow
+        targetRow._isDailyMaxRow || targetRow._isDailyTotalRow || targetRow._isFilterRow
       )) {
         // Don't allow dropping on header rows (but project rows are OK)
         setDropTargetRowId(null);
@@ -93,7 +93,7 @@ export default function useDragAndDropRows({
     if (targetRow && (
       targetRow._isMonthRow || targetRow._isWeekRow || targetRow._isDayRow ||
       targetRow._isDayOfWeekRow || targetRow._isDailyMinRow ||
-      targetRow._isDailyMaxRow || targetRow._isFilterRow
+      targetRow._isDailyMaxRow || targetRow._isDailyTotalRow || targetRow._isFilterRow
     )) {
       setDraggedRowId(null);
       setDropTargetRowId(null);

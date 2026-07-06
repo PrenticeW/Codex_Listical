@@ -87,20 +87,65 @@ const TableRow = React.memo(function TableRow({
   const isDragging = Array.isArray(draggedRowId) && draggedRowId.includes(rowId);
   const isDropTarget = dropTargetRowId === rowId;
 
-  // Check if this is a pinned row (first 7 rows)
-  const isPinnedRow = row.index < 7;
+  // Check if this is a pinned row (first 8 rows)
+  const isPinnedRow = row.index < 8;
   // Higher z-index for pinned row number cells
   const rowNumZIndex = isPinnedRow ? 15 : 10;
+
+  // Inbox/Archive divider rows are solid black across their FULL width, so
+  // painting the <tr> itself black is safe there — it backstops any
+  // sub-device-pixel gap between adjacent flex cells (from fractional
+  // column-resize widths) that would otherwise show the page background
+  // through as a thin white/grid line.
+  //
+  // Month/Week/Day/Day-of-week/Daily Min/Max/Total rows are NOT safe for
+  // this treatment: only their gutter + fixed-columns (A-H) region is
+  // black — their day-columns region has legitimate light/transparent
+  // content (month labels, dates, S/M/T letters, min/max/total values).
+  // Painting the whole row black would bleed black through any gap in
+  // that light content instead of the harmless grid background. For
+  // those rows, a separate backdrop behind just the gutter+fixed-columns
+  // region below (see fixedRegionBackdropWidth) provides the same
+  // gap-proofing without touching the day-columns area.
+  const isSolidBlackRow = Boolean(
+    row.original._isInboxRow ||
+    row.original._isArchiveRow ||
+    row.original._rowType === 'archiveHeader'
+  );
+
+  const isFixedRegionBlackRow = Boolean(
+    row.original._isMonthRow ||
+    row.original._isWeekRow ||
+    row.original._isDayRow ||
+    row.original._isDayOfWeekRow ||
+    row.original._isDailyMinRow ||
+    row.original._isDailyMaxRow ||
+    row.original._isDailyTotalRow ||
+    row.original._isFilterRow
+  );
+
+  const fixedRegionBackdropWidth = isFixedRegionBlackRow
+    ? table.getColumn('rowNum').getSize() +
+      ['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue']
+        .filter(colId => table.getColumn(colId).getIsVisible())
+        .reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0)
+    : 0;
 
   const style = {
     display: 'flex',
     position: 'absolute',
-    top: 0,
+    // Positioned with `top` rather than `transform: translateY(...)` --
+    // a `transform` on this row would establish a new containing block,
+    // which breaks `position: sticky` on the row-number gutter cell
+    // further down (sticky descendants stop tracking the scroll
+    // container once any ancestor has a transform, which is why the
+    // gutter used to disappear once you scrolled far enough right).
+    top: `${virtualRow.start}px`,
     left: 0,
-    transform: `translateY(${virtualRow.start}px)`,
     width: '100%',
     opacity: isDragging ? 0.5 : 1,
     gap: 0,
+    ...(isSolidBlackRow ? { backgroundColor: 'black' } : {}),
   };
 
   // Check for special row types
@@ -110,6 +155,7 @@ const TableRow = React.memo(function TableRow({
   const isDayOfWeekRow = row.original._isDayOfWeekRow;
   const isDailyMinRow = row.original._isDailyMinRow;
   const isDailyMaxRow = row.original._isDailyMaxRow;
+  const isDailyTotalRow = row.original._isDailyTotalRow;
   const isFilterRow = row.original._isFilterRow;
   const isInboxRow = row.original._isInboxRow;
   const isArchiveRow = row.original._isArchiveRow; // Legacy archive divider
@@ -200,7 +246,7 @@ const TableRow = React.memo(function TableRow({
   }
 
   // Delegate to TaskRow for regular task rows
-  if (!isMonthRow && !isWeekRow && !isDayRow && !isDayOfWeekRow && !isDailyMinRow && !isDailyMaxRow && !isFilterRow && !isInboxRow && !isArchiveRow && !isArchiveHeader && !isArchiveWeekRow) {
+  if (!isMonthRow && !isWeekRow && !isDayRow && !isDayOfWeekRow && !isDailyMinRow && !isDailyMaxRow && !isDailyTotalRow && !isFilterRow && !isInboxRow && !isArchiveRow && !isArchiveHeader && !isArchiveWeekRow) {
     return (
       <TaskRow
         row={row}
@@ -265,6 +311,29 @@ const TableRow = React.memo(function TableRow({
         onDragOver={(e) => handleDragOver(e, rowId)}
         onDrop={(e) => handleDrop(e, rowId)}
       >
+      {isFixedRegionBlackRow && (
+        // Backstop behind just the gutter + fixed-columns (A-H) region —
+        // see fixedRegionBackdropWidth comment above. Sits behind the real
+        // cells (zIndex 0) so it's invisible except through any
+        // sub-pixel gap between them.
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: `${fixedRegionBackdropWidth}px`,
+            height: `${rowHeight}px`,
+            backgroundColor: 'black',
+            // Negative z-index so it paints behind the row's normal-flow
+            // (non-positioned) <td> cells, and behind the sticky gutter
+            // cell too — it's purely a gap backstop, never meant to be on
+            // top of real content.
+            zIndex: -1,
+            pointerEvents: 'none',
+          }}
+        />
+      )}
       {isMonthRow ? (
         <MonthRow
           row={row}
@@ -305,8 +374,67 @@ const TableRow = React.memo(function TableRow({
             const columnId = cell.column.id;
             const value = row.original[columnId] || '';
 
-            // Special handling for row number column
+            // Special handling for row number column. Day/Day-of-week/Daily
+            // Min/Daily Max (always pinned) and the Inbox/Archive-section
+            // divider rows are structural, not real task data, so their
+            // gutter cell is blank/flush. The Archive section's per-week
+            // divider row (isArchiveWeekRow — editable week label + weekly
+            // total) is numbered like a task row via the precomputed
+            // `_gutterNumber` (see ProjectTimePlannerV2.jsx). Archived
+            // project rows are routed to ProjectRow instead.
             if (columnId === 'rowNum') {
+              if (isArchiveWeekRow) {
+                return (
+                  <td
+                    key={cell.id}
+                    style={{
+                      width: `${cell.column.getSize()}px`,
+                      flexShrink: 0,
+                      flexGrow: 0,
+                      height: `${rowHeight}px`,
+                      userSelect: 'none',
+                      boxSizing: 'border-box',
+                      position: 'sticky',
+                      left: 0,
+                      backgroundColor: '#E8ECF5',
+                      zIndex: rowNumZIndex,
+                    }}
+                    className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
+                  >
+                    <div
+                      draggable
+                      onDragStart={(e) => {
+                        e.stopPropagation();
+                        handleDragStart(e, rowId);
+                      }}
+                      onDragEnd={handleDragEnd}
+                      className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-grab active:cursor-grabbing`}
+                      style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
+                      onClick={(e) => handleRowNumberClick(e, rowId)}
+                      onContextMenu={(e) => handleCellContextMenu?.(e, rowId, 'rowNum')}
+                      title="Drag to reorder"
+                    >
+                      <div className="flex items-center">
+                        <GripVertical size={gripIconSize} className="text-gray-400 hover:text-gray-600" />
+                      </div>
+                      <span>{row.original._gutterNumber}</span>
+                      <div style={{ width: `${gripIconSize}px` }} />
+                    </div>
+                  </td>
+                );
+              }
+              // Day/Day-of-week/Daily Min/Daily Max/Inbox/Archive divider
+              // rows all fill the gutter black to match the black bar the
+              // rest of these rows use — no number shown. Borders must
+              // match that same black bar's borders exactly (see the
+              // merged-fixed-cols / merged-all-cols cells below), otherwise
+              // the bordered cell renders taller than the borderless gutter
+              // and the two visibly overhang one another top and bottom.
+              const isDayFamilyPinned = isDayRow || isDayOfWeekRow || isDailyMinRow || isDailyMaxRow;
+              const gutterBorderTop = isDayFamilyPinned ? '1px solid black' : 'none';
+              const gutterBorderBottom = isDayFamilyPinned
+                ? '1px solid black'
+                : '1.5px solid black';
               return (
                 <td
                   key={cell.id}
@@ -319,30 +447,21 @@ const TableRow = React.memo(function TableRow({
                     boxSizing: 'border-box',
                     position: 'sticky',
                     left: 0,
-                    backgroundColor: '#E8ECF5',
+                    backgroundColor: 'black',
                     zIndex: rowNumZIndex,
                   }}
-                  className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
+                  className="p-0"
                 >
                   <div
-                    draggable
-                    onDragStart={(e) => {
-                      e.stopPropagation();
-                      handleDragStart(e, rowId);
+                    className="h-full flex items-center justify-between"
+                    style={{
+                      minHeight: `${rowHeight}px`,
+                      backgroundColor: 'black',
+                      borderTop: gutterBorderTop,
+                      borderBottom: gutterBorderBottom,
                     }}
-                    onDragEnd={handleDragEnd}
-                    className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-grab active:cursor-grabbing`}
-                    style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
                     onClick={(e) => handleRowNumberClick(e, rowId)}
-                    onContextMenu={(e) => handleCellContextMenu?.(e, rowId, 'rowNum')}
-                    title="Drag to reorder"
-                  >
-                    <div className="flex items-center">
-                      <GripVertical size={gripIconSize} className="text-gray-400 hover:text-gray-600" />
-                    </div>
-                    <span>{row.index + 1}</span>
-                    <div style={{ width: `${gripIconSize}px` }} />
-                  </div>
+                  />
                 </td>
               );
             }
@@ -764,53 +883,12 @@ const TableRow = React.memo(function TableRow({
 
             // For fixed columns, show empty cells (or label for daily min/max)
             if (['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].includes(columnId)) {
-              // For day row (row 3), render individual cells with labels
-              if (isDayRow) {
-                const labelMap = {
-                  'checkbox': '\u00A0\u00A0✓',
-                  'project': '\u00A0\u00A0Project',
-                  'subproject': '\u00A0\u00A0Subproject',
-                  'status': '\u00A0\u00A0Status',
-                  'task': '\u00A0\u00A0Task',
-                  'recurring': '\u00A0\u00A0Recurring',
-                  'estimate': '\u00A0\u00A0Estimate',
-                  'timeValue': '\u00A0\u00A0Time Value'
-                };
-
-                return (
-                  <td
-                    key={cell.id}
-                    style={{
-                      width: `${cell.column.getSize()}px`,
-                      flexShrink: 0,
-                      flexGrow: 0,
-                      height: `${rowHeight}px`,
-                      boxSizing: 'border-box',
-                    }}
-                    className="p-0"
-                  >
-                    <div
-                      className="h-full flex items-center"
-                      style={{
-                        minHeight: `${rowHeight}px`,
-                        backgroundColor: 'black',
-                        color: 'white',
-                        fontSize: `${cellFontSize}px`,
-                        fontWeight: 500,
-                        borderTop: '1.5px solid white',
-                        borderBottom: '1.5px solid white',
-                        borderLeft: (columnId === 'checkbox') ? '1.5px solid black' : '1px solid black',
-                        borderRight: '1px solid black'
-                      }}
-                    >
-                      {labelMap[columnId] || ''}
-                    </div>
-                  </td>
-                );
-              }
-
-              // For day of week row (row 4) and daily min/max rows (rows 5-6), merge all fixed columns
-              if ((isDayOfWeekRow || isDailyMinRow || isDailyMaxRow) && !mergedCellRendered) {
+              // Day, day-of-week, and daily min/max rows all render a single
+              // plain black bar across the fixed columns -- the column
+              // labels (Project, Subproject, Status, etc.) that used to be
+              // white text here now live in the Filter row instead, so this
+              // bar no longer needs labels or the white divider borders.
+              if ((isDayRow || isDayOfWeekRow || isDailyMinRow || isDailyMaxRow) && !mergedCellRendered) {
                 mergedCellRendered = true;
 
                 return (
@@ -830,16 +908,16 @@ const TableRow = React.memo(function TableRow({
                       style={{
                         minHeight: `${rowHeight}px`,
                         backgroundColor: 'black',
-                        borderTop: isDayOfWeekRow ? '1px solid black' : '1px solid black',
-                        borderBottom: isDailyMaxRow ? '1.5px solid white' : '1px solid black',
+                        borderTop: '1px solid black',
+                        borderBottom: '1px solid black',
                         borderRight: '1.5px solid black',
                       }}
                     >
                     </div>
                   </td>
                 );
-              } else if (isDayOfWeekRow || isDailyMinRow || isDailyMaxRow) {
-                // Skip subsequent fixed columns for day-of-week/daily min/max rows
+              } else if (isDayRow || isDayOfWeekRow || isDailyMinRow || isDailyMaxRow) {
+                // Skip subsequent fixed columns for day/day-of-week/daily min/max rows
                 return null;
               }
 
@@ -909,11 +987,18 @@ const TableRow = React.memo(function TableRow({
       });
     })()
       ) : isFilterRow ? (
-        // Render filter row with filter button placeholders
-        row.getVisibleCells().map(cell => {
+        // Render filter row: fixed-column (A-H) labels/filters/resize only
+        // now — day-column totals/filters/resize moved to the Daily Total
+        // row above (see isDailyTotalRow branch below).
+        (() => {
+        let mergedDayCellRendered = false;
+        return row.getVisibleCells().map(cell => {
         const columnId = cell.column.id;
 
-        // Special handling for row number column
+        // Special handling for row number column. The Filter row is where
+        // all the column labels live now (Project, Subproject, etc.), so
+        // its gutter cell gets the "#" label to match — the column header
+        // for the row-number gutter below.
         if (columnId === 'rowNum') {
           return (
             <td
@@ -927,29 +1012,30 @@ const TableRow = React.memo(function TableRow({
                 boxSizing: 'border-box',
                 position: 'sticky',
                 left: 0,
-                backgroundColor: '#E8ECF5',
+                backgroundColor: '#F0F4FC',
                 zIndex: rowNumZIndex,
               }}
-              className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
+              className="p-0"
             >
               <div
-                draggable
-                onDragStart={(e) => {
-                  e.stopPropagation();
-                  handleDragStart(e, rowId);
+                className="h-full flex items-center"
+                style={{
+                  minHeight: `${rowHeight}px`,
+                  backgroundColor: '#F0F4FC',
+                  borderBottom: '1px solid #d3d3d3',
+                  paddingLeft: '6px',
                 }}
-                onDragEnd={handleDragEnd}
-                className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-grab active:cursor-grabbing`}
-                style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
                 onClick={(e) => handleRowNumberClick(e, rowId)}
-                onContextMenu={(e) => handleCellContextMenu?.(e, rowId, 'rowNum')}
-                title="Drag to reorder"
               >
-                <div className="flex items-center">
-                  <GripVertical size={gripIconSize} className="text-gray-400 hover:text-gray-600" />
-                </div>
-                <span>{row.index + 1}</span>
-                <div style={{ width: `${gripIconSize}px` }} />
+                <span
+                  style={{
+                    fontSize: `${headerFontSize}px`,
+                    fontWeight: 600,
+                    color: '#334155',
+                  }}
+                >
+                  #
+                </span>
               </div>
             </td>
           );
@@ -980,6 +1066,22 @@ const TableRow = React.memo(function TableRow({
             (columnId === 'estimate' && selectedEstimateFilters.size > 0)
           );
 
+          // Column resizing now lives here on the Filter row (the
+          // column-letter header row that used to hold this was removed).
+          const column = table.getColumn(columnId);
+          const canResize = column?.getCanResize?.();
+
+          // Column labels also moved here from the removed column-letter row.
+          const columnLabel = {
+            project: 'Project',
+            subproject: 'Subproject',
+            status: 'Status',
+            task: 'Task',
+            recurring: 'Recurring',
+            estimate: 'Estimate',
+            timeValue: 'Time Value',
+          }[columnId];
+
           return (
             <td
               key={cell.id}
@@ -993,16 +1095,32 @@ const TableRow = React.memo(function TableRow({
               className="p-0"
             >
               <div
-                className="h-full flex items-center justify-end"
+                className="h-full flex items-center justify-between"
                 style={{
+                  position: 'relative',
                   minHeight: `${rowHeight}px`,
                   backgroundColor: row.index < 4 ? 'black' : '#F0F4FC',
                   borderBottom: row.index < 4 ? '1px solid black' : '1px solid #d3d3d3',
                   borderLeft: (row.index < 4 && columnId === 'checkbox') ? '1px solid black' : 'none',
                   borderRight: columnId === 'timeValue' ? '1.5px solid black' : (row.index < 4 ? 'none' : '1px solid #d3d3d3'),
+                  paddingLeft: columnLabel ? '6px' : '0',
                   paddingRight: hasFilter ? '2px' : '0'
                 }}
               >
+                {columnLabel && (
+                  <span
+                    style={{
+                      fontSize: `${headerFontSize}px`,
+                      fontWeight: 600,
+                      color: '#334155',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {columnLabel}
+                  </span>
+                )}
                 {hasFilter && filterClickHandler && (
                   isFilterActive ? (
                     <Filter
@@ -1022,74 +1140,276 @@ const TableRow = React.memo(function TableRow({
                     />
                   )
                 )}
+                {canResize && (
+                  <div
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const startX = e.clientX;
+                      const startWidth = column.getSize();
+                      const handleMouseMove = (moveEvent) => {
+                        moveEvent.preventDefault();
+                        const diff = moveEvent.clientX - startX;
+                        const minSize = column.columnDef.minSize || 30;
+                        const newWidth = Math.max(minSize, startWidth + diff);
+                        table.setColumnSizing(prev => ({ ...prev, [column.id]: newWidth }));
+                      };
+                      const handleMouseUp = () => {
+                        document.removeEventListener('mousemove', handleMouseMove);
+                        document.removeEventListener('mouseup', handleMouseUp);
+                        document.body.style.cursor = '';
+                        document.body.style.userSelect = '';
+                      };
+                      document.addEventListener('mousemove', handleMouseMove);
+                      document.addEventListener('mouseup', handleMouseUp);
+                      document.body.style.cursor = 'col-resize';
+                      document.body.style.userSelect = 'none';
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#000000'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    className="column-resizer"
+                    style={{
+                      position: 'absolute',
+                      right: '-2px',
+                      top: 0,
+                      bottom: 0,
+                      width: '10px',
+                      cursor: 'col-resize',
+                      userSelect: 'none',
+                      touchAction: 'none',
+                      backgroundColor: 'transparent',
+                      zIndex: 10000,
+                      pointerEvents: 'all',
+                    }}
+                    title="Drag to resize column"
+                  />
+                )}
               </div>
             </td>
           );
         }
 
-        // For day columns, show filter button (right-aligned) and 0.00 value (center-aligned)
-        const value = row.original[columnId] || '';
-        const dayIndex = parseInt(columnId.split('-')[1]);
-        const isLastDayOfWeek = (dayIndex + 1) % 7 === 0;
-        const isFilterActive = dayColumnFilters && dayColumnFilters.has(columnId);
-
-        return (
-          <td
-            key={cell.id}
-            style={{
-              width: `${cell.column.getSize()}px`,
-              flexShrink: 0,
-              flexGrow: 0,
-              height: `${rowHeight}px`,
-              boxSizing: 'border-box',
-            }}
-            className="p-0"
-          >
-            <div
-              className="h-full flex items-center justify-between"
+        // Day columns: single merged plain black bar — totals/filters/
+        // resize for day columns now live on the Daily Total row above.
+        if (!mergedDayCellRendered) {
+          mergedDayCellRendered = true;
+          const dayColumnsWidth = Array.from({ length: totalDays }, (_, i) => `day-${i}`)
+            .reduce((sum, dayColId) => sum + table.getColumn(dayColId).getSize(), 0);
+          return (
+            <td
+              key="merged-day-cols"
               style={{
-                minHeight: `${rowHeight}px`,
-                fontSize: `${cellFontSize}px`,
-                backgroundColor: '#F0F4FC',
-                borderBottom: '1px solid #D0D8E8',
-                borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #D0D8E8',
-                paddingLeft: '2px',
-                paddingRight: '2px',
+                width: `${dayColumnsWidth}px`,
+                flexShrink: 0,
+                flexGrow: 0,
+                height: `${rowHeight}px`,
+                boxSizing: 'border-box',
               }}
+              className="p-0"
             >
-              <span className="text-right flex-1 pr-2" style={{ fontSize: `${cellFontSize}px`, fontWeight: 'bold' }}>{value}</span>
-              {isFilterActive ? (
-                <Filter
-                  size={10}
-                  fill="var(--brand-deep)"
-                  className="cursor-pointer transition-colors shrink-0"
-                  style={{ color: 'var(--brand-deep)' }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (handleDayColumnFilterToggle) {
-                      handleDayColumnFilterToggle(columnId);
-                    }
+              <div
+                className="h-full"
+                style={{
+                  minHeight: `${rowHeight}px`,
+                  backgroundColor: 'black',
+                  borderBottom: '1.5px solid black',
+                }}
+              />
+            </td>
+          );
+        }
+        return null;
+        });
+        })()
+      ) : isDailyTotalRow ? (
+        // Render Daily Total row: day columns show total values + filter
+        // icons + resize handles (moved here from the removed column-letter
+        // header row); fixed columns (A-H) render a single merged plain
+        // black bar, same treatment as Daily Min/Daily Max's fixed columns.
+        (() => {
+          let mergedFixedCellRendered = false;
+          return row.getVisibleCells().map(cell => {
+            const columnId = cell.column.id;
+
+            // Row-number gutter: black fill, no number — matches the other
+            // pinned header rows.
+            if (columnId === 'rowNum') {
+              return (
+                <td
+                  key={cell.id}
+                  style={{
+                    width: `${cell.column.getSize()}px`,
+                    flexShrink: 0,
+                    flexGrow: 0,
+                    height: `${rowHeight}px`,
+                    userSelect: 'none',
+                    boxSizing: 'border-box',
+                    position: 'sticky',
+                    left: 0,
+                    backgroundColor: 'black',
+                    zIndex: rowNumZIndex,
                   }}
-                  title="Filter active"
-                />
-              ) : (
-                <ListFilter
-                  size={10}
-                  strokeWidth={2}
-                  className="cursor-pointer transition-colors text-gray-400 hover:text-gray-600 shrink-0"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (handleDayColumnFilterToggle) {
-                      handleDayColumnFilterToggle(columnId);
-                    }
+                  className="p-0"
+                >
+                  <div
+                    className="h-full flex items-center justify-between"
+                    style={{
+                      minHeight: `${rowHeight}px`,
+                      backgroundColor: 'black',
+                      borderTop: '1px solid black',
+                      borderBottom: '1px solid black',
+                    }}
+                    onClick={(e) => handleRowNumberClick(e, rowId)}
+                  />
+                </td>
+              );
+            }
+
+            // Fixed columns (A-H): single merged plain black bar.
+            if (['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].includes(columnId)) {
+              if (!mergedFixedCellRendered) {
+                mergedFixedCellRendered = true;
+                return (
+                  <td
+                    key="merged-fixed-cols"
+                    style={{
+                      width: `${['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].filter(colId => table.getColumn(colId).getIsVisible()).reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0)}px`,
+                      flexShrink: 0,
+                      flexGrow: 0,
+                      height: `${rowHeight}px`,
+                      boxSizing: 'border-box',
+                    }}
+                    className="p-0"
+                  >
+                    <div
+                      className="h-full flex items-center"
+                      style={{
+                        minHeight: `${rowHeight}px`,
+                        backgroundColor: 'black',
+                        borderTop: '1px solid black',
+                        borderBottom: '1px solid black',
+                        borderRight: '1.5px solid black',
+                      }}
+                    />
+                  </td>
+                );
+              }
+              return null;
+            }
+
+            // Day columns: total value + filter button (right-aligned) and
+            // resize handle — moved here from the old Filter row.
+            const value = row.original[columnId] || '';
+            const dayIndex = parseInt(columnId.split('-')[1]);
+            const isLastDayOfWeek = (dayIndex + 1) % 7 === 0;
+            const isFilterActive = dayColumnFilters && dayColumnFilters.has(columnId);
+
+            const dayColumn = table.getColumn(columnId);
+            const dayColumnCanResize = dayColumn?.getCanResize?.();
+
+            return (
+              <td
+                key={cell.id}
+                style={{
+                  width: `${cell.column.getSize()}px`,
+                  flexShrink: 0,
+                  flexGrow: 0,
+                  height: `${rowHeight}px`,
+                  boxSizing: 'border-box',
+                }}
+                className="p-0"
+              >
+                <div
+                  className="h-full flex items-center justify-between"
+                  style={{
+                    position: 'relative',
+                    minHeight: `${rowHeight}px`,
+                    fontSize: `${cellFontSize}px`,
+                    backgroundColor: '#F0F4FC',
+                    borderBottom: '1px solid #D0D8E8',
+                    borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #D0D8E8',
+                    paddingLeft: '2px',
+                    paddingRight: '2px',
                   }}
-                  title="Add filter"
-                />
-              )}
-            </div>
-          </td>
-        );
-      })
+                >
+                  <span className="text-right flex-1 pr-2" style={{ fontSize: `${cellFontSize}px`, fontWeight: 'bold' }}>{value}</span>
+                  {isFilterActive ? (
+                    <Filter
+                      size={10}
+                      fill="var(--brand-deep)"
+                      className="cursor-pointer transition-colors shrink-0"
+                      style={{ color: 'var(--brand-deep)' }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (handleDayColumnFilterToggle) {
+                          handleDayColumnFilterToggle(columnId);
+                        }
+                      }}
+                      title="Filter active"
+                    />
+                  ) : (
+                    <ListFilter
+                      size={10}
+                      strokeWidth={2}
+                      className="cursor-pointer transition-colors text-gray-400 hover:text-gray-600 shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (handleDayColumnFilterToggle) {
+                          handleDayColumnFilterToggle(columnId);
+                        }
+                      }}
+                      title="Add filter"
+                    />
+                  )}
+                  {dayColumnCanResize && (
+                    <div
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const startX = e.clientX;
+                        const startWidth = dayColumn.getSize();
+                        const handleMouseMove = (moveEvent) => {
+                          moveEvent.preventDefault();
+                          const diff = moveEvent.clientX - startX;
+                          const minSize = dayColumn.columnDef.minSize || 30;
+                          const newWidth = Math.max(minSize, startWidth + diff);
+                          table.setColumnSizing(prev => ({ ...prev, [dayColumn.id]: newWidth }));
+                        };
+                        const handleMouseUp = () => {
+                          document.removeEventListener('mousemove', handleMouseMove);
+                          document.removeEventListener('mouseup', handleMouseUp);
+                          document.body.style.cursor = '';
+                          document.body.style.userSelect = '';
+                        };
+                        document.addEventListener('mousemove', handleMouseMove);
+                        document.addEventListener('mouseup', handleMouseUp);
+                        document.body.style.cursor = 'col-resize';
+                        document.body.style.userSelect = 'none';
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#000000'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                      className="column-resizer"
+                      style={{
+                        position: 'absolute',
+                        right: '-2px',
+                        top: 0,
+                        bottom: 0,
+                        width: '10px',
+                        cursor: 'col-resize',
+                        userSelect: 'none',
+                        touchAction: 'none',
+                        backgroundColor: 'transparent',
+                        zIndex: 10000,
+                        pointerEvents: 'all',
+                      }}
+                      title="Drag to resize column"
+                    />
+                  )}
+                </div>
+              </td>
+            );
+          });
+        })()
       ) : null}
     </tr>
     </>

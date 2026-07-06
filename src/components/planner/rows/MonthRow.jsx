@@ -1,5 +1,4 @@
 import React from 'react';
-import { GripVertical } from 'lucide-react';
 
 /**
  * MonthRow Component
@@ -21,7 +20,10 @@ function MonthRow({
 }) {
   return (
     <>
-      {/* Row number cell */}
+      {/* Row-number gutter cell — no number for this pinned header row (the
+          numbered/shaded gutter only begins at the true first data row,
+          currently row 8), but filled black to match the black bar the
+          rest of this row's fixed columns use. */}
       <td
         key="rowNum"
         style={{
@@ -33,31 +35,30 @@ function MonthRow({
           boxSizing: 'border-box',
           position: 'sticky',
           left: 0,
-          backgroundColor: '#E8ECF5',
+          // Left transparent (not black) so the rounded corner on the inner
+          // div below actually shows the table's white background peeking
+          // through, instead of this td's own black square filling in
+          // behind the curve and hiding it. Table cells with
+          // border-collapse: collapse also ignore border-radius entirely,
+          // so the td can't be rounded directly — the div does the visual
+          // work.
           zIndex: rowNumZIndex,
         }}
-        className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
+        className="p-0"
       >
         <div
-          className="h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-pointer"
-          style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: '#E8ECF5', color: '#6A7A9E' }}
+          className="h-full flex items-center justify-between"
+          style={{
+            minHeight: `${rowHeight}px`,
+            backgroundColor: 'black',
+            // Match the merged-fixed-cols cell's borders below so both
+            // cells render at the same height and don't overhang each other.
+            borderTop: '1px solid black',
+            borderBottom: '1px solid black',
+            borderTopLeftRadius: '14px',
+          }}
           onClick={(e) => handleRowNumberClick(e, rowId)}
-        >
-          <div
-            draggable
-            onDragStart={(e) => {
-              e.stopPropagation();
-              handleDragStart(e, rowId);
-            }}
-            onDragEnd={handleDragEnd}
-            className="cursor-grab active:cursor-grabbing flex items-center"
-            title="Drag to reorder"
-          >
-            <GripVertical size={gripIconSize} className="text-gray-400 hover:text-gray-600" />
-          </div>
-          <span>{row.index + 1}</span>
-          <div style={{ width: `${gripIconSize}px` }} />
-        </div>
+        />
       </td>
 
       {/* Merged cell for columns A-H */}
@@ -77,7 +78,7 @@ function MonthRow({
           style={{
             minHeight: `${rowHeight}px`,
             backgroundColor: 'black',
-            borderTop: '1.5px solid white',
+            borderTop: '1px solid black',
             borderBottom: '1px solid black',
             borderRight: '1.5px solid black',
           }}

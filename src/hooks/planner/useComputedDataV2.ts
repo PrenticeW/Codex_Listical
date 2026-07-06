@@ -32,7 +32,7 @@ export default function useComputedDataV2({
     const dataWithTimeValues = data.map(row => {
       // Skip special rows
       if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
-          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow || row._isFilterRow ||
+          row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow || row._isDailyTotalRow || row._isFilterRow ||
           row._isInboxRow || row._isArchiveRow ||
           row._rowType === 'archiveHeader' || row._rowType === 'archiveRow' ||
           row._rowType === 'archivedProjectHeader' || row._rowType === 'archivedProjectGeneral' || row._rowType === 'archivedProjectUnscheduled' ||

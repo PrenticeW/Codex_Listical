@@ -53,7 +53,7 @@ export function assignParentGroupIds(data: PlannerRow[]): PlannerRow[] {
 
     // Skip special rows — they don't need positional parentGroupId assignment
     if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
-        row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow || row._isFilterRow ||
+        row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow || row._isDailyTotalRow || row._isFilterRow ||
         row._isInboxRow || row._isArchiveRow ||
         row._rowType === 'projectHeader' || row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled' ||
         row._rowType === 'subprojectHeader' || row._rowType === 'subprojectGeneral' || row._rowType === 'subprojectUnscheduled') {

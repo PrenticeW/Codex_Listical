@@ -36,6 +36,7 @@ export const isSectionDivider = (row: any): boolean => {
  */
 export const isSpecialRow = (row: any): boolean => {
   return !!(
+    row._isDailyTotalRow ||
     row._isFilterRow ||
     row._isInboxRow ||
     row._isArchiveRow ||
@@ -158,6 +159,7 @@ export const isEditableRow = (row: any): boolean => {
 export const shouldBypassFilters = (row: any): boolean => {
   return (
     isTimelineRow(row) ||
+    row._isDailyTotalRow ||
     row._isFilterRow ||
     isSectionDivider(row) ||
     isProjectStructureRow(row) ||
@@ -181,6 +183,7 @@ export const isDraggableRow = (row: any): boolean => {
 export const isValidDropTarget = (row: any): boolean => {
   return !(
     isTimelineRow(row) ||
+    row._isDailyTotalRow ||
     row._isFilterRow ||
     isSectionDivider(row) ||
     isAnyArchiveRow(row) ||

@@ -29,6 +29,7 @@ const isSpecialRow = (row: any): boolean => {
     row._isDayOfWeekRow ||
     row._isDailyMinRow ||
     row._isDailyMaxRow ||
+    row._isDailyTotalRow ||
     row._isFilterRow ||
     row._isInboxRow ||
     row._isArchiveRow ||

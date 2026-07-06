@@ -187,7 +187,25 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
   });
   rows.push(dailyMaxRow);
 
-  // Row 7: Filter row
+  // Row 7: Daily total row (day columns only — daily total values + filter icons)
+  const dailyTotalRow = {
+    id: 'daily-total-row',
+    checkbox: '',
+    project: '',
+    subproject: '',
+    status: '',
+    task: '',
+    recurring: '',
+    estimate: '',
+    timeValue: '',
+    _isDailyTotalRow: true, // Flag to identify this as the daily-total row
+  };
+  dates.forEach((date, i) => {
+    dailyTotalRow[`day-${i}`] = '0.00'; // Default value for calendar area filters
+  });
+  rows.push(dailyTotalRow);
+
+  // Row 8: Filter row (fixed columns only — Project/Subproject/.../Time Value labels + filter icons)
   const filterRow = {
     id: 'filter-row',
     checkbox: '', // Column A - no filter needed
@@ -200,12 +218,9 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
     timeValue: '', // Column H - no filter needed
     _isFilterRow: true, // Flag to identify this as a filter row
   };
-  dates.forEach((date, i) => {
-    filterRow[`day-${i}`] = '0.00'; // Default value for calendar area filters
-  });
   rows.push(filterRow);
 
-  // Regular data rows (starting from row 8)
+  // Regular data rows (starting from row 9)
   for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
     const row = {
       id: crypto.randomUUID(),
