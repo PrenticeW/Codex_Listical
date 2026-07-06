@@ -49,7 +49,7 @@ import ArchiveYearModal from '../components/ArchiveYearModal';
 import { AddTasksModal } from '../components/AddTasksModal';
 import ContextMenu from '../components/planner/ContextMenu';
 import useContextMenu from '../hooks/planner/useContextMenu';
-import { createInitialData } from '../utils/planner/dataCreators';
+import { createInitialData, ensureDailyTotalRow } from '../utils/planner/dataCreators';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../constants/planner/rowTypes';
 import { minutesToEstimateLabel } from '../utils/staging/planTableHelpers';
 import { mapDailyBoundsToTimeline } from '../utils/planner/dailyBoundsMapper';
@@ -391,7 +391,7 @@ export default function ProjectTimePlannerV2() {
   // cache miss the skeleton renders briefly and the hydration effect
   // below swaps in the loaded rows once the async load resolves.
   const [data, setDataRaw] = useState(() => {
-    if (Array.isArray(taskRows) && taskRows.length > 0) return taskRows;
+    if (Array.isArray(taskRows) && taskRows.length > 0) return ensureDailyTotalRow(taskRows);
     return createInitialData(20, totalDays, startDate);
   });
 
@@ -418,7 +418,10 @@ export default function ProjectTimePlannerV2() {
     if (dataHydrated.current) return;
     dataHydrated.current = true;
     if (Array.isArray(taskRows) && taskRows.length > 0) {
-      setData(taskRows);
+      // Backfills a missing Daily Total row for accounts whose saved data
+      // predates that row type -- see ensureDailyTotalRow for why this
+      // matters (it silently breaks the "8 pinned rows" sticky-header slice).
+      setData(ensureDailyTotalRow(taskRows));
     }
   }, [storageLoaded, taskRows, setData]);
 

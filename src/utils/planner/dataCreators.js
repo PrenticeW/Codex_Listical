@@ -244,3 +244,56 @@ export const createInitialData = (rowCount = 100, totalDays = 84, startDate) => 
 
   return rows;
 };
+
+/**
+ * Backfills a missing Daily Total row into previously-saved planner data.
+ *
+ * The Daily Total row (`_isDailyTotalRow`) was added to `createInitialData`
+ * after some accounts' planner data had already been created and persisted,
+ * so their saved `data` array never got one. Every piece of code that reads
+ * this row (the Daily Total effect in ProjectTimePlannerV2.jsx, the "8 pinned
+ * rows" slice in PlannerTable.jsx, the merged-fixed-cols rendering in
+ * TableRow.jsx) assumes it exists and is positioned right before the filter
+ * row. When it's missing, PlannerTable's hardcoded `rows.slice(0, 8)` for the
+ * sticky header ends up one row short and pins the first real data row
+ * instead -- which reads as "the filter row is broken / cut off".
+ *
+ * Call this once when hydrating loaded/persisted rows. It's a no-op if the
+ * row already exists. The newly-inserted row's day-* values are placeholder
+ * zeros; the existing Daily Total recompute effect fills in real totals on
+ * the next data pass, and the normal debounced save persists the row going
+ * forward so this only needs to run once per account.
+ */
+export const ensureDailyTotalRow = (rows) => {
+  if (!Array.isArray(rows) || rows.some(row => row._isDailyTotalRow)) {
+    return rows;
+  }
+
+  // Need a sibling pinned row to know which day-* columns exist -- Daily Max
+  // is the row immediately above where Daily Total belongs.
+  const referenceRow = rows.find(row => row._isDailyMaxRow) || rows.find(row => row._isDailyMinRow);
+  if (!referenceRow) return rows;
+
+  const dailyTotalRow = {
+    id: 'daily-total-row',
+    checkbox: '',
+    project: '',
+    subproject: '',
+    status: '',
+    task: '',
+    recurring: '',
+    estimate: '',
+    timeValue: '',
+    _isDailyTotalRow: true,
+  };
+  Object.keys(referenceRow).forEach(key => {
+    if (key.startsWith('day-')) dailyTotalRow[key] = '0.00';
+  });
+
+  const filterRowIndex = rows.findIndex(row => row._isFilterRow);
+  const insertIndex = filterRowIndex !== -1 ? filterRowIndex : rows.length;
+
+  const next = [...rows];
+  next.splice(insertIndex, 0, dailyTotalRow);
+  return next;
+};
