@@ -491,7 +491,15 @@ const TableRow = React.memo(function TableRow({
               const totalFixedWidth = visibleFixedColumns.reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0);
 
               // Add all day columns widths
+              // Must filter to visible day columns only, same as the fixed
+              // columns above -- summing every day column regardless of
+              // visibility makes this merged bar wider than the table's
+              // actual (visible-only) total width whenever any day columns
+              // are hidden (e.g. the hide-past-weeks feature), which pushes
+              // this row's content out past the real scrollable area and
+              // gets clipped.
               const dayColumnsWidth = Array.from({ length: totalDays }, (_, i) => `day-${i}`)
+                .filter(dayColId => table.getColumn(dayColId).getIsVisible())
                 .reduce((sum, dayColId) => sum + table.getColumn(dayColId).getSize(), 0);
 
               const totalWidth = totalFixedWidth + dayColumnsWidth;
@@ -543,7 +551,15 @@ const TableRow = React.memo(function TableRow({
               const totalFixedWidth = visibleFixedColumns.reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0);
 
               // Add all day columns widths
+              // Must filter to visible day columns only, same as the fixed
+              // columns above -- summing every day column regardless of
+              // visibility makes this merged bar wider than the table's
+              // actual (visible-only) total width whenever any day columns
+              // are hidden (e.g. the hide-past-weeks feature), which pushes
+              // this row's content out past the real scrollable area and
+              // gets clipped.
               const dayColumnsWidth = Array.from({ length: totalDays }, (_, i) => `day-${i}`)
+                .filter(dayColId => table.getColumn(dayColId).getIsVisible())
                 .reduce((sum, dayColId) => sum + table.getColumn(dayColId).getSize(), 0);
 
               const totalWidth = totalFixedWidth + dayColumnsWidth;
@@ -595,7 +611,15 @@ const TableRow = React.memo(function TableRow({
               const totalFixedWidth = visibleFixedColumns.reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0);
 
               // Add all day columns widths
+              // Must filter to visible day columns only, same as the fixed
+              // columns above -- summing every day column regardless of
+              // visibility makes this merged bar wider than the table's
+              // actual (visible-only) total width whenever any day columns
+              // are hidden (e.g. the hide-past-weeks feature), which pushes
+              // this row's content out past the real scrollable area and
+              // gets clipped.
               const dayColumnsWidth = Array.from({ length: totalDays }, (_, i) => `day-${i}`)
+                .filter(dayColId => table.getColumn(dayColId).getIsVisible())
                 .reduce((sum, dayColId) => sum + table.getColumn(dayColId).getSize(), 0);
 
               const totalWidth = totalFixedWidth + dayColumnsWidth;
