@@ -815,6 +815,8 @@ export default function TacticsPage() {
   const tableElementRef = useRef(null);
   const navBarRef = useRef(null);
   const [navBarHeight, setNavBarHeight] = useState(0);
+  const minMaxContainerRef = useRef(null);
+  const [minMaxContainerHeight, setMinMaxContainerHeight] = useState(0);
   const headerContainerRef = useRef(null);
   const cellMenuRef = useRef(null);
   const hasLoadedInitialState = useRef(false);
@@ -5045,6 +5047,18 @@ export default function TacticsPage() {
     return () => observer.disconnect();
   }, []);
 
+  // Measure the Min/Max table's rendered height so we can add an equal
+  // amount of trailing space below it (extra breathing room at page bottom).
+  useEffect(() => {
+    if (!minMaxContainerRef.current) return undefined;
+    const observer = new ResizeObserver(() => {
+      setMinMaxContainerHeight(minMaxContainerRef.current?.offsetHeight ?? 0);
+    });
+    observer.observe(minMaxContainerRef.current);
+    setMinMaxContainerHeight(minMaxContainerRef.current.offsetHeight);
+    return () => observer.disconnect();
+  }, []);
+
   // Override global overflow:hidden to allow page scrolling
   useEffect(() => {
     const root = document.getElementById('root');
@@ -5150,9 +5164,21 @@ export default function TacticsPage() {
               supplies the bottom/left/right border and bottom corners, forming one visual box. */}
           <div
             style={{
+              // Solid, square-cornered occluder behind the rounded header
+              // below. Without this, the page's fixed grid-pattern
+              // background shows through the small square notch left
+              // outside the header's rounded corners (border-radius only
+              // curves that element's own background, it doesn't hide
+              // whatever is behind it) once the header is stuck and content
+              // has scrolled past underneath it.
               position: 'sticky',
               top: navBarHeight,
               zIndex: 12,
+              backgroundColor: '#ffffff',
+            }}
+          >
+          <div
+            style={{
               backgroundColor: '#F5F7FA',
               border: '1.5px solid #1A1A1A',
               borderBottom: '1.5px solid #1A1A1A',
@@ -5280,6 +5306,7 @@ export default function TacticsPage() {
               </tbody>
             </table>
             </div>
+          </div>
           </div>
           {/* Scrollable body — horizontal scroll only. Holds all three boxes
               (calendar, totals, min/max) so they scroll left/right together
@@ -5795,6 +5822,7 @@ export default function TacticsPage() {
               handoff. No repeated day-name header row here (unlike Totals above);
               it's just the two constraint rows, min first then max. */}
           <div
+            ref={minMaxContainerRef}
             style={{
               backgroundColor: '#ffffff',
               border: '1.5px solid #1A1A1A',
@@ -5909,6 +5937,10 @@ export default function TacticsPage() {
           </tbody>
         </table>
         </div>
+          {/* Trailing space at the bottom of the page, equal to the height of
+              the Min/Max table above, so the page doesn't end abruptly right
+              after the last table. */}
+          <div aria-hidden="true" style={{ height: minMaxContainerHeight, flexShrink: 0 }} />
           </div>
         {cellMenu ? createPortal(renderCellProjectMenu(), document.body) : null}
         </div>
