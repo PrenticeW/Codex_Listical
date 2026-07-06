@@ -146,7 +146,12 @@ function WeekRow({
             <div
               className="h-full flex items-center justify-center font-semibold text-gray-700"
               style={{
-                fontSize: `${cellFontSize}px`,
+                // Week label is a calendar figure (NUM_FONT/Mulish in the
+                // design handover), not prose -- doesn't inherit DM Sans.
+                fontFamily: "'Mulish', sans-serif",
+                // headerFontSize (12, matches design's H2 fontSize:12), not
+                // cellFontSize -- this is chrome text, not a data cell.
+                fontSize: `${headerFontSize}px`,
                 minHeight: `${rowHeight}px`,
                 backgroundColor: 'transparent',
                 borderTop: '1.5px solid black',
@@ -163,7 +168,11 @@ function WeekRow({
                   onKeyDown={handleKeyDown}
                   onClick={(e) => e.stopPropagation()}
                   style={{
-                    fontSize: `${cellFontSize}px`,
+                    // index.css sets a blanket `input { font-family: DM Sans }`,
+                    // which beats inheritance -- must be set explicitly here to
+                    // match the display span's Mulish.
+                    fontFamily: "'Mulish', sans-serif",
+                    fontSize: `${headerFontSize}px`,
                     fontWeight: 600,
                     width: '90%',
                     textAlign: 'center',

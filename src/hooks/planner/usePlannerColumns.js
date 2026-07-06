@@ -94,7 +94,10 @@ export default function usePlannerColumns({ totalDays }) {
         accessorKey: `day-${i}`,
         size: 60,
         minSize: 40,
-        enableResizing: true,
+        // Day columns don't need per-column resizing -- there are too many
+        // of them (84) for it to be a useful affordance, and it added a
+        // resize handle in the Daily Total row that wasn't needed.
+        enableResizing: false,
       });
     }
 

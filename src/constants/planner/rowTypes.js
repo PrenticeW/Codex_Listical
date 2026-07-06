@@ -116,7 +116,7 @@ export const ARCHIVE_ROW_STYLE = {
 };
 
 export const ARCHIVE_HEADER_STYLE = {
-  backgroundColor: '#000000', // Black
+  backgroundColor: '#24252B', // Design handover dark chrome (var(--bento-dark)), not pure black
   color: '#ffffff', // White
 };
 

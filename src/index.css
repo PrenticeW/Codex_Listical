@@ -130,6 +130,29 @@ tr.selected-row td button {
   cursor: auto !important;
 }
 
+/* System page row focus state — design handover (reference/index.html
+   `.sys-sel-row`). Draws a border ring around the selected row's content,
+   skipping the row-number gutter (36px, matches the fixed rowNum column
+   width in usePlannerColumns.js), on top of the existing background wash. */
+tr.sys-sel-row {
+  position: relative;
+  z-index: 1;
+}
+
+tr.sys-sel-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 36px;
+  right: 0;
+  border-top: 1px solid var(--sel-ring);
+  border-bottom: 1px solid var(--sel-ring);
+  border-left: 1px solid var(--sel-ring);
+  pointer-events: none;
+  z-index: 5;
+}
+
 /* Row number cell when row is selected */
 tr.selected-row td.selected-cell {
   background-color: var(--sel-gutter) !important;
@@ -274,4 +297,16 @@ option.estimate-highlight {
 /* Force select dropdowns to not trigger scroll */
 table td {
   overflow: visible !important;
+}
+
+/* Hides the scrollbar track/thumb while leaving scrolling itself intact
+   (trackpad, shift+wheel, drag) -- used on the System page's table wrapper
+   so the horizontal scrollbar doesn't show as a visible bar under the grid. */
+.no-scrollbar {
+  scrollbar-width: none;       /* Firefox */
+  -ms-overflow-style: none;    /* legacy Edge/IE */
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;               /* Chrome, Safari, newer Edge */
 }

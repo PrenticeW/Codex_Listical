@@ -130,12 +130,15 @@ function ProjectDropdownCell({
     >
       <button
         ref={buttonRef}
-        className="py-0.5 rounded-full flex-1 focus:outline-none flex items-center justify-between gap-1"
+        className="py-0.5 flex-1 focus:outline-none flex items-center justify-between gap-1"
         style={{
           fontSize: `${cellFontSize}px`,
           backgroundColor: currentColors.bg,
           color: currentColors.text,
           fontWeight: '500',
+          // Design handover (reference/SystemDropdowns.jsx, PillTrigger) uses
+          // a squarer borderRadius: 5 chip, not a fully-rounded pill.
+          borderRadius: '5px',
           paddingLeft: '8px',
           paddingRight: '8px',
           border: '2px solid var(--sel-ring)',
@@ -176,7 +179,7 @@ function ProjectDropdownCell({
                   alignItems: 'center',
                   backgroundColor: optionColors.bg,
                   color: optionColors.text,
-                  borderRadius: '9999px',
+                  borderRadius: '5px',
                   margin: '2px 4px',
                   fontWeight: '500',
                   paddingLeft: '8px',

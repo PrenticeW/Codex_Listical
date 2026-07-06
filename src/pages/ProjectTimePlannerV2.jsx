@@ -1766,9 +1766,12 @@ export default function ProjectTimePlannerV2() {
   // Calculate number of weeks
   const weeksCount = Math.ceil(totalDays / 7);
 
-  // Calculate sizes based on scale (normalized to 14px base like other pages)
+  // Calculate sizes based on scale. Base cell size matches the design
+  // handover (reference/SystemView.jsx: ROW_H 24 + task-cell fontSize 12.5)
+  // -- was 14px, which read noticeably larger than the compact editorial
+  // density the design calls for at the same 24px row height.
   const rowHeight = Math.round(24 * sizeScale);
-  const cellFontSize = Math.round(14 * sizeScale);
+  const cellFontSize = Math.round(12.5 * sizeScale);
   const headerFontSize = Math.round(12 * sizeScale);
   const gripIconSize = Math.round(16 * sizeScale);
 

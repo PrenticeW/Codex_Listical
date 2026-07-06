@@ -114,7 +114,7 @@ const TaskRow = React.memo(function TaskRow({
       )}
       <tr
         style={style}
-        className={isRowSelected || isDragging ? 'selected-row' : ''}
+        className={isRowSelected || isDragging ? 'selected-row sys-sel-row' : ''}
         onDragOver={(e) => handleDragOver(e, rowId)}
         onDrop={(e) => handleDrop(e, rowId)}
       >
@@ -153,8 +153,11 @@ const TaskRow = React.memo(function TaskRow({
                     handleDragStart(e, rowId);
                   }}
                   onDragEnd={handleDragEnd}
-                  className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-grab active:cursor-grabbing`}
-                  style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
+                  className={`h-full border-r border-b border-gray-300 flex items-center justify-between cursor-grab active:cursor-grabbing`}
+                  // Row-number gutter is Mulish per the design handover
+                  // (NUM_FONT in reference/SystemView.jsx) -- not Tailwind's
+                  // generic `font-mono` stack, which was never the intended font.
+                  style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
                   onClick={(e) => {
                     handleRowNumberClick(e, rowId);
                     window.dispatchEvent(new CustomEvent(TASK_ROW_PANEL_CLOSE_EVENT));
@@ -405,11 +408,15 @@ const TaskRow = React.memo(function TaskRow({
                     <div className="w-full flex items-center" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
                       {value && value !== '' && value !== '-' ? (
                         <div
-                          className="rounded-full text-xs flex items-center justify-between gap-1 flex-1"
+                          className="text-xs flex items-center justify-between gap-1 flex-1"
                           style={{
                             backgroundColor: '#e5e5e5',
                             color: '#000000',
                             fontSize: `${cellFontSize}px`,
+                            // Design handover (reference/SystemDropdowns.jsx,
+                            // PillTrigger) uses a squarer borderRadius: 5
+                            // chip, not a fully-rounded pill.
+                            borderRadius: '5px',
                             paddingLeft: '6px',
                             paddingRight: '6px',
                             border: '2px solid white',
@@ -429,11 +436,12 @@ const TaskRow = React.memo(function TaskRow({
                         </div>
                       ) : (
                         <div
-                          className="rounded-full text-xs flex items-center justify-between gap-1 flex-1"
+                          className="text-xs flex items-center justify-between gap-1 flex-1"
                           style={{
                             backgroundColor: '#ffffff',
                             color: '#000000',
                             fontSize: `${cellFontSize}px`,
+                            borderRadius: '5px',
                             paddingLeft: '6px',
                             paddingRight: '6px',
                             border: '2px solid white'
@@ -469,9 +477,10 @@ const TaskRow = React.memo(function TaskRow({
                         />
                       )}
                       <div
-                        className="rounded-full flex items-center justify-between gap-1 flex-1"
+                        className="flex items-center justify-between gap-1 flex-1"
                         style={{
                           fontSize: `${cellFontSize}px`,
+                          borderRadius: '5px',
                           paddingLeft: '8px',
                           paddingRight: '8px',
                           color: '#000000',
@@ -495,11 +504,12 @@ const TaskRow = React.memo(function TaskRow({
                     <div className="w-full flex items-center" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
                       {value && value !== '' ? (
                         <div
-                          className="rounded-full text-xs flex items-center justify-between gap-1 flex-1"
+                          className="text-xs flex items-center justify-between gap-1 flex-1"
                           style={{
                             backgroundColor: PILLBOX_COLORS[value]?.bg || PILLBOX_COLORS['-'].bg,
                             color: PILLBOX_COLORS[value]?.text || PILLBOX_COLORS['-'].text,
                             fontSize: `${cellFontSize}px`,
+                            borderRadius: '5px',
                             paddingLeft: '6px',
                             paddingRight: '6px',
                             border: '2px solid white',
@@ -519,11 +529,12 @@ const TaskRow = React.memo(function TaskRow({
                         </div>
                       ) : (
                         <div
-                          className="rounded-full text-xs flex items-center justify-between gap-1 flex-1"
+                          className="text-xs flex items-center justify-between gap-1 flex-1"
                           style={{
                             backgroundColor: PILLBOX_COLORS['-'].bg,
                             color: PILLBOX_COLORS['-'].text,
                             fontSize: `${cellFontSize}px`,
+                            borderRadius: '5px',
                             paddingLeft: '6px',
                             paddingRight: '6px',
                             border: '2px solid white'
@@ -566,7 +577,7 @@ const TaskRow = React.memo(function TaskRow({
                       </div>
                     </div>
                   ) : columnId === 'timeValue' ? (
-                    <div className="w-full text-right" style={{ paddingRight: '8px' }}>
+                    <div className="w-full text-right" style={{ fontFamily: "'Mulish', sans-serif", paddingRight: '8px' }}>
                       {value || '\u00A0'}
                     </div>
                   ) : isDayColumn ? (

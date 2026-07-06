@@ -145,7 +145,10 @@ const TableRow = React.memo(function TableRow({
     width: '100%',
     opacity: isDragging ? 0.5 : 1,
     gap: 0,
-    ...(isSolidBlackRow ? { backgroundColor: 'black' } : {}),
+    // Inbox/Archive dividers use the design handover's dark chrome
+    // (#24252B / var(--bento-dark)), same as the filter row -- not pure
+    // black.
+    ...(isSolidBlackRow ? { backgroundColor: '#24252B' } : {}),
   };
 
   // Check for special row types
@@ -307,7 +310,7 @@ const TableRow = React.memo(function TableRow({
       )}
       <tr
         style={style}
-        className={isRowSelected || isDragging ? 'selected-row' : ''}
+        className={isRowSelected || isDragging ? 'selected-row sys-sel-row' : ''}
         onDragOver={(e) => handleDragOver(e, rowId)}
         onDrop={(e) => handleDrop(e, rowId)}
       >
@@ -324,7 +327,11 @@ const TableRow = React.memo(function TableRow({
             left: 0,
             width: `${fixedRegionBackdropWidth}px`,
             height: `${rowHeight}px`,
-            backgroundColor: 'black',
+            // Filter row's fixed columns are the design handover's dark
+            // chrome (#24252B) -- the other pinned calendar rows (Month/
+            // Week/Day/Day-of-week/Daily Min/Max/Total) stay pure black
+            // per reference/SystemView.jsx.
+            backgroundColor: isFilterRow ? '#24252B' : 'black',
             // Negative z-index so it paints behind the row's normal-flow
             // (non-positioned) <td> cells, and behind the sticky gutter
             // cell too — it's purely a gap backstop, never meant to be on
@@ -408,8 +415,11 @@ const TableRow = React.memo(function TableRow({
                         handleDragStart(e, rowId);
                       }}
                       onDragEnd={handleDragEnd}
-                      className={`h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-grab active:cursor-grabbing`}
-                      style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
+                      className={`h-full border-r border-b border-gray-300 flex items-center justify-between cursor-grab active:cursor-grabbing`}
+                      // Row-number gutter is Mulish per the design handover
+                      // (NUM_FONT in reference/SystemView.jsx) -- not Tailwind's
+                      // generic `font-mono` stack, which was never the intended font.
+                      style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
                       onClick={(e) => handleRowNumberClick(e, rowId)}
                       onContextMenu={(e) => handleCellContextMenu?.(e, rowId, 'rowNum')}
                       title="Drag to reorder"
@@ -435,6 +445,11 @@ const TableRow = React.memo(function TableRow({
               const gutterBorderBottom = isDayFamilyPinned
                 ? '1px solid black'
                 : '1.5px solid black';
+              // Day/Day-of-week/Daily Min/Daily Max gutters stay pure black
+              // (matches the calendar-header rows). Inbox/Archive divider
+              // gutters use the design handover's dark chrome (#24252B),
+              // same as the rest of those rows.
+              const gutterBg = isDayFamilyPinned ? 'black' : '#24252B';
               return (
                 <td
                   key={cell.id}
@@ -447,7 +462,7 @@ const TableRow = React.memo(function TableRow({
                     boxSizing: 'border-box',
                     position: 'sticky',
                     left: 0,
-                    backgroundColor: 'black',
+                    backgroundColor: gutterBg,
                     zIndex: rowNumZIndex,
                   }}
                   className="p-0"
@@ -456,7 +471,7 @@ const TableRow = React.memo(function TableRow({
                     className="h-full flex items-center justify-between"
                     style={{
                       minHeight: `${rowHeight}px`,
-                      backgroundColor: 'black',
+                      backgroundColor: gutterBg,
                       borderTop: gutterBorderTop,
                       borderBottom: gutterBorderBottom,
                     }}
@@ -497,7 +512,10 @@ const TableRow = React.memo(function TableRow({
                     className="h-full flex items-center"
                     style={{
                       minHeight: `${rowHeight}px`,
-                      backgroundColor: 'black',
+                      // Design handover (reference/SystemView.jsx SectionBar)
+                      // uses var(--bento-dark) = #24252B for Inbox/Archive
+                      // dividers, not pure black.
+                      backgroundColor: '#24252B',
                       borderBottom: '1.5px solid black',
                       borderRight: '1.5px solid black',
                       color: 'white',
@@ -546,7 +564,10 @@ const TableRow = React.memo(function TableRow({
                     className="h-full flex items-center"
                     style={{
                       minHeight: `${rowHeight}px`,
-                      backgroundColor: 'black',
+                      // Design handover (reference/SystemView.jsx SectionBar)
+                      // uses var(--bento-dark) = #24252B for Inbox/Archive
+                      // dividers, not pure black.
+                      backgroundColor: '#24252B',
                       borderBottom: '1.5px solid black',
                       borderRight: '1.5px solid black',
                       color: 'white',
@@ -799,6 +820,9 @@ const TableRow = React.memo(function TableRow({
                       ...ARCHIVE_ROW_STYLE,
                       borderBottom: '1px solid #d3d3d3',
                       borderRight: columnId === 'timeValue' ? '1.5px solid black' : '1px solid #d3d3d3',
+                      // Date range + hour totals are ledger figures (matches
+                      // NUM_FONT / Mulish in the design handover).
+                      fontFamily: "'Mulish', sans-serif",
                       fontSize: `${cellFontSize}px`,
                       paddingLeft: '3px',
                       paddingRight: '3px',
@@ -829,6 +853,10 @@ const TableRow = React.memo(function TableRow({
                         }}
                         autoFocus
                         style={{
+                          // index.css forces `input { font-family: DM Sans }`,
+                          // overriding inheritance -- match the surrounding
+                          // Mulish ledger figure explicitly.
+                          fontFamily: "'Mulish', sans-serif",
                           width: '100%',
                           height: '100%',
                           border: 'none',
@@ -881,14 +909,14 @@ const TableRow = React.memo(function TableRow({
               );
             }
 
-            // For fixed columns, show empty cells (or label for daily min/max)
+            // For fixed columns, show empty cells (or label for daily min/max/total)
             if (['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].includes(columnId)) {
-              // Day, day-of-week, and daily min/max rows all render a single
-              // plain black bar across the fixed columns -- the column
-              // labels (Project, Subproject, Status, etc.) that used to be
-              // white text here now live in the Filter row instead, so this
-              // bar no longer needs labels or the white divider borders.
-              if ((isDayRow || isDayOfWeekRow || isDailyMinRow || isDailyMaxRow) && !mergedCellRendered) {
+              // Day and day-of-week rows render a single plain black bar
+              // across the fixed columns -- the column labels (Project,
+              // Subproject, Status, etc.) that used to be white text here
+              // now live in the Filter row instead, so this bar no longer
+              // needs labels or the white divider borders.
+              if ((isDayRow || isDayOfWeekRow) && !mergedCellRendered) {
                 mergedCellRendered = true;
 
                 return (
@@ -916,8 +944,79 @@ const TableRow = React.memo(function TableRow({
                     </div>
                   </td>
                 );
-              } else if (isDayRow || isDayOfWeekRow || isDailyMinRow || isDailyMaxRow) {
-                // Skip subsequent fixed columns for day/day-of-week/daily min/max rows
+              } else if (isDayRow || isDayOfWeekRow) {
+                // Skip subsequent fixed columns for day/day-of-week rows
+                return null;
+              }
+
+              // Daily Min/Max rows: per the design handover (reference/
+              // SystemView.jsx H5/H6), columns A-G stay a blank black bar,
+              // but column H (Time Value) carries a right-aligned uppercase
+              // "Daily Min"/"Daily Max" label instead of being blank.
+              if ((isDailyMinRow || isDailyMaxRow) && !mergedCellRendered) {
+                mergedCellRendered = true;
+
+                const widthAG = ['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate']
+                  .filter(colId => table.getColumn(colId).getIsVisible())
+                  .reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0);
+                const widthH = table.getColumn('timeValue').getIsVisible() ? table.getColumn('timeValue').getSize() : 0;
+
+                return (
+                  <React.Fragment key="merged-fixed-cols-minmax">
+                    <td
+                      style={{
+                        width: `${widthAG}px`,
+                        flexShrink: 0,
+                        flexGrow: 0,
+                        height: `${rowHeight}px`,
+                        boxSizing: 'border-box',
+                      }}
+                      className="p-0"
+                    >
+                      <div
+                        className="h-full flex items-center"
+                        style={{
+                          minHeight: `${rowHeight}px`,
+                          backgroundColor: 'black',
+                          borderTop: '1px solid black',
+                          borderBottom: '1px solid black',
+                          borderRight: '1px solid rgba(255,255,255,0.1)',
+                        }}
+                      />
+                    </td>
+                    <td
+                      style={{
+                        width: `${widthH}px`,
+                        flexShrink: 0,
+                        flexGrow: 0,
+                        height: `${rowHeight}px`,
+                        boxSizing: 'border-box',
+                      }}
+                      className="p-0"
+                    >
+                      <div
+                        className="h-full flex items-center justify-end"
+                        style={{
+                          minHeight: `${rowHeight}px`,
+                          backgroundColor: 'black',
+                          borderTop: '1px solid black',
+                          borderBottom: '1px solid black',
+                          borderRight: '1.5px solid black',
+                          paddingRight: '8px',
+                          fontFamily: "'Mulish', sans-serif",
+                          fontSize: '9px',
+                          color: 'rgba(255,255,255,0.55)',
+                          letterSpacing: '0.06em',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Daily {isDailyMinRow ? 'Min' : 'Max'}
+                      </div>
+                    </td>
+                  </React.Fragment>
+                );
+              } else if (isDailyMinRow || isDailyMaxRow) {
+                // Skip subsequent fixed columns for daily min/max rows
                 return null;
               }
 
@@ -968,7 +1067,17 @@ const TableRow = React.memo(function TableRow({
               className="h-full flex items-center justify-center"
               style={{
                 minHeight: `${rowHeight}px`,
-                fontSize: (isDailyMinRow || isDailyMaxRow) ? '0.6875rem' : `${cellFontSize}px`,
+                // Design handover (reference/SystemView.jsx, NUM_FONT) uses
+                // Mulish for every date/day-of-week/min/max figure in the
+                // calendar header rows -- these are numeral/ledger content,
+                // not prose, so they don't inherit the page's DM Sans.
+                fontFamily: "'Mulish', sans-serif",
+                // Matches reference/SystemView.jsx exactly: H3 (date) 10.5px,
+                // H4 (day-of-week) 11px, H5/H6 (min/max) 11px (0.6875rem).
+                // These are fixed chrome sizes, not tied to the cellFontSize/
+                // headerFontSize zoom scale, same as the existing min/max
+                // convention this extends.
+                fontSize: (isDailyMinRow || isDailyMaxRow) ? '0.6875rem' : (isDayRow ? '10.5px' : isDayOfWeekRow ? '11px' : `${cellFontSize}px`),
                 fontStyle: (isDailyMinRow || isDailyMaxRow) ? 'italic' : undefined,
                 backgroundColor: bgColor,
                 borderTop: isDayRow ? '1.5px solid black' : (isDayOfWeekRow ? '1.5px solid black' : undefined),
@@ -1012,7 +1121,11 @@ const TableRow = React.memo(function TableRow({
                 boxSizing: 'border-box',
                 position: 'sticky',
                 left: 0,
-                backgroundColor: '#F0F4FC',
+                // Dark chrome band per the design handover (reference/
+                // SystemView.jsx H8 row uses var(--bento-dark) = #24252B for
+                // the whole column-names row, including its "#" gutter cell)
+                // — was mismatched light blue before.
+                backgroundColor: '#24252B',
                 zIndex: rowNumZIndex,
               }}
               className="p-0"
@@ -1021,17 +1134,22 @@ const TableRow = React.memo(function TableRow({
                 className="h-full flex items-center"
                 style={{
                   minHeight: `${rowHeight}px`,
-                  backgroundColor: '#F0F4FC',
-                  borderBottom: '1px solid #d3d3d3',
+                  backgroundColor: '#24252B',
+                  // Separates this cell from the adjacent checkbox column --
+                  // without it, the two same-colored cells read as one
+                  // merged block since the checkbox cell has no borderLeft
+                  // at this row index.
+                  borderRight: '1px solid rgba(237,235,221,0.14)',
                   paddingLeft: '6px',
                 }}
                 onClick={(e) => handleRowNumberClick(e, rowId)}
               >
                 <span
                   style={{
+                    fontFamily: "'Mulish', sans-serif",
                     fontSize: `${headerFontSize}px`,
                     fontWeight: 600,
-                    color: '#334155',
+                    color: 'rgba(237,235,221,0.45)',
                   }}
                 >
                   #
@@ -1043,7 +1161,20 @@ const TableRow = React.memo(function TableRow({
 
         // For fixed columns
         if (['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].includes(columnId)) {
-          // Columns that need filter buttons: B (project), D (status), F (recurring), G (estimate)
+          // Estimate (G) and Time Value (H) are merged into a single "Time"
+          // header cell here -- Time Value has no label/filter of its own,
+          // so skip it entirely; its width gets folded into the estimate
+          // cell below instead.
+          if (columnId === 'timeValue') {
+            return null;
+          }
+
+          const isTimeHeaderCell = columnId === 'estimate';
+          const cellWidth = isTimeHeaderCell
+            ? cell.column.getSize() + table.getColumn('timeValue').getSize()
+            : cell.column.getSize();
+
+          // Columns that need filter buttons: B (project), D (status), F (recurring), G (estimate/time)
           // Note: subproject is excluded as we don't have a filter for it yet
           const hasFilter = ['project', 'subproject', 'status', 'recurring', 'estimate'].includes(columnId);
 
@@ -1068,7 +1199,9 @@ const TableRow = React.memo(function TableRow({
 
           // Column resizing now lives here on the Filter row (the
           // column-letter header row that used to hold this was removed).
-          const column = table.getColumn(columnId);
+          // The merged Time cell resizes the timeValue column, since that's
+          // the column whose right edge the handle sits on.
+          const column = table.getColumn(isTimeHeaderCell ? 'timeValue' : columnId);
           const canResize = column?.getCanResize?.();
 
           // Column labels also moved here from the removed column-letter row.
@@ -1078,15 +1211,14 @@ const TableRow = React.memo(function TableRow({
             status: 'Status',
             task: 'Task',
             recurring: 'Recurring',
-            estimate: 'Estimate',
-            timeValue: 'Time Value',
+            estimate: 'Time',
           }[columnId];
 
           return (
             <td
               key={cell.id}
               style={{
-                width: `${cell.column.getSize()}px`,
+                width: `${cellWidth}px`,
                 flexShrink: 0,
                 flexGrow: 0,
                 height: `${rowHeight}px`,
@@ -1099,20 +1231,25 @@ const TableRow = React.memo(function TableRow({
                 style={{
                   position: 'relative',
                   minHeight: `${rowHeight}px`,
-                  backgroundColor: row.index < 4 ? 'black' : '#F0F4FC',
-                  borderBottom: row.index < 4 ? '1px solid black' : '1px solid #d3d3d3',
-                  borderLeft: (row.index < 4 && columnId === 'checkbox') ? '1px solid black' : 'none',
-                  borderRight: columnId === 'timeValue' ? '1.5px solid black' : (row.index < 4 ? 'none' : '1px solid #d3d3d3'),
-                  paddingLeft: columnLabel ? '6px' : '0',
-                  paddingRight: hasFilter ? '2px' : '0'
+                  // Dark chrome band per the design handover -- the filter
+                  // row is where column names + filter icons now live
+                  // (reference/SystemView.jsx H8), and that row is always
+                  // #24252B regardless of theme, not the previous light
+                  // blue / dead row.index<4 check.
+                  backgroundColor: '#24252B',
+                  borderRight: isTimeHeaderCell ? '1.5px solid black' : '1px solid rgba(237,235,221,0.14)',
+                  // Design handover (reference/SystemView.jsx H8 row) uses
+                  // `padding: '0 8px'` uniformly on these cells -- was 6px/2px.
+                  paddingLeft: columnLabel ? '8px' : '0',
+                  paddingRight: hasFilter ? '8px' : '0'
                 }}
               >
                 {columnLabel && (
                   <span
                     style={{
                       fontSize: `${headerFontSize}px`,
-                      fontWeight: 600,
-                      color: '#334155',
+                      fontWeight: 700,
+                      color: '#EDEBDD',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -1136,7 +1273,9 @@ const TableRow = React.memo(function TableRow({
                       className="cursor-pointer"
                       onClick={filterClickHandler}
                       title={`Filter ${columnId}`}
-                      style={{ fill: 'none', stroke: 'black' }}
+                      // Was rgba(237,235,221,0.5) -- trying plain white for
+                      // more contrast against the #24252B chrome band.
+                      style={{ fill: 'none', stroke: 'white' }}
                     />
                   )
                 )}
@@ -1165,7 +1304,7 @@ const TableRow = React.memo(function TableRow({
                       document.body.style.cursor = 'col-resize';
                       document.body.style.userSelect = 'none';
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#000000'; }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(237,235,221,0.25)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                     className="column-resizer"
                     style={{
@@ -1211,7 +1350,10 @@ const TableRow = React.memo(function TableRow({
                 className="h-full"
                 style={{
                   minHeight: `${rowHeight}px`,
-                  backgroundColor: 'black',
+                  // Keep this consistent with the rest of the filter row's
+                  // #24252B dark chrome instead of switching to pure black
+                  // once it reaches the day columns.
+                  backgroundColor: '#24252B',
                   borderBottom: '1.5px solid black',
                 }}
               />
@@ -1265,47 +1407,85 @@ const TableRow = React.memo(function TableRow({
               );
             }
 
-            // Fixed columns (A-H): single merged plain black bar.
+            // Fixed columns (A-H): columns A-G stay a blank black bar, but
+            // column H (Time Value) carries a right-aligned uppercase
+            // "Daily Total" label -- per the design handover (reference/
+            // SystemView.jsx H7), same treatment as Daily Min/Daily Max.
             if (['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].includes(columnId)) {
               if (!mergedFixedCellRendered) {
                 mergedFixedCellRendered = true;
+
+                const widthAG = ['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate']
+                  .filter(colId => table.getColumn(colId).getIsVisible())
+                  .reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0);
+                const widthH = table.getColumn('timeValue').getIsVisible() ? table.getColumn('timeValue').getSize() : 0;
+
                 return (
-                  <td
-                    key="merged-fixed-cols"
-                    style={{
-                      width: `${['checkbox', 'project', 'subproject', 'status', 'task', 'recurring', 'estimate', 'timeValue'].filter(colId => table.getColumn(colId).getIsVisible()).reduce((sum, colId) => sum + table.getColumn(colId).getSize(), 0)}px`,
-                      flexShrink: 0,
-                      flexGrow: 0,
-                      height: `${rowHeight}px`,
-                      boxSizing: 'border-box',
-                    }}
-                    className="p-0"
-                  >
-                    <div
-                      className="h-full flex items-center"
+                  <React.Fragment key="merged-fixed-cols">
+                    <td
                       style={{
-                        minHeight: `${rowHeight}px`,
-                        backgroundColor: 'black',
-                        borderTop: '1px solid black',
-                        borderBottom: '1px solid black',
-                        borderRight: '1.5px solid black',
+                        width: `${widthAG}px`,
+                        flexShrink: 0,
+                        flexGrow: 0,
+                        height: `${rowHeight}px`,
+                        boxSizing: 'border-box',
                       }}
-                    />
-                  </td>
+                      className="p-0"
+                    >
+                      <div
+                        className="h-full flex items-center"
+                        style={{
+                          minHeight: `${rowHeight}px`,
+                          backgroundColor: 'black',
+                          borderTop: '1px solid black',
+                          borderBottom: '1px solid black',
+                          borderRight: '1px solid rgba(255,255,255,0.1)',
+                        }}
+                      />
+                    </td>
+                    <td
+                      style={{
+                        width: `${widthH}px`,
+                        flexShrink: 0,
+                        flexGrow: 0,
+                        height: `${rowHeight}px`,
+                        boxSizing: 'border-box',
+                      }}
+                      className="p-0"
+                    >
+                      <div
+                        className="h-full flex items-center justify-end"
+                        style={{
+                          minHeight: `${rowHeight}px`,
+                          backgroundColor: 'black',
+                          borderTop: '1px solid black',
+                          borderBottom: '1px solid black',
+                          borderRight: '1.5px solid black',
+                          paddingRight: '8px',
+                          fontFamily: "'Mulish', sans-serif",
+                          fontSize: '9px',
+                          color: 'rgba(255,255,255,0.55)',
+                          letterSpacing: '0.06em',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Daily Total
+                      </div>
+                    </td>
+                  </React.Fragment>
                 );
               }
               return null;
             }
 
-            // Day columns: total value + filter button (right-aligned) and
-            // resize handle — moved here from the old Filter row.
+            // Day columns: total value + filter button (right-aligned) —
+            // moved here from the old Filter row. Day columns are not
+            // individually resizable (there are 84 of them; not a useful
+            // affordance), so no resize handle here.
             const value = row.original[columnId] || '';
             const dayIndex = parseInt(columnId.split('-')[1]);
             const isLastDayOfWeek = (dayIndex + 1) % 7 === 0;
             const isFilterActive = dayColumnFilters && dayColumnFilters.has(columnId);
-
-            const dayColumn = table.getColumn(columnId);
-            const dayColumnCanResize = dayColumn?.getCanResize?.();
 
             return (
               <td
@@ -1325,14 +1505,22 @@ const TableRow = React.memo(function TableRow({
                     position: 'relative',
                     minHeight: `${rowHeight}px`,
                     fontSize: `${cellFontSize}px`,
-                    backgroundColor: '#F0F4FC',
-                    borderBottom: '1px solid #D0D8E8',
-                    borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #D0D8E8',
+                    // Design handover (reference/SystemView.jsx H7 "Daily
+                    // Total" row) fills the day columns with the project
+                    // header color (P.headerSet[0]) -- same #8BA8D8 band
+                    // used for project header rows elsewhere in this table
+                    // -- not the whisper-blue wash that was here before.
+                    backgroundColor: '#8BA8D8',
+                    borderBottom: '1px solid #d3d3d3',
+                    borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3',
                     paddingLeft: '2px',
-                    paddingRight: '2px',
+                    // Was 2px -- left the filter icon sitting almost flush
+                    // against the cell's right border.
+                    paddingRight: '6px',
                   }}
                 >
-                  <span className="text-right flex-1 pr-2" style={{ fontSize: `${cellFontSize}px`, fontWeight: 'bold' }}>{value}</span>
+                  {/* Matches reference/SystemView.jsx H7 dayTotals span (fontSize: 11) -- fixed chrome size, not the cellFontSize zoom scale. */}
+                  <span className="text-right flex-1 pr-2" style={{ fontFamily: "'Mulish', sans-serif", fontSize: '11px', fontWeight: 'bold' }}>{value}</span>
                   {isFilterActive ? (
                     <Filter
                       size={10}
@@ -1351,7 +1539,8 @@ const TableRow = React.memo(function TableRow({
                     <ListFilter
                       size={10}
                       strokeWidth={2}
-                      className="cursor-pointer transition-colors text-gray-400 hover:text-gray-600 shrink-0"
+                      className="cursor-pointer transition-colors shrink-0"
+                      style={{ color: 'black' }}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (handleDayColumnFilterToggle) {
@@ -1359,50 +1548,6 @@ const TableRow = React.memo(function TableRow({
                         }
                       }}
                       title="Add filter"
-                    />
-                  )}
-                  {dayColumnCanResize && (
-                    <div
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const startX = e.clientX;
-                        const startWidth = dayColumn.getSize();
-                        const handleMouseMove = (moveEvent) => {
-                          moveEvent.preventDefault();
-                          const diff = moveEvent.clientX - startX;
-                          const minSize = dayColumn.columnDef.minSize || 30;
-                          const newWidth = Math.max(minSize, startWidth + diff);
-                          table.setColumnSizing(prev => ({ ...prev, [dayColumn.id]: newWidth }));
-                        };
-                        const handleMouseUp = () => {
-                          document.removeEventListener('mousemove', handleMouseMove);
-                          document.removeEventListener('mouseup', handleMouseUp);
-                          document.body.style.cursor = '';
-                          document.body.style.userSelect = '';
-                        };
-                        document.addEventListener('mousemove', handleMouseMove);
-                        document.addEventListener('mouseup', handleMouseUp);
-                        document.body.style.cursor = 'col-resize';
-                        document.body.style.userSelect = 'none';
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#000000'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                      className="column-resizer"
-                      style={{
-                        position: 'absolute',
-                        right: '-2px',
-                        top: 0,
-                        bottom: 0,
-                        width: '10px',
-                        cursor: 'col-resize',
-                        userSelect: 'none',
-                        touchAction: 'none',
-                        backgroundColor: 'transparent',
-                        zIndex: 10000,
-                        pointerEvents: 'all',
-                      }}
-                      title="Drag to resize column"
                     />
                   )}
                 </div>

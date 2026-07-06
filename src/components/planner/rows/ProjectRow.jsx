@@ -139,7 +139,7 @@ export default function ProjectRow({
       )}
       <tr
         style={style}
-        className={isRowSelected || isDragging ? 'selected-row' : ''}
+        className={isRowSelected || isDragging ? 'selected-row sys-sel-row' : ''}
         onDragOver={(e) => handleDragOver(e, rowId)}
         onDrop={(e) => handleDrop(e, rowId)}
       >
@@ -174,8 +174,11 @@ export default function ProjectRow({
                     handleDragStart(e, rowId);
                   }}
                   onDragEnd={handleDragEnd}
-                  className="h-full border-r border-b border-gray-300 flex items-center justify-between font-mono cursor-grab active:cursor-grabbing"
-                  style={{ fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
+                  className="h-full border-r border-b border-gray-300 flex items-center justify-between cursor-grab active:cursor-grabbing"
+                  // Row-number gutter is Mulish per the design handover
+                  // (NUM_FONT in reference/SystemView.jsx) -- not Tailwind's
+                  // generic `font-mono` stack, which was never the intended font.
+                  style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
                   onClick={(e) => {
                     handleRowNumberClick(e, rowId);
                     window.dispatchEvent(new CustomEvent(TASK_ROW_PANEL_CLOSE_EVENT));
@@ -626,6 +629,9 @@ export default function ProjectRow({
                   borderRight: borderRightStyle,
                   paddingLeft: '3px',
                   paddingRight: '3px',
+                  // Scheduled-total / quota figures are ledger content
+                  // (matches NUM_FONT/Mulish in the design handover).
+                  fontFamily: (columnId === 'estimate' || columnId === 'timeValue') ? "'Mulish', sans-serif" : undefined,
                   fontWeight: isHeader && columnId === 'estimate' ? '600' : '400',
                   fontStyle: columnId === 'timeValue' ? 'italic' : 'normal',
                   justifyContent: columnId === 'estimate' ? 'flex-end' : 'flex-start',

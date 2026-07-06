@@ -149,12 +149,15 @@ function DropdownCell({
     >
       <button
         ref={buttonRef}
-        className={`${isPillbox ? 'py-0.5 rounded-full flex-1' : 'w-full h-full px-1'} focus:outline-none flex items-center justify-between gap-1`}
+        className={`${isPillbox ? 'py-0.5 flex-1' : 'w-full h-full px-1'} focus:outline-none flex items-center justify-between gap-1`}
         style={{
           fontSize: isPillbox ? `${cellFontSize}px` : `${cellFontSize}px`,
           backgroundColor: isPillbox && colors ? colors.bg : '#ffffff',
           color: isPillbox && colors ? colors.text : 'inherit',
           fontWeight: isPillbox ? '500' : 'normal',
+          // Design handover (reference/SystemDropdowns.jsx, PillTrigger) uses
+          // a squarer borderRadius: 5 chip, not a fully-rounded pill.
+          borderRadius: isPillbox ? '5px' : undefined,
           paddingLeft: isPillbox ? '8px' : undefined,
           paddingRight: isPillbox ? '8px' : undefined,
           border: '2px solid var(--sel-ring)',
@@ -196,7 +199,7 @@ function DropdownCell({
                   boxShadow: (!isPillbox && index === selectedIndex) ? 'inset 0 0 0 2px var(--brand-deep)' : 'none',
                   backgroundColor: isPillbox && optionColors ? optionColors.bg : (index === selectedIndex ? 'var(--sel-row)' : '#ffffff'),
                   color: isPillbox && optionColors ? optionColors.text : 'inherit',
-                  borderRadius: isPillbox ? '9999px' : '0',
+                  borderRadius: isPillbox ? '5px' : '0',
                   margin: isPillbox ? '2px 4px' : '0',
                   fontWeight: isPillbox ? '500' : 'normal',
                   paddingLeft: isPillbox ? '8px' : '8px',

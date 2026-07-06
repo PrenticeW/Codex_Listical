@@ -69,8 +69,13 @@ function PlannerTable({
     <div className="flex-1 flex flex-col min-h-0 gap-4 overflow-hidden">
       <div
         ref={tableBodyRef}
-        className="flex-1 overflow-auto border border-slate-200/60 bg-white rounded-lg shadow-sm"
-        style={{ position: 'relative' }}
+        className="overflow-auto no-scrollbar border border-slate-200/60 bg-white rounded-lg shadow-sm"
+        // Was `flex-1`, which always stretches to fill the remaining column
+        // height regardless of content -- with few rows that left a tall
+        // empty white box below the last row. `maxHeight: 100%` instead caps
+        // it at the available space (still scrolls when content is taller)
+        // but lets it shrink to the actual content height otherwise.
+        style={{ position: 'relative', maxHeight: '100%' }}
         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
       >
         <table
@@ -101,7 +106,14 @@ function PlannerTable({
               display: 'grid',
               position: 'sticky',
               top: 0,
-              zIndex: 4,
+              // Must beat the scrolling body's row-number gutter cells
+              // (rowNumZIndex, up to 10 in TableRow.jsx) -- those sticky
+              // <td>s live in an unpositioned tbody/tr, so they compare
+              // directly against this tbody's z-index in the same
+              // stacking context. If this value is lower, the numbered
+              // gutter scrolls in front of the pinned black header block
+              // instead of disappearing behind it.
+              zIndex: 20,
               backgroundColor: 'white',
               height: `${8 * rowHeight}px`,
               width: `${table.getTotalSize()}px`,
@@ -266,31 +278,6 @@ function PlannerTable({
             })}
           </tbody>
         </table>
-      </div>
-
-      {/* Debug info */}
-      <div className="p-3 bg-slate-100 rounded-lg text-xs font-mono shrink-0 border border-slate-200">
-        <div className="flex gap-4">
-          <div>
-            <span className="text-green-600 font-semibold">Virtualization:</span> Rendering {rowVirtualizer.getVirtualItems().length} of {data.length} rows
-          </div>
-          <div>Selected cells: {selectedCells.size} {selectedCells.size > 0 && `(${Array.from(selectedCells).slice(0, 5).join(', ')}${selectedCells.size > 5 ? '...' : ''})`}</div>
-          <div>Selected rows: {selectedRows.size} {selectedRows.size > 0 && `(${Array.from(selectedRows).join(', ')})`}</div>
-        </div>
-        <div className="mt-1">
-          <span>Editing: {editingCell ? `${editingCell.rowId} / ${editingCell.columnId}` : 'None'}</span>
-          {' • '}
-          <span style={undoStack.length > 0 ? { color:'var(--brand-deep)', fontWeight:600 } : { color:'#94a3b8' }}>
-            Undo: {undoStack.length}
-          </span>
-          {' • '}
-          <span style={redoStack.length > 0 ? { color:'var(--brand-deep)', fontWeight:600 } : { color:'#94a3b8' }}>
-            Redo: {redoStack.length}
-          </span>
-        </div>
-        <div className="text-slate-500 mt-1">
-          Try: Click row # to select row • Click cell to select • Drag to select range • Shift+Click for range • Cmd/Ctrl+Click for multi • Double-click to edit • Delete/Backspace to clear cells/rows • Cmd/Ctrl+Backspace to delete rows entirely • Cmd/Ctrl+C to copy • Cmd/Ctrl+V to paste • Cmd/Ctrl+Z to undo • Cmd/Ctrl+Shift+Z to redo
-        </div>
       </div>
     </div>
   );
