@@ -15,6 +15,7 @@ import { createPortal } from 'react-dom';
 import PanelShell from './PanelShell';
 import { useNavigate } from 'react-router-dom';
 import { useGearPanel } from '../contexts/GearPanelContext';
+import usePanelWidth from '../hooks/usePanelWidth';
 import { useAuth } from '../contexts/AuthContext';
 import { useYear } from '../contexts/YearContext';
 import { loadSiteSnapshots, restoreSiteSnapshot } from '../lib/snapshotStorage';
@@ -1055,6 +1056,7 @@ export default function GearPanel() {
   const { currentYear } = useYear();
   const [showHistory, setShowHistory] = useState(false);
   const [navBottom, setNavBottom] = useState(0);
+  const { width: panelWidth, setWidth: setPanelWidth, minWidth, maxWidth } = usePanelWidth();
 
   // Track clock format at the GearPanel level so HistoryView always has the
   // latest value without managing its own copy.
@@ -1104,7 +1106,15 @@ export default function GearPanel() {
   }, [isOpen, close]);
 
   return (
-    <PanelShell isOpen={isOpen} navBottom={navBottom} width={320} zIndex={99996}>
+    <PanelShell
+      isOpen={isOpen}
+      navBottom={navBottom}
+      width={panelWidth}
+      zIndex={99996}
+      onWidthChange={setPanelWidth}
+      minWidth={minWidth}
+      maxWidth={maxWidth}
+    >
       {/* Two-view slider — 200% wide (two 50% panes), not fixed 640/320px.
           PanelShell's frosted tray is inset 7px from the panel's own width,
           so it's narrower than that width prop; percentage-based sizing

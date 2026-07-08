@@ -13,6 +13,8 @@ function PlannerTable({
   selectedRows,
   rowVirtualizer,
   isCellSelected,
+  getCellSelectionEdges,
+  hasMultiCellSelection,
   editingCell,
   editValue,
   setEditValue,
@@ -117,11 +119,29 @@ function PlannerTable({
               backgroundColor: 'white',
               height: `${8 * rowHeight}px`,
               width: `${table.getTotalSize()}px`,
+              // Matches the parent panel's rounded-lg (8px) so this pinned,
+              // square-cornered block doesn't visually square off the
+              // panel's top corners once it's stuck flush against them.
+              // overflow: hidden clips its own row backgrounds to that
+              // curve too -- same pattern used for the sticky header on
+              // the Plan page (TacticsPage.jsx).
+              borderTopLeftRadius: 8,
+              borderTopRightRadius: 8,
+              overflow: 'hidden',
             }}
           >
             {table.getRowModel().rows.slice(0, 8).map((row, index) => {
               const rowId = row.original.id;
               const isRowSelected = selectedRows.has(rowId);
+
+              // Only the outer edges of a contiguous selected-row block get a
+              // border (see index.css .sys-sel-row) — check the neighbours in
+              // full row order, not just this pinned slice.
+              const allRows = table.getRowModel().rows;
+              const prevRowId = allRows[index - 1]?.original.id;
+              const nextRowId = allRows[index + 1]?.original.id;
+              const isTopOfSelectionBlock = isRowSelected && !(prevRowId && selectedRows.has(prevRowId));
+              const isBottomOfSelectionBlock = isRowSelected && !(nextRowId && selectedRows.has(nextRowId));
 
               // Create a virtual row object for proper positioning
               const virtualRow = {
@@ -136,7 +156,11 @@ function PlannerTable({
                   row={row}
                   virtualRow={virtualRow}
                   isRowSelected={isRowSelected}
+                  isTopOfSelectionBlock={isTopOfSelectionBlock}
+                  isBottomOfSelectionBlock={isBottomOfSelectionBlock}
                   isCellSelected={isCellSelected}
+                  getCellSelectionEdges={getCellSelectionEdges}
+                  hasMultiCellSelection={hasMultiCellSelection}
                   editingCell={editingCell}
                   editValue={editValue}
                   setEditValue={setEditValue}
@@ -209,6 +233,15 @@ function PlannerTable({
               const rowId = row.original.id;
               const isRowSelected = selectedRows.has(rowId);
 
+              // Only the outer edges of a contiguous selected-row block get a
+              // border (see index.css .sys-sel-row) — check the neighbours in
+              // full row order.
+              const allRows = table.getRowModel().rows;
+              const prevRowId = allRows[virtualRow.index - 1]?.original.id;
+              const nextRowId = allRows[virtualRow.index + 1]?.original.id;
+              const isTopOfSelectionBlock = isRowSelected && !(prevRowId && selectedRows.has(prevRowId));
+              const isBottomOfSelectionBlock = isRowSelected && !(nextRowId && selectedRows.has(nextRowId));
+
               // Adjust virtualRow start to account for the 8 pinned rows
               const adjustedVirtualRow = {
                 ...virtualRow,
@@ -221,7 +254,11 @@ function PlannerTable({
                   row={row}
                   virtualRow={adjustedVirtualRow}
                   isRowSelected={isRowSelected}
+                  isTopOfSelectionBlock={isTopOfSelectionBlock}
+                  isBottomOfSelectionBlock={isBottomOfSelectionBlock}
                   isCellSelected={isCellSelected}
+                  getCellSelectionEdges={getCellSelectionEdges}
+                  hasMultiCellSelection={hasMultiCellSelection}
                   editingCell={editingCell}
                   editValue={editValue}
                   setEditValue={setEditValue}

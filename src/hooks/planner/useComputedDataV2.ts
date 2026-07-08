@@ -138,9 +138,13 @@ export default function useComputedDataV2({
       // Write a task-event for every row whose computed status differs from its stored status.
       // This covers auto-transitions (e.g. '-' → 'Scheduled' when time is scheduled) that
       // never go through handleEditComplete.
+      // Skip the very first transition away from '-' (the placeholder status a blank/new
+      // row starts with before it has any task text) -- that's just the row acquiring its
+      // initial real status, which the "Created" entry in the history panel already covers.
+      // Logging it too would duplicate that as a redundant "- -> Not Scheduled" event.
       data.forEach(row => {
         const computed = row.id ? computedById.get(row.id) : undefined;
-        if (computed && row.id && row.status !== computed.status) {
+        if (computed && row.id && row.status !== computed.status && row.status !== '-') {
           writeTaskEvent(row.id, {
             field: 'status',
             oldValue: row.status || null,

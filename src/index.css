@@ -1,5 +1,16 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
+/* Self-hosted fonts (@fontsource) — not loaded from the Google Fonts CDN.
+   Avoids sending every visitor's IP address to fonts.googleapis.com on
+   page load; see docs/compliance.md "Third-party fonts". */
+@import "@fontsource/dm-sans/400.css";
+@import "@fontsource/dm-sans/500.css";
+@import "@fontsource/dm-sans/600.css";
+@import "@fontsource/dm-sans/700.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/mulish/400.css";
+@import "@fontsource/mulish/500.css";
+@import "@fontsource/mulish/600.css";
+@import "@fontsource/mulish/700.css";
 @import "tailwindcss";
 
 :root {
@@ -82,21 +93,34 @@ table td.active-cell {
   transition: box-shadow 0.15s ease;
 }
 
-/* Cell selection highlight — thin rose outline, drawn above child content
-   so dropdowns, pills, etc. don't clip it. */
+/* Cell range selection — a border drawn only on the outer edges of the
+   selected block (sel-edge-* modifiers, computed by getCellSelectionEdges
+   in useSpreadsheetSelection.js), so a multi-cell selection reads as one
+   bordered area instead of every cell getting its own full outline. The
+   light --sel-row overlay wash (same treatment as row selection) is added
+   via .sel-fill only once more than one cell is selected — a single
+   selected cell just gets its outline, same as before. */
 table td.selected-cell {
   position: relative;
   z-index: 1;
+}
+
+table td.selected-cell.sel-fill {
+  background-color: var(--sel-row) !important;
 }
 
 table td.selected-cell::after {
   content: '';
   position: absolute;
   inset: 0;
-  border: 2px solid var(--sel-ring);
   pointer-events: none;
   z-index: 10;
 }
+
+table td.selected-cell.sel-edge-top::after    { border-top: 2px solid var(--sel-ring); }
+table td.selected-cell.sel-edge-bottom::after { border-bottom: 2px solid var(--sel-ring); }
+table td.selected-cell.sel-edge-left::after   { border-left: 2px solid var(--sel-ring); }
+table td.selected-cell.sel-edge-right::after  { border-right: 2px solid var(--sel-ring); }
 
 /* Dropdown positioning - hint to browser to show options below */
 table td select {
@@ -131,9 +155,15 @@ tr.selected-row td button {
 }
 
 /* System page row focus state — design handover (reference/index.html
-   `.sys-sel-row`). Draws a border ring around the selected row's content,
+   `.sys-sel-row`). Draws a border ring around the selected *block* of rows,
    skipping the row-number gutter (36px, matches the fixed rowNum column
-   width in usePlannerColumns.js), on top of the existing background wash. */
+   width in usePlannerColumns.js), on top of the existing background wash.
+   The left edge is drawn on every selected row — consecutive rows' left
+   borders line up into one continuous edge — but the top/bottom caps are
+   only drawn on the first/last row of a contiguous selected block
+   (.sel-block-top / .sel-block-bottom, computed in PlannerTable.jsx), so a
+   multi-row selection reads as one bordered area instead of a stack of
+   individually-outlined rows. */
 tr.sys-sel-row {
   position: relative;
   z-index: 1;
@@ -146,23 +176,17 @@ tr.sys-sel-row::before {
   bottom: 0;
   left: 36px;
   right: 0;
-  border-top: 1px solid var(--sel-ring);
-  border-bottom: 1px solid var(--sel-ring);
   border-left: 1px solid var(--sel-ring);
   pointer-events: none;
   z-index: 5;
 }
 
-/* Row number cell when row is selected */
-tr.selected-row td.selected-cell {
-  background-color: var(--sel-gutter) !important;
-  font-weight: 700 !important;
-  cursor: grab !important;
-  color: #fff !important;
+tr.sys-sel-row.sel-block-top::before {
+  border-top: 1px solid var(--sel-ring);
 }
 
-tr.selected-row td.selected-cell:active {
-  cursor: grabbing !important;
+tr.sys-sel-row.sel-block-bottom::before {
+  border-bottom: 1px solid var(--sel-ring);
 }
 
 /* Goal page drag handle — black anchor when row is selected */

@@ -349,7 +349,7 @@ function SubprojectHeaderPanel({ selectedTask, onBack }) {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <BackBtn onClick={onBack} />
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
+      <div className="no-scrollbar" style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
         <div style={{ paddingTop: 8, paddingBottom: 24 }}>
 
           <div style={BENTO_CARD}>
@@ -561,7 +561,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
       }}>
         <BackBtn onClick={onBack} />
 
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
+        <div className="no-scrollbar" style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
           <div style={{ paddingTop: 8, paddingBottom: 24 }}>
 
             {/* Task name */}
@@ -623,11 +623,14 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
         <BackBtn onClick={() => setShowHistory(false)} />
 
         <div style={{ flex: 1, minHeight: 0, padding: '8px 11px 16px', display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <div style={{
-            flex: 1, minHeight: 0, background: '#FFFFFF', borderRadius: 12,
-            border: '1px solid #e8e8e4', boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.07)',
-            overflowY: 'auto', overflowX: 'hidden', padding: '15px 16px',
-          }}>
+          <div
+            className="no-scrollbar"
+            style={{
+              flex: 1, minHeight: 0, background: '#FFFFFF', borderRadius: 12,
+              border: '1px solid #e8e8e4', boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.07)',
+              overflowY: 'auto', overflowX: 'hidden', padding: '15px 16px',
+            }}
+          >
             <SectionLabel>Status History</SectionLabel>
             {statusEvents.length === 0 ? (
               <div style={{ fontSize: 12, color: C.textFaint, fontStyle: 'italic', paddingTop: 4 }}>

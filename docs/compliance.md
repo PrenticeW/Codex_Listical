@@ -35,3 +35,9 @@ Supabase's built-in SMTP is development-only (~2 auth emails per hour per projec
 ### Signup flow note
 
 `signup` in `AuthContext.signupCore` is intentionally **not** wrapped with `useAsyncHandler`. Wrapping it flips global `isLoading`, which causes `PublicRoute` to render its spinner, unmounting SignupPage mid-flow and wiping local state. Do not re-wrap it. Same applies to `sendOtp` and `verifyOtp`.
+
+---
+
+## Third-party fonts
+
+Fonts (DM Sans, IBM Plex Mono, Mulish) are self-hosted via `@fontsource` packages and imported in `src/index.css`, not loaded from the Google Fonts CDN. Loading fonts directly from `fonts.googleapis.com` sends every visitor's IP address to Google before consent — the pattern a German regional court (LG München, 2022) found to violate GDPR, since self-hosting is trivially possible and no legitimate-interest defense applies. Do not reintroduce a `fonts.googleapis.com` `@import`/`<link>` for any typeface; add new weights via `@fontsource/<family>/<weight>.css` instead.

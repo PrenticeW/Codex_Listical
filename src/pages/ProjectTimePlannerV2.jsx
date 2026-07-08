@@ -15,7 +15,6 @@ import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
 import { TACTICS_SEND_TO_SYSTEM_EVENT, getSendToSystemTimestamp, loadSentChipsSnapshot, loadTacticsYearSettings } from '../lib/tacticsStorage';
 import { SYSTEM_PANEL_ACTION_EVENT, SYSTEM_PANEL_SELECTION_EVENT, SYSTEM_PANEL_SCALE_EVENT, SYSTEM_PANEL_DAY_FILTER_EVENT, SYSTEM_PANEL_PROJECT_NAMES_EVENT, SYSTEM_PANEL_PROJECT_FILTER_EVENT } from '../components/SystemPanel';
-import { useSystemPanel } from '../contexts/SystemPanelContext';
 import { useTaskRowPanel, TASK_ROW_DETAIL_UPDATE_EVENT } from '../contexts/TaskRowPanelContext';
 import { loadSentMetricsSnapshot, peekTacticsMetricsCache } from '../lib/tacticsMetricsStorage';
 import { peekTacticsCache } from '../lib/tacticsStorage';
@@ -379,7 +378,6 @@ export default function ProjectTimePlannerV2() {
 
   // Page-specific size setting
   const { sizeScale, increaseSize, decreaseSize } = usePageSize('system');
-  const { isOpen: isSystemPanelOpen } = useSystemPanel();
 
   // Initialise data from cached taskRows when available, otherwise a blank
   // skeleton. On a sync cache hit (the common case after the first visit)
@@ -1833,6 +1831,8 @@ export default function ProjectTimePlannerV2() {
   const {
     getCellKey,
     isCellSelected,
+    getCellSelectionEdges,
+    hasMultiCellSelection,
     getRowRange,
     getCellRange,
     handleRowNumberClick,
@@ -2867,7 +2867,7 @@ export default function ProjectTimePlannerV2() {
         </div>
       )}
 
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-4 pb-4" style={{ paddingRight: isSystemPanelOpen ? 336 : undefined }}>
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-4 pb-4">
         <PlannerTable
           tableBodyRef={tableBodyRef}
         table={table}
@@ -2876,6 +2876,8 @@ export default function ProjectTimePlannerV2() {
         selectedRows={selectedRows}
         rowVirtualizer={rowVirtualizer}
         isCellSelected={isCellSelected}
+        getCellSelectionEdges={getCellSelectionEdges}
+        hasMultiCellSelection={hasMultiCellSelection}
         editingCell={editingCell}
         editValue={editValue}
         setEditValue={setEditValue}

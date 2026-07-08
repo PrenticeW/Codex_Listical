@@ -10,6 +10,7 @@ import {
   ARCHIVED_PROJECT_SUB_STYLE,
 } from '../../constants/planner/rowTypes';
 import { TASK_ROW_DETAIL_EVENT } from '../../contexts/TaskRowPanelContext';
+import { getSelectionEdgeClassNames } from '../../utils/planner/selectionEdgeClasses';
 
 // Active-filter icon color. Filters keep the same icon at rest and when
 // active — only the color changes (no icon swap). High-saturation blue,
@@ -64,7 +65,11 @@ const TableRow = React.memo(function TableRow({
   row,
   virtualRow,
   isRowSelected,
+  isTopOfSelectionBlock,
+  isBottomOfSelectionBlock,
   isCellSelected,
+  getCellSelectionEdges,
+  hasMultiCellSelection,
   editingCell,
   editValue,
   setEditValue,
@@ -217,6 +222,8 @@ const TableRow = React.memo(function TableRow({
         row={row}
         virtualRow={virtualRow}
         isRowSelected={isRowSelected}
+        isTopOfSelectionBlock={isTopOfSelectionBlock}
+        isBottomOfSelectionBlock={isBottomOfSelectionBlock}
         handleRowNumberClick={handleRowNumberClick}
         handleDragStart={handleDragStart}
         handleDragEnd={handleDragEnd}
@@ -235,6 +242,8 @@ const TableRow = React.memo(function TableRow({
         collapsedGroups={collapsedGroups}
         toggleGroupCollapse={toggleGroupCollapse}
         isCellSelected={isCellSelected}
+        getCellSelectionEdges={getCellSelectionEdges}
+        hasMultiCellSelection={hasMultiCellSelection}
         editingCell={editingCell}
         editValue={editValue}
         setEditValue={setEditValue}
@@ -256,6 +265,8 @@ const TableRow = React.memo(function TableRow({
         row={row}
         virtualRow={virtualRow}
         isRowSelected={isRowSelected}
+        isTopOfSelectionBlock={isTopOfSelectionBlock}
+        isBottomOfSelectionBlock={isBottomOfSelectionBlock}
         handleRowNumberClick={handleRowNumberClick}
         handleDragStart={handleDragStart}
         handleDragEnd={handleDragEnd}
@@ -275,6 +286,8 @@ const TableRow = React.memo(function TableRow({
         collapsedGroups={collapsedGroups}
         toggleGroupCollapse={toggleGroupCollapse}
         isCellSelected={isCellSelected}
+        getCellSelectionEdges={getCellSelectionEdges}
+        hasMultiCellSelection={hasMultiCellSelection}
         editingCell={editingCell}
         editValue={editValue}
         setEditValue={setEditValue}
@@ -296,7 +309,11 @@ const TableRow = React.memo(function TableRow({
         row={row}
         virtualRow={virtualRow}
         isRowSelected={isRowSelected}
+        isTopOfSelectionBlock={isTopOfSelectionBlock}
+        isBottomOfSelectionBlock={isBottomOfSelectionBlock}
         isCellSelected={isCellSelected}
+        getCellSelectionEdges={getCellSelectionEdges}
+        hasMultiCellSelection={hasMultiCellSelection}
         editingCell={editingCell}
         editValue={editValue}
         handleRowNumberClick={handleRowNumberClick}
@@ -351,7 +368,11 @@ const TableRow = React.memo(function TableRow({
       )}
       <tr
         style={style}
-        className={isRowSelected || isDragging ? 'selected-row sys-sel-row' : ''}
+        className={[
+          isRowSelected || isDragging ? 'selected-row sys-sel-row' : '',
+          isTopOfSelectionBlock ? 'sel-block-top' : '',
+          isBottomOfSelectionBlock ? 'sel-block-bottom' : '',
+        ].filter(Boolean).join(' ')}
         onDragOver={(e) => handleDragOver(e, rowId)}
         onDrop={(e) => handleDrop(e, rowId)}
       >
@@ -447,7 +468,7 @@ const TableRow = React.memo(function TableRow({
                       backgroundColor: '#E8ECF5',
                       zIndex: rowNumZIndex,
                     }}
-                    className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
+                    className="p-0"
                   >
                     <div
                       draggable
@@ -845,6 +866,7 @@ const TableRow = React.memo(function TableRow({
               const editableColumnId = 'archiveLabel'; // Save to archiveLabel field
               const isEditing = isTaskColumn && editingCell?.rowId === rowId && editingCell?.columnId === editableColumnId;
               const isSelected = isTaskColumn && isCellSelected?.(rowId, editableColumnId);
+              const selectionEdgeClasses = getSelectionEdgeClassNames(getCellSelectionEdges?.(rowId, editableColumnId));
 
               return (
                 <td
@@ -856,7 +878,7 @@ const TableRow = React.memo(function TableRow({
                     height: `${rowHeight}px`,
                     boxSizing: 'border-box',
                   }}
-                  className={`p-0 ${isSelected && !isEditing ? 'selected-cell' : ''}`}
+                  className={`p-0 ${isSelected && !isEditing ? `selected-cell ${selectionEdgeClasses} ${hasMultiCellSelection ? 'sel-fill' : ''}` : ''}`}
                   onMouseDown={(e) => {
                     if (isTaskColumn && handleCellMouseDown) {
                       handleCellMouseDown(e, rowId, editableColumnId);
@@ -1196,7 +1218,7 @@ const TableRow = React.memo(function TableRow({
               className="p-0"
             >
               <div
-                className="h-full flex items-center"
+                className="h-full flex items-center justify-center"
                 style={{
                   minHeight: `${rowHeight}px`,
                   backgroundColor: '#24252B',
@@ -1205,7 +1227,6 @@ const TableRow = React.memo(function TableRow({
                   // merged block since the checkbox cell has no borderLeft
                   // at this row index.
                   borderRight: '1px solid rgba(237,235,221,0.14)',
-                  paddingLeft: '6px',
                 }}
                 onClick={(e) => handleRowNumberClick(e, rowId)}
               >

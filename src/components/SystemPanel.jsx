@@ -18,6 +18,7 @@ import { createPortal } from 'react-dom';
 import PanelShell from './PanelShell';
 import { useLocation } from 'react-router-dom';
 import { useSystemPanel } from '../contexts/SystemPanelContext';
+import usePanelWidth from '../hooks/usePanelWidth';
 import { useTaskRowPanel } from '../contexts/TaskRowPanelContext';
 import { TaskDetailContent } from './planner/TaskRowPanel';
 import { useYear } from '../contexts/YearContext';
@@ -120,6 +121,79 @@ function ActionBtn({ icon, label, disabled, onClick, rightSlot, style }) {
         {label}
       </div>
       {rightSlot}
+    </button>
+  );
+}
+
+// ExpandRowHeader — clickable header of a collapsible Sort/Filter row (Move
+// from Inbox to Planner, Filter by day, Filter by goal). Gets a hover state
+// like every other interactive row in this panel (icon/label/chevron tint to
+// brand + a soft brand background) instead of just a cursor change.
+function ExpandRowHeader({ icon, label, expanded, onToggle }) {
+  const [hov, setHov] = useState(false);
+  const active = hov || expanded;
+  return (
+    <div
+      onClick={onToggle}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex', alignItems: 'center', padding: '13px 16px',
+        cursor: 'pointer',
+        background: active ? 'var(--brand-hover-bg)' : 'transparent',
+        transition: 'background 0.15s',
+      }}
+    >
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, flex: 1,
+        color: active ? 'var(--brand-deep)' : C.textDim, transition: 'color 0.15s',
+      }}>
+        <span style={{ display: 'flex' }}>{icon}</span>
+        <span style={{ fontFamily: FONT, fontSize: 14 }}>{label}</span>
+      </div>
+      <svg
+        width="7" height="11" viewBox="0 0 7 11" fill="none"
+        style={{ transition: 'transform 0.2s, stroke 0.15s', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)', flexShrink: 0 }}
+      >
+        <path d="M1 1l5 4.5L1 10" stroke={active ? 'var(--brand-deep)' : C.textLight} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    </div>
+  );
+}
+
+// FilterActionBtn — centered, bordered ghost button for one-shot actions inside
+// an expanded filter/sort section (Sort, Clear filter). Shares one style so
+// every such action reads the same instead of each section inventing its own
+// treatment (solid fill vs. underlined text link).
+function FilterActionBtn({ label, onClick, disabled }) {
+  return (
+    <button
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        width: '100%', border: `1px solid ${C.border}`, borderRadius: 8,
+        padding: '7px 11px', background: 'none',
+        fontFamily: FONT, fontSize: 13, fontWeight: 400,
+        color: disabled ? C.textFaint : C.textDim,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.5 : 1,
+        transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+      }}
+      onMouseEnter={e => {
+        if (!disabled) {
+          e.currentTarget.style.borderColor = 'var(--brand-hover-bd)';
+          e.currentTarget.style.color = 'var(--brand-deep)';
+          e.currentTarget.style.background = 'var(--brand-hover-bg)';
+        }
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = C.border;
+        e.currentTarget.style.color = disabled ? C.textFaint : C.textDim;
+        e.currentTarget.style.background = 'none';
+      }}
+    >
+      {label}
     </button>
   );
 }
@@ -389,26 +463,16 @@ function SortSection() {
         overflow: 'hidden',
       }}>
         {/* Header row */}
-        <div
-          style={{
-            display: 'flex', alignItems: 'center', padding: '13px 16px',
-            cursor: 'pointer',
-          }}
-          onClick={() => setInboxOpen(v => !v)}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+        <ExpandRowHeader
+          icon={
             <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-              <path d="M1 3h11M3 6.5h7M5 10h3" stroke={C.textDim} strokeWidth="1.2" strokeLinecap="round"/>
+              <path d="M1 3h11M3 6.5h7M5 10h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
             </svg>
-            <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim }}>Move from Inbox to Planner</span>
-          </div>
-          <svg
-            width="7" height="11" viewBox="0 0 7 11" fill="none"
-            style={{ transition: 'transform 0.2s', transform: inboxOpen ? 'rotate(90deg)' : 'rotate(0deg)', flexShrink: 0 }}
-          >
-            <path d="M1 1l5 4.5L1 10" stroke={C.textLight} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </div>
+          }
+          label="Move from Inbox to Planner"
+          expanded={inboxOpen}
+          onToggle={() => setInboxOpen(v => !v)}
+        />
 
         {/* Expanded panel */}
         {inboxOpen && (
@@ -423,20 +487,9 @@ function SortSection() {
                 />
               ))}
             </div>
-            <button
-              onClick={handleSort}
-              disabled={!anyChecked}
-              style={{
-                marginTop: 10, width: '100%', height: 30,
-                background: anyChecked ? 'var(--brand-deep)' : C.border,
-                border: 'none', borderRadius: 7,
-                fontFamily: FONT, fontSize: 13, fontWeight: 500,
-                color: '#fff', cursor: anyChecked ? 'pointer' : 'default',
-                transition: 'background 0.15s',
-              }}
-            >
-              Sort
-            </button>
+            <div style={{ marginTop: 10 }}>
+              <FilterActionBtn label="Sort" onClick={handleSort} disabled={!anyChecked} />
+            </div>
           </div>
         )}
       </div>
@@ -555,25 +608,18 @@ function PlanSection() {
 
       {/* Filter by day */}
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden', marginBottom: 8 }}>
-        <div
-          style={{ display: 'flex', alignItems: 'center', padding: '13px 16px', cursor: 'pointer' }}
-          onClick={() => setDayOpen(v => !v)}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+        <ExpandRowHeader
+          icon={
             <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-              <rect x="1" y="2" width="11" height="9" rx="1.5" stroke={C.textDim} strokeWidth="1.2"/>
-              <path d="M4 1v2M9 1v2" stroke={C.textDim} strokeWidth="1.2" strokeLinecap="round"/>
-              <path d="M1 5h11" stroke={C.textDim} strokeWidth="1.2"/>
+              <rect x="1" y="2" width="11" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
+              <path d="M4 1v2M9 1v2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+              <path d="M1 5h11" stroke="currentColor" strokeWidth="1.2"/>
             </svg>
-            <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim }}>Filter by day</span>
-          </div>
-          <svg
-            width="7" height="11" viewBox="0 0 7 11" fill="none"
-            style={{ transition: 'transform 0.2s', transform: dayOpen ? 'rotate(90deg)' : 'rotate(0deg)', flexShrink: 0 }}
-          >
-            <path d="M1 1l5 4.5L1 10" stroke={C.textLight} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </div>
+          }
+          label="Filter by day"
+          expanded={dayOpen}
+          onToggle={() => setDayOpen(v => !v)}
+        />
         {dayOpen && (
           <div style={{ borderTop: `1px solid ${C.border}`, padding: '14px 16px 16px' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -599,16 +645,9 @@ function PlanSection() {
               })}
             </div>
             {activeDays.size > 0 && (
-              <button
-                onClick={handleClearDays}
-                style={{
-                  marginTop: 8, padding: 0, background: 'none', border: 'none',
-                  cursor: 'pointer', fontFamily: FONT, fontSize: 12, color: C.textFaint,
-                  textDecoration: 'underline',
-                }}
-              >
-                Clear filter
-              </button>
+              <div style={{ marginTop: 8 }}>
+                <FilterActionBtn label="Clear filter" onClick={handleClearDays} />
+              </div>
             )}
           </div>
         )}
@@ -616,25 +655,18 @@ function PlanSection() {
 
       {/* Filter by goal */}
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
-        <div
-          style={{ display: 'flex', alignItems: 'center', padding: '13px 16px', cursor: 'pointer' }}
-          onClick={() => setGoalOpen(v => !v)}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+        <ExpandRowHeader
+          icon={
             <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-              <circle cx="6.5" cy="6.5" r="5" stroke={C.textDim} strokeWidth="1.2"/>
-              <circle cx="6.5" cy="6.5" r="2.5" stroke={C.textDim} strokeWidth="1.2"/>
-              <circle cx="6.5" cy="6.5" r="0.8" fill={C.textDim}/>
+              <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.2"/>
+              <circle cx="6.5" cy="6.5" r="2.5" stroke="currentColor" strokeWidth="1.2"/>
+              <circle cx="6.5" cy="6.5" r="0.8" fill="currentColor"/>
             </svg>
-            <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim }}>Filter by goal</span>
-          </div>
-          <svg
-            width="7" height="11" viewBox="0 0 7 11" fill="none"
-            style={{ transition: 'transform 0.2s', transform: goalOpen ? 'rotate(90deg)' : 'rotate(0deg)', flexShrink: 0 }}
-          >
-            <path d="M1 1l5 4.5L1 10" stroke={C.textLight} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </div>
+          }
+          label="Filter by goal"
+          expanded={goalOpen}
+          onToggle={() => setGoalOpen(v => !v)}
+        />
         {goalOpen && (
           <div style={{ borderTop: `1px solid ${C.border}`, padding: '14px 16px 16px' }}>
             {projects.length === 0 ? (
@@ -664,16 +696,9 @@ function PlanSection() {
                   })}
                 </div>
                 {activeProject && (
-                  <button
-                    onClick={() => handleProjectPick(activeProject)}
-                    style={{
-                      marginTop: 8, padding: 0, background: 'none', border: 'none',
-                      cursor: 'pointer', fontFamily: FONT, fontSize: 12, color: C.textFaint,
-                      textDecoration: 'underline',
-                    }}
-                  >
-                    Clear filter
-                  </button>
+                  <div style={{ marginTop: 8 }}>
+                    <FilterActionBtn label="Clear filter" onClick={() => handleProjectPick(activeProject)} />
+                  </div>
                 )}
               </>
             )}
@@ -795,6 +820,7 @@ export default function SystemPanel() {
   const [navBottom, setNavBottom] = useState(0);
   const { pathname } = useLocation();
   const { currentYear } = useYear();
+  const { width: panelWidth, setWidth: setPanelWidth, minWidth, maxWidth } = usePanelWidth();
 
   const [use24Hour, setUse24Hour] = useState(
     () => peekTacticsCache(currentYear).yearSettings?.use24Hour ?? false
@@ -853,7 +879,15 @@ export default function SystemPanel() {
   const showTaskDetail = Boolean(selectedTask);
 
   return (
-    <PanelShell isOpen={isOpen} navBottom={navBottom} width={320} zIndex={99994}>
+    <PanelShell
+      isOpen={isOpen}
+      navBottom={navBottom}
+      width={panelWidth}
+      zIndex={99994}
+      onWidthChange={setPanelWidth}
+      minWidth={minWidth}
+      maxWidth={maxWidth}
+    >
       {/* ── Outer slide: system content ↔ task detail ──
           200% wide (two 50% panes), not fixed 640/320px — the frosted tray
           in PanelShell is inset 7px from the panel's own width, so it's
@@ -871,7 +905,10 @@ export default function SystemPanel() {
         }}>
           {/* System main content */}
           <div style={{ width: '50%', flexShrink: 0, overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingTop: 20, paddingBottom: 24 }}>
+            <div
+              className="no-scrollbar"
+              style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingTop: 20, paddingBottom: 24 }}
+            >
               <InsertSection />
               <SortSection />
               <ArchiveSection />

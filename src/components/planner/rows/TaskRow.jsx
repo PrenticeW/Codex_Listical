@@ -9,6 +9,7 @@ import ProjectDropdownCell from '../ProjectDropdownCell';
 import SubprojectDropdownCell from '../SubprojectDropdownCell';
 import { ESTIMATE_COLOR_MAP } from '../../../constants/planner/rowTypes';
 import { ChevronDown } from 'lucide-react';
+import { getSelectionEdgeClassNames } from '../../../utils/planner/selectionEdgeClasses';
 
 /**
  * TaskRow Component
@@ -21,7 +22,11 @@ const TaskRow = React.memo(function TaskRow({
   row,
   virtualRow,
   isRowSelected,
+  isTopOfSelectionBlock,
+  isBottomOfSelectionBlock,
   isCellSelected,
+  getCellSelectionEdges,
+  hasMultiCellSelection,
   editingCell,
   editValue,
   handleRowNumberClick,
@@ -114,7 +119,11 @@ const TaskRow = React.memo(function TaskRow({
       )}
       <tr
         style={style}
-        className={isRowSelected || isDragging ? 'selected-row sys-sel-row' : ''}
+        className={[
+          isRowSelected || isDragging ? 'selected-row sys-sel-row' : '',
+          isTopOfSelectionBlock ? 'sel-block-top' : '',
+          isBottomOfSelectionBlock ? 'sel-block-bottom' : '',
+        ].filter(Boolean).join(' ')}
         onDragOver={(e) => handleDragOver(e, rowId)}
         onDrop={(e) => handleDrop(e, rowId)}
       >
@@ -144,7 +153,7 @@ const TaskRow = React.memo(function TaskRow({
                   backgroundColor: '#E8ECF5',
                   zIndex: rowNumZIndex,
                 }}
-                className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
+                className="p-0"
               >
                 <div
                   draggable
@@ -222,7 +231,7 @@ const TaskRow = React.memo(function TaskRow({
                 position: 'relative',
                 overflow: isEditing ? 'visible' : 'hidden',
               }}
-              className={`p-0 ${isSelected && !isEditing ? 'selected-cell' : ''}`}
+              className={`p-0 ${isSelected && !isEditing ? `selected-cell ${getSelectionEdgeClassNames(getCellSelectionEdges?.(rowId, columnId))} ${hasMultiCellSelection ? 'sel-fill' : ''}` : ''}`}
               onDragOver={(e) => handleCellDragOver?.(e, rowId, columnId)}
               onDragLeave={(e) => handleCellDragLeave?.(e)}
               onDrop={(e) => handleCellDrop?.(e, rowId, columnId)}

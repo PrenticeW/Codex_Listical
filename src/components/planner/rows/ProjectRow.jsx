@@ -1,6 +1,7 @@
 import { GripVertical, ChevronRight, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { TASK_ROW_DETAIL_EVENT, TASK_ROW_PANEL_CLOSE_EVENT } from '../../../contexts/TaskRowPanelContext';
+import { getSelectionEdgeClassNames } from '../../../utils/planner/selectionEdgeClasses';
 
 /**
  * ProjectRow Component
@@ -15,6 +16,8 @@ export default function ProjectRow({
   row,
   virtualRow,
   isRowSelected,
+  isTopOfSelectionBlock,
+  isBottomOfSelectionBlock,
   handleRowNumberClick,
   handleDragStart,
   handleDragEnd,
@@ -34,6 +37,8 @@ export default function ProjectRow({
   collapsedGroups = new Set(),
   toggleGroupCollapse = () => {},
   isCellSelected,
+  getCellSelectionEdges,
+  hasMultiCellSelection,
   editingCell,
   editValue,
   setEditValue,
@@ -139,7 +144,11 @@ export default function ProjectRow({
       )}
       <tr
         style={style}
-        className={isRowSelected || isDragging ? 'selected-row sys-sel-row' : ''}
+        className={[
+          isRowSelected || isDragging ? 'selected-row sys-sel-row' : '',
+          isTopOfSelectionBlock ? 'sel-block-top' : '',
+          isBottomOfSelectionBlock ? 'sel-block-bottom' : '',
+        ].filter(Boolean).join(' ')}
         onDragOver={(e) => handleDragOver(e, rowId)}
         onDrop={(e) => handleDrop(e, rowId)}
       >
@@ -165,7 +174,7 @@ export default function ProjectRow({
                   backgroundColor: '#E8ECF5',
                   zIndex: rowNumZIndex,
                 }}
-                className={`p-0 ${isRowSelected ? 'selected-cell' : ''}`}
+                className="p-0"
               >
                 <div
                   draggable
@@ -229,6 +238,7 @@ export default function ProjectRow({
               const editableColumnId = isSubprojectHeader ? 'subprojectName' : 'projectName';
               const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === editableColumnId;
               const isSelected = isCellSelected?.(rowId, editableColumnId);
+              const selectionEdgeClasses = getSelectionEdgeClassNames(getCellSelectionEdges?.(rowId, editableColumnId));
 
               return (
                 <td
@@ -241,7 +251,7 @@ export default function ProjectRow({
                     userSelect: isEditing ? 'text' : 'none',
                     boxSizing: 'border-box',
                   }}
-                  className={`p-0 ${isSelected && !isEditing ? 'selected-cell' : ''}`}
+                  className={`p-0 ${isSelected && !isEditing ? `selected-cell ${selectionEdgeClasses} ${hasMultiCellSelection ? 'sel-fill' : ''}` : ''}`}
                   onMouseDown={(e) => {
                     if (isEditing) return;
                     // Don't select the row when clicking the collapse/expand chevron
@@ -289,18 +299,6 @@ export default function ProjectRow({
                       outlineOffset: '-2px',
                     }}
                   >
-                    {isHeader && groupId && (
-                      <span
-                        data-group-toggle
-                        style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!isEditing) toggleGroupCollapse(groupId);
-                        }}
-                      >
-                        {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-                      </span>
-                    )}
                     {isSubprojectHeader && groupId && (
                       <span
                         data-group-toggle
@@ -478,6 +476,7 @@ export default function ProjectRow({
             const editableColumnId = 'task';
             const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === editableColumnId;
             const isSelected = isCellSelected?.(rowId, editableColumnId);
+            const selectionEdgeClasses = getSelectionEdgeClassNames(getCellSelectionEdges?.(rowId, editableColumnId));
 
             return (
               <td
@@ -490,7 +489,7 @@ export default function ProjectRow({
                   userSelect: isEditing ? 'text' : 'none',
                   boxSizing: 'border-box',
                 }}
-                className={`p-0 ${isSelected && !isEditing ? 'selected-cell' : ''}`}
+                className={`p-0 ${isSelected && !isEditing ? `selected-cell ${selectionEdgeClasses} ${hasMultiCellSelection ? 'sel-fill' : ''}` : ''}`}
                 onMouseDown={(e) => {
                   if (isEditing) return;
                   if (handleCellMouseDown) {

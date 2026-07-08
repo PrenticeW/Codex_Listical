@@ -183,6 +183,38 @@ export const useSpreadsheetSelection = ({
     setDragStartCell(null);
   }, [setIsDragging, setDragStartCell]);
 
+  // Neighbour-based edge detection for the currently selected cell range —
+  // mirrors the row-selection-block edge logic (PlannerTable.jsx). Rather
+  // than tracking the rectangle's bounds separately, this just checks
+  // whether each of the four neighbouring cells (in full row/column order)
+  // is also selected; any side whose neighbour is absent/unselected is an
+  // outer edge of the selection and should get a border there. This lets a
+  // multi-cell selection read as a single bordered block instead of every
+  // cell drawing its own full outline.
+  const getCellSelectionEdges = useCallback((rowId, columnId) => {
+    if (!selectedCells.has(getCellKey(rowId, columnId))) {
+      return { top: false, bottom: false, left: false, right: false };
+    }
+
+    const rowIndex = data.findIndex(r => r.id === rowId);
+    const colIndex = allColumnIds.indexOf(columnId);
+    if (rowIndex === -1 || colIndex === -1) {
+      return { top: false, bottom: false, left: false, right: false };
+    }
+
+    const prevRowId = rowIndex > 0 ? data[rowIndex - 1]?.id : null;
+    const nextRowId = rowIndex < data.length - 1 ? data[rowIndex + 1]?.id : null;
+    const prevColId = colIndex > 0 ? allColumnIds[colIndex - 1] : null;
+    const nextColId = colIndex < allColumnIds.length - 1 ? allColumnIds[colIndex + 1] : null;
+
+    return {
+      top: !(prevRowId && selectedCells.has(getCellKey(prevRowId, columnId))),
+      bottom: !(nextRowId && selectedCells.has(getCellKey(nextRowId, columnId))),
+      left: !(prevColId && selectedCells.has(getCellKey(rowId, prevColId))),
+      right: !(nextColId && selectedCells.has(getCellKey(rowId, nextColId))),
+    };
+  }, [selectedCells, getCellKey, data, allColumnIds]);
+
   const handleCellDoubleClick = useCallback((rowId, columnId, value) => {
     if (columnId === 'rowNum') return;
 
@@ -194,9 +226,17 @@ export const useSpreadsheetSelection = ({
     setEditValue(currentValue);
   }, [setEditingCell, setEditValue, data]);
 
+  // The light overlay wash only makes sense once more than one cell is
+  // selected — a lone selected cell should just get its outline, matching
+  // how it looked before (and how a single selected row isn't washed
+  // differently from a multi-row selection either).
+  const hasMultiCellSelection = selectedCells.size > 1;
+
   return {
     getCellKey,
     isCellSelected,
+    getCellSelectionEdges,
+    hasMultiCellSelection,
     getRowRange,
     getCellRange,
     handleRowNumberClick,

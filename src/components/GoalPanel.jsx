@@ -15,6 +15,7 @@ import PanelShell from './PanelShell';
 import { useGoalPanel } from '../contexts/GoalPanelContext';
 import { useYear } from '../contexts/YearContext';
 import usePageSize from '../hooks/usePageSize';
+import usePanelWidth from '../hooks/usePanelWidth';
 import { PALETTE } from '../utils/staging/projectColour';
 
 // Action event — consumed by StagingPageV2
@@ -1080,6 +1081,7 @@ export default function GoalPanel() {
   const { isOpen, close } = useGoalPanel();
   const [navBottom, setNavBottom] = useState(0);
   const { pathname } = useLocation();
+  const { width: panelWidth, setWidth: setPanelWidth, minWidth, maxWidth } = usePanelWidth();
   const [selectedGoal, setSelectedGoal] = useState(null);
   const [selectedRow, setSelectedRow] = useState(null);
   const [colourViewOpen, setColourViewOpen] = useState(false);
@@ -1161,7 +1163,15 @@ export default function GoalPanel() {
   if (pathname !== '/staging') return null;
 
   return (
-    <PanelShell isOpen={isOpen} navBottom={navBottom} width={320} zIndex={99994}>
+    <PanelShell
+      isOpen={isOpen}
+      navBottom={navBottom}
+      width={panelWidth}
+      zIndex={99994}
+      onWidthChange={setPanelWidth}
+      minWidth={minWidth}
+      maxWidth={maxWidth}
+    >
       {/* Scrollable content + pinned footer */}
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingTop: 20, paddingBottom: 24 }}>

@@ -8,14 +8,21 @@
  *   3. Frosted tray — rgba(255,255,255,0.82) inset 7px, radius 14, clips children
  *
  * Props
- *   isOpen      boolean   — drives slide-in / slide-out
- *   navBottom   number    — px from viewport top where the panel should start
- *   width       number    — panel width in px (default 320)
- *   zIndex      number    — default 99994; use higher value for sub-panels
- *   children    ReactNode — rendered inside the frosted tray
+ *   isOpen        boolean   — drives slide-in / slide-out
+ *   navBottom     number    — px from viewport top where the panel should start
+ *   width         number    — panel width in px (default 320)
+ *   zIndex        number    — default 99994; use higher value for sub-panels
+ *   onWidthChange function  — optional. When provided, a drag handle is
+ *                             rendered on the left edge of the frosted tray;
+ *                             dragging it live-resizes the panel and calls
+ *                             onWidthChange(newWidth) once on mouseup so the
+ *                             caller can persist the final value.
+ *   minWidth      number    — clamp floor while dragging (default 280)
+ *   maxWidth      number    — clamp ceiling while dragging (default 600)
+ *   children      ReactNode — rendered inside the frosted tray
  */
 
-import React from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 const MAUVE = (a) => `rgba(130,155,210,${a})`;
@@ -26,19 +33,72 @@ export default function PanelShell({
   navBottom = 62,
   width = 320,
   zIndex = 99994,
+  onWidthChange,
+  minWidth = 280,
+  maxWidth = 600,
   children,
 }) {
   const nb = navBottom;
+
+  // Live width while dragging the resize handle; null when not dragging, in
+  // which case the committed `width` prop is used.
+  const [liveWidth, setLiveWidth] = useState(null);
+  const [handleHovered, setHandleHovered] = useState(false);
+  const effectiveWidth = liveWidth ?? width;
+
+  const draggingRef = useRef(false);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(0);
+
+  const handleMouseMove = useCallback((e) => {
+    if (!draggingRef.current) return;
+    // Panel is anchored to the right edge of the viewport, so dragging the
+    // handle left (away from the edge) should grow the panel.
+    const delta = startXRef.current - e.clientX;
+    const nextWidth = Math.min(maxWidth, Math.max(minWidth, startWidthRef.current + delta));
+    setLiveWidth(nextWidth);
+  }, [minWidth, maxWidth]);
+
+  const handleMouseUp = useCallback(() => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    window.removeEventListener('mousemove', handleMouseMove);
+    window.removeEventListener('mouseup', handleMouseUp);
+    setLiveWidth((current) => {
+      if (current != null) onWidthChange?.(current);
+      return null;
+    });
+  }, [handleMouseMove, onWidthChange]);
+
+  const handleMouseDown = useCallback((e) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    startXRef.current = e.clientX;
+    startWidthRef.current = width;
+    setLiveWidth(width);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }, [width, handleMouseMove, handleMouseUp]);
+
+  // Clean up window listeners if the panel unmounts mid-drag
+  useEffect(() => () => {
+    window.removeEventListener('mousemove', handleMouseMove);
+    window.removeEventListener('mouseup', handleMouseUp);
+  }, [handleMouseMove, handleMouseUp]);
 
   // Grid layer — portaled so it has no CSS-transformed ancestor
   const gridLayer = createPortal(
     <div
       style={{
         position: 'fixed',
-        right: isOpen ? 0 : -width,
+        right: isOpen ? 0 : -effectiveWidth,
         top: nb,
         bottom: 0,
-        width,
+        width: effectiveWidth,
         backgroundColor: '#fff',
         backgroundImage: [
           `linear-gradient(${MAUVE(0.50)} 1px, transparent 1px)`,
@@ -50,7 +110,7 @@ export default function PanelShell({
         borderTopLeftRadius: 20,
         zIndex: zIndex - 1,
         pointerEvents: 'none',
-        transition: `right ${EASE}`,
+        transition: liveWidth != null ? 'none' : `right ${EASE}`,
       }}
     />,
     document.body,
@@ -65,12 +125,12 @@ export default function PanelShell({
           right: 0,
           top: nb,
           bottom: 0,
-          width,
+          width: effectiveWidth,
           borderTopLeftRadius: 20,
           zIndex,
           overflow: 'hidden',
           transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
-          transition: `transform ${EASE}`,
+          transition: liveWidth != null ? 'transform 0.25s cubic-bezier(0.4,0,0.2,1)' : `transform ${EASE}`,
         }}
       >
         {/* Gradient layer */}
@@ -106,6 +166,39 @@ export default function PanelShell({
         >
           {children}
         </div>
+
+        {/* Resize handle — left edge of the panel itself (outside the tray
+            inset), full height */}
+        {onWidthChange && (
+          <div
+            onMouseDown={handleMouseDown}
+            onMouseEnter={() => setHandleHovered(true)}
+            onMouseLeave={() => setHandleHovered(false)}
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left: 0,
+              width: 8,
+              zIndex: 10,
+              cursor: 'col-resize',
+              background: 'transparent',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: 3,
+                width: 2,
+                borderRadius: 1,
+                background: (handleHovered || liveWidth != null) ? MAUVE(0.55) : 'transparent',
+                transition: 'background 0.15s',
+              }}
+            />
+          </div>
+        )}
       </div>
     </>
   );

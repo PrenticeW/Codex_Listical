@@ -23,6 +23,7 @@ import { useLocation } from 'react-router-dom';
 import PanelShell from './PanelShell';
 import { usePlanPanel } from '../contexts/PlanPanelContext';
 import usePageSize from '../hooks/usePageSize';
+import usePanelWidth from '../hooks/usePanelWidth';
 import { parseEstimateLabelToMinutes } from '../utils/staging/planTableHelpers';
 
 // ─── Public event constants ────────────────────────────────────────────────────
@@ -75,15 +76,21 @@ const C = {
 
 const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
-// PanelShell renders at PANEL_WIDTH (320) but insets its frosted tray by 7px
-// on every side, so the tray's actual usable width is PANEL_WIDTH - 14 = 306.
-// The sliding views inside must be sized to that inner width, not the outer
-// panel width — otherwise their rightmost ~14px (including a BentoCard's own
-// right margin) gets clipped by the tray's overflow:hidden, making cards and
-// chips look flush against the right edge instead of having breathing room.
-const PANEL_WIDTH = 320;
+// PanelShell renders at a user-resizable width (default 320, via
+// usePanelWidth) but insets its frosted tray by 7px on every side, so the
+// tray's actual usable width is width - 14. The sliding views inside must be
+// sized to that inner width, not the outer panel width — otherwise their
+// rightmost ~14px (including a BentoCard's own right margin) gets clipped by
+// the tray's overflow:hidden, making cards and chips look flush against the
+// right edge instead of having breathing room.
+//
+// DEFAULT_VIEW_WIDTH is only a fallback for sub-views that don't receive a
+// live viewWidth prop (e.g. TimePickerView, which isn't currently rendered).
+// Every actually-rendered sub-view (MainView, ColourView, ScheduleView) is
+// passed a live `viewWidth` computed from usePanelWidth() in PlanPanel below.
 const TRAY_INSET = 7;
-const VIEW_WIDTH = PANEL_WIDTH - TRAY_INSET * 2;
+const DEFAULT_PANEL_WIDTH = 320;
+const DEFAULT_VIEW_WIDTH = DEFAULT_PANEL_WIDTH - TRAY_INSET * 2;
 
 const BENTO_CARD = {
   background: '#FFFFFF',
@@ -632,7 +639,7 @@ const PALE_SWATCHES = new Set(['hsl(0,0%,100%)', 'hsl(35,20%,97%)', 'hsl(40,60%,
 
 // ─── Colour picker sub-view ───────────────────────────────────────────────────
 
-function ColourView({ chipName, chipColour, onBack, onConfirm }) {
+function ColourView({ chipName, chipColour, onBack, onConfirm, viewWidth = DEFAULT_VIEW_WIDTH }) {
   const [pendingColour, setPendingColour] = useState(chipColour ?? '#c9daf8');
   const colourInputRef = useRef(null);
 
@@ -658,7 +665,7 @@ function ColourView({ chipName, chipColour, onBack, onConfirm }) {
   }, [pendingColour, onConfirm]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: VIEW_WIDTH, flexShrink: 0, minHeight: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: viewWidth, flexShrink: 0, minHeight: 0 }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
@@ -923,7 +930,7 @@ function GoalDropdown({ allChips, currentProjectId, anchorRect, onSelect, onClos
 
 // ─── Time picker sub-view ─────────────────────────────────────────────────────
 
-function TimePickerView({ label, initialMinutes, incrementMinutes, onBack, onConfirm }) {
+function TimePickerView({ label, initialMinutes, incrementMinutes, onBack, onConfirm, viewWidth = DEFAULT_VIEW_WIDTH }) {
   const inc = incrementMinutes > 0 ? incrementMinutes : 30;
 
   const snap = (mins) => {
@@ -966,7 +973,7 @@ function TimePickerView({ label, initialMinutes, incrementMinutes, onBack, onCon
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: VIEW_WIDTH, flexShrink: 0, minHeight: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: viewWidth, flexShrink: 0, minHeight: 0 }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '12px 22px 10px', borderBottom: `1px solid ${C.borderLight}`,
@@ -1027,7 +1034,7 @@ function TimePickerView({ label, initialMinutes, incrementMinutes, onBack, onCon
 
 // ─── Schedule items sub-view ──────────────────────────────────────────────────
 
-function ScheduleView({ scheduleData, onDragStartRef, onAddChipRef, onBack }) {
+function ScheduleView({ scheduleData, onDragStartRef, onAddChipRef, onBack, viewWidth = DEFAULT_VIEW_WIDTH }) {
   const {
     projects = [],
     scheduleLayout = null,
@@ -1087,7 +1094,7 @@ function ScheduleView({ scheduleData, onDragStartRef, onAddChipRef, onBack }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: VIEW_WIDTH, flexShrink: 0, minHeight: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: viewWidth, flexShrink: 0, minHeight: 0 }}>
       {/* Header — just the back button, no title bar (matches the design's
           bare BackBtn treatment for this sub-view). */}
       <div style={{ padding: '16px 18px 8px', flexShrink: 0 }}>
@@ -1537,11 +1544,12 @@ function MainView({
   onDurationChange,
   onToggleChipDuration,
   onRemoveChip,
+  viewWidth = DEFAULT_VIEW_WIDTH,
 }) {
   const hasChip = selectedChip != null;
 
   return (
-    <div style={{ width: VIEW_WIDTH, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div style={{ width: viewWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Scrollable body */}
       <div style={{ flex: 1, overflowY: 'auto', paddingTop: 20, paddingBottom: 8 }}>
         <UpdateSection isUpToDate={isUpToDate} onSendToSystem={onSendToSystem} />
@@ -1581,6 +1589,8 @@ export default function PlanPanel() {
   const { isOpen, open, close } = usePlanPanel();
   const [navBottom, setNavBottom] = useState(0);
   const { pathname } = useLocation();
+  const { width: panelWidth, setWidth: setPanelWidth, minWidth, maxWidth } = usePanelWidth();
+  const viewWidth = panelWidth - TRAY_INSET * 2;
 
   // Panel view: 'main' | 'colour' | 'schedule'
   const [panelView, setPanelView] = useState('main');
@@ -1787,19 +1797,27 @@ export default function PlanPanel() {
 
   return (
     <>
-      <PanelShell isOpen={isOpen} navBottom={navBottom} width={PANEL_WIDTH} zIndex={99994}>
-        {/* Horizontal slider track: two VIEW_WIDTH-wide views, sized to the
-            tray's actual inner width (see VIEW_WIDTH above), not the outer
+      <PanelShell
+        isOpen={isOpen}
+        navBottom={navBottom}
+        width={panelWidth}
+        zIndex={99994}
+        onWidthChange={setPanelWidth}
+        minWidth={minWidth}
+        maxWidth={maxWidth}
+      >
+        {/* Horizontal slider track: two viewWidth-wide views, sized to the
+            tray's actual inner width (see viewWidth above), not the outer
             panel width — otherwise the right edge of whichever view is
             showing gets clipped by the tray's overflow:hidden. */}
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <div
             style={{
               display: 'flex',
-              width: VIEW_WIDTH * 2,
+              width: viewWidth * 2,
               flex: 1,
               minHeight: 0,
-              transform: isSlid ? `translateX(-${VIEW_WIDTH}px)` : 'translateX(0)',
+              transform: isSlid ? `translateX(-${viewWidth}px)` : 'translateX(0)',
               transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
             }}
           >
@@ -1818,6 +1836,7 @@ export default function PlanPanel() {
               onDurationChange={handleDurationChange}
               onToggleChipDuration={handleToggleChipDuration}
               onRemoveChip={handleRemoveChip}
+              viewWidth={viewWidth}
             />
 
             {/* View 2 — Colour or Schedule */}
@@ -1827,6 +1846,7 @@ export default function PlanPanel() {
                 onDragStartRef={onDragStartRef}
                 onAddChipRef={onAddChipRef}
                 onBack={goToMain}
+                viewWidth={viewWidth}
               />
             ) : (
               <ColourView
@@ -1834,6 +1854,7 @@ export default function PlanPanel() {
                 chipColour={selectedChip?.colour ?? '#c9daf8'}
                 onBack={goToMain}
                 onConfirm={handleColourConfirm}
+                viewWidth={viewWidth}
               />
             )}
           </div>
