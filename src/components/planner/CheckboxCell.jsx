@@ -9,7 +9,13 @@ function CheckboxCell({
   onComplete,
   onKeyDown,
   cellFontSize,
+  rowHeight,
 }) {
+  // Derive the box size from the row height (same formula the view-mode
+  // checkbox in TaskRow.jsx uses) so it scales with page zoom instead of
+  // staying a fixed 20px regardless of row size. Falls back to a sane
+  // default if rowHeight isn't passed in.
+  const boxSize = Math.max(14, (rowHeight ?? 32) - 6);
   // Parse initial value - accept boolean, string "true"/"false", or empty string
   const parseValue = (val) => {
     if (typeof val === 'boolean') return val;
@@ -67,10 +73,10 @@ function CheckboxCell({
         className="cursor-pointer focus:outline-none"
         style={{
           accentColor: '#c9e9c0', // Done status background color
-          width: '20px',
-          height: '20px',
-          minWidth: '20px',
-          minHeight: '20px',
+          width: `${boxSize}px`,
+          height: `${boxSize}px`,
+          minWidth: `${boxSize}px`,
+          minHeight: `${boxSize}px`,
         }}
       />
     </div>

@@ -26,7 +26,7 @@ import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import { revertArchive } from '../utils/planner/revertArchive';
 import { importTasksForDraftYear } from '../utils/planner/importTasksFromYear';
 import { placeImportedTasks } from '../utils/planner/placeImportedTasks';
-import { isEditableRow, isSpecialRow } from '../utils/planner/rowTypeChecks';
+import { isEditableRow } from '../utils/planner/rowTypeChecks';
 import usePlannerFilters from '../hooks/planner/usePlannerFilters';
 import { useFilteredData, useFilterValues } from '../hooks/planner/useFilteredData';
 import { useProjectTotals, useDailyTotals } from '../hooks/planner/useTotalsCalculation';
@@ -46,7 +46,6 @@ import ProjectListicalMenu from '../components/planner/ProjectListicalMenu';
 import PlannerTable from '../components/planner/PlannerTable';
 import FilterPanel from '../components/planner/FilterPanel';
 import ArchiveYearModal from '../components/ArchiveYearModal';
-import { AddTasksModal } from '../components/AddTasksModal';
 import ContextMenu from '../components/planner/ContextMenu';
 import useContextMenu from '../hooks/planner/useContextMenu';
 import { createInitialData, ensureDailyTotalRow } from '../utils/planner/dataCreators';
@@ -351,9 +350,6 @@ export default function ProjectTimePlannerV2() {
     }
   }, [refreshMetadata]);
 
-  // Add tasks modal state
-  const [isAddTasksModalOpen, setIsAddTasksModalOpen] = useState(false);
-
   // Storage management (all persistent settings) - now year-aware
   const {
     columnSizing,
@@ -502,30 +498,35 @@ export default function ProjectTimePlannerV2() {
     handleProjectFilterSelect,
     handleProjectFilterButtonClick,
     closeProjectFilterMenu,
+    clearProjectFilter,
     subprojectFilterMenu,
     subprojectFilterMenuRef,
     subprojectFilterButtonRef,
     handleSubprojectFilterSelect,
     handleSubprojectFilterButtonClick,
     closeSubprojectFilterMenu,
+    clearSubprojectFilter,
     statusFilterMenu,
     statusFilterMenuRef,
     statusFilterButtonRef,
     handleStatusFilterSelect,
     handleStatusFilterButtonClick,
     closeStatusFilterMenu,
+    clearStatusFilter,
     recurringFilterMenu,
     recurringFilterMenuRef,
     recurringFilterButtonRef,
     handleRecurringFilterSelect,
     handleRecurringFilterButtonClick,
     closeRecurringFilterMenu,
+    clearRecurringFilter,
     estimateFilterMenu,
     estimateFilterMenuRef,
     estimateFilterButtonRef,
     handleEstimateFilterSelect,
     handleEstimateFilterButtonClick,
     closeEstimateFilterMenu,
+    clearEstimateFilter,
   } = filters;
 
   // Day filter state — empty Set means off; populated Set means those days are active
@@ -2347,89 +2348,6 @@ export default function ProjectTimePlannerV2() {
     });
   }, [totalDays]);
 
-  const handleNewSubproject = useCallback(() => {
-    setIsListicalMenuOpen(false);
-
-    // Find the selected row
-    if (selectedRows.size === 0) {
-      // No row selected, do nothing
-      return;
-    }
-
-    // Get the first (or only) selected row
-    const selectedRowId = Array.from(selectedRows)[0];
-    const selectedRowIndex = data.findIndex(r => r.id === selectedRowId);
-
-    if (selectedRowIndex === -1) return;
-
-    const selectedRow = data[selectedRowIndex];
-
-    // Determine the parent project group ID
-    // If the selected row is a project header, use its groupId
-    // Otherwise, use the row's parentGroupId
-    let projectGroupId = null;
-    let projectNickname = null;
-    let fullProjectName = null;
-
-    if (selectedRow._rowType === 'projectHeader') {
-      projectGroupId = selectedRow.groupId;
-      projectNickname = selectedRow.projectNickname;
-      fullProjectName = selectedRow.projectName;
-    } else if (selectedRow.parentGroupId) {
-      projectGroupId = selectedRow.parentGroupId;
-      // Extract project nickname from parentGroupId (format: "project-{nickname}")
-      projectNickname = selectedRow.parentGroupId.replace('project-', '');
-      // Try to find the project name from the project header
-      const projectHeader = data.find(r => r.groupId === projectGroupId && r._rowType === 'projectHeader');
-      fullProjectName = projectHeader?.projectName || projectNickname;
-    }
-
-    // Create unique ID for this subproject
-    const subprojectId = `subproject-${Date.now()}`;
-
-    // Create new subproject section row (light pink row like General/Unscheduled, with "New" label)
-    const newSubprojectRow = {
-      id: subprojectId,
-      _rowType: 'subprojectGeneral', // Use subproject section row type
-      parentGroupId: projectGroupId, // Associate with the project
-      projectNickname: projectNickname || '',
-      projectName: fullProjectName || '',
-      subprojectLabel: 'New', // Custom label that will be editable
-      rowNum: '',
-      checkbox: '',
-      project: '',
-      subproject: '',
-      status: '',
-      task: '', // Will show "New" label
-      recurring: '',
-      estimate: '',
-      timeValue: '',
-      ...createEmptyDayColumns(totalDays),
-    };
-
-    // Store the insertion index for undo
-    const insertIndex = selectedRowIndex + 1;
-
-    // Create command for undo/redo support
-    const command = {
-      execute: () => {
-        setData(prev => {
-          const newData = [...prev];
-          newData.splice(insertIndex, 0, newSubprojectRow);
-          return newData;
-        });
-      },
-      undo: () => {
-        setData(prev => {
-          const newData = [...prev];
-          newData.splice(insertIndex, 1);
-          return newData;
-        });
-      },
-    };
-
-    executeCommand(command);
-  }, [selectedRows, data, totalDays, executeCommand]);
 
   // Insert N label (subprojectGeneral) rows — used by SystemPanel
   const addLabelsWithCount = useCallback((count) => {
@@ -2456,6 +2374,24 @@ export default function ProjectTimePlannerV2() {
         } else if (selectedRow.parentGroupId) {
           projectGroupId = selectedRow.parentGroupId;
           projectNickname = selectedRow.parentGroupId.replace('project-', '');
+          const projectHeader = data.find(r => r.groupId === projectGroupId && r._rowType === 'projectHeader');
+          fullProjectName = projectHeader?.projectName || projectNickname;
+        }
+      }
+    } else if (contextMenu.rowId) {
+      // Insert after the right-clicked row (mirrors addTasksWithCount), and
+      // inherit the same project context so labels land in the right group.
+      const rowIndex = data.findIndex(r => r.id === contextMenu.rowId);
+      if (rowIndex !== -1) {
+        insertIndex = rowIndex + 1;
+        const clickedRow = data[rowIndex];
+        if (clickedRow._rowType === 'projectHeader') {
+          projectGroupId = clickedRow.groupId;
+          projectNickname = clickedRow.projectNickname;
+          fullProjectName = clickedRow.projectName;
+        } else if (clickedRow.parentGroupId) {
+          projectGroupId = clickedRow.parentGroupId;
+          projectNickname = clickedRow.parentGroupId.replace('project-', '');
           const projectHeader = data.find(r => r.groupId === projectGroupId && r._rowType === 'projectHeader');
           fullProjectName = projectHeader?.projectName || projectNickname;
         }
@@ -2500,7 +2436,7 @@ export default function ProjectTimePlannerV2() {
 
     executeCommand(command);
     setSelectedRows(new Set(newRows.map(r => r.id)));
-  }, [selectedRows, data, totalDays, executeCommand, setSelectedRows]);
+  }, [selectedRows, contextMenu.rowId, data, totalDays, executeCommand, setSelectedRows]);
 
   // Duplicate all currently selected rows, inserting copies after the last selected row
   const duplicateSelectedRows = useCallback(() => {
@@ -2847,91 +2783,6 @@ export default function ProjectTimePlannerV2() {
     window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_PROJECT_NAMES_EVENT, { detail: { projects } }));
   }, [data]);
 
-  // Context menu action handlers
-  const handleContextMenuAddTasks = useCallback(() => {
-    setIsAddTasksModalOpen(true);
-  }, []);
-
-  const handleInsertRowAbove = useCallback(() => {
-    if (!contextMenu.rowId) return;
-
-    const clickedIndex = data.findIndex(r => r.id === contextMenu.rowId);
-    if (clickedIndex === -1) return;
-
-    // Never insert inside the pinned calendar-header block (Month through
-    // Filter). If the clicked row is one of those structural rows, "insert
-    // above" has no sensible position within the headers, so redirect to
-    // the very start of the real data rows (i.e. right after the Filter
-    // row) instead of splicing a task row in between two header rows.
-    const clickedRow = data[clickedIndex];
-    let rowIndex = clickedIndex;
-    if (isSpecialRow(clickedRow)) {
-      const firstDataIndex = data.findIndex(r => !isSpecialRow(r));
-      rowIndex = firstDataIndex === -1 ? data.length : firstDataIndex;
-    }
-
-    const newRow = createEmptyTaskRows(1, totalDays)[0];
-
-    const command = {
-      execute: () => {
-        setData(prev => {
-          const newData = [...prev];
-          newData.splice(rowIndex, 0, newRow);
-          return newData;
-        });
-      },
-      undo: () => {
-        setData(prev => {
-          const newData = [...prev];
-          newData.splice(rowIndex, 1);
-          return newData;
-        });
-      },
-    };
-
-    executeCommand(command);
-  }, [contextMenu.rowId, data, totalDays, executeCommand]);
-
-  const handleInsertRowBelow = useCallback(() => {
-    if (!contextMenu.rowId) return;
-
-    const clickedIndex = data.findIndex(r => r.id === contextMenu.rowId);
-    if (clickedIndex === -1) return;
-
-    // Same guard as handleInsertRowAbove: never let a task row land inside
-    // the header block. If the clicked row is a header row, redirect to
-    // right after the Filter row (the natural start of the data rows).
-    // Inserting below the Filter row itself already resolves to this same
-    // position, so no special-casing is needed there.
-    const clickedRow = data[clickedIndex];
-    let rowIndex = clickedIndex;
-    if (isSpecialRow(clickedRow)) {
-      const firstDataIndex = data.findIndex(r => !isSpecialRow(r));
-      rowIndex = (firstDataIndex === -1 ? data.length : firstDataIndex) - 1;
-    }
-
-    const newRow = createEmptyTaskRows(1, totalDays)[0];
-
-    const command = {
-      execute: () => {
-        setData(prev => {
-          const newData = [...prev];
-          newData.splice(rowIndex + 1, 0, newRow);
-          return newData;
-        });
-      },
-      undo: () => {
-        setData(prev => {
-          const newData = [...prev];
-          newData.splice(rowIndex + 1, 1);
-          return newData;
-        });
-      },
-    };
-
-    executeCommand(command);
-  }, [contextMenu.rowId, data, totalDays, executeCommand]);
-
   // Checkbox input class for menu
   const checkboxInputClass = 'h-4 w-4 cursor-pointer rounded border-gray-300 text-emerald-700 focus:ring-emerald-600';
 
@@ -3087,6 +2938,7 @@ export default function ProjectTimePlannerV2() {
         selectedProjectFilters={selectedProjectFilters}
         handleProjectFilterSelect={handleProjectFilterSelect}
         closeProjectFilterMenu={closeProjectFilterMenu}
+        clearProjectFilter={clearProjectFilter}
         subprojectFilterMenu={subprojectFilterMenu}
         subprojectFilterMenuRef={subprojectFilterMenuRef}
         subprojectFilterButtonRef={subprojectFilterButtonRef}
@@ -3094,6 +2946,7 @@ export default function ProjectTimePlannerV2() {
         selectedSubprojectFilters={selectedSubprojectFilters}
         handleSubprojectFilterSelect={handleSubprojectFilterSelect}
         closeSubprojectFilterMenu={closeSubprojectFilterMenu}
+        clearSubprojectFilter={clearSubprojectFilter}
         statusFilterMenu={statusFilterMenu}
         statusFilterMenuRef={statusFilterMenuRef}
         statusFilterButtonRef={statusFilterButtonRef}
@@ -3101,6 +2954,7 @@ export default function ProjectTimePlannerV2() {
         selectedStatusFilters={selectedStatusFilters}
         handleStatusFilterSelect={handleStatusFilterSelect}
         closeStatusFilterMenu={closeStatusFilterMenu}
+        clearStatusFilter={clearStatusFilter}
         recurringFilterMenu={recurringFilterMenu}
         recurringFilterMenuRef={recurringFilterMenuRef}
         recurringFilterButtonRef={recurringFilterButtonRef}
@@ -3108,6 +2962,7 @@ export default function ProjectTimePlannerV2() {
         selectedRecurringFilters={selectedRecurringFilters}
         handleRecurringFilterSelect={handleRecurringFilterSelect}
         closeRecurringFilterMenu={closeRecurringFilterMenu}
+        clearRecurringFilter={clearRecurringFilter}
         estimateFilterMenu={estimateFilterMenu}
         estimateFilterMenuRef={estimateFilterMenuRef}
         estimateFilterButtonRef={estimateFilterButtonRef}
@@ -3115,6 +2970,7 @@ export default function ProjectTimePlannerV2() {
         selectedEstimateFilters={selectedEstimateFilters}
         handleEstimateFilterSelect={handleEstimateFilterSelect}
         closeEstimateFilterMenu={closeEstimateFilterMenu}
+        clearEstimateFilter={clearEstimateFilter}
       />
       </div>
 
@@ -3125,23 +2981,14 @@ export default function ProjectTimePlannerV2() {
         yearNumber={activeYear?.yearNumber ?? currentYear}
       />
 
-      {/* Add Tasks Modal */}
-      <AddTasksModal
-        isOpen={isAddTasksModalOpen}
-        onClose={() => setIsAddTasksModalOpen(false)}
-        onConfirm={addTasksWithCount}
-      />
-
       {/* Context Menu */}
       <ContextMenu
         contextMenu={contextMenu}
         onClose={closeContextMenu}
         onDeleteRows={handleDeleteRows}
         onDuplicateRow={handleDuplicateRow}
-        onInsertRowAbove={handleInsertRowAbove}
-        onInsertRowBelow={handleInsertRowBelow}
-        onAddTasks={handleContextMenuAddTasks}
-        onAddSubproject={handleNewSubproject}
+        onInsertTaskRows={addTasksWithCount}
+        onInsertLabelRows={addLabelsWithCount}
         onCopy={handleCopy}
         onPaste={handlePaste}
       />

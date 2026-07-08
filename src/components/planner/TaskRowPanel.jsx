@@ -4,6 +4,13 @@
  * Exports TaskDetailContent: a self-contained inner-slide pair
  * (task detail main view + history sub-view). No portal or fixed
  * positioning — SystemPanel owns the panel shell and the outer slide.
+ *
+ * Rebuilt on the same bento-card primitives as the other panels
+ * (GearPanel/SystemPanel/GoalPanel/PlanPanel) per the design handoff
+ * (reference/TaskRowPanelUI.jsx) so it reads as part of the same system
+ * instead of the pre-redesign sticky-header/border-divider layout it had
+ * before. Visual-only change — all data flow, events, and handlers below
+ * are unchanged from before this pass.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -12,26 +19,32 @@ import { saveTaskNote, readTaskEvents } from '../../utils/planner/storage';
 import { TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
 import { fmtTimestamp } from '../../utils/fmtTimestamp';
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
+// ─── Design tokens (match GearPanel/SystemPanel) ─────────────────────────────
 
 const C = {
   bg:          '#fff',
-  bgSubtle:    '#fafaf8',
+  bgBlock:     '#f7f7f5',
   border:      '#e8e8e4',
   borderLight: '#f0f0ed',
-  borderMid:   '#f5f5f3',
   text:        '#1a1a1a',
   textDim:     '#555',
   textMid:     '#777',
   textFaint:   '#999',
   textLight:   '#bbb',
-  // Theme brand colours (blue), not old pre-redesign green — matches the
-  // other panels (GearPanel/SystemPanel/GoalPanel/PlanPanel).
   green:       'var(--brand-deep)',
   greenDark:   'var(--brand-ink)',
 };
 
 const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+const BENTO_CARD = {
+  background: '#FFFFFF',
+  borderRadius: 12,
+  padding: '15px 16px',
+  margin: '0 11px 7px',
+  border: '1px solid #e8e8e4',
+  boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.07)',
+};
 
 // ─── Status chip colours — derived from PILLBOX_COLORS so panel and table stay in sync
 
@@ -83,9 +96,8 @@ function SectionLabel({ children }) {
       fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
       fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
       textTransform: 'uppercase', color: 'var(--brand-ink)',
-      marginBottom: 14,
-      borderBottom: '1px solid var(--brand-bd)',
-      paddingBottom: 6,
+      paddingBottom: 9, borderBottom: '1px solid var(--brand-bd)',
+      marginBottom: 11,
     }}>
       {children}
     </div>
@@ -106,105 +118,137 @@ function StatusChipSm({ status }) {
   );
 }
 
-function HeaderStatusChip({ status }) {
-  const s = getStatusChip(status);
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      fontSize: 11, fontWeight: 500, borderRadius: 20, padding: '3px 9px',
-      background: s.bg, color: s.color, border: `1px solid ${s.border}`,
-      flexShrink: 0,
-    }}>
-      <svg width="7" height="7" viewBox="0 0 7 7" fill="none">
-        <circle cx="3.5" cy="3.5" r="3" fill={s.dot} />
-      </svg>
-      {status || '—'}
-    </span>
-  );
-}
-
 const ChevronRight = () => (
   <svg width="7" height="11" viewBox="0 0 7 11" fill="none">
     <path d="M1 1l5 4.5L1 10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 );
 
-const ChevronLeft = () => (
-  <svg width="7" height="11" viewBox="0 0 7 11" fill="none">
-    <path d="M6 1L1 5.5L6 10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+const HistoryIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+    <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.2"/>
+    <path d="M6.5 3.5v3l2 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 );
 
+// Bento-card "Back" pill (reference/PanelPrimitives.jsx → BackBtn). Includes
+// its own top-level padding wrapper — callers render it directly, no extra
+// padding div needed around it.
 function BackBtn({ onClick }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div style={{ padding: '16px 18px 8px', flexShrink: 0 }}>
+      <button
+        onClick={onClick}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 11px',
+          background: hovered ? 'var(--brand-tint)' : '#ffffff',
+          border: `1px solid ${hovered ? 'var(--brand)' : C.border}`,
+          borderRadius: 8,
+          boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.07)',
+          cursor: 'pointer',
+          color: hovered ? 'var(--brand-deep)' : '#616161',
+          fontFamily: FONT, fontSize: 13, fontWeight: 500,
+          transition: 'all 0.15s',
+        }}
+      >
+        <svg width="5" height="9" viewBox="0 0 5 9" fill="none">
+          <path d="M4.5 1L1 4.5l3.5 3.5" stroke="var(--brand-deep)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+        Back
+      </button>
+    </div>
+  );
+}
+
+// Standard bento action-row button (matches SystemPanel's ActionBtn)
+function ActionBtn({ icon, label, rightSlot, onClick, style }) {
   return (
     <button
       onClick={onClick}
       style={{
-        background: 'none', border: 'none', cursor: 'pointer', color: C.textLight,
-        display: 'flex', alignItems: 'center', padding: 0, gap: 4,
-        fontFamily: FONT, fontSize: 12,
-        transition: 'color 0.15s',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
+        padding: '13px 16px', fontFamily: FONT, fontSize: 14, fontWeight: 400,
+        color: C.textDim, cursor: 'pointer',
+        transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+        width: '100%', textAlign: 'left',
+        ...style,
       }}
-      onMouseEnter={e => e.currentTarget.style.color = C.text}
-      onMouseLeave={e => e.currentTarget.style.color = C.textLight}
+      onMouseEnter={e => {
+        e.currentTarget.style.borderColor = 'var(--brand)';
+        e.currentTarget.style.color = 'var(--brand-deep)';
+        e.currentTarget.style.background = 'var(--brand-hover-bg)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = C.border;
+        e.currentTarget.style.color = C.textDim;
+        e.currentTarget.style.background = 'none';
+      }}
     >
-      <ChevronLeft />
-      Back
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {icon}
+        {label}
+      </div>
+      {rightSlot}
     </button>
   );
 }
 
-function RecurringChip({ active, onToggle }) {
+// Toggle switch (matches GearPanel's Toggle)
+function Toggle({ checked, onChange }) {
   return (
-    <button
-      onClick={onToggle}
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 4,
-        fontSize: 11, fontFamily: FONT,
-        borderRadius: 20, padding: '3px 9px',
-        background: active ? C.green : '#f7f7f5',
-        color: active ? '#fff' : '#888',
-        border: `1px solid ${active ? C.green : '#e0e0dc'}`,
-        cursor: 'pointer',
-        transition: 'background 0.15s, color 0.15s, border-color 0.15s',
-      }}
-    >
-      {active ? (
-        <svg width="10" height="10" viewBox="0 0 12 10" fill="none">
-          <path d="M1 5l3.5 3.5L11 1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      ) : (
-        <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-          <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-        </svg>
-      )}
-      Recurring
-    </button>
+    <label style={{ position: 'relative', width: 36, height: 20, flexShrink: 0, cursor: 'pointer', display: 'block' }}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={e => onChange(e.target.checked)}
+        style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }}
+      />
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: checked ? 'var(--brand-deep)' : '#D9D5E2',
+        borderRadius: 20, transition: 'background 0.2s',
+      }} />
+      <div style={{
+        position: 'absolute', top: 3,
+        left: checked ? 19 : 3,
+        width: 14, height: 14,
+        background: '#fff', borderRadius: '50%',
+        transition: 'left 0.2s', pointerEvents: 'none',
+      }} />
+    </label>
   );
 }
+
+// Label/value row used inside bento cards (matches GearPanel's rowStyle/labelStyle)
+const ROW_STYLE = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 };
+const ROW_LABEL_STYLE = { fontSize: 13, color: C.textDim };
 
 function HistoryEntry({ status, fromStatus, time, note, isLast }) {
   const s = getStatusChip(status);
   return (
     <div style={{
       display: 'flex', alignItems: 'flex-start', gap: 10,
-      padding: '10px 0',
-      borderBottom: isLast ? 'none' : `1px solid ${C.borderMid}`,
+      padding: '9px 0',
+      borderBottom: isLast ? 'none' : `1px solid ${C.borderLight}`,
     }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 2, flexShrink: 0 }}>
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.dot, flexShrink: 0 }} />
-        {!isLast && <div style={{ width: 1, background: C.border, flex: 1, minHeight: 18, marginTop: 3 }} />}
+        <div style={{ width: 7, height: 7, borderRadius: '50%', background: s.dot, flexShrink: 0 }} />
+        {!isLast && <div style={{ width: 1, background: C.border, flex: 1, minHeight: 16, marginTop: 3 }} />}
       </div>
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: note ? 3 : 0, flexWrap: 'wrap' }}>
           {fromStatus && (
             <>
               <StatusChipSm status={fromStatus} />
-              <span style={{ color: C.textLight, fontSize: 10 }}>→</span>
+              <span style={{ color: C.textFaint, fontSize: 10 }}>→</span>
             </>
           )}
           <StatusChipSm status={status} />
-          <span style={{ fontSize: 11, color: C.textLight }}>{time}</span>
+          <span style={{ fontSize: 10.5, color: '#8090A8', fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" }}>{time}</span>
         </div>
         {note && (
           <div style={{ fontSize: 12, color: C.textFaint, marginTop: 2, lineHeight: 1.45 }}>{note}</div>
@@ -216,9 +260,9 @@ function HistoryEntry({ status, fromStatus, time, note, isLast }) {
 
 function CreatedEntry({ date, agePill }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 0' }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 0' }}>
       <div style={{ paddingTop: 2, flexShrink: 0 }}>
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ccc' }} />
+        <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#ccc' }} />
       </div>
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -229,12 +273,12 @@ function CreatedEntry({ date, agePill }) {
           }}>
             Created
           </span>
-          <span style={{ fontSize: 11, color: C.textLight }}>
+          <span style={{ fontSize: 10.5, color: '#8090A8', fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" }}>
             {date}
             {agePill && (
               <span style={{
-                fontSize: 11, color: C.textFaint,
-                background: '#f5f5f3', border: `1px solid ${C.border}`,
+                fontSize: 10.5, color: C.textFaint,
+                background: C.bgBlock, border: `1px solid ${C.border}`,
                 borderRadius: 20, padding: '2px 8px', marginLeft: 6,
               }}>
                 {agePill}
@@ -242,47 +286,6 @@ function CreatedEntry({ date, agePill }) {
             )}
           </span>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function RecurringBlock({ completionCount, lastCompletedAt }) {
-  return (
-    <div style={{
-      background: C.bgSubtle, border: `1px solid ${C.border}`,
-      borderRadius: 10, padding: '12px 14px',
-    }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        fontSize: 14, paddingBottom: 6, borderBottom: `1px solid ${C.borderLight}`,
-      }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 7, color: C.textFaint }}>
-          <svg width="12" height="12" viewBox="0 0 13 13" fill="none">
-            <path d="M11 6.5a4.5 4.5 0 10-4.5 4.5" stroke={C.textLight} strokeWidth="1.2" strokeLinecap="round"/>
-            <path d="M11 4v2.5H8.5" stroke={C.textLight} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          Completions
-        </span>
-        <span style={{
-          background: C.green, color: '#fff',
-          borderRadius: 20, padding: '1px 8px', fontSize: 12, fontWeight: 600,
-        }}>
-          {completionCount ?? 0}
-        </span>
-      </div>
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        fontSize: 14, paddingTop: 6,
-      }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 7, color: C.textFaint }}>
-          <svg width="12" height="12" viewBox="0 0 13 13" fill="none">
-            <circle cx="6.5" cy="6.5" r="5" stroke={C.textLight} strokeWidth="1.2"/>
-            <path d="M6.5 4v3l2 1.5" stroke={C.textLight} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          Last completed
-        </span>
-        <span style={{ color: C.text, fontWeight: 500, fontSize: 14 }}>{lastCompletedAt ?? '—'}</span>
       </div>
     </div>
   );
@@ -344,50 +347,45 @@ function SubprojectHeaderPanel({ selectedTask, onBack }) {
   const rowLabel = selectedTask?.subprojectName || selectedTask?.subproject || '—';
 
   return (
-    <div style={{ display: 'flex', width: 640, height: '100%' }}>
-      <div style={{ width: 320, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
-        {/* Sticky header */}
-        <div style={{ padding: '20px 26px 16px', borderBottom: `1px solid ${C.borderLight}`, position: 'sticky', top: 0, background: C.bg, zIndex: 2 }}>
-          <div style={{ marginBottom: 18 }}>
-            <BackBtn onClick={onBack} />
-          </div>
-          <div style={{ fontSize: 13, fontWeight: 500, color: C.textDim, marginBottom: 4 }}>Subproject</div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {rowLabel}
-          </div>
-        </div>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <BackBtn onClick={onBack} />
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
+        <div style={{ paddingTop: 8, paddingBottom: 24 }}>
 
-        {/* Day tag section */}
-        <div style={{ padding: '20px 26px', borderBottom: `1px solid ${C.borderLight}` }}>
-          <SectionLabel>Day</SectionLabel>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {DAY_TAGS.map(day => {
-              const isActive = dayTag === day;
-              return (
-                <button
-                  key={day}
-                  onClick={() => handleDayPick(day)}
-                  style={{
-                    padding: '5px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
-                    fontFamily: FONT, fontSize: 13, fontWeight: isActive ? 600 : 400,
-                    background: isActive ? C.green : C.bgSubtle,
-                    color: isActive ? '#fff' : C.textMid,
-                    transition: 'background 0.12s, color 0.12s',
-                  }}
-                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#e8efe9'; }}
-                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = C.bgSubtle; }}
-                >
-                  {day}
-                </button>
-              );
-            })}
+          <div style={BENTO_CARD}>
+            <SectionLabel>Subproject</SectionLabel>
+            <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{rowLabel}</div>
           </div>
 
-          {/* Lock status */}
-          <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ ...BENTO_CARD, marginBottom: 0 }}>
+            <SectionLabel>Day</SectionLabel>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 12 }}>
+              {DAY_TAGS.map(day => {
+                const isActive = dayTag === day;
+                return (
+                  <button
+                    key={day}
+                    onClick={() => handleDayPick(day)}
+                    style={{
+                      padding: '7px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                      fontFamily: FONT, fontSize: 13, fontWeight: isActive ? 600 : 400,
+                      background: isActive ? C.green : C.bgBlock,
+                      color: isActive ? '#fff' : C.textDim,
+                      transition: 'background 0.12s, color 0.12s',
+                    }}
+                    onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--brand-hover-bg)'; }}
+                    onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = C.bgBlock; }}
+                  >
+                    {day}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Lock status */}
             {dayTagLocked ? (
-              <>
-                <span style={{ fontSize: 12, color: C.textMid }}>Manually set</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: C.textDim }}>Manually set</span>
                 <button
                   onClick={handleClearLock}
                   style={{
@@ -398,13 +396,14 @@ function SubprojectHeaderPanel({ selectedTask, onBack }) {
                 >
                   Reset to auto-detect
                 </button>
-              </>
+              </div>
             ) : (
               <span style={{ fontSize: 12, color: C.textFaint, fontStyle: 'italic' }}>
                 {dayTag ? 'Auto-detected from row name' : 'No day detected — pick one above to set manually'}
               </span>
             )}
           </div>
+
         </div>
       </div>
     </div>
@@ -487,8 +486,6 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
   }, [selectedTask?.id, persistNote]);
 
   const handleNotesBlur = useCallback((e) => {
-    e.target.style.borderColor = '#e0e0dc';
-    e.target.style.background = C.bgSubtle;
     // Flush immediately on blur — cancels the debounce timer
     if (noteSaveDebounceRef.current) {
       clearTimeout(noteSaveDebounceRef.current);
@@ -514,12 +511,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
     return <SubprojectHeaderPanel selectedTask={selectedTask} onBack={onBack} />;
   }
 
-  const taskName   = selectedTask?.task || '—';
-  const status     = selectedTask?.status || '';
-  const project    = selectedTask?.project;
-  const subproject = selectedTask?.subproject;
-  const hasProject    = project && project !== '-' && project !== '';
-  const hasSubproject = subproject && subproject !== '-' && subproject !== '';
+  const taskName = selectedTask?.task || '—';
 
   // Structural/blank row empty state
   const structuralMessage = getStructuralRowMessage(selectedTask);
@@ -528,20 +520,10 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
   if (structuralMessage || isBlankRow) {
     const message = structuralMessage ?? 'Empty row — add a task name to get started';
     return (
-      <div style={{ display: 'flex', width: 640, height: '100%' }}>
-        <div style={{
-          width: 320, flexShrink: 0, height: '100%', display: 'flex', flexDirection: 'column',
-        }}>
-          <div style={{
-            padding: '20px 26px 16px',
-            borderBottom: `1px solid ${C.borderLight}`,
-            position: 'sticky', top: 0, background: C.bg, zIndex: 2,
-          }}>
-            <div style={{ marginBottom: 18 }}>
-              <BackBtn onClick={onBack} />
-            </div>
-          </div>
-          <div style={{ padding: '24px 26px' }}>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <BackBtn onClick={onBack} />
+        <div style={{ paddingTop: 8 }}>
+          <div style={{ ...BENTO_CARD, marginBottom: 0 }}>
             <p style={{ fontFamily: FONT, fontSize: 13, color: C.textFaint, fontStyle: 'italic', margin: 0 }}>
               {message}
             </p>
@@ -562,144 +544,128 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
     }));
 
   return (
-    // Inner slide: 640px wide, clips at 320px via parent overflow:hidden
+    // Inner slide: 200% wide (two 50% panes), clips via parent overflow:hidden.
+    // Percentage-based rather than fixed 640/320px so this always matches
+    // whatever the real available width is (e.g. PanelShell's frosted tray is
+    // inset 7px from the outer panel edge, so it's narrower than the panel's
+    // own width prop — fixed pixel widths here previously overflowed that tray).
     <div style={{
-      display: 'flex', width: 640, height: '100%',
+      display: 'flex', width: '200%', height: '100%',
       transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
-      transform: showHistory ? 'translateX(-320px)' : 'translateX(0)',
+      transform: showHistory ? 'translateX(-50%)' : 'translateX(0)',
     }}>
 
       {/* ── Task detail main view ── */}
       <div style={{
-        width: 320, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden',
-        height: '100%', display: 'flex', flexDirection: 'column',
+        width: '50%', flexShrink: 0, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
-        {/* Sticky header */}
-        <div style={{
-          padding: '20px 26px 16px',
-          borderBottom: `1px solid ${C.borderLight}`,
-          position: 'sticky', top: 0, background: C.bg, zIndex: 2,
-        }}>
-          <div style={{ marginBottom: 18 }}>
-            <BackBtn onClick={onBack} />
-          </div>
+        <BackBtn onClick={onBack} />
 
-          <div style={{
-            fontSize: 15, fontWeight: 600, color: C.text,
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            marginBottom: 8,
-          }}>
-            {taskName}
-          </div>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
+          <div style={{ paddingTop: 8, paddingBottom: 24 }}>
 
-          {hasProject && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: C.textDim }}>{project}</span>
-              {hasSubproject && (
-                <>
-                  <span style={{ fontSize: 11, color: C.textLight }}>/</span>
-                  <span style={{ fontSize: 12, color: C.textMid }}>{subproject}</span>
-                </>
-              )}
+            {/* Task name */}
+            <div style={BENTO_CARD}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.text, lineHeight: 1.4 }}>
+                {taskName}
+              </div>
             </div>
-          )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {/* {status && <HeaderStatusChip status={status} />} */}
-            <RecurringChip active={recurringActive} onToggle={toggleRecurring} />
+            {/* Schedule — Recurring toggle */}
+            <div style={BENTO_CARD}>
+              <SectionLabel>Schedule</SectionLabel>
+              <div style={{ ...ROW_STYLE, marginBottom: 0 }}>
+                <span style={ROW_LABEL_STYLE}>Recurring</span>
+                <Toggle checked={recurringActive} onChange={() => toggleRecurring()} />
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div style={BENTO_CARD}>
+              <SectionLabel>Notes</SectionLabel>
+              <textarea
+                placeholder="Add a note…"
+                value={notes}
+                onChange={handleNotesChange}
+                onBlur={handleNotesBlur}
+                style={{
+                  width: '100%', boxSizing: 'border-box', minHeight: 360, resize: 'none',
+                  border: '1px solid var(--brand-hover-bd)', borderRadius: 8,
+                  fontFamily: FONT, fontSize: 13, color: C.text,
+                  background: C.bgBlock, padding: '9px 11px',
+                  outline: 'none', lineHeight: 1.55,
+                  transition: 'border-color 0.15s',
+                }}
+                onFocus={e => { e.target.style.borderColor = 'var(--brand)'; }}
+              />
+            </div>
+
+            {/* Status history preview */}
+            <div style={{ ...BENTO_CARD, marginBottom: 0 }}>
+              <SectionLabel>Status History</SectionLabel>
+              <ActionBtn
+                icon={<HistoryIcon />}
+                label={`See ${statusEvents.length > 0 ? `${statusEvents.length} ` : ''}change${statusEvents.length === 1 ? '' : 's'}`}
+                rightSlot={<ChevronRight />}
+                onClick={() => setShowHistory(true)}
+                style={{ marginBottom: 0 }}
+              />
+            </div>
+
           </div>
-        </div>
-
-        {/* Notes */}
-        <div style={{ borderBottom: `1px solid ${C.borderLight}`, padding: '20px 26px 14px' }}>
-          <SectionLabel>Notes</SectionLabel>
-          <textarea
-            placeholder="Add a note…"
-            value={notes}
-            onChange={handleNotesChange}
-            style={{
-              width: '100%', minHeight: 360, resize: 'none',
-              border: '1px solid #e0e0dc', borderRadius: 10,
-              fontFamily: FONT, fontSize: 14, color: C.text,
-              background: C.bgSubtle, padding: '12px 14px',
-              outline: 'none', lineHeight: 1.55,
-              transition: 'border-color 0.15s',
-            }}
-            onFocus={e => { e.target.style.borderColor = C.green; e.target.style.background = '#fff'; }}
-            onBlur={handleNotesBlur}
-          />
-        </div>
-
-        {/* Status history preview */}
-        <div style={{ padding: '20px 26px 32px' }}>
-          <SectionLabel>Status history</SectionLabel>
-
-          <button
-            onClick={() => setShowHistory(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-              fontFamily: FONT, fontSize: 13, color: C.green, marginTop: 14,
-              transition: 'opacity 0.15s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.opacity = '0.7'}
-            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-          >
-            <svg width="11" height="11" viewBox="0 0 13 13" fill="none">
-              <path d="M6.5 1v12M1 6.5h11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity="0.5"/>
-            </svg>
-            See all {statusEvents.length > 0 ? `${statusEvents.length} ` : ''}changes
-            <ChevronRight />
-          </button>
         </div>
       </div>
 
       {/* ── History sub-view ── */}
       <div style={{
-        width: 320, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden',
-        height: '100%', display: 'flex', flexDirection: 'column',
+        width: '50%', flexShrink: 0, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
-        <div style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10,
-          padding: '20px 26px 16px', borderBottom: `1px solid ${C.borderLight}`,
-          position: 'sticky', top: 0, background: C.bg, zIndex: 2,
-        }}>
-          <BackBtn onClick={() => setShowHistory(false)} />
-          <span style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Status history</span>
-        </div>
+        <BackBtn onClick={() => setShowHistory(false)} />
 
-        <div style={{ padding: '6px 26px 24px' }}>
-          {statusEvents.length === 0 ? (
-            <div style={{ fontSize: 12, color: C.textLight, fontStyle: 'italic', paddingTop: 14 }}>
-              No history yet.
-            </div>
-          ) : (
-            statusEvents.map((ev, i) => (
-              <HistoryEntry key={i} {...ev} isLast={i === statusEvents.length - 1 && !selectedTask?.taskCreatedAt} />
-            ))
-          )}
-
-          {selectedTask?.taskCreatedAt && (
-            <CreatedEntry
-              date={new Date(selectedTask.taskCreatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-              agePill={getAgePill(selectedTask.taskCreatedAt)}
-            />
-          )}
-        </div>
-
-        {recurringActive && (
-          <div style={{ borderTop: `1px solid ${C.borderLight}`, padding: '20px 26px' }}>
-            <SectionLabel>Recurring</SectionLabel>
-            <RecurringBlock
-              completionCount={selectedTask?.completionCount ?? 0}
-              lastCompletedAt={
-                selectedTask?.lastCompletedAt
-                  ? new Date(selectedTask.lastCompletedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-                  : null
-              }
-            />
+        <div style={{ flex: 1, minHeight: 0, padding: '8px 11px 16px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <div style={{
+            flex: 1, minHeight: 0, background: '#FFFFFF', borderRadius: 12,
+            border: '1px solid #e8e8e4', boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.07)',
+            overflowY: 'auto', overflowX: 'hidden', padding: '15px 16px',
+          }}>
+            <SectionLabel>Status History</SectionLabel>
+            {statusEvents.length === 0 ? (
+              <div style={{ fontSize: 12, color: C.textFaint, fontStyle: 'italic', paddingTop: 4 }}>
+                No history yet.
+              </div>
+            ) : (
+              statusEvents.map((ev, i) => (
+                <HistoryEntry key={i} {...ev} isLast={i === statusEvents.length - 1 && !selectedTask?.taskCreatedAt} />
+              ))
+            )}
+            {selectedTask?.taskCreatedAt && (
+              <CreatedEntry
+                date={new Date(selectedTask.taskCreatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                agePill={getAgePill(selectedTask.taskCreatedAt)}
+              />
+            )}
           </div>
-        )}
+
+          {recurringActive && (
+            <div style={{ ...BENTO_CARD, margin: 0, flexShrink: 0 }}>
+              <SectionLabel>Recurring</SectionLabel>
+              <div style={ROW_STYLE}>
+                <span style={ROW_LABEL_STYLE}>Completions</span>
+                <span style={{ background: C.green, color: '#fff', borderRadius: 20, padding: '1px 8px', fontSize: 12, fontWeight: 600 }}>
+                  {selectedTask?.completionCount ?? 0}
+                </span>
+              </div>
+              <div style={{ ...ROW_STYLE, marginBottom: 0 }}>
+                <span style={ROW_LABEL_STYLE}>Last completed</span>
+                <span style={{ color: C.text, fontWeight: 500, fontSize: 13 }}>
+                  {selectedTask?.lastCompletedAt
+                    ? new Date(selectedTask.lastCompletedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : '—'}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
     </div>

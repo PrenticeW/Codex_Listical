@@ -253,6 +253,17 @@ option.estimate-highlight {
   font-weight: 700;
 }
 
+/* Hide number input spinner arrows (Chrome/Safari + Firefox) — used by
+   inline count inputs like the context menu's "Insert tasks/labels" rows. */
+.no-spinner::-webkit-inner-spin-button,
+.no-spinner::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.no-spinner {
+  -moz-appearance: textfield;
+}
+
 .status-pill-container {
   display: flex;
   align-items: center;

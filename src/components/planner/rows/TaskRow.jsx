@@ -297,6 +297,7 @@ const TaskRow = React.memo(function TaskRow({
                       onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
                       onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
                       cellFontSize={cellFontSize}
+                      rowHeight={rowHeight}
                     />
                   ) : columnId === 'project' ? (
                     <ProjectDropdownCell
@@ -334,7 +335,7 @@ const TaskRow = React.memo(function TaskRow({
                   ) : columnId === 'estimate' ? (
                     <EstimateDropdownCell
                       initialValue={editValue}
-                      onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
+                      onComplete={(newValue, options) => handleEditComplete(rowId, columnId, newValue, options)}
                       onCancel={() => handleEditCancel(rowId, columnId)}
                       onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
                       cellFontSize={cellFontSize}
@@ -376,10 +377,13 @@ const TaskRow = React.memo(function TaskRow({
                         }}
                         className="flex items-center justify-center cursor-pointer"
                         style={{
-                          width: `${rowHeight - 12}px`,
-                          height: `${rowHeight - 12}px`,
-                          minWidth: `${rowHeight - 12}px`,
-                          minHeight: `${rowHeight - 12}px`,
+                          // Was rowHeight-12 -- left the box looking tiny at the
+                          // default 24px row height (only 12px). Scale off a
+                          // smaller margin so it actually fills the cell.
+                          width: `${Math.max(14, rowHeight - 6)}px`,
+                          height: `${Math.max(14, rowHeight - 6)}px`,
+                          minWidth: `${Math.max(14, rowHeight - 6)}px`,
+                          minHeight: `${Math.max(14, rowHeight - 6)}px`,
                           backgroundColor: (value === 'true' || value === true) ? '#4A70C8' : 'white',
                           border: `2px solid ${(value === 'true' || value === true) ? '#4A70C8' : '#D0D8E8'}`,
                           borderRadius: '3px',
@@ -387,8 +391,8 @@ const TaskRow = React.memo(function TaskRow({
                       >
                         {(value === 'true' || value === true) && (
                           <svg
-                            width={`${rowHeight - 14}`}
-                            height={`${rowHeight - 14}`}
+                            width={`${Math.max(10, rowHeight - 10)}`}
+                            height={`${Math.max(10, rowHeight - 10)}`}
                             viewBox="0 0 14 14"
                             fill="none"
                             xmlns="http://www.w3.org/2000/svg"

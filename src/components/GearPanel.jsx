@@ -1105,20 +1105,24 @@ export default function GearPanel() {
 
   return (
     <PanelShell isOpen={isOpen} navBottom={navBottom} width={320} zIndex={99996}>
-      {/* Two-view slider */}
+      {/* Two-view slider — 200% wide (two 50% panes), not fixed 640/320px.
+          PanelShell's frosted tray is inset 7px from the panel's own width,
+          so it's narrower than that width prop; percentage-based sizing
+          always matches the tray's real width instead of overflowing past
+          its right edge. */}
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div
           style={{
             display: 'flex',
-            width: 640,
+            width: '200%',
             flex: 1,
             minHeight: 0,
-            transform: showHistory ? 'translateX(-320px)' : 'translateX(0)',
+            transform: showHistory ? 'translateX(-50%)' : 'translateX(0)',
             transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
           }}
         >
           {/* Main view */}
-          <div style={{ width: 320, flexShrink: 0, overflowY: 'auto', paddingTop: 20, paddingBottom: 24 }}>
+          <div style={{ width: '50%', flexShrink: 0, overflowY: 'auto', paddingTop: 20, paddingBottom: 24 }}>
             <YourYearSection />
             <TimelineSection onShowHistory={() => setShowHistory(true)} />
             <SystemSettingsSection />
@@ -1127,7 +1131,7 @@ export default function GearPanel() {
           </div>
 
           {/* History view */}
-          <div style={{ width: 320, flexShrink: 0, overflowY: 'auto' }}>
+          <div style={{ width: '50%', flexShrink: 0, overflowY: 'auto' }}>
             <HistoryView onBack={() => setShowHistory(false)} isActive={showHistory && isOpen} use24Hour={use24Hour} />
           </div>
         </div>

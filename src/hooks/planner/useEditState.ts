@@ -84,7 +84,7 @@ export default function useEditState({
   const [editingCell, setEditingCell] = useState<CellReference | null>(null);
   const [editValue, setEditValue] = useState('');
 
-  const handleEditComplete = useCallback((rowId: string, columnId: string, newValue: string) => {
+  const handleEditComplete = useCallback((rowId: string, columnId: string, newValue: string, options?: { timeValueOverride?: string }) => {
     // Get the old value before updating
     const row = data.find(r => r.id === rowId);
 
@@ -100,8 +100,14 @@ export default function useEditState({
       : columnId;
     const oldValue = row?.[actualColumnId] || '';
 
-    // Don't create command if value hasn't changed
-    if (oldValue === newValue) {
+    // Don't create command if value hasn't changed. Re-confirming a new
+    // Hours+Minutes combo on a cell that's already "Custom" still needs to
+    // go through — the estimate label is unchanged but timeValueOverride
+    // carries a different total, so treat that as a real change too.
+    const timeValueOverrideChanged = columnId === 'estimate'
+      && options?.timeValueOverride !== undefined
+      && options.timeValueOverride !== (row?.timeValue || '0.00');
+    if (oldValue === newValue && !timeValueOverrideChanged) {
       setEditingCell(null);
       setEditValue('');
       return;
@@ -236,9 +242,12 @@ export default function useEditState({
     if (columnId === 'estimate') {
       const oldTimeValue = row?.timeValue || '0.00';
       const newMinutes = parseEstimateLabelToMinutes(newValue);
-      // Custom estimate keeps timeValue as-is; '-'/'Multi' reset to '0.00'; preset estimates compute it
+      // Custom estimate normally keeps timeValue as-is; the Estimate dropdown's
+      // Hours+Minutes combo (Confirm button) passes an explicit override so the
+      // combined total lands in the Value column. '-'/'Multi' reset to '0.00';
+      // preset estimates compute it from the label.
       const newTimeValue = newValue === 'Custom'
-        ? oldTimeValue
+        ? (options?.timeValueOverride ?? oldTimeValue)
         : newMinutes === null
           ? '0.00'
           : formatMinutesToHHmm(newMinutes);

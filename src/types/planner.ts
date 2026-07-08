@@ -108,7 +108,7 @@ export interface UseEditStateReturn {
   editValue: string;
   setEditingCell: (cell: CellReference | null) => void;
   setEditValue: (value: string) => void;
-  handleEditComplete: (rowId: string, columnId: string, newValue: string) => void;
+  handleEditComplete: (rowId: string, columnId: string, newValue: string, options?: { timeValueOverride?: string }) => void;
   handleEditCancel: (rowId: string, columnId: string) => void;
   handleEditKeyDown: (e: React.KeyboardEvent, rowId: string, columnId: string, currentValue: string) => void;
 }

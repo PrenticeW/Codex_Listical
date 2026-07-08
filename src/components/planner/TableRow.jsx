@@ -1,5 +1,5 @@
 import React from 'react';
-import { GripVertical, ListFilter, Filter, ChevronRight, ChevronDown } from 'lucide-react';
+import { GripVertical, ListFilter, ChevronRight, ChevronDown } from 'lucide-react';
 import { MonthRow, WeekRow } from './rows';
 import TaskRow from './rows/TaskRow';
 import ProjectRow from './rows/ProjectRow';
@@ -10,6 +10,47 @@ import {
   ARCHIVED_PROJECT_SUB_STYLE,
 } from '../../constants/planner/rowTypes';
 import { TASK_ROW_DETAIL_EVENT } from '../../contexts/TaskRowPanelContext';
+
+// Active-filter icon color. Filters keep the same icon at rest and when
+// active — only the color changes (no icon swap). High-saturation blue,
+// distinct from the muted --brand-deep token used elsewhere.
+const FILTER_ACTIVE_COLOR = '#0066FF';
+
+// Shared filter funnel icon for column headers + day-total cells. Same
+// glyph at rest and active (color-only state change per design review).
+// On hover: solid white fill behind the icon, icon turns black.
+function FilterIcon({ size, active, activeColor, inactiveColor, onClick, title, className = '' }) {
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <span
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 2,
+        margin: -2,
+        borderRadius: 4,
+        background: hovered ? '#ffffff' : 'transparent',
+        transition: 'background 0.12s',
+        lineHeight: 0,
+      }}
+    >
+      <ListFilter
+        size={size}
+        strokeWidth={2}
+        className={`cursor-pointer transition-colors shrink-0 ${className}`}
+        onClick={onClick}
+        title={title}
+        style={{
+          fill: 'none',
+          stroke: hovered ? '#000000' : (active ? activeColor : inactiveColor),
+        }}
+      />
+    </span>
+  );
+}
 
 /**
  * TableRow Component
@@ -1283,25 +1324,16 @@ const TableRow = React.memo(function TableRow({
                   </span>
                 )}
                 {hasFilter && filterClickHandler && (
-                  isFilterActive ? (
-                    <Filter
-                      size={14}
-                      className="cursor-pointer"
-                      onClick={filterClickHandler}
-                      title={`Filter ${columnId}`}
-                      style={{ fill: 'var(--brand-deep)', stroke: 'var(--brand-deep)' }}
-                    />
-                  ) : (
-                    <ListFilter
-                      size={14}
-                      className="cursor-pointer"
-                      onClick={filterClickHandler}
-                      title={`Filter ${columnId}`}
-                      // Was rgba(237,235,221,0.5) -- trying plain white for
-                      // more contrast against the #24252B chrome band.
-                      style={{ fill: 'none', stroke: 'white' }}
-                    />
-                  )
+                  <FilterIcon
+                    size={14}
+                    active={isFilterActive}
+                    activeColor={FILTER_ACTIVE_COLOR}
+                    // Inactive: warm off-white ink token used elsewhere on
+                    // this dark chrome band (see borderRight/color above).
+                    inactiveColor="rgba(237,235,221,0.5)"
+                    onClick={filterClickHandler}
+                    title={`Filter ${columnId}`}
+                  />
                 )}
                 {canResize && (
                   <div
@@ -1545,35 +1577,19 @@ const TableRow = React.memo(function TableRow({
                 >
                   {/* Matches reference/SystemView.jsx H7 dayTotals span (fontSize: 11) -- fixed chrome size, not the cellFontSize zoom scale. */}
                   <span className="text-right flex-1 pr-2" style={{ fontFamily: "'Mulish', sans-serif", fontSize: '11px', fontWeight: 'bold' }}>{value}</span>
-                  {isFilterActive ? (
-                    <Filter
-                      size={10}
-                      fill="var(--brand-deep)"
-                      className="cursor-pointer transition-colors shrink-0"
-                      style={{ color: 'var(--brand-deep)' }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (handleDayColumnFilterToggle) {
-                          handleDayColumnFilterToggle(columnId);
-                        }
-                      }}
-                      title="Filter active"
-                    />
-                  ) : (
-                    <ListFilter
-                      size={10}
-                      strokeWidth={2}
-                      className="cursor-pointer transition-colors shrink-0"
-                      style={{ color: 'black' }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (handleDayColumnFilterToggle) {
-                          handleDayColumnFilterToggle(columnId);
-                        }
-                      }}
-                      title="Add filter"
-                    />
-                  )}
+                  <FilterIcon
+                    size={10}
+                    active={isFilterActive}
+                    activeColor={FILTER_ACTIVE_COLOR}
+                    inactiveColor="#000000"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (handleDayColumnFilterToggle) {
+                        handleDayColumnFilterToggle(columnId);
+                      }
+                    }}
+                    title={isFilterActive ? 'Filter active' : 'Add filter'}
+                  />
                 </div>
               </td>
             );

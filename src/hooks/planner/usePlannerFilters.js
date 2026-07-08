@@ -47,6 +47,11 @@ function useFilter() {
     setFilterMenu({ open: false, left: 0, top: 0 });
   }, []);
 
+  const clearFilter = useCallback(() => {
+    setSelectedFilters(new Set());
+    setFilterMenu({ open: false, left: 0, top: 0 });
+  }, []);
+
   return {
     selectedFilters,
     filterMenu,
@@ -55,6 +60,7 @@ function useFilter() {
     handleFilterSelect,
     handleFilterButtonClick,
     closeFilterMenu,
+    clearFilter,
   };
 }
 
@@ -96,6 +102,7 @@ export default function usePlannerFilters() {
     handleProjectFilterSelect: projectFilter.handleFilterSelect,
     handleProjectFilterButtonClick: projectFilter.handleFilterButtonClick,
     closeProjectFilterMenu: projectFilter.closeFilterMenu,
+    clearProjectFilter: projectFilter.clearFilter,
 
     // Subproject filter
     subprojectFilterMenu: subprojectFilter.filterMenu,
@@ -105,6 +112,7 @@ export default function usePlannerFilters() {
     handleSubprojectFilterSelect: subprojectFilter.handleFilterSelect,
     handleSubprojectFilterButtonClick: subprojectFilter.handleFilterButtonClick,
     closeSubprojectFilterMenu: subprojectFilter.closeFilterMenu,
+    clearSubprojectFilter: subprojectFilter.clearFilter,
 
     // Status filter
     statusFilterMenu: statusFilter.filterMenu,
@@ -114,6 +122,7 @@ export default function usePlannerFilters() {
     handleStatusFilterSelect: statusFilter.handleFilterSelect,
     handleStatusFilterButtonClick: statusFilter.handleFilterButtonClick,
     closeStatusFilterMenu: statusFilter.closeFilterMenu,
+    clearStatusFilter: statusFilter.clearFilter,
 
     // Recurring filter
     recurringFilterMenu: recurringFilter.filterMenu,
@@ -123,6 +132,7 @@ export default function usePlannerFilters() {
     handleRecurringFilterSelect: recurringFilter.handleFilterSelect,
     handleRecurringFilterButtonClick: recurringFilter.handleFilterButtonClick,
     closeRecurringFilterMenu: recurringFilter.closeFilterMenu,
+    clearRecurringFilter: recurringFilter.clearFilter,
 
     // Estimate filter
     estimateFilterMenu: estimateFilter.filterMenu,
@@ -132,5 +142,6 @@ export default function usePlannerFilters() {
     handleEstimateFilterSelect: estimateFilter.handleFilterSelect,
     handleEstimateFilterButtonClick: estimateFilter.handleFilterButtonClick,
     closeEstimateFilterMenu: estimateFilter.closeFilterMenu,
+    clearEstimateFilter: estimateFilter.clearFilter,
   };
 }
