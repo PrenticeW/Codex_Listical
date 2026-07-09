@@ -617,8 +617,9 @@ export default function ProjectTimePlannerV2() {
   // Note: coerceNumber is now imported from valueNormalizers as coerceToNumber
   // We keep this wrapper for backward compatibility with existing code
   const coerceNumber = useCallback((value) => {
-    const result = coerceToNumber(value);
-    return result === 0 && value == null ? null : result;
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'string' && value.trim() === '') return null;
+    return coerceToNumber(value);
   }, []);
 
   // Collect unique values for filter dropdowns from the data

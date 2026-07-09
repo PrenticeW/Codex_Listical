@@ -24,6 +24,7 @@ import {
   isSectionDivider,
   isProjectStructureRow,
   isSpecialRow,
+  isTimelineRow,
 } from '../../utils/planner/rowTypeChecks';
 import { getNormalizedColumnValue } from '../../utils/planner/valueNormalizers';
 
@@ -173,6 +174,86 @@ export const useFilteredData = ({
       return selectedEstimateFilters.has(getNormalizedColumnValue(row, 'estimate'));
     };
 
+    // --- Cascade-hide setup ---
+    // Header/divider/group rows (project headers, subproject headers, the
+    // Inbox and Archive dividers, archive week rows, archived project
+    // structure) carry no day-column values of their own, so they can't be
+    // matched by the numeric day-column check directly. Instead, each of
+    // these should disappear once none of its descendant content rows
+    // survive the currently active filters -- an empty header shouldn't
+    // linger after all of its children get filtered out.
+
+    const dayFilterActive = dayColumnFilters.size > 0;
+
+    // Whether a single leaf/content row's own values satisfy every
+    // currently active filter (project/subproject/status/recurring/estimate
+    // plus the day-column numeric filter). Used only to decide whether a
+    // row counts as "visible content" for its ancestor header/divider rows.
+    const leafMatchesActiveFilters = (row) => {
+      if (!matchesProjectFilter(row)) return false;
+      if (!matchesSubprojectFilter(row)) return false;
+      if (!matchesStatusFilter(row)) return false;
+      if (!matchesRecurringFilter(row)) return false;
+      if (!matchesEstimateFilter(row)) return false;
+      if (!dayFilterActive) return true;
+      return Array.from(dayColumnFilters).every(dayColumnId => {
+        return coerceNumber(row[dayColumnId]) !== null;
+      });
+    };
+
+    // Map of groupId -> direct children (rows whose parentGroupId points at it)
+    const childrenByParentGroupId = new Map();
+    for (const row of visibleData) {
+      if (row.parentGroupId) {
+        if (!childrenByParentGroupId.has(row.parentGroupId)) {
+          childrenByParentGroupId.set(row.parentGroupId, []);
+        }
+        childrenByParentGroupId.get(row.parentGroupId).push(row);
+      }
+    }
+
+    // Recursively determine whether a container row (identified by its
+    // groupId) has at least one descendant that survives the active
+    // filters -- either a leaf content row that matches directly, or a
+    // nested container (e.g. a subproject header) that itself has
+    // surviving content.
+    const groupSurvivalCache = new Map();
+    const groupHasVisibleContent = (groupId) => {
+      if (!groupId) return false;
+      if (groupSurvivalCache.has(groupId)) return groupSurvivalCache.get(groupId);
+      groupSurvivalCache.set(groupId, false); // cycle guard
+      const children = childrenByParentGroupId.get(groupId) || [];
+      const result = children.some(child => {
+        if (child.groupId) {
+          return groupHasVisibleContent(child.groupId);
+        }
+        return leafMatchesActiveFilters(child);
+      });
+      groupSurvivalCache.set(groupId, result);
+      return result;
+    };
+
+    // Inbox and Archive dividers aren't linked to their members via
+    // groupId/parentGroupId -- membership is purely positional (the rows
+    // between the divider and the next section). Resolve visibility by
+    // scanning that range directly.
+    const inboxDividerIndex = visibleData.findIndex(r => r._isInboxRow);
+    const archiveHeaderIndex = visibleData.findIndex(r => r._rowType === 'archiveHeader');
+
+    let inboxHasVisibleContent = true;
+    if (inboxDividerIndex !== -1) {
+      const endIndex = archiveHeaderIndex !== -1 ? archiveHeaderIndex : visibleData.length;
+      inboxHasVisibleContent = visibleData
+        .slice(inboxDividerIndex + 1, endIndex)
+        .some(row => leafMatchesActiveFilters(row));
+    }
+
+    let archiveHasVisibleContent = true;
+    if (archiveHeaderIndex !== -1) {
+      const archiveWeekRows = visibleData.filter(r => r._rowType === 'archiveRow');
+      archiveHasVisibleContent = archiveWeekRows.some(r => groupHasVisibleContent(r.groupId));
+    }
+
     const filtered = visibleData.filter(row => {
       // Filter out rows that belong to collapsed groups (archive weeks and projects)
       // Use recursive check to handle nested groups (e.g., archive week > project > sections)
@@ -229,15 +310,47 @@ export const useFilteredData = ({
       if (!matchesRecurringFilter(row)) return false;
       if (!matchesEstimateFilter(row)) return false;
 
-      // Always show timeline header rows (month, week, day headers, filter row, daily min/max)
-      // These are NOT filterable by day columns - they should always be visible
       if (shouldBypassFilters(row)) {
+        // Timeline/metrics rows (month, week, day headers, daily min/max,
+        // daily total, filter row) carry no filterable content of their
+        // own -- always show these regardless of filter state.
+        if (isTimelineRow(row) || row._isDailyTotalRow || row._isFilterRow) {
+          return true;
+        }
+
+        // Everything else in this bucket is a header/divider/group row
+        // (project headers, subproject headers, the Inbox/Archive dividers,
+        // archive week rows, archived project structure). When the day
+        // column filter is active these always disappear -- unconditionally,
+        // even if one of their child rows happens to match the filter.
+        if (dayFilterActive) {
+          return false;
+        }
+
+        // No day-column filter active: fall back to cascade-hiding based on
+        // whether any descendant content row survives the other active
+        // filters (project/status/recurring/estimate).
+        if (row._isInboxRow) {
+          return inboxHasVisibleContent;
+        }
+        if (row._rowType === 'archiveHeader') {
+          return archiveHasVisibleContent;
+        }
+        if (row.groupId) {
+          // projectHeader, subprojectHeader, archiveRow (week), archivedProjectHeader
+          return groupHasVisibleContent(row.groupId);
+        }
+        if (row.parentGroupId) {
+          // projectGeneral / projectUnscheduled / archived General / Unscheduled
+          // section-label rows -- tied to their parent container's visibility.
+          return groupHasVisibleContent(row.parentGroupId);
+        }
+
+        // Fallback for any structural row type not covered above.
         return true;
       }
 
-      // For all other rows (regular tasks, project rows, inbox/archive dividers), apply day column filtering
-      // In main branch, FILTERABLE_ROW_TYPES includes: projectTask, inboxItem, projectHeader, projectGeneral, projectUnscheduled
-      // Inbox and Archive rows should be filtered just like project rows
+      // For all other rows (regular tasks, project rows), apply day column filtering
       const hasAllFilteredValues = Array.from(dayColumnFilters).every(dayColumnId => {
         const value = row[dayColumnId];
         const numericValue = coerceNumber(value);

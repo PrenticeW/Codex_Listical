@@ -1409,7 +1409,12 @@ const TableRow = React.memo(function TableRow({
         // resize for day columns now live on the Daily Total row above.
         if (!mergedDayCellRendered) {
           mergedDayCellRendered = true;
+          // Filter to visible day columns only, same as the other merged
+          // bars above -- otherwise this bar renders wider than the
+          // table's actual visible width whenever day columns are hidden
+          // (e.g. hide-past-weeks), overflowing/clipping the row.
           const dayColumnsWidth = Array.from({ length: totalDays }, (_, i) => `day-${i}`)
+            .filter(dayColId => table.getColumn(dayColId).getIsVisible())
             .reduce((sum, dayColId) => sum + table.getColumn(dayColId).getSize(), 0);
           return (
             <td
