@@ -97,19 +97,66 @@ export const useFilteredData = ({
       }
     }
 
-    // Build the set of subheader groupIds hidden by the day filter.
+    // Build the set of groupIds hidden by the day filter.
     // Uses the stored dayTag if available; falls back to text detection on the row's label.
-    // A subheader with no detectable day (neither stored nor in text) is always kept visible.
+    // Rules:
+    //  - A tagged subheader whose day is not in the active set is hidden.
+    //  - A project with NO subheader matching any active day is hidden entirely
+    //    (its header, all of its subheaders — tagged or not — and their rows).
+    //  - Within a matching project, untagged subheaders stay visible.
     const hiddenByDayFilter = new Set();
     if (dayFilter && dayFilter.size > 0) {
+      // groupId -> row lookup so we can walk parent chains up to the project header
+      const rowByGroupId = new Map();
       for (const row of visibleData) {
-        if (row._rowType === 'subprojectHeader') {
-          // Stored dayTag takes precedence; fall back to scanning the subheader text
-          const effectiveDay = row.dayTag
-            ?? detectDayTagFromText(row.subprojectName || row.subproject || row.task || '');
-          // Only hide if a day was detected AND it's not in the active filter set
-          if (effectiveDay && !dayFilter.has(effectiveDay)) {
-            if (row.groupId) hiddenByDayFilter.add(row.groupId);
+        if (row.groupId) rowByGroupId.set(row.groupId, row);
+      }
+      const findProjectGroupId = (row) => {
+        let current = row;
+        const seen = new Set();
+        while (current && current.parentGroupId && !seen.has(current.parentGroupId)) {
+          seen.add(current.parentGroupId);
+          const parent = rowByGroupId.get(current.parentGroupId);
+          if (!parent) return current.parentGroupId;
+          if (parent._rowType === 'projectHeader') return parent.groupId;
+          current = parent;
+        }
+        return null;
+      };
+
+      // Pass 1 — classify subheaders and record which projects have a matching day
+      const projectsWithMatchingDay = new Set();
+      for (const row of visibleData) {
+        if (row._rowType !== 'subprojectHeader') continue;
+        // Stored dayTag takes precedence; fall back to scanning the subheader text
+        const effectiveDay = row.dayTag
+          ?? detectDayTagFromText(row.subprojectName || row.subproject || row.task || '');
+        if (!effectiveDay) continue; // untagged — resolved by its project's fate
+        if (dayFilter.has(effectiveDay)) {
+          const projectGroupId = findProjectGroupId(row);
+          if (projectGroupId) projectsWithMatchingDay.add(projectGroupId);
+        } else if (row.groupId) {
+          hiddenByDayFilter.add(row.groupId);
+        }
+      }
+
+      // Pass 2 — hide project headers with no matching subheader
+      for (const row of visibleData) {
+        if (row._rowType === 'projectHeader' && row.groupId && !projectsWithMatchingDay.has(row.groupId)) {
+          hiddenByDayFilter.add(row.groupId);
+        }
+      }
+
+      // Pass 3 — propagate hiding down the parent chain until stable
+      // (project header -> subheaders/sections -> task rows)
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const row of visibleData) {
+          if (row.parentGroupId && hiddenByDayFilter.has(row.parentGroupId)
+              && row.groupId && !hiddenByDayFilter.has(row.groupId)) {
+            hiddenByDayFilter.add(row.groupId);
+            changed = true;
           }
         }
       }
@@ -261,13 +308,14 @@ export const useFilteredData = ({
         return false;
       }
 
-      // Day filter: hide subheader rows whose dayTag doesn't match, and hide their child rows.
+      // Day filter: hide non-matching subheaders, whole projects with no
+      // activity on the selected days, and all of their child rows.
       if (dayFilter && dayFilter.size > 0) {
-        // Hide the subheader itself
-        if (row._rowType === 'subprojectHeader' && row.groupId && hiddenByDayFilter.has(row.groupId)) {
+        // Hide the container itself (project header or subheader)
+        if (row.groupId && hiddenByDayFilter.has(row.groupId)) {
           return false;
         }
-        // Hide task rows that live under a hidden subheader
+        // Hide rows that live under a hidden container (tasks, section labels)
         if (row.parentGroupId && hiddenByDayFilter.has(row.parentGroupId)) {
           return false;
         }

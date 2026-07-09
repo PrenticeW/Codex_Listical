@@ -22,7 +22,7 @@ export default function AccountDeletedPage() {
         Your account is scheduled for deletion and will be fully removed within 30 days.
       </p>
       <p className="auth-subtitle">
-        If this was a mistake, contact <a href="mailto:support@codexlistical.com">support@codexlistical.com</a> within this period to cancel the deletion request.
+        If this was a mistake, contact <a href="mailto:hello@tacular.app">hello@tacular.app</a> within this period to cancel the deletion request.
       </p>
       <div className="auth-rule" />
       <Link to="/login" className="auth-link-btn muted">Return to login</Link>

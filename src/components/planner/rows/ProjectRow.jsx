@@ -287,9 +287,14 @@ export default function ProjectRow({
                       position: 'relative',
                       fontSize: `${cellFontSize}px`,
                       minHeight: `${rowHeight}px`,
-                      // Inner div covers the <td>, so the row-selected pink has to be
+                      // Inner div covers the <td>, so row selection has to be
                       // applied here rather than relying on `tr.selected-row td` CSS.
-                      backgroundColor: isRowSelected ? 'var(--sel-row)' : bgColor,
+                      // Keep the header's own fill and tint it with a translucent
+                      // overlay rather than replacing it with a flat colour.
+                      backgroundColor: bgColor,
+                      backgroundImage: isRowSelected
+                        ? 'linear-gradient(var(--sel-row-overlay), var(--sel-row-overlay))'
+                        : 'none',
                       borderBottom: '1px solid #d3d3d3',
                       borderRight: '1px solid #d3d3d3',
                       paddingLeft: '8px',
@@ -516,9 +521,14 @@ export default function ProjectRow({
                   style={{
                     fontSize: `${cellFontSize}px`,
                     minHeight: `${rowHeight}px`,
-                    // Inner div covers the <td>, so the row-selected pink has to be
+                    // Inner div covers the <td>, so row selection has to be
                     // applied here rather than relying on `tr.selected-row td` CSS.
-                    backgroundColor: isRowSelected ? 'var(--sel-row)' : bgColor,
+                    // Keep the header's own fill and tint it with a translucent
+                    // overlay rather than replacing it with a flat colour.
+                    backgroundColor: bgColor,
+                    backgroundImage: isRowSelected
+                      ? 'linear-gradient(var(--sel-row-overlay), var(--sel-row-overlay))'
+                      : 'none',
                     borderBottom: '1px solid #d3d3d3',
                     borderRight: '1px solid #d3d3d3',
                     paddingLeft: '8px',
@@ -623,7 +633,11 @@ export default function ProjectRow({
                 style={{
                   fontSize: `${cellFontSize}px`,
                   minHeight: `${rowHeight}px`,
-                  backgroundColor: isDayColumn ? 'transparent' : (isRowSelected ? 'var(--sel-row)' : bgColor), // No background for day columns
+                  backgroundColor: isDayColumn ? 'transparent' : bgColor, // No background for day columns
+                  // Same overlay tint as the label cells so selection covers the whole row.
+                  backgroundImage: isRowSelected
+                    ? 'linear-gradient(var(--sel-row-overlay), var(--sel-row-overlay))'
+                    : 'none',
                   borderBottom: '1px solid #d3d3d3',
                   borderRight: borderRightStyle,
                   paddingLeft: '3px',
