@@ -49,7 +49,7 @@ class ErrorBoundary extends Component {
             Something went wrong
           </h1>
           <p className="text-sm text-gray-600 mb-6">
-            Listical hit an unexpected error. Your saved work is still on this
+            Tacular hit an unexpected error. Your saved work is still on this
             device. Try reloading the page. If the issue keeps happening,
             please let us know.
           </p>

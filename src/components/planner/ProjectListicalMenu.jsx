@@ -89,7 +89,7 @@ export default function ProjectListicalMenu({
         aria-expanded={isOpen}
         className="inline-flex items-center gap-2 rounded border border-[#ced3d0] bg-white px-3 py-2 font-semibold text-[#065f46] shadow-sm transition hover:bg-[#f2fdf6] hover:shadow-md"
       >
-        <span>Listical</span>
+        <span className="uppercase">Tacular</span>
       </button>
       {isOpen && (
         <div

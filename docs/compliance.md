@@ -16,13 +16,13 @@ All user data must be deletable on request. The `deletion_audit_log` table and `
 
 ---
 
-## Age requirement — minimum 16
+## Age requirement — minimum 18
 
-Operative framework: GDPR-K, default age of digital consent is 16.
+Product decision: the floor is 18 (legal adult), not the GDPR-K minimum of 16. GDPR-K's default age of digital consent is 16 and remains the legal floor across the EU/UK, but 18 was chosen deliberately for broader coverage.
 
-**Database (source of truth):** `public.profiles.date_of_birth` is `NOT NULL`. A CHECK constraint and `BEFORE INSERT OR UPDATE` trigger (`validate_age_requirement`) reject any row where DOB is NULL or indicates under 16. Defined in `supabase/migrations/20260425000001_bump_age_requirement_to_16.sql`.
+**Database (source of truth):** `public.profiles.date_of_birth` is `NOT NULL`. A CHECK constraint and `BEFORE INSERT OR UPDATE` trigger (`validate_age_requirement`) reject any row where DOB is NULL or indicates under 18. Originally set to 16 in `supabase/migrations/20260425000001_bump_age_requirement_to_16.sql`, bumped to 18 in `supabase/migrations/20260708220000_bump_age_requirement_to_18.sql`.
 
-**Client (UX gate):** `src/pages/SignupPage.jsx` caps the year dropdown at `currentYear - 16` and shows a warning message. This is convenience only — the DB is the real gate.
+**Client (UX gate):** `src/pages/SignupPage.jsx` caps the year dropdown at `currentYear - 18` and shows a warning message. This is convenience only — the DB is the real gate.
 
 Do not make further assumptions about user age elsewhere in the app. Do not collect data beyond what is necessary for the planning features.
 

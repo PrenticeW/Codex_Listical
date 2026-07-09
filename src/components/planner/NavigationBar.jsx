@@ -118,8 +118,8 @@ export default function NavigationBar({
     >
       {/* Left: wordmark */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <span style={{ fontFamily: FONT, fontSize: 21, fontWeight: 700, letterSpacing: '-0.035em', color: '#1F1F1F' }}>
-          Listical
+        <span style={{ fontFamily: 'var(--font-wordmark)', fontSize: 21, fontWeight: 800, letterSpacing: '-0.02em', textTransform: 'uppercase', color: '#1F1F1F' }}>
+          Tacular
         </span>
         {listicalButton && <div style={{ position: 'relative' }}>{listicalButton}</div>}
       </div>
