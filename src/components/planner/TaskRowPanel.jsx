@@ -18,6 +18,7 @@ import { PILLBOX_COLORS } from './DropdownCell';
 import { saveTaskNote, readTaskEvents } from '../../utils/planner/storage';
 import { TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
 import { fmtTimestamp } from '../../utils/fmtTimestamp';
+import { linkifyText, containsUrl, renderUrlSegments } from '../../utils/linkify';
 
 // ─── Design tokens (match GearPanel/SystemPanel) ─────────────────────────────
 
@@ -251,7 +252,7 @@ function HistoryEntry({ status, fromStatus, time, note, isLast }) {
           <span style={{ fontSize: 10.5, color: '#8090A8', fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" }}>{time}</span>
         </div>
         {note && (
-          <div style={{ fontSize: 12, color: C.textFaint, marginTop: 2, lineHeight: 1.45 }}>{note}</div>
+          <div style={{ fontSize: 12, color: C.textFaint, marginTop: 2, lineHeight: 1.45 }}>{linkifyText(note)}</div>
         )}
       </div>
     </div>
@@ -428,7 +429,17 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
   const [recurringActive, setRecurringActive] = useState(false);
   const [notes, setNotes] = useState('');
   const [events, setEvents] = useState([]);
+  // Notes display/edit toggle — a textarea can't render anchors, so when the
+  // note contains a URL and isn't being edited we show a linkified read view
+  // and swap back to the textarea on click.
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const notesTextareaRef = React.useRef(null);
+  const notesMirrorRef = React.useRef(null);
   const noteSaveDebounceRef = React.useRef(null);
+
+  useEffect(() => {
+    if (isEditingNotes && notesTextareaRef.current) notesTextareaRef.current.focus();
+  }, [isEditingNotes]);
 
   // Reset inner state and load fresh data whenever the selected task changes
   useEffect(() => {
@@ -438,6 +449,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
       noteSaveDebounceRef.current = null;
     }
     setShowHistory(false);
+    setIsEditingNotes(false);
     if (selectedTask) {
       setRecurringActive(selectedTask.recurring === 'true' || selectedTask.recurring === true);
       setNotes(selectedTask.notes ?? '');
@@ -567,7 +579,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
             {/* Task name */}
             <div style={BENTO_CARD}>
               <div style={{ fontSize: 13, fontWeight: 600, color: C.text, lineHeight: 1.4 }}>
-                {taskName}
+                {linkifyText(taskName)}
               </div>
             </div>
 
@@ -583,21 +595,68 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
             {/* Notes */}
             <div style={BENTO_CARD}>
               <SectionLabel>Notes</SectionLabel>
-              <textarea
-                placeholder="Add a note…"
-                value={notes}
-                onChange={handleNotesChange}
-                onBlur={handleNotesBlur}
-                style={{
-                  width: '100%', boxSizing: 'border-box', minHeight: 360, resize: 'none',
-                  border: '1px solid var(--brand-hover-bd)', borderRadius: 8,
-                  fontFamily: FONT, fontSize: 13, color: C.text,
-                  background: C.bgBlock, padding: '9px 11px',
-                  outline: 'none', lineHeight: 1.55,
-                  transition: 'border-color 0.15s',
-                }}
-                onFocus={e => { e.target.style.borderColor = 'var(--brand)'; }}
-              />
+              {!isEditingNotes && containsUrl(notes) ? (
+                <div
+                  title="Click to edit"
+                  onClick={() => setIsEditingNotes(true)}
+                  style={{
+                    width: '100%', boxSizing: 'border-box', minHeight: 360,
+                    border: '1px solid var(--brand-hover-bd)', borderRadius: 8,
+                    fontFamily: FONT, fontSize: 13, color: C.text,
+                    background: C.bgBlock, padding: '9px 11px',
+                    lineHeight: 1.55, whiteSpace: 'pre-wrap',
+                    overflowWrap: 'anywhere', cursor: 'text',
+                  }}
+                >
+                  {linkifyText(notes)}
+                </div>
+              ) : (
+                // While editing a note that contains a URL, a mirror layer
+                // behind the (transparent-text) textarea paints URLs as links.
+                <div style={{ position: 'relative' }}>
+                  {containsUrl(notes) && (
+                    <div
+                      ref={notesMirrorRef}
+                      aria-hidden
+                      style={{
+                        position: 'absolute', inset: 0, boxSizing: 'border-box',
+                        border: '1px solid transparent', borderRadius: 8,
+                        fontFamily: FONT, fontSize: 13, color: C.text,
+                        background: C.bgBlock, padding: '9px 11px',
+                        lineHeight: 1.55, whiteSpace: 'pre-wrap',
+                        overflowWrap: 'break-word', overflow: 'hidden',
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      {renderUrlSegments(notes)}
+                    </div>
+                  )}
+                  <textarea
+                    ref={notesTextareaRef}
+                    placeholder="Add a note…"
+                    value={notes}
+                    onChange={handleNotesChange}
+                    onScroll={(e) => {
+                      if (notesMirrorRef.current) notesMirrorRef.current.scrollTop = e.target.scrollTop;
+                    }}
+                    onBlur={(e) => { setIsEditingNotes(false); handleNotesBlur(e); }}
+                    style={{
+                      position: 'relative',
+                      width: '100%', boxSizing: 'border-box', minHeight: 360, resize: 'none',
+                      border: '1px solid var(--brand-hover-bd)', borderRadius: 8,
+                      fontFamily: FONT, fontSize: 13,
+                      color: containsUrl(notes) ? 'transparent' : C.text,
+                      caretColor: C.text,
+                      background: containsUrl(notes) ? 'transparent' : C.bgBlock,
+                      padding: '9px 11px',
+                      outline: 'none', lineHeight: 1.55,
+                      whiteSpace: 'pre-wrap', overflowWrap: 'break-word',
+                      transition: 'border-color 0.15s',
+                    }}
+                    onFocus={e => { e.target.style.borderColor = 'var(--brand)'; }}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Status history preview */}

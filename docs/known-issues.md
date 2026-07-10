@@ -26,6 +26,7 @@
 | Item | Detail |
 |---|---|
 | Blank task rows retain history after accidental edits | If a user types into an empty task row and commits (Enter/Tab/blur), `writeTaskEvent` fires and `task_created_at` is stamped on the row — even if they then delete the text and leave the row blank again. The row quietly carries that history and creation date, which will surface on the next task written into the same row. Fix considered (clearing `task_events` and `task_created_at` when task name is set to empty) but deferred — risk of unintended data loss outweighed the edge-case frequency. Workaround: delete and re-add the row instead. |
+| Legacy rows may lack `project_id` | The `projectNickname` quota-lookup bug was fixed June 2026 (`projectId` stamped at creation, stored in `project_id`, read on load). `ProjectRow.jsx` still falls back to the nickname map for rows created before the fix — renaming a project with such rows can break quota lookups until those rows are re-saved. |
 
 ---
 
@@ -34,7 +35,6 @@
 | Bug | Detail |
 |---|---|
 | Settings panel closes when "Undo Draft Year" is pressed | Root cause traced to a DOM-position swap race: `undoDraftYear()` fires `yearMetadataStorage` events mid-click which change `draftYear` to null, causing React to replace the "Undo Draft Year" button with "Plan next year" at the same screen coordinates before the click is processed. The browser fires `click` on the newly-appeared button, triggering `handlePlanNextYear → close()`. Attempted fixes (pinning the button with `isUndoing`, calling `open()` after success) did not fully resolve it. Deeper fix likely requires either debouncing the metadata event dispatch inside `undoDraftYear` or decoupling `GearPanel` from the `YearProvider` re-render cycle. |
-| ~~Quota lookup still depends on `projectNickname` one hop upstream~~ | Fixed June 2026. `projectId` is now stamped on scaffold rows (projectHeader/General/Unscheduled) and chip task rows at creation time, serialized to the `project_id` DB column, and read back on load. `ProjectRow.jsx` prefers `row.original.projectId` with a fallback to the nickname map for any legacy rows written before the fix. |
 
 ---
 

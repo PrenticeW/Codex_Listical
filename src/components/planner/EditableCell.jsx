@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { containsUrl, renderUrlSegments } from '../../utils/linkify';
 
 /**
  * EditableCell Component
@@ -72,33 +73,65 @@ function EditableCell({
     adjustHeight(inputRef.current);
   }, [localValue]);
 
+  // While the value contains a URL, the textarea's own text is made
+  // transparent (caret stays visible) and an identically laid-out mirror
+  // behind it paints the same text with URLs styled as links.
+  const hasUrl = containsUrl(localValue);
+
+  const sharedTextStyle = {
+    width: '100%',
+    padding: '0 4px',
+    fontSize: `${cellFontSize}px`,
+    fontFamily: 'inherit',
+    lineHeight: 'normal',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    minHeight: '100%',
+    boxSizing: 'border-box',
+    whiteSpace: 'pre-wrap',
+    overflowWrap: 'break-word',
+  };
+
   return (
-    <textarea
-      ref={(el) => {
-        inputRef.current = el;
-        adjustHeight(el);
-      }}
-      value={localValue}
-      onChange={(e) => setLocalValue(e.target.value)}
-      onBlur={handleBlur}
-      onKeyDown={handleKeyDown}
-      style={{
-        width: '100%',
-        padding: '0 4px',
-        border: '2px solid var(--brand)',
-        outline: 'none',
-        resize: 'none',
-        background: '#fff',
-        overflow: 'hidden',
-        fontSize: `${cellFontSize}px`,
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        zIndex: 10,
-        minHeight: '100%',
-        boxSizing: 'border-box',
-      }}
-    />
+    <>
+      {hasUrl && (
+        <div
+          aria-hidden
+          style={{
+            ...sharedTextStyle,
+            border: '2px solid transparent',
+            background: '#fff',
+            zIndex: 10,
+            pointerEvents: 'none',
+            overflow: 'hidden',
+          }}
+        >
+          {renderUrlSegments(localValue)}
+        </div>
+      )}
+      <textarea
+        ref={(el) => {
+          inputRef.current = el;
+          adjustHeight(el);
+        }}
+        value={localValue}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+        style={{
+          ...sharedTextStyle,
+          border: '2px solid var(--brand)',
+          outline: 'none',
+          resize: 'none',
+          background: hasUrl ? 'transparent' : '#fff',
+          color: hasUrl ? 'transparent' : undefined,
+          caretColor: '#000',
+          overflow: 'hidden',
+          zIndex: 11,
+        }}
+      />
+    </>
   );
 }
 

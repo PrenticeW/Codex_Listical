@@ -10,6 +10,7 @@ import SubprojectDropdownCell from '../SubprojectDropdownCell';
 import { ESTIMATE_COLOR_MAP } from '../../../constants/planner/rowTypes';
 import { ChevronDown } from 'lucide-react';
 import { getSelectionEdgeClassNames } from '../../../utils/planner/selectionEdgeClasses';
+import { linkifyText } from '../../../utils/linkify';
 
 /**
  * TaskRow Component
@@ -393,8 +394,8 @@ const TaskRow = React.memo(function TaskRow({
                           height: `${Math.max(14, rowHeight - 6)}px`,
                           minWidth: `${Math.max(14, rowHeight - 6)}px`,
                           minHeight: `${Math.max(14, rowHeight - 6)}px`,
-                          backgroundColor: (value === 'true' || value === true) ? '#4A70C8' : 'white',
-                          border: `2px solid ${(value === 'true' || value === true) ? '#4A70C8' : '#D0D8E8'}`,
+                          backgroundColor: (value === 'true' || value === true) ? '#276436' : 'white',
+                          border: `2px solid ${(value === 'true' || value === true) ? '#276436' : '#D0D8E8'}`,
                           borderRadius: '3px',
                         }}
                       >
@@ -599,7 +600,7 @@ const TaskRow = React.memo(function TaskRow({
                     </div>
                   ) : (
                     <div className="w-full" style={{ paddingLeft: '8px', paddingRight: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
-                      {value || '\u00A0'}
+                      {value ? linkifyText(value) : '\u00A0'}
                     </div>
                   )
                 )}

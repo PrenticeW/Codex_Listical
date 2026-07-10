@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PLAN_ESTIMATE_OPTIONS } from '../../utils/staging/planTableHelpers';
+import { linkifyText, containsUrl, renderUrlSegments } from '../../utils/linkify';
 
 /**
  * Shared cell styling utilities
@@ -100,6 +101,20 @@ export function TextInputCell({
 }) {
   const bg = getCellBackground({ isDropTarget, rowType, promptBg });
   const isHeader = rowType === 'header';
+
+  // Display/edit toggle for linkified URLs. A native <input> can't render
+  // anchors, so when the value contains a URL and the cell isn't being
+  // edited we show a static linkified div instead, swapping back to the
+  // input on click/focus. Cells without URLs keep the always-live input
+  // exactly as before.
+  const [isEditing, setIsEditing] = useState(false);
+  const inputRef = useRef(null);
+  const showLinkifiedDisplay = !isEditing && containsUrl(value);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) inputRef.current.focus();
+  }, [isEditing]);
+
   const style = {
     backgroundColor: bg,
     height: isHeader ? 44 : CELL_HEIGHT,
@@ -128,6 +143,86 @@ export function TextInputCell({
     outline: 'none',
   };
 
+  // Static display shown in place of the input when the value contains a
+  // URL and the cell isn't being edited. Clicking anywhere in it (except a
+  // link) swaps back to the input for editing. cellMouseDown/cellMouseEnter
+  // still fire from the <td>, so click-to-select and drag-select behave the
+  // same as with the live input.
+  const linkifiedDisplay = (
+    <div
+      style={{
+        ...inputStyle,
+        cursor: 'text',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        display: 'block',
+        flex: trailing ? 1 : undefined,
+        minWidth: trailing ? 0 : undefined,
+      }}
+      onClick={() => setIsEditing(true)}
+      // Programmatic focus (usePlanTableFocus targets the data-plan-*
+      // attributes) lands here when the display is shown — swap to the
+      // input, which the isEditing effect then focuses for real.
+      tabIndex={-1}
+      onFocus={() => setIsEditing(true)}
+      {...dataAttributes}
+    >
+      {linkifyText(value)}
+    </div>
+  );
+
+  // While editing a value that contains a URL, paint a mirror behind the
+  // (transparent-text) input so URLs read as links mid-edit. The mirror
+  // tracks the input's horizontal scroll so long values stay aligned.
+  const hasUrl = containsUrl(value);
+  const mirrorRef = useRef(null);
+  const syncMirrorScroll = (e) => {
+    if (mirrorRef.current) mirrorRef.current.scrollLeft = e.target.scrollLeft;
+  };
+
+  const input = (
+    <div style={{ position: 'relative', width: '100%', ...(trailing ? { flex: 1, minWidth: 0 } : {}) }}>
+      {hasUrl && (
+        <div
+          ref={mirrorRef}
+          aria-hidden
+          style={{
+            ...inputStyle,
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            whiteSpace: 'pre',
+            overflow: 'hidden',
+            pointerEvents: 'none',
+          }}
+        >
+          <span>{renderUrlSegments(value || '')}</span>
+        </div>
+      )}
+      <input
+        ref={inputRef}
+        type="text"
+        size={1}
+        value={value || ''}
+        onChange={(e) => { onChange(e.target.value); syncMirrorScroll(e); }}
+        onScroll={syncMirrorScroll}
+        onKeyDown={onKeyDown}
+        onFocus={onFocus}
+        onBlur={() => setIsEditing(false)}
+        onMouseDown={onMouseDown}
+        placeholder={placeholder}
+        style={{
+          ...inputStyle,
+          position: 'relative',
+          ...(hasUrl ? { color: 'transparent', caretColor: textColor || inkColor } : {}),
+        }}
+        {...dataAttributes}
+      />
+    </div>
+  );
+
   return (
     <td
       className={`${cellClassName(isSelected)}${trailing ? ' group/cell' : ''}`}
@@ -138,18 +233,7 @@ export function TextInputCell({
     >
       {trailing ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <input
-            type="text"
-            size={1}
-            value={value || ''}
-            onChange={(e) => onChange(e.target.value)}
-            onKeyDown={onKeyDown}
-            onFocus={onFocus}
-            onMouseDown={onMouseDown}
-            placeholder={placeholder}
-            style={{ ...inputStyle, flex: 1, minWidth: 0 }}
-            {...dataAttributes}
-          />
+          {showLinkifiedDisplay ? linkifiedDisplay : input}
           <div
             style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}
             onMouseDown={(e) => e.stopPropagation()}
@@ -158,18 +242,7 @@ export function TextInputCell({
           </div>
         </div>
       ) : (
-        <input
-          type="text"
-          size={1}
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          onFocus={onFocus}
-          onMouseDown={onMouseDown}
-          placeholder={placeholder}
-          style={inputStyle}
-          {...dataAttributes}
-        />
+        showLinkifiedDisplay ? linkifiedDisplay : input
       )}
     </td>
   );

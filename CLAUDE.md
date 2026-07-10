@@ -58,7 +58,7 @@ All data is scoped by `yearNumber` — every storage module function takes it as
 
 ### `projectNickname` as join key — do not extend
 
-`projectNickname` is the current join key between Plan and System. It is fragile — a nickname change silently breaks quota lookups. Do not add any new logic depending on it. The Supabase migration is complete but this specific join has not yet been switched to `id` — see `docs/known-issues.md`.
+The Plan–System join now uses `projectId` (`project_id` column) — fixed June 2026. `projectNickname` remains only as a fallback for legacy rows in `ProjectRow.jsx`. Do not add any new logic depending on nicknames — see `docs/known-issues.md`.
 
 ### Draft year / Plan Next Year flow
 
