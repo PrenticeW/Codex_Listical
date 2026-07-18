@@ -43,6 +43,10 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // True only when the current session arrived via a password-recovery link.
+  // Gates /reset-password so ordinary sign-ins (including OAuth) never see
+  // the "Set new password" screen.
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   // Initialize auth state on mount and listen to auth changes
   useEffect(() => {
@@ -72,6 +76,12 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
         console.log('Auth state changed:', event);
+
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsPasswordRecovery(true);
+        } else if (event === 'SIGNED_OUT') {
+          setIsPasswordRecovery(false);
+        }
 
         if (currentSession) {
           setUser(currentSession.user);
@@ -216,6 +226,24 @@ export function AuthProvider({ children }) {
   const sendOtp = sendOtpCore;
   const verifyOtp = verifyOtpCore;
 
+  // Sign in with Google via Supabase OAuth. The browser handles the whole
+  // redirect flow; on return, onAuthStateChange picks up the new session.
+  const signInWithGoogle = useCallback(async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/`,
+      },
+    });
+
+    if (error) {
+      console.error('Google sign in error:', error);
+      return { error };
+    }
+
+    return { error: null };
+  }, []);
+
   // Reset password function
   const resetPassword = useCallback(async (email) => {
     try {
@@ -260,6 +288,8 @@ export function AuthProvider({ children }) {
     session,
     isLoading,
     isAuthenticated,
+    isPasswordRecovery,
+    clearPasswordRecovery: () => setIsPasswordRecovery(false),
 
     // Methods
     login,
@@ -269,6 +299,7 @@ export function AuthProvider({ children }) {
     updatePassword,
     sendOtp,
     verifyOtp,
+    signInWithGoogle,
   };
 
   return (

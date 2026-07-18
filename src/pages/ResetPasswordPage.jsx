@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import AuthShell, { AuthField, AuthErrorBanner, AuthSpinnerLabel } from '../components/auth/AuthShell';
 
@@ -11,13 +11,33 @@ import AuthShell, { AuthField, AuthErrorBanner, AuthSpinnerLabel } from '../comp
  * (reference/auth-pages/auth-pages.html in ListicalVisualHandover.zip)
  * via the shared AuthShell chrome.
  */
+// True while the URL still carries password-recovery credentials that
+// Supabase hasn't consumed yet (hash tokens or a PKCE ?code=). Checked so
+// we don't redirect away before the PASSWORD_RECOVERY event has fired.
+function urlLooksLikeRecovery() {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.location.hash.includes('type=recovery') ||
+    new URLSearchParams(window.location.search).has('code')
+  );
+}
+
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
-  const { updatePassword } = useAuth();
+  const { updatePassword, isLoading: authLoading, isAuthenticated, isPasswordRecovery, clearPasswordRecovery } = useAuth();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Guard: this page is only for sessions that arrived via a password-recovery
+  // link. An ordinary signed-in user (password, OTP, or OAuth — e.g. a Google
+  // sign-in that fell back to the web redirect) should never be asked to set a
+  // password, so send them to the app instead.
+  const isLegitRecovery = isPasswordRecovery || urlLooksLikeRecovery();
+  if (!authLoading && isAuthenticated && !isLegitRecovery) {
+    return <Navigate to="/" replace />;
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -46,7 +66,8 @@ export default function ResetPasswordPage() {
         return;
       }
 
-      // Success - redirect to login or home
+      // Success - clear the recovery flag and redirect to the app
+      clearPasswordRecovery();
       navigate('/');
     } catch (err) {
       setError(err.message || 'An unexpected error occurred');
