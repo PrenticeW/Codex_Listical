@@ -69,7 +69,8 @@ import {
 } from '../utils/planner/clipboardOperations';
 import { createSortInboxCommand } from '../utils/planner/sortInbox';
 import { createSortPlannerCommand } from '../utils/planner/sortPlanner';
-import { saveTaskRows, readTaskRows, loadChipTaskNote, preloadChipTaskNotes } from '../utils/planner/storage';
+import { saveTaskRows, readTaskRows, invalidateTaskRowsCache, loadChipTaskNote, preloadChipTaskNotes } from '../utils/planner/storage';
+import { supabase } from '../lib/supabase';
 import { DEFAULT_PROJECT_ID } from '../constants/plannerStorageKeys';
 import {
   calculateWeekRange,
@@ -426,12 +427,21 @@ export default function ProjectTimePlannerV2() {
   // flush would still overwrite the correct save with pre-hydration data if it
   // runs after the debounced save completes).
   const lastSaveInitiatedRef = useRef(0);
+  // Set true just before setData() swaps in rows fetched from the server, so
+  // the debounced-save effect skips exactly one cycle (see realtime effect).
+  const skipNextAutoSaveRef = useRef(false);
 
   // Only after dataHydrated, so the initial blank skeleton doesn't get
   // pushed back to Supabase and wipe the loaded rows.
   useEffect(() => {
     if (!dataHydrated.current) return;
     if (isCurrentYearArchived) return;
+    // A data swap that came FROM the server (realtime refresh below) must not
+    // bounce straight back as a delete-all-then-reinsert save.
+    if (skipNextAutoSaveRef.current) {
+      skipNextAutoSaveRef.current = false;
+      return;
+    }
     const timeoutId = setTimeout(() => {
       lastSaveInitiatedRef.current = Date.now();
       setTaskRows(data);
@@ -462,6 +472,61 @@ export default function ProjectTimePlannerV2() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Realtime: refresh the table when another client (the mobile app) writes
+  // this user's planner_rows — the mirror of mobile's subscribeToPlannerRows.
+  // Guards:
+  //   - echo mute: our own saves are delete-all-then-reinsert, which fires a
+  //     storm of events; skip anything within 5s of a local save initiation.
+  //     This also protects in-flight local edits from being clobbered by a
+  //     refresh (any pending edit implies a save initiated <500ms ago).
+  //   - debounce: mobile writes can land in bursts (e.g. a reorder pass);
+  //     coalesce into one refetch.
+  //   - archived/draft years never refresh (mobile only writes the active year).
+  useEffect(() => {
+    if (isCurrentYearArchived || isCurrentYearDraft) return undefined;
+    let cancelled = false;
+    let refreshTimer = null;
+    let channel = null;
+    (async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData?.user?.id;
+      if (!uid || cancelled) return;
+      channel = supabase
+        .channel(`planner-rows-web-${currentYear}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'planner_rows', filter: `user_id=eq.${uid}` },
+          () => {
+            if (Date.now() - lastSaveInitiatedRef.current < 5000) return;
+            if (refreshTimer) clearTimeout(refreshTimer);
+            refreshTimer = setTimeout(async () => {
+              try {
+                invalidateTaskRowsCache(currentYear);
+                const rows = await readTaskRows(DEFAULT_PROJECT_ID, currentYear);
+                if (cancelled) return;
+                // Re-check the mute window — a local edit may have landed
+                // while the refetch was in flight.
+                if (Date.now() - lastSaveInitiatedRef.current < 5000) return;
+                if (Array.isArray(rows) && rows.length > 0) {
+                  skipNextAutoSaveRef.current = true;
+                  setData(ensureDailyTotalRow(rows));
+                }
+              } catch (err) {
+                console.error('Realtime task-row refresh failed', err);
+              }
+            }, 800);
+          }
+        )
+        .subscribe();
+    })();
+    return () => {
+      cancelled = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
+      if (channel) supabase.removeChannel(channel);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentYear, isCurrentYearArchived, isCurrentYearDraft]);
 
   const [selectedCells, setSelectedCells] = useState(new Set()); // Set of "rowId|columnId"
   const [selectedRows, setSelectedRows] = useState(new Set()); // Set of rowIds for row highlight

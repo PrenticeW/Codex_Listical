@@ -24,6 +24,7 @@
 ## Known UX limitations — deferred
 
 | Item | Detail |
+| Post-confirmation redirect hangs on a loading screen | Clicking the signup confirmation email link confirms the account server-side, but the redirect back into the app (observed 18 Jul 2026, referer `/reset-password`) gets stuck on an indefinite loading screen instead of landing signed-in. Workaround: open the login page fresh and sign in normally — the confirmation itself succeeded. Likely the auth-callback/redirect handling doesn't cover the `signup` confirmation type. |
 |---|---|
 | Blank task rows retain history after accidental edits | If a user types into an empty task row and commits (Enter/Tab/blur), `writeTaskEvent` fires and `task_created_at` is stamped on the row — even if they then delete the text and leave the row blank again. The row quietly carries that history and creation date, which will surface on the next task written into the same row. Fix considered (clearing `task_events` and `task_created_at` when task name is set to empty) but deferred — risk of unintended data loss outweighed the edge-case frequency. Workaround: delete and re-add the row instead. |
 | Legacy rows may lack `project_id` | The `projectNickname` quota-lookup bug was fixed June 2026 (`projectId` stamped at creation, stored in `project_id`, read on load). `ProjectRow.jsx` still falls back to the nickname map for rows created before the fix — renaming a project with such rows can break quota lookups until those rows are re-saved. |

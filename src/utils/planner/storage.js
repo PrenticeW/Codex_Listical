@@ -47,6 +47,7 @@ import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
 import {
   getCached,
   hasCached,
+  invalidate,
   setCached,
 } from '../../lib/storageCache';
 
@@ -70,6 +71,15 @@ const taskRowsKey = (yearNumber) => `task_rows:${yearNumber}`;
  * initialisers so the very first render shows the cached values rather
  * than defaults that get replaced a tick later by the async load.
  */
+/**
+ * Drop the cached task rows for a year so the next readTaskRows hits
+ * Supabase. Used by the System page's realtime subscription to pick up
+ * writes made by other clients (e.g. the mobile app).
+ */
+export function invalidateTaskRowsCache(yearNumber) {
+  invalidate(CACHE_NS, taskRowsKey(yearNumber));
+}
+
 export function peekPlannerCache(yearNumber) {
   if (yearNumber == null) return { plannerSettings: null, yearRow: null, taskRows: null };
   const sk = settingsKey(yearNumber);
