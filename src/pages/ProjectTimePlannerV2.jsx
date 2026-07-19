@@ -497,8 +497,13 @@ export default function ProjectTimePlannerV2() {
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'planner_rows', filter: `user_id=eq.${uid}` },
-          () => {
-            if (Date.now() - lastSaveInitiatedRef.current < 5000) return;
+          (payload) => {
+            const sinceOwnSave = Date.now() - lastSaveInitiatedRef.current;
+            if (sinceOwnSave < 5000) {
+              console.log(`[realtime] ${payload.eventType} muted (own save ${sinceOwnSave}ms ago)`);
+              return;
+            }
+            console.log(`[realtime] ${payload.eventType} → scheduling refresh`);
             if (refreshTimer) clearTimeout(refreshTimer);
             refreshTimer = setTimeout(async () => {
               try {
@@ -507,8 +512,12 @@ export default function ProjectTimePlannerV2() {
                 if (cancelled) return;
                 // Re-check the mute window — a local edit may have landed
                 // while the refetch was in flight.
-                if (Date.now() - lastSaveInitiatedRef.current < 5000) return;
+                if (Date.now() - lastSaveInitiatedRef.current < 5000) {
+                  console.log('[realtime] refresh discarded (local edit mid-flight)');
+                  return;
+                }
                 if (Array.isArray(rows) && rows.length > 0) {
+                  console.log(`[realtime] refreshed ${rows.length} rows`);
                   skipNextAutoSaveRef.current = true;
                   setData(ensureDailyTotalRow(rows));
                 }
@@ -518,7 +527,9 @@ export default function ProjectTimePlannerV2() {
             }, 800);
           }
         )
-        .subscribe();
+        .subscribe((status, err) => {
+          console.log('[realtime] planner_rows channel:', status, err?.message ?? '');
+        });
     })();
     return () => {
       cancelled = true;
