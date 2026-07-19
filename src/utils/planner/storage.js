@@ -1026,6 +1026,12 @@ export const readTaskRows = async (
     if (tasksRes.error) throw tasksRes.error;
     if (archivesRes.error) throw archivesRes.error;
 
+    // Record which planner_rows ids this client has seen server-side. The
+    // diff-based save uses this to tell "row web created" apart from "row
+    // another client (mobile) created that web hasn't refreshed in yet",
+    // and "row web deleted" apart from "row deleted remotely".
+    _knownRowIds.set(yearNumber, new Set((tasksRes.data || []).map((r) => r.id)));
+
     const totalDays = yearRow.total_days || DEFAULT_TOTAL_DAYS;
     const startDate = yearRow.start_date || todayIso();
     const taskCount = (tasksRes.data || []).length;
@@ -1079,16 +1085,59 @@ export const readTaskRows = async (
   }
 };
 
-// Serialize planner saves so concurrent DELETE+INSERT calls can't interleave.
-//
-// saveTaskRows uses a replace-the-layer pattern (DELETE all rows, then bulk
-// INSERT). If two saves run concurrently — e.g. the 500ms debounce fires just
-// before the user signs out, and the unmount flush fires immediately after —
-// both DELETEs clear the table first, then both INSERTs add their rows,
-// producing duplicate rows in Supabase. Chaining every save onto this promise
-// ensures they execute one at a time: the second waits until the first's INSERT
-// has committed before starting its own DELETE.
+// Serialize planner saves so concurrent read-diff-write cycles can't
+// interleave. saveTaskRows reads the server's current rows, diffs them
+// against the desired state, and writes only the difference; two saves
+// running concurrently would both diff against the same pre-save snapshot
+// and double-apply. Chaining every save onto this promise ensures they
+// execute one at a time.
 let _taskRowsSaveQueue = Promise.resolve();
+
+// --- diff-save bookkeeping (per yearNumber) -------------------------------
+// _knownRowIds: planner_rows ids this client has observed on the server
+// (populated by readTaskRows fetches and maintained by saves). A desired row
+// missing from the DB is only INSERTed when its id is NOT known — a known id
+// missing from the DB means another client deleted it, and re-inserting it
+// would resurrect the deletion from web's stale snapshot. Symmetrically, a
+// DB row absent from web's desired state is only DELETEd when its id IS
+// known — an unknown id means another client inserted it (e.g. mobile's
+// delete-undo) after web's last refresh, and deleting it would erase that
+// write.
+const _knownRowIds = new Map(); // yearNumber -> Set<id>
+// Web's blank grid rows carry synthetic ids ('row-0'); the DB needs UUIDs.
+// The old delete-all save minted fresh UUIDs every save (harmless when every
+// row was rewritten); a diff save must keep them stable or each save would
+// duplicate every synthetic row.
+const _syntheticRowIds = new Map(); // yearNumber -> Map<syntheticId, uuid>
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// JSON.stringify with recursively sorted keys — postgres jsonb reorders
+// object keys, so a naive stringify of day_entries would diff every row.
+function stableStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value === undefined ? null : value);
+}
+
+// Columns the web save owns. id/user_id/year_id are identity; anything else
+// in the desired payload is compared against the DB row.
+const DIFF_KEYS = [
+  'project_id', 'parent_row_id', 'row_kind', 'checkbox', 'subproject_label',
+  'status', 'task', 'recurring', 'estimate', 'time_value_minutes',
+  'day_entries', 'display_order', 'notes', 'task_created_at',
+  'completion_count', 'last_completed_at', 'day_tag', 'day_tag_locked',
+];
+
+function plannerRowDiffers(desired, dbRow) {
+  for (const key of DIFF_KEYS) {
+    if (stableStringify(desired[key] ?? null) !== stableStringify(dbRow[key] ?? null)) return true;
+  }
+  return false;
+}
 
 export const saveTaskRows = (
   taskRows,
@@ -1125,44 +1174,96 @@ async function _saveTaskRowsImpl(taskRows, yearNumber) {
       persistedTaskRows.push(row);
     }
 
-    // Replace-the-layer pattern (same as helper #4): delete all existing
-    // planner_rows + archived_weeks for this year, then bulk insert.
-    const [taskDelete, archiveDelete] = await Promise.all([
-      supabase
+    // Diff-based save (replaced the delete-all-then-reinsert pattern,
+    // 2026-07-19). Rewriting every row from web's in-memory snapshot erased
+    // any write another client (mobile) made since web's last refresh — a
+    // mobile delete got resurrected, a mobile delete-undo's re-insert got
+    // wiped by the next web save. Now the save reads the server's current
+    // rows (inside the serialized queue, so no interleaving) and writes only
+    // the difference, using _knownRowIds to leave rows web has never seen
+    // alone and to avoid resurrecting rows deleted remotely.
+
+    // Stable UUIDs for synthetic-id rows (see _syntheticRowIds above).
+    let synMap = _syntheticRowIds.get(yearNumber);
+    if (!synMap) { synMap = new Map(); _syntheticRowIds.set(yearNumber, synMap); }
+    const desiredRows = persistedTaskRows.map((row, idx) => {
+      let id = row.id;
+      if (!(typeof id === 'string' && UUID_RE.test(id))) {
+        if (!synMap.has(id)) synMap.set(id, crypto.randomUUID());
+        id = synMap.get(id);
+      }
+      return plannerRowPayloadToDb({ row: { ...row, id }, userId, yearId, displayOrder: idx });
+    });
+
+    const { data: currentData, error: currentErr } = await supabase
+      .from('planner_rows')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('year_id', yearId);
+    if (currentErr) throw currentErr;
+    const currentById = new Map((currentData || []).map((r) => [r.id, r]));
+    const desiredIds = new Set(desiredRows.map((r) => r.id));
+    // Fallback (save before any read this pageload — shouldn't happen, since
+    // autosave requires hydration): treat the server's rows as known, which
+    // reduces to last-writer-wins for deletes but still never resurrects.
+    const known = _knownRowIds.get(yearNumber) || new Set(currentById.keys());
+
+    const toUpsert = [];
+    for (const d of desiredRows) {
+      const cur = currentById.get(d.id);
+      if (!cur) {
+        // Missing from the DB. Known id → another client deleted it since we
+        // last looked; do NOT resurrect it. Unknown id → a row web created.
+        if (!known.has(d.id)) toUpsert.push(d);
+      } else if (plannerRowDiffers(d, cur)) {
+        toUpsert.push(d);
+      }
+    }
+    const toDelete = [];
+    for (const id of currentById.keys()) {
+      // In the DB but not in web's state. Unknown id → another client
+      // inserted it since web's last refresh (e.g. an undo re-insert);
+      // leave it — the realtime refresh will bring it into web's view.
+      if (!desiredIds.has(id) && known.has(id)) toDelete.push(id);
+    }
+
+    // TODO(debug): remove after cross-client sync is verified.
+    console.log('[planner-save] diff', { upsert: toUpsert.length, delete: toDelete.length, server: currentById.size });
+
+    if (toUpsert.length > 0) {
+      const { error: upsertErr } = await supabase
+        .from('planner_rows')
+        .upsert(toUpsert, { onConflict: 'id' });
+      if (upsertErr) throw upsertErr;
+    }
+    if (toDelete.length > 0) {
+      const { error: deleteErr } = await supabase
         .from('planner_rows')
         .delete()
         .eq('user_id', userId)
-        .eq('year_id', yearId),
-      supabase
-        .from('archived_weeks')
-        .delete()
-        .eq('user_id', userId)
-        .eq('year_id', yearId),
-    ]);
-    if (taskDelete.error) throw taskDelete.error;
-    if (archiveDelete.error) throw archiveDelete.error;
-
-    const insertOps = [];
-
-    const dbTaskRows = persistedTaskRows.map((row, idx) =>
-      plannerRowPayloadToDb({ row, userId, yearId, displayOrder: idx }),
-    );
-    if (dbTaskRows.length > 0) {
-      insertOps.push(supabase.from('planner_rows').insert(dbTaskRows));
+        .in('id', toDelete);
+      if (deleteErr) throw deleteErr;
     }
 
+    const nextKnown = new Set(known);
+    for (const d of toUpsert) nextKnown.add(d.id);
+    for (const id of toDelete) nextKnown.delete(id);
+    _knownRowIds.set(yearNumber, nextKnown);
+
+    // archived_weeks keeps the replace-the-layer pattern: mobile never
+    // writes it, so a full rewrite can't clobber another client.
+    const archiveDelete = await supabase
+      .from('archived_weeks')
+      .delete()
+      .eq('user_id', userId)
+      .eq('year_id', yearId);
+    if (archiveDelete.error) throw archiveDelete.error;
     const dbArchiveRows = archiveRowsToWrite.map(({ row, weekNumber }) =>
       archiveRowPayloadToDb({ row, userId, yearId, weekNumber }),
     );
     if (dbArchiveRows.length > 0) {
-      insertOps.push(supabase.from('archived_weeks').insert(dbArchiveRows));
-    }
-
-    if (insertOps.length > 0) {
-      const insertRes = await Promise.all(insertOps);
-      for (const r of insertRes) {
-        if (r.error) throw r.error;
-      }
+      const archiveInsert = await supabase.from('archived_weeks').insert(dbArchiveRows);
+      if (archiveInsert.error) throw archiveInsert.error;
     }
 
     // Cache the just-saved array so the next read returns it instantly
