@@ -477,9 +477,12 @@ export default function ProjectTimePlannerV2() {
   // this user's planner_rows — the mirror of mobile's subscribeToPlannerRows.
   // Guards:
   //   - echo mute: our own saves are delete-all-then-reinsert, which fires a
-  //     storm of events; skip anything within 5s of a local save initiation.
-  //     This also protects in-flight local edits from being clobbered by a
-  //     refresh (any pending edit implies a save initiated <500ms ago).
+  //     storm of events; refreshes are DEFERRED until 5s past the last local
+  //     save initiation (deferred, not dropped — a dropped event can be a
+  //     real mobile write, e.g. an undo re-insert, and losing it leaves web
+  //     stale until its next save erases the mobile change). The mute also
+  //     protects in-flight local edits from being clobbered by a refresh
+  //     (any pending edit implies a save initiated <500ms ago).
   //   - debounce: mobile writes can land in bursts (e.g. a reorder pass);
   //     coalesce into one refetch.
   //   - archived/draft years never refresh (mobile only writes the active year).
@@ -488,6 +491,39 @@ export default function ProjectTimePlannerV2() {
     let cancelled = false;
     let refreshTimer = null;
     let channel = null;
+    const MUTE_MS = 5000;
+    // (Re)arm the coalescing refresh timer. When the timer fires inside the
+    // echo-mute window of a local save, it re-arms for just past the window
+    // instead of dropping the event — see the handler comment below.
+    const scheduleRefresh = (delay) => {
+      if (cancelled) return;
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(async () => {
+        const sinceSave = Date.now() - lastSaveInitiatedRef.current;
+        if (sinceSave < MUTE_MS) {
+          scheduleRefresh(MUTE_MS - sinceSave + 250);
+          return;
+        }
+        try {
+          invalidateTaskRowsCache(currentYear);
+          const rows = await readTaskRows(DEFAULT_PROJECT_ID, currentYear);
+          if (cancelled) return;
+          // A local edit may have landed while the refetch was in flight —
+          // its save supersedes what we just read. Try again after ITS
+          // mute window rather than discarding the pending refresh.
+          if (Date.now() - lastSaveInitiatedRef.current < MUTE_MS) {
+            scheduleRefresh(1000);
+            return;
+          }
+          if (Array.isArray(rows) && rows.length > 0) {
+            skipNextAutoSaveRef.current = true;
+            setData(ensureDailyTotalRow(rows));
+          }
+        } catch (err) {
+          console.error('Realtime task-row refresh failed', err);
+        }
+      }, delay);
+    };
     (async () => {
       const { data: userData } = await supabase.auth.getUser();
       const uid = userData?.user?.id;
@@ -502,25 +538,14 @@ export default function ProjectTimePlannerV2() {
           // user's rows, so the filter was only an optimization.
           { event: '*', schema: 'public', table: 'planner_rows' },
           () => {
-            // Skip echoes of our own delete-all-then-reinsert saves.
-            if (Date.now() - lastSaveInitiatedRef.current < 5000) return;
-            if (refreshTimer) clearTimeout(refreshTimer);
-            refreshTimer = setTimeout(async () => {
-              try {
-                invalidateTaskRowsCache(currentYear);
-                const rows = await readTaskRows(DEFAULT_PROJECT_ID, currentYear);
-                if (cancelled) return;
-                // Re-check the mute window — a local edit may have landed
-                // while the refetch was in flight.
-                if (Date.now() - lastSaveInitiatedRef.current < 5000) return;
-                if (Array.isArray(rows) && rows.length > 0) {
-                  skipNextAutoSaveRef.current = true;
-                  setData(ensureDailyTotalRow(rows));
-                }
-              } catch (err) {
-                console.error('Realtime task-row refresh failed', err);
-              }
-            }, 800);
+            // Defer — never drop. Events that arrive inside the echo-mute
+            // window used to be discarded outright, which lost real mobile
+            // writes landing during it (e.g. a delete-undo's re-insert while
+            // a local autosave settled): web kept stale in-memory rows and
+            // its next delete-all-then-reinsert save erased the mobile
+            // change from Supabase. Now a muted event reschedules itself
+            // for just past the window's end, so the refetch always happens.
+            scheduleRefresh(800);
           }
         )
         .subscribe();
