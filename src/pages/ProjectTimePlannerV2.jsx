@@ -487,6 +487,8 @@ export default function ProjectTimePlannerV2() {
   //     coalesce into one refetch.
   //   - archived/draft years never refresh (mobile only writes the active year).
   useEffect(() => {
+    // TODO(debug): remove after realtime delivery is verified.
+    console.log('[realtime] effect run', { currentYear, isCurrentYearArchived, isCurrentYearDraft });
     if (isCurrentYearArchived || isCurrentYearDraft) return undefined;
     let cancelled = false;
     let refreshTimer = null;
@@ -502,7 +504,7 @@ export default function ProjectTimePlannerV2() {
         const sinceSave = Date.now() - lastSaveInitiatedRef.current;
         if (sinceSave < MUTE_MS) {
           // TODO(debug): remove after realtime delivery is verified.
-          console.debug('[realtime] muted, deferring refresh', MUTE_MS - sinceSave + 250);
+          console.log('[realtime] muted, deferring refresh', MUTE_MS - sinceSave + 250);
           scheduleRefresh(MUTE_MS - sinceSave + 250);
           return;
         }
@@ -518,7 +520,7 @@ export default function ProjectTimePlannerV2() {
             return;
           }
           // TODO(debug): remove after realtime delivery is verified.
-          console.debug('[realtime] refetched rows', Array.isArray(rows) ? rows.length : rows);
+          console.log('[realtime] refetched rows', Array.isArray(rows) ? rows.length : rows);
           if (Array.isArray(rows) && rows.length > 0) {
             skipNextAutoSaveRef.current = true;
             setData(ensureDailyTotalRow(rows));
@@ -531,6 +533,8 @@ export default function ProjectTimePlannerV2() {
     (async () => {
       const { data: userData } = await supabase.auth.getUser();
       const uid = userData?.user?.id;
+      // TODO(debug): remove after realtime delivery is verified.
+      console.log('[realtime] auth uid', uid, 'cancelled', cancelled);
       if (!uid || cancelled) return;
       channel = supabase
         .channel(`planner-rows-web-${currentYear}`)
@@ -543,7 +547,7 @@ export default function ProjectTimePlannerV2() {
           { event: '*', schema: 'public', table: 'planner_rows' },
           (payload) => {
             // TODO(debug): remove after realtime delivery is verified.
-            console.debug('[realtime] planner_rows event', payload?.eventType, payload?.old?.id ?? payload?.new?.id);
+            console.log('[realtime] planner_rows event', payload?.eventType, payload?.old?.id ?? payload?.new?.id);
             // Defer — never drop. Events that arrive inside the echo-mute
             // window used to be discarded outright, which lost real mobile
             // writes landing during it (e.g. a delete-undo's re-insert while
@@ -556,7 +560,7 @@ export default function ProjectTimePlannerV2() {
         )
         .subscribe((status, err) => {
           // TODO(debug): remove after realtime delivery is verified.
-          console.debug('[realtime] channel status', status, err?.message ?? '');
+          console.log('[realtime] channel status', status, err?.message ?? '');
         });
     })();
     return () => {
