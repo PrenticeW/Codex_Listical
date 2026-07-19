@@ -496,7 +496,11 @@ export default function ProjectTimePlannerV2() {
         .channel(`planner-rows-web-${currentYear}`)
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'planner_rows', filter: `user_id=eq.${uid}` },
+          // No server-side filter: a `user_id=eq.` filter subscribed fine but
+          // delivered zero events (verified 2026-07-19), while mobile's
+          // `year_id=eq.` filter works. RLS already scopes delivery to this
+          // user's rows, so the filter was only an optimization.
+          { event: '*', schema: 'public', table: 'planner_rows' },
           (payload) => {
             const sinceOwnSave = Date.now() - lastSaveInitiatedRef.current;
             if (sinceOwnSave < 5000) {
