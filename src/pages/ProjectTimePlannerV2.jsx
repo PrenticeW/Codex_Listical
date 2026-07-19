@@ -501,6 +501,8 @@ export default function ProjectTimePlannerV2() {
       refreshTimer = setTimeout(async () => {
         const sinceSave = Date.now() - lastSaveInitiatedRef.current;
         if (sinceSave < MUTE_MS) {
+          // TODO(debug): remove after realtime delivery is verified.
+          console.debug('[realtime] muted, deferring refresh', MUTE_MS - sinceSave + 250);
           scheduleRefresh(MUTE_MS - sinceSave + 250);
           return;
         }
@@ -515,6 +517,8 @@ export default function ProjectTimePlannerV2() {
             scheduleRefresh(1000);
             return;
           }
+          // TODO(debug): remove after realtime delivery is verified.
+          console.debug('[realtime] refetched rows', Array.isArray(rows) ? rows.length : rows);
           if (Array.isArray(rows) && rows.length > 0) {
             skipNextAutoSaveRef.current = true;
             setData(ensureDailyTotalRow(rows));
@@ -537,7 +541,9 @@ export default function ProjectTimePlannerV2() {
           // `year_id=eq.` filter works. RLS already scopes delivery to this
           // user's rows, so the filter was only an optimization.
           { event: '*', schema: 'public', table: 'planner_rows' },
-          () => {
+          (payload) => {
+            // TODO(debug): remove after realtime delivery is verified.
+            console.debug('[realtime] planner_rows event', payload?.eventType, payload?.old?.id ?? payload?.new?.id);
             // Defer — never drop. Events that arrive inside the echo-mute
             // window used to be discarded outright, which lost real mobile
             // writes landing during it (e.g. a delete-undo's re-insert while
@@ -548,7 +554,10 @@ export default function ProjectTimePlannerV2() {
             scheduleRefresh(800);
           }
         )
-        .subscribe();
+        .subscribe((status, err) => {
+          // TODO(debug): remove after realtime delivery is verified.
+          console.debug('[realtime] channel status', status, err?.message ?? '');
+        });
     })();
     return () => {
       cancelled = true;
