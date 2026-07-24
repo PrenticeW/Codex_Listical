@@ -29,6 +29,7 @@ import {
   loadTacticsColumnWidths,
   saveTacticsColumnWidths,
   TACTICS_SEND_TO_SYSTEM_EVENT,
+  TACTICS_CHIPS_CONFLICT_EVENT,
   setSendToSystemTimestamp,
   saveSentChipsSnapshot,
   peekTacticsCache,
@@ -2282,6 +2283,36 @@ export default function TacticsPage() {
     }, 600);
     return () => clearTimeout(timer);
   }, [projectChips, customProjects, chipTimeOverrides, currentYear]);
+  // HIGH-2 conflict listener: when a chip autosave is dropped because another
+  // client saved the live layer first, tacticsStorage broadcasts the fresh
+  // server layer on TACTICS_CHIPS_CONFLICT_EVENT. Replace this tab's chip
+  // state with it so the user stops editing (and eventually re-saving) a
+  // stale layer. Mirrors the success branch of the load effect. The setState
+  // calls below re-trigger the autosave with state identical to the server
+  // layer, which is a harmless no-op rewrite under the new version.
+  useEffect(() => {
+    const handleChipsConflict = (event) => {
+      const detail = event?.detail;
+      if (!detail || detail.__eventYear !== currentYear) return;
+      const startIndex = Math.max(0, DAYS_OF_WEEK.indexOf(startDay));
+      const weekDays = DAYS_OF_WEEK.slice(startIndex).concat(DAYS_OF_WEEK.slice(0, startIndex));
+      const serverChips = Array.isArray(detail.projectChips) ? detail.projectChips : [];
+      const dedupedChips = dedupeChipsById(serverChips);
+      updateChipSequenceFromList(dedupedChips);
+      setProjectChips(dedupedChips.map((chip) => {
+        if (chip.dayName != null || chip.columnIndex >= DAY_COLUMN_COUNT) return chip;
+        return { ...chip, dayName: weekDays[chip.columnIndex] ?? null };
+      }));
+      setCustomProjects(Array.isArray(detail.customProjects) ? detail.customProjects : []);
+      setChipTimeOverrides(
+        detail.chipTimeOverrides && typeof detail.chipTimeOverrides === 'object'
+          ? detail.chipTimeOverrides
+          : {}
+      );
+    };
+    window.addEventListener(TACTICS_CHIPS_CONFLICT_EVENT, handleChipsConflict);
+    return () => window.removeEventListener(TACTICS_CHIPS_CONFLICT_EVENT, handleChipsConflict);
+  }, [currentYear, startDay]);
   const restoreCanonicalScheduleChip = useCallback((chip, filtered) => {
     const isScheduleChip =
       chip &&

@@ -90,6 +90,12 @@ export function peekTacticsCache(yearNumber) {
 // --- exported event names (unchanged) ---------------------------------
 
 export const TACTICS_CHIPS_STORAGE_EVENT = 'tactics-chips-state-update';
+// Fired when a live-layer chip save is dropped because another client saved
+// first (HIGH-2 guard). detail carries the fresh server layer; TacticsPage
+// listens and replaces its in-memory chip state so the user stops editing a
+// stale layer. Kept separate from TACTICS_CHIPS_STORAGE_EVENT because that
+// event's existing consumers treat it as "a save just succeeded".
+export const TACTICS_CHIPS_CONFLICT_EVENT = 'tactics-chips-conflict';
 export const TACTICS_SETTINGS_STORAGE_EVENT = 'tactics-settings-state-update';
 export const TACTICS_SEND_TO_SYSTEM_EVENT = 'tactics-send-to-system';
 
@@ -754,6 +760,13 @@ export async function saveTacticsChipsState(payload, yearNumber) {
       );
       setCached(CACHE_NS, chipsLayerKey(yearNumber, false), res.fresh);
       _chipLiveVersions.set(yearNumber, res.freshVersion);
+      // Dedicated conflict event: TacticsPage listens for this and replaces
+      // its chip state with the server layer (the storage-update event below
+      // only reaches read-side consumers like useTacticsChips). Note the
+      // version bookkeeping above is only safe BECAUSE the page applies this
+      // state — if it didn't, the tab's next edit would save its stale layer
+      // under the now-valid version.
+      dispatchEvent(TACTICS_CHIPS_CONFLICT_EVENT, res.fresh, yearNumber);
       dispatchEvent(TACTICS_CHIPS_STORAGE_EVENT, res.fresh, yearNumber);
       return;
     }
