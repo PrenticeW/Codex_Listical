@@ -1,0 +1,31 @@
+/* Self-hosted fonts (@fontsource) — not loaded from the Google Fonts CDN.
+   Avoids sending every visitor's IP address to fonts.googleapis.com on
+   page load; see docs/compliance.md "Third-party fonts".
+
+   Imported here (and pulled in via a JS import in main.jsx) rather than
+   from inside index.css's own `@import "tailwindcss"` chain: Tailwind v4's
+   PostCSS plugin bundles @imports through Lightning CSS, which does not
+   rebase the relative url(./files/...) references inside @fontsource's
+   CSS back to node_modules. That left the woff2/woff url()s unresolved at
+   build time (Vite logs "didn't resolve at build time, it will remain
+   unchanged to be resolved at runtime"), so the font binaries never made
+   it into dist/assets and every browser 404'd on them in production,
+   silently falling back to the system sans-serif. Importing this file as
+   its own JS-level CSS module lets Vite's native CSS pipeline resolve and
+   hash the font asset paths correctly instead. Add new weights via
+   @fontsource/<family>/<weight>.css as before. */
+@import "@fontsource/dm-sans/400.css";
+@import "@fontsource/dm-sans/500.css";
+@import "@fontsource/dm-sans/600.css";
+@import "@fontsource/dm-sans/700.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/syne/700.css";
+@import "@fontsource/syne/800.css";
+@import "@fontsource/outfit/600.css";
+@import "@fontsource/outfit/700.css";
+@import "@fontsource/outfit/800.css";
+@import "@fontsource/mulish/400.css";
+@import "@fontsource/mulish/500.css";
+@import "@fontsource/mulish/600.css";
+@import "@fontsource/mulish/700.css";

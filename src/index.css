@@ -1,21 +1,5 @@
-/* Self-hosted fonts (@fontsource) — not loaded from the Google Fonts CDN.
-   Avoids sending every visitor's IP address to fonts.googleapis.com on
-   page load; see docs/compliance.md "Third-party fonts". */
-@import "@fontsource/dm-sans/400.css";
-@import "@fontsource/dm-sans/500.css";
-@import "@fontsource/dm-sans/600.css";
-@import "@fontsource/dm-sans/700.css";
-@import "@fontsource/ibm-plex-mono/400.css";
-@import "@fontsource/ibm-plex-mono/500.css";
-@import "@fontsource/syne/700.css";
-@import "@fontsource/syne/800.css";
-@import "@fontsource/outfit/600.css";
-@import "@fontsource/outfit/700.css";
-@import "@fontsource/outfit/800.css";
-@import "@fontsource/mulish/400.css";
-@import "@fontsource/mulish/500.css";
-@import "@fontsource/mulish/600.css";
-@import "@fontsource/mulish/700.css";
+/* Self-hosted fonts (@fontsource) are imported from src/fonts.css via a
+   JS import in main.jsx, not from here — see fonts.css for why. */
 @import "tailwindcss";
 
 :root {
