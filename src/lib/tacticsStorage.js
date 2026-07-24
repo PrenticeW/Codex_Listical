@@ -406,12 +406,91 @@ function customProjectPayloadToRow(custom, { userId, yearId, isSent }) {
   };
 }
 
-async function readChipsLayer({ userId, yearId, yearNumber, isSent }) {
-  if (yearNumber != null) {
-    const key = chipsLayerKey(yearNumber, isSent);
-    if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
+// --- live-layer optimistic concurrency (HIGH-2 guard) ------------------
+//
+// The live chip save is replace-the-layer (delete + reinsert of the whole
+// (user, year, is_sent=false) slice), so a save from a stale client used to
+// silently erase everything another device had added since this client's
+// last read. Guard: tactics_year_settings.chips_live_version (migration
+// 20260724000001) is bumped with a compare-and-set before every live-layer
+// rewrite. On CAS failure the save is dropped and the layer refetched
+// instead; saveTacticsChipsState broadcasts the fresh state so the UI
+// converges on server truth. The very last local edit on the losing client
+// is discarded — an accepted trade-off vs silently wiping the other
+// device's chips.
+//
+// The sent layer stays unguarded on purpose: it is only written by an
+// explicit Send to System press, where last-press-wins is the right
+// semantic.
+
+// yearNumber -> last chips_live_version this client observed on the server.
+// Absent entry means this session has not yet read the live layer from the
+// DB (e.g. state hydrated from the localStorage cache mirror) — the first
+// save then does a fresh read + content compare before claiming a version.
+const _chipLiveVersions = new Map();
+
+// JSON.stringify with recursively sorted keys, skipping undefined-valued
+// entries (a fresh DB read carries e.g. `startMinutes: undefined` while the
+// same layer rehydrated from localStorage lacks the key entirely — the two
+// must compare equal). Mirrors stableStringify in utils/planner/storage.js.
+function stableChipsStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableChipsStringify).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value).filter((k) => value[k] !== undefined).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${stableChipsStringify(value[k])}`).join(',')}}`;
   }
-  const [chipsRes, customRes] = await Promise.all([
+  return JSON.stringify(value === undefined ? null : value);
+}
+
+// Normalise a chips-layer object for comparison: the save path caches empty
+// collections as null while a fresh DB read of an empty layer returns []
+// (and vice versa for overrides) — the two spellings must compare equal.
+function normalizeChipsLayerForCompare(layer) {
+  if (!layer || typeof layer !== 'object') return null;
+  return {
+    projectChips: Array.isArray(layer.projectChips) ? layer.projectChips : [],
+    customProjects: Array.isArray(layer.customProjects) ? layer.customProjects : [],
+    chipTimeOverrides:
+      layer.chipTimeOverrides && typeof layer.chipTimeOverrides === 'object'
+        ? layer.chipTimeOverrides
+        : {},
+  };
+}
+
+/**
+ * Compare-and-set bump of chips_live_version. Returns the new version on
+ * success, or null on conflict (another client bumped it first).
+ */
+async function casBumpChipsLiveVersion({ userId, yearId, expected }) {
+  const { data, error } = await supabase
+    .from('tactics_year_settings')
+    .update({ chips_live_version: expected + 1 })
+    .eq('user_id', userId)
+    .eq('year_id', yearId)
+    .eq('chips_live_version', expected)
+    .select('chips_live_version');
+  if (error) throw error;
+  if (Array.isArray(data) && data.length > 0) return expected + 1;
+  // No row matched: either a version mismatch, or the settings row does not
+  // exist yet (first ever chip save for this year).
+  if (expected === 0) {
+    const { error: insErr } = await supabase
+      .from('tactics_year_settings')
+      .insert({ user_id: userId, year_id: yearId, chips_live_version: 1 });
+    if (!insErr) return 1;
+    // 23505 = the row appeared concurrently → treat as a version conflict.
+    if (insErr.code !== '23505') throw insErr;
+  }
+  return null;
+}
+
+/**
+ * Uncached fetch of a chips layer straight from the DB, plus (live layer
+ * only) the current chips_live_version. readChipsLayer wraps this with the
+ * cache; the save-path guard uses it directly.
+ */
+async function fetchChipsLayerFromDb({ userId, yearId, isSent }) {
+  const [chipsRes, customRes, versionRes] = await Promise.all([
     supabase
       .from('tactics_chips')
       .select('*')
@@ -424,9 +503,18 @@ async function readChipsLayer({ userId, yearId, yearNumber, isSent }) {
       .eq('user_id', userId)
       .eq('year_id', yearId)
       .eq('is_sent', isSent),
+    isSent
+      ? Promise.resolve(null)
+      : supabase
+          .from('tactics_year_settings')
+          .select('chips_live_version')
+          .eq('user_id', userId)
+          .eq('year_id', yearId)
+          .maybeSingle(),
   ]);
   if (chipsRes.error) throw chipsRes.error;
   if (customRes.error) throw customRes.error;
+  if (versionRes?.error) throw versionRes.error;
 
   const chipRows = chipsRes.data || [];
   const customRows = customRes.data || [];
@@ -458,8 +546,20 @@ async function readChipsLayer({ userId, yearId, yearNumber, isSent }) {
     result = { projectChips, customProjects, chipTimeOverrides: overrides };
   }
 
+  // chips_live_version reads 0 when the settings row doesn't exist yet.
+  const version = versionRes?.data?.chips_live_version ?? 0;
+  return { result, version };
+}
+
+async function readChipsLayer({ userId, yearId, yearNumber, isSent }) {
+  if (yearNumber != null) {
+    const key = chipsLayerKey(yearNumber, isSent);
+    if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
+  }
+  const { result, version } = await fetchChipsLayerFromDb({ userId, yearId, isSent });
   if (yearNumber != null) {
     setCached(CACHE_NS, chipsLayerKey(yearNumber, isSent), result);
+    if (!isSent) _chipLiveVersions.set(yearNumber, version);
   }
   return result;
 }
@@ -499,6 +599,37 @@ async function writeChipsLayerInner({ userId, yearId, yearNumber, isSent, payloa
     payload?.chipTimeOverrides && typeof payload.chipTimeOverrides === 'object'
       ? payload.chipTimeOverrides
       : null;
+
+  // --- HIGH-2 guard (live layer only): claim the next chips_live_version
+  // before rewriting the layer. A stale client fails the CAS and its save is
+  // dropped; the caller refetches and rebroadcasts server state instead.
+  if (!isSent && yearNumber != null) {
+    let expected = _chipLiveVersions.get(yearNumber);
+
+    if (expected == null) {
+      // No version observed this session (state hydrated from the
+      // localStorage mirror, or the module reloaded). Fetch the layer fresh
+      // and compare it to the last state this client knew: a difference
+      // means another client wrote since — conflict, don't overwrite.
+      const knownBefore = getCached(CACHE_NS, chipsLayerKey(yearNumber, false));
+      const fresh = await fetchChipsLayerFromDb({ userId, yearId, isSent: false });
+      if (
+        knownBefore !== undefined &&
+        stableChipsStringify(normalizeChipsLayerForCompare(knownBefore)) !==
+          stableChipsStringify(normalizeChipsLayerForCompare(fresh.result))
+      ) {
+        return { conflict: true, fresh: fresh.result, freshVersion: fresh.version };
+      }
+      expected = fresh.version;
+    }
+
+    const newVersion = await casBumpChipsLiveVersion({ userId, yearId, expected });
+    if (newVersion == null) {
+      const fresh = await fetchChipsLayerFromDb({ userId, yearId, isSent: false });
+      return { conflict: true, fresh: fresh.result, freshVersion: fresh.version };
+    }
+    _chipLiveVersions.set(yearNumber, newVersion);
+  }
 
   // Replace-the-layer pattern: delete every chip and custom project at this
   // (user, year, is_sent) slice, then insert the new set. Done as two
@@ -612,7 +743,20 @@ export async function saveTacticsChipsState(payload, yearNumber) {
       console.error(`Cannot save tactics chip state: year ${yearNumber} does not exist`);
       return;
     }
-    await writeChipsLayer({ userId, yearId, yearNumber, isSent: false, payload });
+    const res = await writeChipsLayer({ userId, yearId, yearNumber, isSent: false, payload });
+    if (res?.conflict) {
+      // Another client saved this layer since we last read it. Drop this
+      // stale save, adopt the server's state, and broadcast it so the Plan
+      // page re-renders with the merged reality instead of silently wiping
+      // the other client's chips.
+      console.warn(
+        `[tactics-chips] save conflict for year ${yearNumber}: another client saved first; refreshing from server`,
+      );
+      setCached(CACHE_NS, chipsLayerKey(yearNumber, false), res.fresh);
+      _chipLiveVersions.set(yearNumber, res.freshVersion);
+      dispatchEvent(TACTICS_CHIPS_STORAGE_EVENT, res.fresh, yearNumber);
+      return;
+    }
     // Schedule a snapshot after 30s of inactivity so the captured state
     // includes this edit but rapid/mid-thought edits don't produce partials.
     debounceSiteSnapshot(yearNumber);

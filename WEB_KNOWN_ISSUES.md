@@ -24,11 +24,16 @@ Legend: `[ ]` open · `[~]` needs verification against live deployment · `[x]` 
   - **Multi-user failure (if EXECUTE still public):** a signed-in user could call `record_deletion_attempt(<victim>)` to exhaust another user's deletion rate limit, `request_account_deletion(<victim>)` to flag someone else's account for deletion, or `get_year_stats(...)` to read arbitrary users' stats.
   - **Fix:** Derive the user from `auth.uid()` inside each function; `REVOKE EXECUTE ... FROM public, authenticated` and grant only to `service_role` where the function is meant to be service-side. **Verify current grants against the live DB.**
 
-- [ ] **HIGH-2 · Multi-device / multi-tab edits clobber each other (last-write-wins)**
-  - **Where:** `utils/planner/storage.js:196-210` and the tactics / staging / metrics save paths
-  - **What:** Settings, tactics, staging and metrics each persist as one whole-blob row via `upsert(..., { onConflict: 'user_id,year_id' })` — no conflict detection, last save wins. `planner_rows` is better (id-level diff, lines 1208-1250) but depends on an in-memory `_knownRowIds` set per tab, and the "realtime refresh" referenced in the comments is not actually subscribed anywhere. The cache header itself documents "two browser tabs on the same account will not see each other's edits until refresh" as an accepted pre-launch trade-off.
-  - **Multi-device failure:** phone + laptop (or two tabs) editing the same year → silent data loss on the blob tables.
-  - **Fix:** Add a realtime subscription or a version/`updated_at` guard (optimistic concurrency) on the blob rows; reconcile instead of overwrite.
+- [~] **HIGH-2 · Multi-device / multi-tab edits clobber each other (last-write-wins)**
+  - **Where:** the tactics / staging / metrics save paths (planner_rows now handled, see below)
+  - **Status by surface (updated 2026-07-24):**
+    - `planner_rows` — **done, needs live verification.** Diff-based save with serialized queue + `_knownRowIds` (no resurrecting remote deletes, no deleting remote inserts), plus a realtime subscription in `ProjectTimePlannerV2.jsx:540` with a mute window around local saves. Verify on the live deployment, then strip the `[realtime]` / `[planner-save]` debug logs (MED-3).
+    - `tactics_chips` / `tactics_custom_projects` — **guard added 2026-07-24.** The live-layer replace-the-layer save now does a compare-and-set on `tactics_year_settings.chips_live_version` (migration `20260724000001_chip_layer_version.sql`) before its delete+insert. A stale client's save is dropped; the layer is refetched and rebroadcast so the UI converges on server truth. First save in a session (state hydrated from the localStorage mirror) does a fresh read + content compare before claiming a version. Sent layer intentionally unguarded (last Send-press wins). Losing client drops its very last local edit — accepted trade-off vs wiping the other device's chips. **Apply the migration to the live DB before deploying.**
+    - `projects` (staging) — **open.** Diffs by row id but has no known-ids guard: a stale tab deletes rows created on another device, and per-row upserts overwrite remote field edits. Port the planner `_knownRowIds` pattern.
+    - `tactics_metrics` — **open.** Whole-blob row per year; a stale save overwrites all metrics. Add the same version-guard pattern as chips.
+    - `planner_settings` / `tactics_year_settings` columns — **low risk, open.** Per-column upserts so callers only clobber their own column; residual LWW within a column is UI preferences only.
+  - **Multi-device failure:** phone + laptop (or two tabs) editing the same year → silent data loss on the remaining open surfaces above.
+  - **Fix pattern chosen:** version guard + refetch-on-conflict (no new realtime channels beyond the existing planner one); reconcile instead of overwrite.
 
 ---
 
