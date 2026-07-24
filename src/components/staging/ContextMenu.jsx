@@ -39,7 +39,7 @@ function MenuItem({ label, onClick, danger, hint, disabled }) {
         width: '100%', padding: '5px 2px',
         background: hovered && !disabled ? 'rgba(43,89,182,0.05)' : 'transparent',
         border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', textAlign: 'left',
-        fontFamily: FONT, fontSize: 13, fontWeight: 400,
+        fontFamily: FONT, fontSize: 'calc(13px * var(--pz))', fontWeight: 400,
         color: disabled ? '#C0C0C0' : danger ? '#c0392b' : '#1F1F1F',
         borderRadius: 6,
         transition: 'background 0.1s',
@@ -48,7 +48,7 @@ function MenuItem({ label, onClick, danger, hint, disabled }) {
     >
       <span>{label}</span>
       {hint && (
-        <span style={{ fontSize: 11, color: '#9E9E9E', fontFamily: MONO, marginLeft: 12 }}>{hint}</span>
+        <span style={{ fontSize: 'calc(11px * var(--pz))', color: '#9E9E9E', fontFamily: MONO, marginLeft: 12 }}>{hint}</span>
       )}
     </button>
   );
@@ -119,7 +119,7 @@ export default function ContextMenu({
       {/* Selection info header */}
       {(hasSelectedRows || hasSelectedCells) && (
         <div style={{
-          fontSize: 9, fontWeight: 700, letterSpacing: '.1em',
+          fontSize: 'calc(9px * var(--pz))', fontWeight: 700, letterSpacing: '.1em',
           textTransform: 'uppercase', color: '#9E9E9E',
           fontFamily: MONO, marginBottom: 8, paddingBottom: 6,
           borderBottom: '1px solid rgba(200,174,198,0.35)',
@@ -187,7 +187,7 @@ export default function ContextMenu({
 
       {/* No context fallback */}
       {!hasRowContext && !hasSelectedCells && !hasSelectedRows && (
-        <div style={{ fontSize: 12, color: '#9E9E9E', fontStyle: 'italic', padding: '2px 2px' }}>
+        <div style={{ fontSize: 'calc(12px * var(--pz))', color: '#9E9E9E', fontStyle: 'italic', padding: '2px 2px' }}>
           Right-click on a row for options
         </div>
       )}

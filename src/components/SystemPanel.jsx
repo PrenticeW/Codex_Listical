@@ -722,6 +722,91 @@ function PlanSection() {
   );
 }
 
+function ButtonPair({ left, right }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+      {[left, right].map((btn, i) => (
+        <button
+          key={i}
+          onClick={btn.onClick}
+          disabled={btn.disabled}
+          style={{
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
+            padding: '12px 16px', fontFamily: FONT, fontSize: 14, fontWeight: 400,
+            color: btn.disabled ? C.textFaint : C.textDim,
+            cursor: btn.disabled ? 'not-allowed' : 'pointer',
+            transition: 'border-color 0.15s, color 0.15s',
+            opacity: btn.disabled ? 0.45 : 1,
+          }}
+          onMouseEnter={e => {
+            if (!btn.disabled) {
+              e.currentTarget.style.borderColor = C.green;
+              e.currentTarget.style.color = C.green;
+            }
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = C.border;
+            e.currentTarget.style.color = btn.disabled ? C.textFaint : C.textDim;
+          }}
+        >
+          {btn.icon}
+          {btn.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function StepBtn({ onClick, disabled, children }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        fontSize: 18, fontWeight: 300, color: disabled ? C.textFaint : C.textDim,
+        background: '#fafaf8', border: 'none',
+        transition: 'background 0.1s, color 0.1s',
+        padding: 0, lineHeight: 1, fontFamily: FONT,
+      }}
+      onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = C.borderLight; e.currentTarget.style.color = C.text; } }}
+      onMouseLeave={e => { e.currentTarget.style.background = '#fafaf8'; e.currentTarget.style.color = disabled ? C.textFaint : C.textDim; }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function StepperRow({ icon, label, value, onDecrease, onIncrease, decreaseDisabled, increaseDisabled }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+      border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 16px',
+    }}>
+      <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        {icon}
+        {label}
+      </span>
+      <div style={{
+        display: 'flex', alignItems: 'center', flex: 1, maxWidth: 200,
+        border: `1px solid ${C.border}`, borderRadius: 7, overflow: 'hidden',
+      }}>
+        <StepBtn onClick={onDecrease} disabled={decreaseDisabled}>−</StepBtn>
+        <span style={{
+          flex: 1, minWidth: 38, textAlign: 'center', fontSize: 14, fontWeight: 500, color: C.text,
+          borderLeft: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`,
+          lineHeight: '28px',
+        }}>
+          {value}
+        </span>
+        <StepBtn onClick={onIncrease} disabled={increaseDisabled}>+</StepBtn>
+      </div>
+    </div>
+  );
+}
+
 function PageSection() {
   const [scale, setScale] = useState(1.0);
 
@@ -731,96 +816,47 @@ function PageSection() {
     return () => window.removeEventListener(SYSTEM_PANEL_SCALE_EVENT, handler);
   }, []);
 
+  const displayScale = Math.round(scale * 100);
+
   return (
     <div style={{ ...BENTO_CARD, margin: '11px 11px 11px' }}>
       <SectionLabel>Page</SectionLabel>
 
-      {/* Undo / Redo */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-        {[
-          {
-            label: 'Undo',
-            icon: (
-              <svg width="11" height="11" viewBox="0 0 13 13" fill="none">
-                <path d="M2 6.5a4.5 4.5 0 114.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-                <path d="M2 4v2.5h2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            ),
-          },
-          {
-            label: 'Redo',
-            icon: (
-              <svg width="11" height="11" viewBox="0 0 13 13" fill="none">
-                <path d="M11 6.5a4.5 4.5 0 10-4.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-                <path d="M11 4v2.5H8.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            ),
-          },
-        ].map(({ label, icon }) => (
-          <button
-            key={label}
-            style={{
-              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
-              padding: '12px 16px', fontFamily: FONT, fontSize: 14, fontWeight: 400,
-              color: C.textDim, cursor: 'pointer', transition: 'border-color 0.15s, color 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--brand)'; e.currentTarget.style.color = 'var(--brand-deep)'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; }}
-            onClick={() => dispatchSystemAction(label.toLowerCase())}
-          >
-            {icon}
-            {label}
-          </button>
-        ))}
-      </div>
+      <ButtonPair
+        left={{
+          icon: (
+            <svg width="11" height="11" viewBox="0 0 13 13" fill="none">
+              <path d="M2 6.5a4.5 4.5 0 114.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              <path d="M2 4v2.5h2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          ),
+          label: 'Undo',
+          onClick: () => dispatchSystemAction('undo'),
+        }}
+        right={{
+          icon: (
+            <svg width="11" height="11" viewBox="0 0 13 13" fill="none">
+              <path d="M11 6.5a4.5 4.5 0 10-4.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              <path d="M11 4v2.5H8.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          ),
+          label: 'Redo',
+          onClick: () => dispatchSystemAction('redo'),
+        }}
+      />
 
-      {/* Zoom stepper */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        border: `1px solid ${C.border}`, borderRadius: 10,
-        padding: '10px 16px',
-      }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: FONT, fontSize: 14, color: C.textDim }}>
+      <StepperRow
+        icon={
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-            <circle cx="5.5" cy="5.5" r="4" stroke={C.textFaint} strokeWidth="1.2"/>
-            <path d="M8.5 8.5L12 12" stroke={C.textFaint} strokeWidth="1.2" strokeLinecap="round"/>
+            <circle cx="5.5" cy="5.5" r="4" stroke="#999" strokeWidth="1.2"/>
+            <path d="M8.5 8.5L12 12" stroke="#999" strokeWidth="1.2" strokeLinecap="round"/>
           </svg>
-          Page zoom
-        </span>
-        <div style={{
-          display: 'flex', alignItems: 'center',
-          border: `1px solid ${C.border}`, borderRadius: 7, overflow: 'hidden',
-        }}>
-          <button
-            onClick={() => dispatchSystemAction('zoomOut')}
-            style={{
-              width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', fontSize: 18, fontWeight: 300, color: C.textDim,
-              background: C.bgBlock, border: 'none', borderRight: `1px solid ${C.border}`,
-              transition: 'background 0.1s', fontFamily: FONT, lineHeight: 1, padding: 0,
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = C.borderLight; }}
-            onMouseLeave={e => { e.currentTarget.style.background = C.bgBlock; }}
-          >−</button>
-          <span style={{
-            minWidth: 44, textAlign: 'center',
-            fontSize: 14, fontWeight: 500, color: C.text,
-            lineHeight: '28px', fontFamily: FONT,
-          }}>{Math.round(scale * 100)}%</span>
-          <button
-            onClick={() => dispatchSystemAction('zoomIn')}
-            style={{
-              width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', fontSize: 18, fontWeight: 300, color: C.textDim,
-              background: C.bgBlock, border: 'none', borderLeft: `1px solid ${C.border}`,
-              transition: 'background 0.1s', fontFamily: FONT, lineHeight: 1, padding: 0,
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = C.borderLight; }}
-            onMouseLeave={e => { e.currentTarget.style.background = C.bgBlock; }}
-          >+</button>
-        </div>
-      </div>
+        }
+        label="Zoom"
+        value={`${displayScale}%`}
+        onDecrease={() => dispatchSystemAction('zoomOut')}
+        onIncrease={() => dispatchSystemAction('zoomIn')}
+      />
     </div>
   );
 }

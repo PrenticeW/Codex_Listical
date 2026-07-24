@@ -53,7 +53,7 @@ function MenuItem({ label, onClick, danger, hint, style }) {
           ? (hovered ? DANGER_BD : 'transparent')
           : (hovered ? 'var(--brand-hover-bd)' : 'transparent')}`,
         cursor: 'pointer', textAlign: 'left',
-        fontFamily: FONT, fontSize: 13, fontWeight: 400,
+        fontFamily: FONT, fontSize: 'calc(13px * var(--pz))', fontWeight: 400,
         color: danger ? DANGER : (hovered ? 'var(--brand-deep)' : INK_MUTE),
         borderRadius: 8,
         transition: 'border-color 0.15s, color 0.15s, background 0.15s',
@@ -62,7 +62,7 @@ function MenuItem({ label, onClick, danger, hint, style }) {
     >
       <span>{label}</span>
       {hint && (
-        <span style={{ fontSize: 11, color: '#9E9E9E', fontFamily: MONO, marginLeft: 12 }}>{hint}</span>
+        <span style={{ fontSize: 'calc(11px * var(--pz))', color: '#9E9E9E', fontFamily: MONO, marginLeft: 12 }}>{hint}</span>
       )}
     </button>
   );
@@ -88,7 +88,7 @@ function CountAddControl({ onAdd }) {
           width: 28, height: 22,
           border: `1px solid ${focused ? 'var(--brand)' : '#e8e8e4'}`,
           borderRadius: 5,
-          fontFamily: FONT, fontSize: 12, fontWeight: 500, color: '#1a1a1a',
+          fontFamily: FONT, fontSize: 'calc(12px * var(--pz))', fontWeight: 500, color: '#1a1a1a',
           textAlign: 'center', background: '#ffffff', outline: 'none', padding: 0,
           transition: 'border-color 0.15s',
         }}
@@ -100,7 +100,7 @@ function CountAddControl({ onAdd }) {
           height: 22, padding: '0 9px',
           background: 'var(--brand-deep)', borderRadius: 5,
           display: 'flex', alignItems: 'center',
-          fontFamily: FONT, fontSize: 11, fontWeight: 600, color: '#ffffff',
+          fontFamily: FONT, fontSize: 'calc(11px * var(--pz))', fontWeight: 600, color: '#ffffff',
           cursor: 'pointer', userSelect: 'none',
         }}
       >
@@ -115,7 +115,7 @@ function CountAddControl({ onAdd }) {
 function InsertRow({ label, onAdd }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 2px', marginBottom: 4 }}>
-      <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 400, color: '#1F1F1F', whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ fontFamily: FONT, fontSize: 'calc(13px * var(--pz))', fontWeight: 400, color: '#1F1F1F', whiteSpace: 'nowrap' }}>{label}</span>
       <CountAddControl onAdd={onAdd} />
     </div>
   );
@@ -180,7 +180,7 @@ export default function ContextMenu({
     >
       {hasSelectedRows && (
         <div style={{
-          fontSize: 9, fontWeight: 700, letterSpacing: '.1em',
+          fontSize: 'calc(9px * var(--pz))', fontWeight: 700, letterSpacing: '.1em',
           textTransform: 'uppercase', color: '#9E9E9E',
           fontFamily: MONO, marginBottom: 8, paddingBottom: 6,
           borderBottom: '1px solid rgba(200,174,198,0.35)',

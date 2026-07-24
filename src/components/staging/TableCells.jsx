@@ -65,7 +65,7 @@ export function DragHandleCell({
       }}
       onClick={onClick}
     >
-      <span style={{ fontSize: 9, color: isHeader ? 'rgba(255,255,255,.3)' : isRowSelected ? '#ffffff' : '#8A8278' }}>⠿</span>
+      <span style={{ fontSize: 'calc(9px * var(--pz))', color: isHeader ? 'rgba(255,255,255,.3)' : isRowSelected ? '#ffffff' : '#8A8278' }}>⠿</span>
     </td>
   );
 }

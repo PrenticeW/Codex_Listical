@@ -9,7 +9,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Archive } from 'lucide-react';
 import { useYear } from '../contexts/YearContext';
 import usePlannerStorage from '../hooks/planner/usePlannerStorage';
-import usePageSize from '../hooks/usePageSize';
+import usePageSize, { usePageScaleVar } from '../hooks/usePageSize';
 import usePanelInset from '../hooks/usePanelInset';
 import usePlannerColumns from '../hooks/planner/usePlannerColumns';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
@@ -380,6 +380,9 @@ export default function ProjectTimePlannerV2() {
 
   // Page-specific size setting
   const { sizeScale, increaseSize, decreaseSize } = usePageSize('system');
+  // Publish the System page scale as --pz so page content (incl. portalled
+  // menus) can size with calc(Npx * var(--pz)).
+  usePageScaleVar(sizeScale);
 
   // Initialise data from cached taskRows when available, otherwise a blank
   // skeleton. On a sync cache hit (the common case after the first visit)
@@ -2902,7 +2905,27 @@ export default function ProjectTimePlannerV2() {
   const checkboxInputClass = 'h-4 w-4 cursor-pointer rounded border-gray-300 text-emerald-700 focus:ring-emerald-600';
 
   // Column definitions
-  const columns = usePlannerColumns({ totalDays });
+  const columns = usePlannerColumns({ totalDays, scale: sizeScale });
+
+  const scaledColumnSizing = useMemo(() => (
+    Object.fromEntries(
+      Object.entries(columnSizing || {}).map(([id, w]) => [id, w * sizeScale])
+    )
+  ), [columnSizing, sizeScale]);
+
+  // Resize handlers work in screen pixels (scaled space); convert back to
+  // base (100%) pixels before persisting.
+  const handleColumnSizingChange = useCallback((updater) => {
+    setColumnSizing((prevBase) => {
+      const prevScaled = Object.fromEntries(
+        Object.entries(prevBase || {}).map(([id, w]) => [id, w * sizeScale])
+      );
+      const nextScaled = typeof updater === 'function' ? updater(prevScaled) : updater;
+      return Object.fromEntries(
+        Object.entries(nextScaled || {}).map(([id, w]) => [id, w / sizeScale])
+      );
+    });
+  }, [setColumnSizing, sizeScale]);
 
   const table = useReactTable({
     data: numberedData,
@@ -2911,7 +2934,10 @@ export default function ProjectTimePlannerV2() {
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
     state: {
-      columnSizing,
+      // Column widths are STORED unscaled (base px at 100%) and scaled here
+      // at render time, so zooming widens columns and a resize done while
+      // zoomed persists correctly when the zoom changes back.
+      columnSizing: scaledColumnSizing,
       columnPinning: {
         left: ['rowNum'], // Pin the row number column to the left
       },
@@ -2921,7 +2947,7 @@ export default function ProjectTimePlannerV2() {
         ...visibleDayColumns,
       },
     },
-    onColumnSizingChange: setColumnSizing,
+    onColumnSizingChange: handleColumnSizingChange,
   });
 
   // Helper to get column width

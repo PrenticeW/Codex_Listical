@@ -28,7 +28,7 @@ function SectionLabel({ children }) {
     <div
       style={{
         fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
-        fontSize: 9,
+        fontSize: 'calc(9px * var(--pz))',
         fontWeight: 700,
         letterSpacing: '0.14em',
         textTransform: 'uppercase',
@@ -345,7 +345,7 @@ function EstimateDropdownCell({
               disabled={!hasCombo}
               style={{
                 fontFamily: FONT,
-                fontSize: 11,
+                fontSize: 'calc(11px * var(--pz))',
                 fontWeight: 600,
                 color: hasCombo ? '#ffffff' : '#999999',
                 background: hasCombo ? 'var(--brand-deep)' : '#e8e8e4',

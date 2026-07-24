@@ -11,7 +11,7 @@ import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import { revertArchive } from '../utils/planner/revertArchive';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { ArchiveYearModal } from '../components/ArchiveYearModal';
-import usePageSize from '../hooks/usePageSize';
+import usePageSize, { usePageScaleVar } from '../hooks/usePageSize';
 import usePanelInset from '../hooks/usePanelInset';
 import {
   useShortlistState,
@@ -133,6 +133,9 @@ export default function StagingPageV2() {
 
   const { sizeScale } = usePageSize('goal');
   const textSizeScale = sizeScale;
+  // Publish the Goal page scale as --pz so all page content (incl. portals)
+  // can size with calc(Npx * var(--pz)).
+  usePageScaleVar(sizeScale);
 
   // Command pattern for undo/redo
   const { canUndo, canRedo, executeCommand, undo, redo } = useCommandPattern();
@@ -1041,13 +1044,13 @@ export default function StagingPageV2() {
           style={{ fontSize: `${Math.round(14 * textSizeScale)}px`, tableLayout: 'fixed' }}
         >
           <colgroup>
-            <col style={{ width: 36 }} />   {/* col 0: gutter / section number */}
-            <col style={{ width: 92 }} />   {/* col 1: prompt button cell */}
-            <col style={{ width: 31 }} />   {/* col 2: response button extension — col1+col2=123px */}
+            <col style={{ width: 'calc(36px * var(--pz))' }} />   {/* col 0: gutter / section number */}
+            <col style={{ width: 'calc(92px * var(--pz))' }} />   {/* col 1: prompt button cell */}
+            <col style={{ width: 'calc(31px * var(--pz))' }} />   {/* col 2: response button extension — col1+col2=123px */}
             <col />                          {/* col 3: flex content */}
             <col />                          {/* col 4: flex content */}
-            <col style={{ width: 140 }} />  {/* col 5: estimate */}
-            <col style={{ width: 120 }} />  {/* col 6: time value */}
+            <col style={{ width: 'calc(140px * var(--pz))' }} />  {/* col 5: estimate */}
+            <col style={{ width: 'calc(120px * var(--pz))' }} />  {/* col 6: time value */}
           </colgroup>
           <tbody>
             {entries.map((rowValues, rowIdx) => {
@@ -1179,7 +1182,7 @@ export default function StagingPageV2() {
             />
             <span style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: 10,
+              fontSize: 'calc(10px * var(--pz))',
               letterSpacing: '.08em',
               textTransform: 'uppercase',
               color: '#9E9E9E',
@@ -1215,18 +1218,19 @@ export default function StagingPageV2() {
                 return (
                   <div key={item.id}>
                     <div className="flex items-start gap-2">
-                      <div className="mt-1 flex h-7 w-7 items-center justify-center">
+                      <div className="mt-1 flex items-center justify-center" style={{ height: 'calc(28px * var(--pz))', width: 'calc(28px * var(--pz))' }}>
                         {item.planTableVisible ? (
                           <button
                             type="button"
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-transparent text-slate-700 hover:text-slate-900"
+                            className="inline-flex items-center justify-center rounded-full border border-transparent text-slate-700 hover:text-slate-900"
+                            style={{ height: 'calc(28px * var(--pz))', width: 'calc(28px * var(--pz))' }}
                             onClick={() => togglePlanTable(item.id)}
                             aria-label={
                               item.planTableCollapsed ? 'Expand plan table' : 'Collapse plan table'
                             }
                           >
                             <SquarePlus
-                              size={18}
+                              size={Math.round(18 * textSizeScale)}
                               className={`transition-transform ${
                                 item.planTableCollapsed ? '' : 'rotate-45'
                               }`}
@@ -1243,13 +1247,17 @@ export default function StagingPageV2() {
                             color: headerTextColor,
                             border: '1.5px solid #1A1A1A',
                             borderRadius: (item.planTableVisible && !item.planTableCollapsed) ? '8px 8px 0 0' : '8px',
-                            height: 40,
-                            paddingLeft: '12px',
-                            paddingRight: '12px',
+                            // All fixed dimensions scale with the page zoom.
+                            // fontSize here also sizes the project name and
+                            // tagline (InlineEditableText inherits font).
+                            fontSize: 'calc(16px * var(--pz))',
+                            height: 'calc(40px * var(--pz))',
+                            paddingLeft: 'calc(12px * var(--pz))',
+                            paddingRight: 'calc(12px * var(--pz))',
                             fontWeight: 600,
-                            gridTemplateColumns: '1fr auto 140px 24px 80px',
+                            gridTemplateColumns: '1fr auto calc(140px * var(--pz)) calc(24px * var(--pz)) calc(80px * var(--pz))',
                             alignItems: 'center',
-                            gap: '12px',
+                            gap: 'calc(12px * var(--pz))',
                             cursor: 'pointer',
                             outline: selectedGoalId === item.id ? '2px solid rgba(0,0,0,0.25)' : 'none',
                             outlineOffset: '-2px',
@@ -1282,19 +1290,19 @@ export default function StagingPageV2() {
                             </span>
                           </div>
                           <div></div>
-                          <div style={{ width: '140px', minWidth: '140px' }}></div>
+                          <div style={{ width: 'calc(140px * var(--pz))', minWidth: 'calc(140px * var(--pz))' }}></div>
                           <div
-                            style={{ width: '24px', minWidth: '24px' }}
+                            style={{ width: 'calc(24px * var(--pz))', minWidth: 'calc(24px * var(--pz))' }}
                             className="flex items-center justify-end"
                           >
                             {item.addedToPlan && (
                               <span style={{
                                 fontFamily: 'var(--font-mono)',
-                                fontSize: 9,
+                                fontSize: 'calc(9px * var(--pz))',
                                 color: '#1A1A1A',
                                 background: 'rgba(255,255,255,0.88)',
                                 borderRadius: 999,
-                                padding: '2px 8px',
+                                padding: 'calc(2px * var(--pz)) calc(8px * var(--pz))',
                                 textTransform: 'uppercase',
                                 letterSpacing: '.05em',
                                 flexShrink: 0,
@@ -1308,7 +1316,7 @@ export default function StagingPageV2() {
                             // container border (1) + p-3 (12) + cell border (1)
                             // + cell paddingRight (10) = 24px; header card is
                             // border (1) + pr-3 (12) + 11px = 24px
-                            style={{ fontSize: `${Math.round(14 * textSizeScale)}px`, paddingRight: '11px' }}
+                            style={{ fontSize: `${Math.round(14 * textSizeScale)}px`, paddingRight: 'calc(11px * var(--pz))' }}
                           >
                             {projectTotal}
                           </div>

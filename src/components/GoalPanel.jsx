@@ -1026,7 +1026,7 @@ function PageSection() {
     return () => window.removeEventListener(GOAL_PANEL_STATE_EVENT, handler);
   }, []);
 
-  const displayScale = Math.round(sizeScale * 10);
+  const displayScale = Math.round(sizeScale * 100);
 
   return (
     <div style={{ ...BENTO_CARD, margin: '11px 11px 11px' }}>
@@ -1065,7 +1065,7 @@ function PageSection() {
           </svg>
         }
         label="Zoom"
-        value={displayScale}
+        value={`${displayScale}%`}
         onDecrease={decreaseSize}
         onIncrease={increaseSize}
         decreaseDisabled={sizeScale <= minScale}

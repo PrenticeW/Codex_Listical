@@ -136,3 +136,22 @@ export default function usePageSize(pageId = 'global') {
     maxScale: MAX_SIZE_SCALE,
   };
 }
+
+/**
+ * Publish a page's size scale as the `--pz` CSS custom property on the
+ * document root, so all page content — including portalled menus and
+ * popovers — can size itself with `calc(Npx * var(--pz))`.
+ *
+ * Call this from the PAGE component that owns the scale (one page is
+ * mounted at a time), not from panels/controls that merely display it.
+ *
+ * @param {number} sizeScale - Current scale from usePageSize
+ */
+export function usePageScaleVar(sizeScale) {
+  useEffect(() => {
+    document.documentElement.style.setProperty('--pz', String(sizeScale));
+    return () => {
+      document.documentElement.style.setProperty('--pz', '1');
+    };
+  }, [sizeScale]);
+}

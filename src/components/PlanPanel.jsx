@@ -1490,14 +1490,10 @@ function PageFooter() {
     return () => window.removeEventListener(PLAN_PANEL_STATE_EVENT, handler);
   }, []);
 
-  const displayScale = Math.round(sizeScale * 10);
+  const displayScale = Math.round(sizeScale * 100);
 
   return (
-    <div style={{
-      borderTop: '1px solid var(--brand-bd)',
-      padding: '20px 22px',
-      flexShrink: 0, background: C.bg,
-    }}>
+    <div style={{ ...BENTO_CARD, margin: '11px 11px 11px', flexShrink: 0 }}>
       <SectionLabel>Page</SectionLabel>
 
       <ButtonPair
@@ -1518,7 +1514,7 @@ function PageFooter() {
       <StepperRow
         icon={ICON.zoom}
         label="Zoom"
-        value={displayScale}
+        value={`${displayScale}%`}
         onDecrease={decreaseSize}
         onIncrease={increaseSize}
         decreaseDisabled={sizeScale <= minScale}

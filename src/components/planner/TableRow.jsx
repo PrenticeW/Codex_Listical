@@ -1099,7 +1099,7 @@ const TableRow = React.memo(function TableRow({
                           borderRight: '1.5px solid black',
                           paddingRight: '8px',
                           fontFamily: "'Mulish', sans-serif",
-                          fontSize: '9px',
+                          fontSize: 'calc(9px * var(--pz))',
                           lineHeight: 1,
                           color: 'rgba(255,255,255,0.55)',
                           letterSpacing: '0.06em',
@@ -1168,12 +1168,11 @@ const TableRow = React.memo(function TableRow({
                 // calendar header rows -- these are numeral/ledger content,
                 // not prose, so they don't inherit the page's DM Sans.
                 fontFamily: "'Mulish', sans-serif",
-                // Matches reference/SystemView.jsx exactly: H3 (date) 10.5px,
-                // H4 (day-of-week) 11px, H5/H6 (min/max) 11px (0.6875rem).
-                // These are fixed chrome sizes, not tied to the cellFontSize/
-                // headerFontSize zoom scale, same as the existing min/max
-                // convention this extends.
-                fontSize: (isDailyMinRow || isDailyMaxRow) ? '0.6875rem' : (isDayRow ? '10.5px' : isDayOfWeekRow ? '11px' : `${cellFontSize}px`),
+                // Matches reference/SystemView.jsx at 100%: H3 (date) 10.5px,
+                // H4 (day-of-week) 11px, H5/H6 (min/max) 11px. These sit in
+                // the scrolling grid alongside data cells, so they scale with
+                // the page zoom (--pz) like everything else in the table.
+                fontSize: (isDailyMinRow || isDailyMaxRow) ? 'calc(11px * var(--pz))' : (isDayRow ? 'calc(10.5px * var(--pz))' : isDayOfWeekRow ? 'calc(11px * var(--pz))' : `${cellFontSize}px`),
                 lineHeight: 1,
                 fontStyle: (isDailyMinRow || isDailyMaxRow) ? 'italic' : undefined,
                 backgroundColor: bgColor,
@@ -1560,7 +1559,7 @@ const TableRow = React.memo(function TableRow({
                           borderRight: '1.5px solid black',
                           paddingRight: '8px',
                           fontFamily: "'Mulish', sans-serif",
-                          fontSize: '9px',
+                          fontSize: 'calc(9px * var(--pz))',
                           lineHeight: 1,
                           color: 'rgba(255,255,255,0.55)',
                           letterSpacing: '0.06em',
@@ -1618,7 +1617,7 @@ const TableRow = React.memo(function TableRow({
                   }}
                 >
                   {/* Matches reference/SystemView.jsx H7 dayTotals span (fontSize: 11) -- fixed chrome size, not the cellFontSize zoom scale. */}
-                  <span className="text-right flex-1 pr-2" style={{ fontFamily: "'Mulish', sans-serif", fontSize: '11px', fontWeight: 'bold', lineHeight: 1 }}>{value}</span>
+                  <span className="text-right flex-1 pr-2" style={{ fontFamily: "'Mulish', sans-serif", fontSize: 'calc(11px * var(--pz))', fontWeight: 'bold', lineHeight: 1 }}>{value}</span>
                   <FilterIcon
                     size={10}
                     active={isFilterActive}

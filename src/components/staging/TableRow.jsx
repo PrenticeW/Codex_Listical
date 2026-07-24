@@ -246,7 +246,7 @@ export default function TableRow({
         >
           <span style={{
             fontFamily: 'var(--font-sans)',
-            fontSize: 22, fontWeight: 700,
+            fontSize: 'calc(22px * var(--pz))', fontWeight: 700,
             color: 'rgba(255,255,255,.18)',
             lineHeight: 1,
           }}>{sectionNum}</span>
@@ -267,7 +267,7 @@ export default function TableRow({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <span style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: 8.5,
+              fontSize: 'calc(8.5px * var(--pz))',
               letterSpacing: '.12em',
               textTransform: 'uppercase',
               color: 'rgba(255,255,255,.55)',
@@ -275,7 +275,7 @@ export default function TableRow({
             }}>{sectionLabel}</span>
             <span style={{
               fontFamily: 'var(--font-sans)',
-              fontSize: 12.5,
+              fontSize: 'calc(12.5px * var(--pz))',
               fontWeight: 600,
               color: 'rgba(255,255,255,.95)',
               lineHeight: 1.15,

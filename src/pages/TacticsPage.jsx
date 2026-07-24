@@ -37,7 +37,7 @@ import {
 import { GEAR_TACTICS_SETTINGS_EVENT } from '../components/GearPanel';
 import { peekStagingCache } from '../lib/stagingStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
-import usePageSize from '../hooks/usePageSize';
+import usePageSize, { usePageScaleVar } from '../hooks/usePageSize';
 import { PLAN_PANEL_ACTION_EVENT, PLAN_PANEL_STATE_EVENT, PLAN_PANEL_CHIP_EVENT, PLAN_PANEL_SCHEDULE_DATA_EVENT, PLAN_PANEL_NAV_EVENT } from '../components/PlanPanel';
 import { getContrastTextColor } from '../utils/colorUtils';
 
@@ -482,6 +482,9 @@ export default function TacticsPage() {
 
   // Page-specific size setting
   const { sizeScale: textSizeScale } = usePageSize('plan');
+  // Publish the Plan page scale as --pz so page content (incl. portalled
+  // popovers like the chip editor) can size with calc(Npx * var(--pz)).
+  usePageScaleVar(textSizeScale);
   const hourOptions = useMemo(() => {
     const step = Math.max(1, incrementMinutes);
     const totalSteps = Math.ceil(MINUTES_IN_DAY / step);
@@ -4640,7 +4643,7 @@ export default function TacticsPage() {
           <input
             ref={menuRenameInputRef}
             type="text"
-            style={{ width:'100%', border:'1px solid #e8e8e4', borderRadius:4, background:'#fff', padding:'4px 8px', fontSize:11, color:'#1A1A1A', outline:'none', fontFamily:"'DM Sans',-apple-system,sans-serif", transition:'border-color .15s' }}
+            style={{ width:'100%', border:'1px solid #e8e8e4', borderRadius:4, background:'#fff', padding:'4px 8px', fontSize:'calc(11px * var(--pz))', color:'#1A1A1A', outline:'none', fontFamily:"'DM Sans',-apple-system,sans-serif", transition:'border-color .15s' }}
             onFocus={e=>e.target.style.borderColor='var(--brand)'}
             value={menuRenamingLabel}
             onChange={(e) => setMenuRenamingLabel(e.target.value)}
@@ -4679,7 +4682,7 @@ export default function TacticsPage() {
         <div onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
-            style={{ display:'flex', alignItems:'center', gap:7, width:'100%', padding:'10px 12px 8px', background:'none', border:'none', cursor:'pointer', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:13, color:'var(--brand-ink)', textAlign:'left', transition:'color .15s' }}
+            style={{ display:'flex', alignItems:'center', gap:7, width:'100%', padding:'10px 12px 8px', background:'none', border:'none', cursor:'pointer', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:'calc(13px * var(--pz))', color:'var(--brand-ink)', textAlign:'left', transition:'color .15s' }}
             onMouseEnter={e=>e.currentTarget.style.color='var(--brand-deep)'}
             onMouseLeave={e=>e.currentTarget.style.color='var(--brand-ink)'}
             onClick={closeChipEditor}
@@ -4690,12 +4693,12 @@ export default function TacticsPage() {
           <div style={{ height:1, background:'rgba(200,174,198,0.35)', margin:'0 0 4px' }} />
           <div className="px-3 pb-3">
             <div
-              style={{ marginBottom:10, display:'flex', width:'100%', alignItems:'center', justifyContent:'center', borderRadius:4, padding:'8px 12px', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', minHeight:32, background: chipEditor.color, color: chipContrastColour(chipEditor.color) }}
+              style={{ marginBottom:10, display:'flex', width:'100%', alignItems:'center', justifyContent:'center', borderRadius:4, padding:'8px 12px', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:'calc(11px * var(--pz))', fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', minHeight:32, background: chipEditor.color, color: chipContrastColour(chipEditor.color) }}
             >
               {chipEditor.name || ' '}
             </div>
 
-            <div style={{ fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', paddingBottom:3, marginBottom:6 }}>Name</div>
+            <div style={{ fontSize:'calc(9px * var(--pz))', fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', paddingBottom:3, marginBottom:6 }}>Name</div>
             <input
               type="text"
               autoFocus
@@ -4705,18 +4708,18 @@ export default function TacticsPage() {
                 if (e.key === 'Enter') { e.preventDefault(); commitChipEditor(); }
                 else if (e.key === 'Escape') { e.preventDefault(); closeChipEditor(); }
               }}
-              style={{ width:'100%', border:'1px solid #e8e8e4', borderRadius:4, padding:'5px 8px', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', color:'#1A1A1A', outline:'none', boxSizing:'border-box', background:'#fff', marginBottom:10, transition:'border-color .15s' }}
+              style={{ width:'100%', border:'1px solid #e8e8e4', borderRadius:4, padding:'5px 8px', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:'calc(11px * var(--pz))', fontWeight:700, textTransform:'uppercase', color:'#1A1A1A', outline:'none', boxSizing:'border-box', background:'#fff', marginBottom:10, transition:'border-color .15s' }}
               onFocus={e=>e.target.style.borderColor='var(--brand)'}
               onBlur={e=>e.target.style.borderColor='#e8e8e4'}
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             />
 
-            <div style={{ fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', paddingBottom:3, marginBottom:6 }}>Colour</div>
+            <div style={{ fontSize:'calc(9px * var(--pz))', fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', paddingBottom:3, marginBottom:6 }}>Colour</div>
             <div style={{ marginBottom:8 }} onClick={(e) => e.stopPropagation()}>
               {CHIP_EDITOR_GROUPS.map(({ label: groupLabel, families }) => (
                 <div key={groupLabel} style={{ marginBottom:4 }}>
-                  <div style={{ fontSize:8, fontWeight:700, letterSpacing:'.1em', textTransform:'uppercase', color:'var(--brand-ink)', marginBottom:3, fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" }}>{groupLabel}</div>
+                  <div style={{ fontSize:'calc(8px * var(--pz))', fontWeight:700, letterSpacing:'.1em', textTransform:'uppercase', color:'var(--brand-ink)', marginBottom:3, fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" }}>{groupLabel}</div>
                   {families.map(({ name: familyName, shades }) => (
                     <div key={familyName} style={{ display:'flex', gap:2, marginBottom:2 }}>
                       {shades.map(([h, s, l], idx) => {
@@ -4749,7 +4752,7 @@ export default function TacticsPage() {
 
             {/* ── Custom colour mixer ─────────────────────────────── */}
             <div style={{ borderTop:'1px solid var(--brand-bd)', paddingTop:8 }} onClick={(e) => e.stopPropagation()}>
-              <div style={{ fontSize:8, fontWeight:700, letterSpacing:'.1em', textTransform:'uppercase', color:'var(--brand-ink)', marginBottom:3, fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" }}>Custom</div>
+              <div style={{ fontSize:'calc(8px * var(--pz))', fontWeight:700, letterSpacing:'.1em', textTransform:'uppercase', color:'var(--brand-ink)', marginBottom:3, fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" }}>Custom</div>
               <div style={{ display:'flex', gap:2 }}>
                 <button
                   type="button"
@@ -4828,7 +4831,7 @@ export default function TacticsPage() {
               type="button"
               title="Confirm"
               onClick={commitChipEditor}
-              style={{ marginTop:10, width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'7px 0', background:'var(--brand-deep)', color:'#fff', border:'1px solid var(--brand-deep)', borderRadius:4, cursor:'pointer', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', transition:'opacity .1s' }}
+              style={{ marginTop:10, width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'7px 0', background:'var(--brand-deep)', color:'#fff', border:'1px solid var(--brand-deep)', borderRadius:4, cursor:'pointer', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:'calc(11px * var(--pz))', fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', transition:'opacity .1s' }}
               onMouseEnter={e=>e.currentTarget.style.opacity='0.85'}
               onMouseLeave={e=>e.currentTarget.style.opacity='1'}
             >
@@ -4840,7 +4843,7 @@ export default function TacticsPage() {
         ) : (
         <>
         {/* ── Default chips section (top) ───────────────────────── */}
-        <div style={{ fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', padding:'10px 12px 5px', marginBottom:4 }}>
+        <div style={{ fontSize:'calc(9px * var(--pz))', fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', padding:'10px 12px 5px', marginBottom:4 }}>
           Default chips
         </div>
         {['sleep', 'rest', 'buffer'].map((defaultId) => {
@@ -4849,7 +4852,7 @@ export default function TacticsPage() {
             <div key={defaultId} className="flex items-center gap-1 px-2 py-1">
               <button
                 type="button"
-                style={{ flex:1, padding:'6px 10px', textAlign:'left', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', borderRadius:4, border:'none', cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', transition:'opacity .1s', backgroundColor: meta.color, color: chipContrastColour(meta.color) }}
+                style={{ flex:1, padding:'6px 10px', textAlign:'left', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:'calc(11px * var(--pz))', fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', borderRadius:4, border:'none', cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', transition:'opacity .1s', backgroundColor: meta.color, color: chipContrastColour(meta.color) }}
                 onClick={() => handleProjectSelection(defaultId)}
               >
                 {meta.label}
@@ -4869,7 +4872,7 @@ export default function TacticsPage() {
         <div style={{ height:1, background:'rgba(200,174,198,0.35)', margin:'4px 0' }} />
 
         {/* ── Project chips section ─────────────────────────────── */}
-        <div style={{ fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', padding:'6px 12px 5px', marginBottom:4 }}>
+        <div style={{ fontSize:'calc(9px * var(--pz))', fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', padding:'6px 12px 5px', marginBottom:4 }}>
           Project chips
         </div>
 
@@ -4885,7 +4888,7 @@ export default function TacticsPage() {
                   <div className="flex items-center gap-1 px-2 py-1">
                     <button
                       type="button"
-                      style={{ flex:1, padding:'6px 10px', textAlign:'left', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', borderRadius:4, border:'none', cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', transition:'opacity .1s', backgroundColor: projColour, color: chipContrastColour(projColour) }}
+                      style={{ flex:1, padding:'6px 10px', textAlign:'left', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:'calc(11px * var(--pz))', fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', borderRadius:4, border:'none', cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', transition:'opacity .1s', backgroundColor: projColour, color: chipContrastColour(projColour) }}
                       onClick={() => handleProjectSelection(project.id)}
                     >
                       {project.label}
@@ -4905,12 +4908,12 @@ export default function TacticsPage() {
             })}
           </ul>
         ) : (
-          <div style={{ padding:'4px 12px 6px', fontSize:11, color:'#9E9E9E', fontFamily:"'DM Sans',-apple-system,sans-serif" }}>No projects added to plan</div>
+          <div style={{ padding:'4px 12px 6px', fontSize:'calc(11px * var(--pz))', color:'#9E9E9E', fontFamily:"'DM Sans',-apple-system,sans-serif" }}>No projects added to plan</div>
         )}
 
         {/* ── Custom chips section ──────────────────────────────── */}
         <div style={{ height:1, background:'rgba(200,174,198,0.35)', margin:'4px 0' }} />
-        <div style={{ fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', padding:'6px 12px 5px', marginBottom:4 }}>
+        <div style={{ fontSize:'calc(9px * var(--pz))', fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', padding:'6px 12px 5px', marginBottom:4 }}>
           Custom chips
         </div>
         {customChips.length ? (
@@ -4922,7 +4925,7 @@ export default function TacticsPage() {
                   <div className="flex items-center gap-1 px-2 py-1">
                     <button
                       type="button"
-                      style={{ flex:1, padding:'6px 10px', textAlign:'left', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', borderRadius:4, border:'none', cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', transition:'opacity .1s', backgroundColor: customColour, color: chipContrastColour(customColour) }}
+                      style={{ flex:1, padding:'6px 10px', textAlign:'left', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:'calc(11px * var(--pz))', fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', borderRadius:4, border:'none', cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', transition:'opacity .1s', backgroundColor: customColour, color: chipContrastColour(customColour) }}
                       onClick={() => handleProjectSelection(project.id)}
                     >
                       {project.label.toUpperCase()}
@@ -4954,7 +4957,7 @@ export default function TacticsPage() {
         <div style={{ padding:'4px 8px 8px' }}>
           <button
             type="button"
-            style={{ width:'100%', padding:'7px 12px', background:'transparent', border:'1px solid transparent', borderRadius:8, cursor:'pointer', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:13, fontWeight:400, color:'#616161', textAlign:'left', transition:'border-color .15s, color .15s, background .15s' }}
+            style={{ width:'100%', padding:'7px 12px', background:'transparent', border:'1px solid transparent', borderRadius:8, cursor:'pointer', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:'calc(13px * var(--pz))', fontWeight:400, color:'#616161', textAlign:'left', transition:'border-color .15s, color .15s, background .15s' }}
             onMouseEnter={e=>{ e.currentTarget.style.borderColor='var(--brand-hover-bd)'; e.currentTarget.style.background='var(--brand-hover-bg)'; e.currentTarget.style.color='var(--brand-deep)'; }}
             onMouseLeave={e=>{ e.currentTarget.style.borderColor='transparent'; e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#616161'; }}
             onClick={handleCreateCustomProject}
@@ -4983,7 +4986,7 @@ export default function TacticsPage() {
               <div style={{ height:1, background:'rgba(200,174,198,0.35)', margin:'4px 0' }} />
               <div style={{ padding:'0 8px 4px' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 4px' }}>
-                  <span style={{ flex:1, paddingLeft:4, fontSize:11, color:'#9E9E9E', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentLabel}</span>
+                  <span style={{ flex:1, paddingLeft:4, fontSize:'calc(11px * var(--pz))', color:'#9E9E9E', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentLabel}</span>
                   <button
                     type="button"
                     title="Rename chip"
@@ -5007,13 +5010,13 @@ export default function TacticsPage() {
 
         {/* ── Schedule chips section ────────────────────────────── */}
         <div style={{ height:1, background:'rgba(200,174,198,0.35)', margin:'4px 0' }} />
-        <div style={{ fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', padding:'6px 12px 5px', marginBottom:4 }}>
+        <div style={{ fontSize:'calc(9px * var(--pz))', fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', padding:'6px 12px 5px', marginBottom:4 }}>
           Schedule chips
         </div>
         <div style={{ padding:'3px 8px 7px' }}>
           <button
             type="button"
-            style={{ display:'flex', width:'100%', alignItems:'center', gap:8, padding:'7px 12px', background:'transparent', border:'1px solid transparent', borderRadius:8, cursor:'pointer', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:13, fontWeight:400, color:'#616161', transition:'border-color .15s, color .15s, background .15s' }}
+            style={{ display:'flex', width:'100%', alignItems:'center', gap:8, padding:'7px 12px', background:'transparent', border:'1px solid transparent', borderRadius:8, cursor:'pointer', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:'calc(13px * var(--pz))', fontWeight:400, color:'#616161', transition:'border-color .15s, color .15s, background .15s' }}
             onMouseEnter={e=>{ e.currentTarget.style.borderColor='var(--brand-hover-bd)'; e.currentTarget.style.background='var(--brand-hover-bg)'; e.currentTarget.style.color='var(--brand-deep)'; }}
             onMouseLeave={e=>{ e.currentTarget.style.borderColor='transparent'; e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#616161'; }}
             onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent(PLAN_PANEL_NAV_EVENT, { detail: { view: 'schedule' } })); }}
@@ -5805,7 +5808,7 @@ export default function TacticsPage() {
                         ...(isDragOver ? { borderTop: '2px solid #111111' } : {}),
                       }}
                     >
-                      <span style={{ opacity: 0.45, fontSize: '11px', lineHeight: 1, userSelect: 'none', textAlign: 'center' }}>⠿</span>
+                      <span style={{ opacity: 0.45, fontSize:'calc(11px * var(--pz))', lineHeight: 1, userSelect: 'none', textAlign: 'center' }}>⠿</span>
                       <span style={{ textAlign: 'center' }}>{row.label}</span>
                     </td>
                     {displayedWeekDays.map((day, idx) => {

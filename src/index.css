@@ -3,6 +3,13 @@
 @import "tailwindcss";
 
 :root {
+  /* ── Page zoom ──
+     The active page publishes its size scale here via usePageScaleVar
+     (src/hooks/usePageSize.js). Any page content — including portalled
+     menus/popovers — sizes text and widths with calc(Npx * var(--pz))
+     so the whole page participates in zoom. Defaults to 1 (100%). */
+  --pz: 1;
+
   /* ── Brand (blue theme) ── */
   --brand:          #5A84D8;
   --brand-deep:     #2B59B6;

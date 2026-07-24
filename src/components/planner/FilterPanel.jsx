@@ -12,7 +12,7 @@ const PANEL_STYLE = {
   border: '1px solid #e8e8e4',
   borderRadius: 6,
   boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 12px rgba(72,50,75,0.10)',
-  fontSize: 12,
+  fontSize: 'calc(12px * var(--pz))',
 };
 
 const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
@@ -29,7 +29,7 @@ function FilterItem({ name, isSelected, onClick }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         width: '100%', height: 26, padding: '0 10px 0 12px',
         background: isSelected ? 'var(--sel-row)' : (hovered ? 'var(--brand-hover-bg)' : '#ffffff'),
-        fontFamily: FONT, fontSize: 12,
+        fontFamily: FONT, fontSize: 'calc(12px * var(--pz))',
         fontWeight: isSelected ? 600 : 400,
         color: isSelected ? '#1F1F1F' : '#383838',
         border: 'none', cursor: 'pointer', textAlign: 'left',
@@ -60,7 +60,7 @@ function ClearBtn({ hasActive, onClear }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '3px 8px',
         color: isHoverActive ? 'var(--brand-deep)' : (hasActive ? '#999' : '#CFCFCF'),
-        fontFamily: FONT, fontSize: 11, fontWeight: 500,
+        fontFamily: FONT, fontSize: 'calc(11px * var(--pz))', fontWeight: 500,
         cursor: hasActive ? 'pointer' : 'default',
         transition: 'color 0.15s', userSelect: 'none',
       }}
@@ -72,7 +72,7 @@ function ClearBtn({ hasActive, onClear }) {
 
 function FilterEmptyState({ label }) {
   return (
-    <div style={{ padding: '8px 12px', color: '#888', fontFamily: FONT, fontSize: 12 }}>
+    <div style={{ padding: '8px 12px', color: '#888', fontFamily: FONT, fontSize: 'calc(12px * var(--pz))' }}>
       No {label} available
     </div>
   );

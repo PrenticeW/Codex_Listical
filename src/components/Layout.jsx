@@ -42,7 +42,7 @@ function DebugSnapshotButton() {
       style={{
         position: 'fixed',
         bottom: '24px',
-        right: '24px',
+        left: '24px',
         zIndex: 999998,
         width: '40px',
         height: '40px',
