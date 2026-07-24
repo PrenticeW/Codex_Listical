@@ -12,10 +12,55 @@ import GearPanel from './GearPanel';
 import SystemPanel from './SystemPanel';
 import PlanPanel from './PlanPanel';
 import GoalPanel from './GoalPanel';
+import { saveSiteSnapshot } from '../lib/snapshotStorage';
 
 function YearKeyedOutlet() {
   const { currentYear } = useYear();
   return <Outlet key={currentYear} />;
+}
+
+// DEBUG — remove before launch (MED-3). Manual snapshot trigger for testing.
+// Calls saveSiteSnapshot directly for the current year. Note the 25s
+// min-interval inside saveSiteSnapshot still applies: if the last snapshot
+// is under 25s old the call silently skips and no toast appears.
+function DebugSnapshotButton() {
+  const { currentYear } = useYear();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      title="Take snapshot now (debug)"
+      onClick={async () => {
+        if (busy || currentYear == null) return;
+        setBusy(true);
+        try {
+          await saveSiteSnapshot(currentYear);
+        } finally {
+          setBusy(false);
+        }
+      }}
+      style={{
+        position: 'fixed',
+        bottom: '24px',
+        right: '24px',
+        zIndex: 999998,
+        width: '40px',
+        height: '40px',
+        borderRadius: '50%',
+        border: 'none',
+        background: busy ? '#94a3b8' : '#1e293b',
+        color: '#f8fafc',
+        fontSize: '18px',
+        lineHeight: '40px',
+        textAlign: 'center',
+        cursor: busy ? 'wait' : 'pointer',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+        padding: 0,
+      }}
+    >
+      📸
+    </button>
+  );
 }
 
 /**
@@ -82,6 +127,7 @@ export default function Layout() {
             <TaskRowPanelProvider>
               <YearProvider>
                 <YearKeyedOutlet />
+                <DebugSnapshotButton />
                 <GearPanel />
                 <SystemPanel />
                 <PlanPanel />
