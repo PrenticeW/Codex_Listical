@@ -215,7 +215,7 @@ function StepBtn({ onClick, disabled, children }) {
       onClick={onClick}
       disabled={disabled}
       style={{
-        width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
         cursor: disabled ? 'not-allowed' : 'pointer',
         fontSize: 18, fontWeight: 300, color: disabled ? C.textFaint : C.textDim,
         background: '#fafaf8', border: 'none',
@@ -233,20 +233,20 @@ function StepBtn({ onClick, disabled, children }) {
 function StepperRow({ icon, label, value, onDecrease, onIncrease, decreaseDisabled, increaseDisabled }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
       border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 16px',
     }}>
-      <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         {icon}
         {label}
       </span>
       <div style={{
-        display: 'flex', alignItems: 'center',
+        display: 'flex', alignItems: 'center', flex: 1, maxWidth: 200,
         border: `1px solid ${C.border}`, borderRadius: 7, overflow: 'hidden',
       }}>
         <StepBtn onClick={onDecrease} disabled={decreaseDisabled}>−</StepBtn>
         <span style={{
-          minWidth: 38, textAlign: 'center', fontSize: 14, fontWeight: 500, color: C.text,
+          flex: 1, minWidth: 38, textAlign: 'center', fontSize: 14, fontWeight: 500, color: C.text,
           borderLeft: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`,
           lineHeight: '28px',
         }}>

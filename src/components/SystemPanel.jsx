@@ -87,18 +87,23 @@ function SectionLabel({ children }) {
 }
 
 // Standard action button row
-function ActionBtn({ icon, label, disabled, onClick, rightSlot, style }) {
+function ActionBtn({ icon, label, disabled, active, onClick, rightSlot, style }) {
+  // Resting styles depend on state: `active` (e.g. a row is selected and this
+  // action applies to it) renders in brand colours to signal availability.
+  const restBorder = active ? 'var(--brand-bd)' : C.border;
+  const restColor = disabled ? C.textFaint : active ? 'var(--brand-deep)' : C.textDim;
+  const restBg = active ? 'var(--brand-tint)' : 'none';
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
+        background: restBg, border: `1px solid ${restBorder}`, borderRadius: 10,
         padding: '13px 16px', fontFamily: FONT, fontSize: 14, fontWeight: 400,
-        color: disabled ? C.textFaint : C.textDim,
+        color: restColor,
         cursor: disabled ? 'not-allowed' : 'pointer',
-        transition: 'border-color 0.15s, color 0.15s',
+        transition: 'border-color 0.15s, color 0.15s, background 0.15s',
         width: '100%', textAlign: 'left', marginBottom: 8,
         opacity: disabled ? 0.5 : 1,
         ...style,
@@ -111,9 +116,9 @@ function ActionBtn({ icon, label, disabled, onClick, rightSlot, style }) {
         }
       }}
       onMouseLeave={e => {
-        e.currentTarget.style.borderColor = C.border;
-        e.currentTarget.style.color = disabled ? C.textFaint : C.textDim;
-        e.currentTarget.style.background = 'none';
+        e.currentTarget.style.borderColor = restBorder;
+        e.currentTarget.style.color = restColor;
+        e.currentTarget.style.background = restBg;
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -230,9 +235,12 @@ function CheckBadge({ visible }) {
   );
 }
 
-// Input + Add button pair (used in Insert section)
-function InsertControl({ inputId, value, onChange, onAdd }) {
-  const active = value !== '' && parseInt(value) > 0;
+// Input + Add button pair (used in Insert section).
+// Plain text input in numeric mode — no native number-input spinners. The
+// field is always editable; `requiresSelection` only gates the Add button.
+function InsertControl({ inputId, value, onChange, onAdd, requiresSelection }) {
+  const armed = !requiresSelection; // a row is selected — signal via the Add button
+  const active = armed && value !== '' && parseInt(value, 10) > 0;
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 6,
@@ -241,11 +249,14 @@ function InsertControl({ inputId, value, onChange, onAdd }) {
       borderLeft: `1px solid ${C.border}`,
     }}>
       <input
-        type="number"
-        min="1"
-        max="999"
+        id={inputId}
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={3}
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={e => onChange(e.target.value.replace(/\D/g, ''))}
+        onKeyDown={e => { if (e.key === 'Enter' && active) onAdd(); }}
         style={{
           width: 44, height: 26,
           border: `1px solid ${C.border}`, borderRadius: 7,
@@ -261,11 +272,12 @@ function InsertControl({ inputId, value, onChange, onAdd }) {
         disabled={!active}
         style={{
           flex: 1, height: 26,
-          background: active ? 'var(--brand-deep)' : C.border,
+          background: armed ? 'var(--brand-deep)' : C.border,
           border: 'none', borderRadius: 7,
           fontFamily: FONT, fontSize: 13, fontWeight: 500,
           color: '#fff', cursor: active ? 'pointer' : 'default',
-          transition: 'background 0.15s',
+          opacity: armed && !active ? 0.75 : 1,
+          transition: 'background 0.15s, opacity 0.15s',
         }}
       >
         Add
@@ -317,7 +329,7 @@ function InsertSection() {
     return () => window.removeEventListener(SYSTEM_PANEL_SELECTION_EVENT, handler);
   }, []);
 
-  const rowDependentStyle = !hasSelection ? { opacity: 0.38, pointerEvents: 'none' } : {};
+
 
   const handleAddTasks = () => {
     const count = parseInt(taskCount, 10);
@@ -336,19 +348,19 @@ function InsertSection() {
         display: 'flex', alignItems: 'center',
         border: `1px solid ${C.border}`, borderRadius: 10,
         overflow: 'hidden', marginBottom: 8,
-        ...rowDependentStyle,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, padding: '13px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, padding: '13px 16px', color: C.textDim }}>
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-            <path d="M1 3.5h11M1 6.5h11M1 9.5h7" stroke={C.textDim} strokeWidth="1.2" strokeLinecap="round"/>
-            <path d="M10 8v4M8 10h4" stroke={C.textDim} strokeWidth="1.2" strokeLinecap="round"/>
+            <path d="M1 3.5h11M1 6.5h11M1 9.5h7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+            <path d="M10 8v4M8 10h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
           </svg>
-          <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim }}>Insert task rows</span>
+          <span style={{ fontFamily: FONT, fontSize: 14 }}>Insert task rows</span>
         </div>
         <InsertControl
           value={taskCount}
           onChange={setTaskCount}
           onAdd={handleAddTasks}
+          requiresSelection={!hasSelection}
         />
       </div>
 
@@ -357,18 +369,18 @@ function InsertSection() {
         display: 'flex', alignItems: 'center',
         border: `1px solid ${C.border}`, borderRadius: 10,
         overflow: 'hidden', marginBottom: 8,
-        ...rowDependentStyle,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, padding: '13px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, padding: '13px 16px', color: C.textDim }}>
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-            <path d="M2 2h4v4H2zM7 2h4v4H7zM2 7h4v4H2z" stroke={C.textDim} strokeWidth="1.2" strokeLinejoin="round"/>
-            <path d="M9 7v4M7 9h4" stroke={C.textDim} strokeWidth="1.2" strokeLinecap="round"/>
+            <path d="M2 2h4v4H2zM7 2h4v4H7zM2 7h4v4H2z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+            <path d="M9 7v4M7 9h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
           </svg>
-          <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim }}>Insert label rows</span>
+          <span style={{ fontFamily: FONT, fontSize: 14 }}>Insert label rows</span>
         </div>
         <InsertControl
           value={labelCount}
           onChange={setLabelCount}
+          requiresSelection={!hasSelection}
           onAdd={() => {
             const count = parseInt(labelCount, 10);
             if (count > 0) {
@@ -428,9 +440,10 @@ function InsertSection() {
           </svg>
         }
         label="Duplicate rows"
+        disabled={!hasSelection}
         onClick={() => { dispatchSystemAction('duplicateRow'); flashDup(); }}
         rightSlot={<CheckBadge visible={dupFlash} />}
-        style={{ marginBottom: 0, ...rowDependentStyle }}
+        style={{ marginBottom: 0 }}
       />
     </div>
   );
@@ -815,7 +828,7 @@ function PageSection() {
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export default function SystemPanel() {
-  const { isOpen, open, close } = useSystemPanel();
+  const { isOpen, close } = useSystemPanel();
   const { selectedTask, closePanel } = useTaskRowPanel();
   const [navBottom, setNavBottom] = useState(0);
   const { pathname } = useLocation();
@@ -853,11 +866,6 @@ export default function SystemPanel() {
       ro.disconnect();
     };
   }, [isOpen]);
-
-  // Auto-open the panel when a task row is selected
-  useEffect(() => {
-    if (selectedTask) open();
-  }, [selectedTask, open]);
 
   // Escape: if showing task detail, go back to system content; otherwise close panel
   useEffect(() => {

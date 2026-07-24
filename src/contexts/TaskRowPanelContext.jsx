@@ -22,6 +22,27 @@ export const TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT = 'task-row-detail-reload-hist
 /** Custom event fired to close the panel (e.g. clicking a row number cell). */
 export const TASK_ROW_PANEL_CLOSE_EVENT = 'task-row-panel-close';
 
+/**
+ * Structural row types that have no meaningful detail view. Clicking one of
+ * these while the panel is open used to show a near-empty card with a Back
+ * button; instead we clear the selection so the panel slides back to the top
+ * System view.
+ * (Mirrors getStructuralRowMessage in components/planner/TaskRowPanel.jsx.)
+ */
+const STRUCTURAL_ROW_TYPES = new Set([
+  'projectHeader',
+  'subprojectHeader',
+  'archivedProjectHeader',
+  'projectGeneral',
+  'archivedProjectGeneral',
+  'projectUnscheduled',
+  'archivedProjectUnscheduled',
+  'subprojectGeneral',
+  'subprojectUnscheduled',
+  'archiveHeader',
+  'archiveRow',
+]);
+
 export function TaskRowPanelProvider({ children }) {
   const [selectedTask, setSelectedTask] = useState(null);
 
@@ -36,11 +57,18 @@ export function TaskRowPanelProvider({ children }) {
   // Listen for open events dispatched from anywhere (e.g. TaskRow task-cell click)
   useEffect(() => {
     const handler = (e) => {
-      if (e.detail?.task) openPanel(e.detail.task);
+      if (!e.detail?.task) return;
+      // Structural rows (project headers, section rows, archive rows) have no
+      // detail view — return to the top panel instead of showing a blank one.
+      if (STRUCTURAL_ROW_TYPES.has(e.detail.task._rowType)) {
+        closePanel();
+        return;
+      }
+      openPanel(e.detail.task);
     };
     window.addEventListener(TASK_ROW_DETAIL_EVENT, handler);
     return () => window.removeEventListener(TASK_ROW_DETAIL_EVENT, handler);
-  }, [openPanel]);
+  }, [openPanel, closePanel]);
 
   // Listen for close events dispatched from anywhere (e.g. row number cell click)
   useEffect(() => {

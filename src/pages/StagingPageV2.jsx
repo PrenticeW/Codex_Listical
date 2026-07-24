@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { getContrastTextColor } from '../utils/colorUtils';
 import { SquarePlus } from 'lucide-react';
 import { GOAL_PANEL_ACTION_EVENT, GOAL_PANEL_STATE_EVENT, GOAL_PANEL_SELECTION_EVENT, GOAL_PANEL_ROW_SELECTION_EVENT } from '../components/GoalPanel';
-import { useGoalPanel } from '../contexts/GoalPanelContext';
 import { useYear } from '../contexts/YearContext';
 import { useAuth } from '../contexts/AuthContext';
 import NavigationBar from '../components/planner/NavigationBar';
@@ -97,7 +96,6 @@ const calculateTimeTotals = (planEntries) => {
 export default function StagingPageV2() {
   const navigate = useNavigate();
   const { currentYear, draftYear, activeYear, allYears, isCurrentYearArchived, refreshMetadata, switchToYear } = useYear();
-  const { isOpen: goalPanelOpen, open: openGoalPanel } = useGoalPanel();
 
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
@@ -1237,7 +1235,6 @@ export default function StagingPageV2() {
                             // the Goal section instead of the Row section
                             clearSelection();
                             fireGoalSelection(item);
-                            if (!goalPanelOpen) openGoalPanel();
                           }}
                         >
                           <div className="w-full flex items-center gap-2 font-semibold min-w-0 overflow-hidden" style={{ maskImage: 'linear-gradient(to right, black 97%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to right, black 97%, transparent 100%)' }}>

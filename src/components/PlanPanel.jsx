@@ -475,20 +475,20 @@ function Btn({ icon, label, disabled, onClick }) {
 function StepperRow({ icon, label, value, onDecrease, onIncrease, decreaseDisabled, increaseDisabled }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
       border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 16px',
     }}>
-      <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         {icon}
         {label}
       </span>
       <div style={{
-        display: 'flex', alignItems: 'center',
+        display: 'flex', alignItems: 'center', flex: 1, maxWidth: 200,
         border: `1px solid ${C.border}`, borderRadius: 7, overflow: 'hidden',
       }}>
         <StepBtn onClick={onDecrease} disabled={decreaseDisabled}>−</StepBtn>
         <span style={{
-          minWidth: 38, textAlign: 'center', fontSize: 14, fontWeight: 500, color: C.text,
+          flex: 1, minWidth: 38, textAlign: 'center', fontSize: 14, fontWeight: 500, color: C.text,
           borderLeft: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`,
           lineHeight: '28px',
         }}>
@@ -509,7 +509,7 @@ function StepBtn({ onClick, disabled, children }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
         cursor: disabled ? 'not-allowed' : 'pointer',
         fontSize: 18, fontWeight: 300, color: disabled ? C.textFaint : (hovered ? C.text : C.textDim),
         background: hovered && !disabled ? C.borderLight : '#fafaf8',
@@ -1653,7 +1653,8 @@ export default function PlanPanel() {
   }, [isOpen, close]);
 
   // Listen for chip selection events from TacticsPage.
-  // Auto-opens the panel when a chip is selected; slides back to main on deselect.
+  // Updates panel content when a chip is selected (panel opens only via the
+  // nav panel button); slides back to main on deselect.
   useEffect(() => {
     const handler = (e) => {
       const chip = e.detail?.chip ?? null;
@@ -1662,7 +1663,6 @@ export default function PlanPanel() {
       if (chips) setAllChips(chips);
       setAddChipAnchorRect(null);
       if (chip) {
-        open();
         goToMainRef.current?.();
       } else if (panelView !== 'main' && panelView !== 'schedule') {
         goToMainRef.current?.();
@@ -1671,7 +1671,7 @@ export default function PlanPanel() {
     window.addEventListener(PLAN_PANEL_CHIP_EVENT, handler);
     return () => window.removeEventListener(PLAN_PANEL_CHIP_EVENT, handler);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, panelView]);
+  }, [panelView]);
 
   // View transitions
   const openView = useCallback((view, setup) => {
