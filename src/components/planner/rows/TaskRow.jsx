@@ -419,7 +419,13 @@ const TaskRow = React.memo(function TaskRow({
                       </div>
                     </div>
                   ) : columnId === 'project' ? (
-                    <div className="w-full flex items-center" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
+                    /* h-full + overflow-hidden: the pill's natural height (line box +
+                       borders) can exceed the fixed 24px row by a fraction of a CSS px;
+                       at browser zoom below 100% that rounds to a whole device pixel and
+                       the pill visibly paints over the row borders. Clipping to the cell
+                       keeps pills inside their rows at every zoom/DPR. Same fix applied
+                       to the subproject, status and estimate wrappers below. */
+                    <div className="w-full h-full flex items-center overflow-hidden" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
                       {value && value !== '' && value !== '-' ? (
                         <div
                           className="text-xs flex items-center justify-between gap-1 flex-1"
@@ -474,7 +480,7 @@ const TaskRow = React.memo(function TaskRow({
                       )}
                     </div>
                   ) : columnId === 'subproject' ? (
-                    <div className="w-full flex items-center relative" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
+                    <div className="w-full h-full flex items-center relative overflow-hidden" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
                       {!value && currentProject && currentProject !== '-' && projectSubprojectsMap[currentProject]?.some(s => s !== '-') && (
                         <div
                           style={{
@@ -515,7 +521,7 @@ const TaskRow = React.memo(function TaskRow({
                       </div>
                     </div>
                   ) : columnId === 'status' ? (
-                    <div className="w-full flex items-center" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
+                    <div className="w-full h-full flex items-center overflow-hidden" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
                       {value && value !== '' ? (
                         <div
                           className="text-xs flex items-center justify-between gap-1 flex-1"
@@ -567,7 +573,7 @@ const TaskRow = React.memo(function TaskRow({
                       )}
                     </div>
                   ) : columnId === 'estimate' ? (
-                    <div className="w-full flex items-center" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
+                    <div className="w-full h-full flex items-center overflow-hidden" style={{ paddingLeft: '3px', paddingRight: '3px' }}>
                       <div
                         className="flex items-center justify-between gap-1 flex-1"
                         style={{
