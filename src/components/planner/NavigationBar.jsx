@@ -122,7 +122,7 @@ export default function NavigationBar({
     >
       {/* Left: wordmark */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <img src={wordmark} alt="Tacular" style={{ height: 18, width: 'auto', display: 'block' }} />
+        <img src={wordmark} alt="Tacular" style={{ height: 32, width: 'auto', display: 'block' }} />
         {listicalButton && <div style={{ position: 'relative' }}>{listicalButton}</div>}
       </div>
 
