@@ -167,7 +167,7 @@ const TaskRow = React.memo(function TaskRow({
                   // Row-number gutter is Mulish per the design handover
                   // (NUM_FONT in reference/SystemView.jsx) -- not Tailwind's
                   // generic `font-mono` stack, which was never the intended font.
-                  style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
+                  style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, lineHeight: 1, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
                   onClick={(e) => {
                     handleRowNumberClick(e, rowId);
                     window.dispatchEvent(new CustomEvent(TASK_ROW_PANEL_CLOSE_EVENT));
@@ -597,7 +597,7 @@ const TaskRow = React.memo(function TaskRow({
                       </div>
                     </div>
                   ) : columnId === 'timeValue' ? (
-                    <div className="w-full text-right" style={{ fontFamily: "'Mulish', sans-serif", paddingRight: '8px' }}>
+                    <div className="w-full text-right" style={{ fontFamily: "'Mulish', sans-serif", lineHeight: 1, paddingRight: '8px' }}>
                       {value || '\u00A0'}
                     </div>
                   ) : isDayColumn ? (

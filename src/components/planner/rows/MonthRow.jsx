@@ -124,6 +124,11 @@ function MonthRow({
                 // cellFontSize -- this is chrome text, not a data cell. This
                 // prop was previously accepted but never actually used here.
                 fontSize: `${headerFontSize}px`,
+                // Mulish's default line-height ('normal') is much taller than
+                // this fixed-height row -- flex align-items:center then
+                // centers that tall line box, not the glyphs, so the text
+                // sits visibly high. Tighten to the font-size itself.
+                lineHeight: 1,
                 minHeight: `${rowHeight}px`,
                 backgroundColor: 'transparent',
                 borderTop: '1.5px solid black',

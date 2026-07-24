@@ -482,7 +482,7 @@ const TableRow = React.memo(function TableRow({
                       // Row-number gutter is Mulish per the design handover
                       // (NUM_FONT in reference/SystemView.jsx) -- not Tailwind's
                       // generic `font-mono` stack, which was never the intended font.
-                      style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
+                      style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, lineHeight: 1, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
                       onClick={(e) => handleRowNumberClick(e, rowId)}
                       onContextMenu={(e) => handleCellContextMenu?.(e, rowId, 'rowNum')}
                       title="Drag to reorder"
@@ -592,6 +592,10 @@ const TableRow = React.memo(function TableRow({
                       color: 'white',
                       fontWeight: '600',
                       fontSize: `${cellFontSize}px`,
+                      // DM Sans's default line-height ('normal') is taller
+                      // than this fixed-height row, so flex align-items:center
+                      // centers the tall line box rather than the glyphs.
+                      lineHeight: 1,
                       paddingLeft: '8px',
                     }}
                   >
@@ -652,6 +656,7 @@ const TableRow = React.memo(function TableRow({
                       color: 'white',
                       fontWeight: '600',
                       fontSize: `${cellFontSize}px`,
+                      lineHeight: 1,
                       paddingLeft: '8px',
                     }}
                   >
@@ -912,6 +917,7 @@ const TableRow = React.memo(function TableRow({
                       // NUM_FONT / Mulish in the design handover).
                       fontFamily: "'Mulish', sans-serif",
                       fontSize: `${cellFontSize}px`,
+                      lineHeight: 1,
                       paddingLeft: '3px',
                       paddingRight: '3px',
                       justifyContent: justifyContent,
@@ -945,6 +951,7 @@ const TableRow = React.memo(function TableRow({
                           // overriding inheritance -- match the surrounding
                           // Mulish ledger figure explicitly.
                           fontFamily: "'Mulish', sans-serif",
+                          lineHeight: 1,
                           width: '100%',
                           height: '100%',
                           border: 'none',
@@ -1093,6 +1100,7 @@ const TableRow = React.memo(function TableRow({
                           paddingRight: '8px',
                           fontFamily: "'Mulish', sans-serif",
                           fontSize: '9px',
+                          lineHeight: 1,
                           color: 'rgba(255,255,255,0.55)',
                           letterSpacing: '0.06em',
                           textTransform: 'uppercase',
@@ -1166,6 +1174,7 @@ const TableRow = React.memo(function TableRow({
                 // headerFontSize zoom scale, same as the existing min/max
                 // convention this extends.
                 fontSize: (isDailyMinRow || isDailyMaxRow) ? '0.6875rem' : (isDayRow ? '10.5px' : isDayOfWeekRow ? '11px' : `${cellFontSize}px`),
+                lineHeight: 1,
                 fontStyle: (isDailyMinRow || isDailyMaxRow) ? 'italic' : undefined,
                 backgroundColor: bgColor,
                 borderTop: isDayRow ? '1.5px solid black' : (isDayOfWeekRow ? '1.5px solid black' : undefined),
@@ -1236,6 +1245,7 @@ const TableRow = React.memo(function TableRow({
                     fontFamily: "'Mulish', sans-serif",
                     fontSize: `${headerFontSize}px`,
                     fontWeight: 600,
+                    lineHeight: 1,
                     color: 'rgba(237,235,221,0.45)',
                   }}
                 >
@@ -1547,6 +1557,7 @@ const TableRow = React.memo(function TableRow({
                           paddingRight: '8px',
                           fontFamily: "'Mulish', sans-serif",
                           fontSize: '9px',
+                          lineHeight: 1,
                           color: 'rgba(255,255,255,0.55)',
                           letterSpacing: '0.06em',
                           textTransform: 'uppercase',
@@ -1603,7 +1614,7 @@ const TableRow = React.memo(function TableRow({
                   }}
                 >
                   {/* Matches reference/SystemView.jsx H7 dayTotals span (fontSize: 11) -- fixed chrome size, not the cellFontSize zoom scale. */}
-                  <span className="text-right flex-1 pr-2" style={{ fontFamily: "'Mulish', sans-serif", fontSize: '11px', fontWeight: 'bold' }}>{value}</span>
+                  <span className="text-right flex-1 pr-2" style={{ fontFamily: "'Mulish', sans-serif", fontSize: '11px', fontWeight: 'bold', lineHeight: 1 }}>{value}</span>
                   <FilterIcon
                     size={10}
                     active={isFilterActive}

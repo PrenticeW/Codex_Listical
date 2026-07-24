@@ -187,7 +187,7 @@ export default function ProjectRow({
                   // Row-number gutter is Mulish per the design handover
                   // (NUM_FONT in reference/SystemView.jsx) -- not Tailwind's
                   // generic `font-mono` stack, which was never the intended font.
-                  style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
+                  style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, lineHeight: 1, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
                   onClick={(e) => {
                     handleRowNumberClick(e, rowId);
                     window.dispatchEvent(new CustomEvent(TASK_ROW_PANEL_CLOSE_EVENT));
@@ -300,6 +300,11 @@ export default function ProjectRow({
                       paddingLeft: '8px',
                       paddingRight: '3px',
                       fontWeight: (isHeader || isSubprojectHeader) ? '600' : '400',
+                      // DM Sans's default line-height ('normal') is taller
+                      // than this fixed-height row -- flex align-items:center
+                      // then centers that tall line box rather than the
+                      // glyphs, so the header band text sits visibly high.
+                      lineHeight: 1,
                       outline: isEditing ? '2px solid black' : 'none',
                       outlineOffset: '-2px',
                     }}
@@ -534,6 +539,7 @@ export default function ProjectRow({
                     paddingLeft: '8px',
                     paddingRight: '3px',
                     fontWeight: '600',
+                    lineHeight: 1,
                     outline: isEditing ? '2px solid black' : 'none',
                     outlineOffset: '-2px',
                     overflow: 'hidden',
@@ -645,6 +651,7 @@ export default function ProjectRow({
                   // Scheduled-total / quota figures are ledger content
                   // (matches NUM_FONT/Mulish in the design handover).
                   fontFamily: (columnId === 'estimate' || columnId === 'timeValue') ? "'Mulish', sans-serif" : undefined,
+                  lineHeight: (columnId === 'estimate' || columnId === 'timeValue') ? 1 : undefined,
                   fontWeight: isHeader && columnId === 'estimate' ? '600' : '400',
                   fontStyle: columnId === 'timeValue' ? 'italic' : 'normal',
                   justifyContent: columnId === 'estimate' ? 'flex-end' : 'flex-start',

@@ -152,6 +152,9 @@ function WeekRow({
                 // headerFontSize (12, matches design's H2 fontSize:12), not
                 // cellFontSize -- this is chrome text, not a data cell.
                 fontSize: `${headerFontSize}px`,
+                // See MonthRow.jsx -- Mulish's default line-height sits taller
+                // than this fixed-height row, pushing flex-centered text high.
+                lineHeight: 1,
                 minHeight: `${rowHeight}px`,
                 backgroundColor: 'transparent',
                 borderTop: '1.5px solid black',
@@ -174,6 +177,7 @@ function WeekRow({
                     fontFamily: "'Mulish', sans-serif",
                     fontSize: `${headerFontSize}px`,
                     fontWeight: 600,
+                    lineHeight: 1,
                     width: '90%',
                     textAlign: 'center',
                     background: 'transparent',
