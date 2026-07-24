@@ -76,6 +76,11 @@ export function peekTacticsCache(yearNumber) {
   const sk = chipsLayerKey(yearNumber, true);
   const tk = sendTsKey(yearNumber);
   const settingsRow = hasCached(CACHE_NS, ysk) ? getCached(CACHE_NS, ysk) : null;
+  // TacticsPage's cache-hit fast path renders liveChips from this peek and
+  // skips loadTacticsChipsState entirely, so this is a state-application
+  // moment: pin the tab's expected chips version to the one saved alongside
+  // the cached layer (HIGH-2 guard, same-browser multi-tab case).
+  if (hasCached(CACHE_NS, lk)) adoptLiveVersionFromCache(yearNumber);
   return {
     yearSettings: settingsRow ? yearSettingsRowToPayload(settingsRow) : null,
     columnWidths: settingsRow && Array.isArray(settingsRow.column_widths)
@@ -429,11 +434,39 @@ function customProjectPayloadToRow(custom, { userId, yearId, isSent }) {
 // explicit Send to System press, where last-press-wins is the right
 // semantic.
 
-// yearNumber -> last chips_live_version this client observed on the server.
-// Absent entry means this session has not yet read the live layer from the
-// DB (e.g. state hydrated from the localStorage cache mirror) — the first
-// save then does a fresh read + content compare before claiming a version.
+// yearNumber -> chips_live_version corresponding to the layer state this TAB
+// last loaded into React. Absent entry means this session has not yet read
+// the live layer at all — the first save then does a fresh read + content
+// compare before claiming a version.
+//
+// The version is ALSO persisted into the storage cache (companion key below,
+// mirrored to localStorage) alongside the layer itself. This matters for
+// same-browser multi-tab: tabs share the localStorage mirror, so a tab that
+// loads chips from cache never hits the DB — it must adopt the version that
+// was current WHEN THE CACHED LAYER IT IS LOADING WAS WRITTEN, not the DB's
+// current version, or a stale tab's save would pass the CAS and wipe the
+// other tab's chips. Adoption happens at state-application moments only
+// (peekTacticsCache and readChipsLayer), never at save time.
 const _chipLiveVersions = new Map();
+
+const chipsLiveVersionKey = (yearNumber) => `chips_live_version:${yearNumber}`;
+
+function recordLiveVersion(yearNumber, version) {
+  if (yearNumber == null) return;
+  _chipLiveVersions.set(yearNumber, version);
+  setCached(CACHE_NS, chipsLiveVersionKey(yearNumber), version);
+}
+
+// Pin this tab's expected version to the one stored alongside the cached
+// layer it is about to render. Called from the cache-hit load paths.
+function adoptLiveVersionFromCache(yearNumber) {
+  if (yearNumber == null) return;
+  const key = chipsLiveVersionKey(yearNumber);
+  if (hasCached(CACHE_NS, key)) {
+    const v = getCached(CACHE_NS, key);
+    if (typeof v === 'number') _chipLiveVersions.set(yearNumber, v);
+  }
+}
 
 // JSON.stringify with recursively sorted keys, skipping undefined-valued
 // entries (a fresh DB read carries e.g. `startMinutes: undefined` while the
@@ -560,12 +593,15 @@ async function fetchChipsLayerFromDb({ userId, yearId, isSent }) {
 async function readChipsLayer({ userId, yearId, yearNumber, isSent }) {
   if (yearNumber != null) {
     const key = chipsLayerKey(yearNumber, isSent);
-    if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
+    if (hasCached(CACHE_NS, key)) {
+      if (!isSent) adoptLiveVersionFromCache(yearNumber);
+      return getCached(CACHE_NS, key);
+    }
   }
   const { result, version } = await fetchChipsLayerFromDb({ userId, yearId, isSent });
   if (yearNumber != null) {
     setCached(CACHE_NS, chipsLayerKey(yearNumber, isSent), result);
-    if (!isSent) _chipLiveVersions.set(yearNumber, version);
+    if (!isSent) recordLiveVersion(yearNumber, version);
   }
   return result;
 }
@@ -634,7 +670,7 @@ async function writeChipsLayerInner({ userId, yearId, yearNumber, isSent, payloa
       const fresh = await fetchChipsLayerFromDb({ userId, yearId, isSent: false });
       return { conflict: true, fresh: fresh.result, freshVersion: fresh.version };
     }
-    _chipLiveVersions.set(yearNumber, newVersion);
+    recordLiveVersion(yearNumber, newVersion);
   }
 
   // Replace-the-layer pattern: delete every chip and custom project at this
@@ -759,7 +795,7 @@ export async function saveTacticsChipsState(payload, yearNumber) {
         `[tactics-chips] save conflict for year ${yearNumber}: another client saved first; refreshing from server`,
       );
       setCached(CACHE_NS, chipsLayerKey(yearNumber, false), res.fresh);
-      _chipLiveVersions.set(yearNumber, res.freshVersion);
+      recordLiveVersion(yearNumber, res.freshVersion);
       // Dedicated conflict event: TacticsPage listens for this and replaces
       // its chip state with the server layer (the storage-update event below
       // only reaches read-side consumers like useTacticsChips). Note the
