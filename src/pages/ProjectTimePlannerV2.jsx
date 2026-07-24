@@ -2949,7 +2949,7 @@ export default function ProjectTimePlannerV2() {
         // gradient hairlines round to zero device pixels and vanish when the
         // effective DPR drops below 1 (browser zoom < 100% on a 1x monitor).
         // The SVG stroke antialiases instead, so the grid survives any zoom.
-        'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2732%27 height=%2732%27%3E%3Cpath d=%27M0 0.5 H32 M0.5 0 V32%27 stroke=%27rgba(130,155,210,0.5)%27 stroke-width=%271%27/%3E%3C/svg%3E")',
+        'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2732%27 height=%2732%27%3E%3Cpath d=%27M0 0.5 H32 M0.5 0 V32%27 stroke=%27rgba(130,155,210,0.15)%27 stroke-width=%271%27/%3E%3C/svg%3E")',
       ].join(','),
       backgroundSize: '100% 100%, 100% 100%, 100% 100%, 100% 100%, 32px 32px',
       backgroundPosition: '0 0, 0 0, 0 0, 0 0, -1px -1px',

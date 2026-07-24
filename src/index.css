@@ -19,7 +19,7 @@
   --sel-row-overlay:   rgba(43,89,182,0.12);
 
   /* ── Page grid ── */
-  --grid-line: rgba(130,155,210,0.50);
+  --grid-line: rgba(130,155,210,0.15);
 
   /* ── Type ── */
   --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -114,6 +114,13 @@ table td.selected-cell.sel-edge-top::after    { border-top: 2px solid var(--sel-
 table td.selected-cell.sel-edge-bottom::after { border-bottom: 2px solid var(--sel-ring); }
 table td.selected-cell.sel-edge-left::after   { border-left: 2px solid var(--sel-ring); }
 table td.selected-cell.sel-edge-right::after  { border-right: 2px solid var(--sel-ring); }
+
+/* Fallback: a selected cell with no sel-edge-* modifiers and no fill (e.g. the
+   Plan page's single-cell selection, which doesn't compute selection edges)
+   gets the full outline, matching the pre-refactor behavior. */
+table td.selected-cell:not(.sel-fill):not(.sel-edge-top):not(.sel-edge-bottom):not(.sel-edge-left):not(.sel-edge-right)::after {
+  border: 2px solid var(--sel-ring);
+}
 
 /* Dropdown positioning - hint to browser to show options below */
 table td select {

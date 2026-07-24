@@ -17,11 +17,13 @@
   position: relative;
   overflow: hidden;
   background-color: #ffffff;
+  /* SVG grid (not linear-gradient) so 1px lines render crisply on
+     high-res/retina screens — matches the fix on the app pages.
+     Stroke colour is hard-coded because CSS vars can't reach into a
+     data URL; keep in sync with --grid-line in src/index.css. */
   background-image:
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 32px 32px, 32px 32px;
-  background-position: -1px -1px, -1px -1px;
+    url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2732%27 height=%2732%27%3E%3Cpath d=%27M0 0.5 H32 M0.5 0 V32%27 stroke=%27rgba(130,155,210,0.15)%27 stroke-width=%271%27/%3E%3C/svg%3E");
+  background-size: 32px 32px;
   font-family: var(--font-sans);
   color: var(--ink);
 }

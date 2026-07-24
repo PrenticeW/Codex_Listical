@@ -101,8 +101,8 @@ export default function PanelShell({
         width: effectiveWidth,
         backgroundColor: '#fff',
         backgroundImage: [
-          `linear-gradient(${MAUVE(0.50)} 1px, transparent 1px)`,
-          `linear-gradient(90deg, ${MAUVE(0.50)} 1px, transparent 1px)`,
+          `linear-gradient(${MAUVE(0.15)} 1px, transparent 1px)`,
+          `linear-gradient(90deg, ${MAUVE(0.15)} 1px, transparent 1px)`,
         ].join(','),
         backgroundSize: '32px 32px',
         backgroundPosition: '-1px -1px',
