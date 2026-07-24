@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import wordmark from '../../assets/brand/tacular-wordmark-black.svg';
 import './AuthShell.css';
 
 /**
@@ -13,7 +14,7 @@ import './AuthShell.css';
  * Purely presentational: takes no storage or routing dependencies, so it
  * can't violate the storage-module / cross-page-event rules in CLAUDE.md.
  */
-export default function AuthShell({ eyebrow, maxWidth = 440, children, footer, wordmarkFont }) {
+export default function AuthShell({ eyebrow, maxWidth = 440, children, footer }) {
   return (
     <div className="auth-stage">
       <span className="auth-cross" style={{ left: 54, top: 54 }} />
@@ -28,7 +29,7 @@ export default function AuthShell({ eyebrow, maxWidth = 440, children, footer, w
           <AuthCorners />
           <div className="auth-wm-standalone">
             <div className="auth-wm-row">
-              <span className="auth-wm" style={wordmarkFont ? { fontFamily: wordmarkFont } : undefined}>Tacular</span>
+              <img className="auth-wm" src={wordmark} alt="Tacular" />
             </div>
           </div>
           <div className="auth-card-frame-inner">

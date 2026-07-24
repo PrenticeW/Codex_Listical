@@ -7,6 +7,7 @@ import { useGearPanel } from '../../contexts/GearPanelContext';
 import { useSystemPanel } from '../../contexts/SystemPanelContext';
 import { usePlanPanel } from '../../contexts/PlanPanelContext';
 import { useGoalPanel } from '../../contexts/GoalPanelContext';
+import wordmark from '../../assets/brand/tacular-wordmark-black.svg';
 
 // Map routes to page identifiers and display names
 const PAGE_CONFIG = {
@@ -121,9 +122,7 @@ export default function NavigationBar({
     >
       {/* Left: wordmark */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <span style={{ fontFamily: 'var(--font-wordmark)', fontSize: 21, fontWeight: 800, letterSpacing: '-0.02em', textTransform: 'uppercase', color: '#1F1F1F' }}>
-          Tacular
-        </span>
+        <img src={wordmark} alt="Tacular" style={{ height: 18, width: 'auto', display: 'block' }} />
         {listicalButton && <div style={{ position: 'relative' }}>{listicalButton}</div>}
       </div>
 
