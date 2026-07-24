@@ -8,12 +8,13 @@ Legend: `[ ]` open · `[~]` needs verification against live deployment · `[x]` 
 
 ## CRITICAL — fix before real multi-user traffic
 
-- [~] **CRIT-1 · Cross-user data leak through the shared browser cache** — **fixed in code 2026-07-24, needs live verification after deploy**
+- [x] **CRIT-1 · Cross-user data leak through the shared browser cache** — **fixed and verified live 2026-07-24**
   - **Where:** `src/lib/storageCache.js` (helper key builders in `tacticsStorage.js`, `stagingStorage.js`, `tacticsMetricsStorage.js`, `utils/planner/storage.js` unchanged)
   - **What (was):** The `cw-cache:` layer mirrored Supabase rows into device-global `localStorage` with no user id in any key (`${module}::${table}:${yearNumber}`), cleared only on `SIGNED_OUT` / `USER_DELETED`. If A's session ended without a clean sign-out, B signing in on the same browser got cache hits on A's data (confirmed on the live deployment 2026-07-24: all 11 `cw-cache:` keys un-scoped).
   - **Fix applied (storageCache.js rewrite, callers untouched):** localStorage keys are now `cw-cache:${userId}::${namespace}::${key}`. Nothing hydrates blind at module init — the module adopts a user (a) synchronously via a best-effort read of the `sb-*-auth-token` user id, and (b) on every auth event carrying a session (`INITIAL_SESSION`/`SIGNED_IN`/`TOKEN_REFRESHED`/...). Adopting a different user than the cache owner clears memory and deletes the previous user's mirror — covering account switches where no `SIGNED_OUT` fires. Legacy un-scoped entries are deleted on first hydration. Persistence is disabled while signed out (memory-only).
   - **Verified so far:** ESLint + `vite build` clean; 15-assertion Node harness covering the B-after-A leak path, legacy-entry purge, warm-start hydration, cold-start-without-token, sign-out clearing, and `clearForYear`/`invalidate` under the new prefix — all pass.
-  - **Still to verify on the live deployment (after deploy):** keys appear as `cw-cache:<uid>::...`; legacy un-scoped keys are purged on first load; warm first paint still works after hard refresh; sign-out leaves zero `cw-cache:` keys.
+  - **Verified live (2026-07-24, post-deploy):** first load purged all 11 legacy un-scoped keys and rewrote the mirror as `cw-cache:<uid>::...` (all keys scoped to the signed-in user). Planted a foreign user's scoped entry and a legacy un-scoped entry → both deleted on the next load, neither readable. App renders with warm first paint after hard refresh; zero console errors.
+  - **Caveats:** (1) A still-open tab running the pre-deploy bundle keeps writing old-format un-scoped keys until it is refreshed (observed once during verification); the new code never reads them and purges them on the next load, so no leak path — just refresh any old tabs. (2) The sign-out sweep (zero `cw-cache:` keys after logout, no persistence while signed out) is covered by the Node harness but was not exercised live; it will be covered by the GearPanel logout end-to-end test already on the "needs testing before launch" list in `docs/known-issues.md`.
 
 ---
 
