@@ -390,11 +390,11 @@ const TableRow = React.memo(function TableRow({
             left: 0,
             width: `${fixedRegionBackdropWidth}px`,
             height: `${rowHeight}px`,
-            // Filter row's fixed columns are the design handover's dark
-            // chrome (#24252B) -- the other pinned calendar rows (Month/
-            // Week/Day/Day-of-week/Daily Min/Max/Total) stay pure black
-            // per reference/SystemView.jsx.
-            backgroundColor: isFilterRow ? '#24252B' : 'black',
+            // Filter row's fixed columns now match the Subproject row's
+            // pale-blue chrome (#DCE4F5) instead of the old dark chrome --
+            // the other pinned calendar rows (Month/Week/Day/Day-of-week/
+            // Daily Min/Max/Total) stay pure black per reference/SystemView.jsx.
+            backgroundColor: isFilterRow ? '#DCE4F5' : 'black',
             // Negative z-index so it paints behind the row's normal-flow
             // (non-positioned) <td> cells, and behind the sticky gutter
             // cell too — it's purely a gap backstop, never meant to be on
@@ -1218,11 +1218,11 @@ const TableRow = React.memo(function TableRow({
                 boxSizing: 'border-box',
                 position: 'sticky',
                 left: 0,
-                // Dark chrome band per the design handover (reference/
-                // SystemView.jsx H8 row uses var(--bento-dark) = #24252B for
-                // the whole column-names row, including its "#" gutter cell)
-                // — was mismatched light blue before.
-                backgroundColor: '#24252B',
+                // "#" gutter now matches the Subproject row's gutter
+                // treatment (backgroundColor #E8ECF5, text #6A7A9E) instead
+                // of the old dark chrome band, so it reads as one family
+                // with the Subproject rows below it.
+                backgroundColor: '#E8ECF5',
                 zIndex: rowNumZIndex,
               }}
               className="p-0"
@@ -1231,12 +1231,12 @@ const TableRow = React.memo(function TableRow({
                 className="h-full flex items-center justify-center"
                 style={{
                   minHeight: `${rowHeight}px`,
-                  backgroundColor: '#24252B',
+                  backgroundColor: '#E8ECF5',
                   // Separates this cell from the adjacent checkbox column --
                   // without it, the two same-colored cells read as one
                   // merged block since the checkbox cell has no borderLeft
                   // at this row index.
-                  borderRight: '1px solid rgba(237,235,221,0.14)',
+                  borderRight: '1px solid #d3d3d3',
                 }}
                 onClick={(e) => handleRowNumberClick(e, rowId)}
               >
@@ -1246,7 +1246,7 @@ const TableRow = React.memo(function TableRow({
                     fontSize: `${headerFontSize}px`,
                     fontWeight: 600,
                     lineHeight: 1,
-                    color: 'rgba(237,235,221,0.45)',
+                    color: '#6A7A9E',
                   }}
                 >
                   #
@@ -1328,13 +1328,13 @@ const TableRow = React.memo(function TableRow({
                 style={{
                   position: 'relative',
                   minHeight: `${rowHeight}px`,
-                  // Dark chrome band per the design handover -- the filter
-                  // row is where column names + filter icons now live
-                  // (reference/SystemView.jsx H8), and that row is always
-                  // #24252B regardless of theme, not the previous light
-                  // blue / dead row.index<4 check.
-                  backgroundColor: '#24252B',
-                  borderRight: isTimeHeaderCell ? '1.5px solid black' : '1px solid rgba(237,235,221,0.14)',
+                  // Pale-blue chrome matching the Subproject row's merged
+                  // cell (#DCE4F5) -- the filter row is where column names +
+                  // filter icons now live (reference/SystemView.jsx H8), and
+                  // it now shares the same colour family as the Subproject
+                  // rows directly below it instead of the old dark chrome.
+                  backgroundColor: '#DCE4F5',
+                  borderRight: isTimeHeaderCell ? '1.5px solid black' : '1px solid #d3d3d3',
                   // Design handover (reference/SystemView.jsx H8 row) uses
                   // `padding: '0 8px'` uniformly on these cells -- was 6px/2px.
                   paddingLeft: columnLabel ? '8px' : '0',
@@ -1346,7 +1346,10 @@ const TableRow = React.memo(function TableRow({
                     style={{
                       fontSize: `${headerFontSize}px`,
                       fontWeight: 700,
-                      color: '#EDEBDD',
+                      // Dark ink -- matches the Subproject row's default
+                      // (unset/inherited black) text now that the
+                      // background is pale blue rather than dark chrome.
+                      color: '#1F2933',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -1360,9 +1363,10 @@ const TableRow = React.memo(function TableRow({
                     size={14}
                     active={isFilterActive}
                     activeColor={FILTER_ACTIVE_COLOR}
-                    // Inactive: warm off-white ink token used elsewhere on
-                    // this dark chrome band (see borderRight/color above).
-                    inactiveColor="rgba(237,235,221,0.5)"
+                    // Inactive: same muted blue-grey used for the Subproject
+                    // row's gutter text/chevron (#6A7A9E / #8090A8), so the
+                    // filter icon reads correctly against the pale-blue fill.
+                    inactiveColor="#6A7A9E"
                     onClick={filterClickHandler}
                     title={`Filter ${columnId}`}
                   />
@@ -1392,7 +1396,7 @@ const TableRow = React.memo(function TableRow({
                       document.body.style.cursor = 'col-resize';
                       document.body.style.userSelect = 'none';
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(237,235,221,0.25)'; }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.1)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                     className="column-resizer"
                     style={{
@@ -1444,10 +1448,10 @@ const TableRow = React.memo(function TableRow({
                 style={{
                   minHeight: `${rowHeight}px`,
                   // Keep this consistent with the rest of the filter row's
-                  // #24252B dark chrome instead of switching to pure black
-                  // once it reaches the day columns.
-                  backgroundColor: '#24252B',
-                  borderBottom: '1.5px solid black',
+                  // #DCE4F5 pale-blue chrome instead of switching to pure
+                  // black once it reaches the day columns.
+                  backgroundColor: '#DCE4F5',
+                  borderBottom: '1px solid #d3d3d3',
                 }}
               />
             </td>
