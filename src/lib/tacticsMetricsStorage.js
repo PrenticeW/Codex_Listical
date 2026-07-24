@@ -38,6 +38,9 @@ export function peekTacticsMetricsCache(yearNumber) {
   if (yearNumber == null) return { live: null, sent: null };
   const lk = metricsKey(yearNumber, false);
   const sk = metricsKey(yearNumber, true);
+  // Applying cached live state to the UI → pin this tab's expected version
+  // to the one stored alongside that cached row (see _metricsLiveVersions).
+  if (hasCached(CACHE_NS, lk)) adoptLiveVersionFromCachedRow(yearNumber, getCached(CACHE_NS, lk));
   return {
     live: hasCached(CACHE_NS, lk) ? dbRowToPayload(getCached(CACHE_NS, lk)) : null,
     sent: hasCached(CACHE_NS, sk) ? dbRowToPayload(getCached(CACHE_NS, sk)) : null,
@@ -161,10 +164,105 @@ function dbRowToPayload(row) {
   };
 }
 
+// --- live-row optimistic concurrency (HIGH-2 guard) ---------------------
+//
+// The live metrics save rewrites the whole (user, year, is_sent=false) row,
+// so a save from a stale client used to silently overwrite every metric
+// another device had written. Guard: tactics_metrics.live_version (migration
+// 20260724000002) is bumped with a compare-and-set on every live-row update.
+// On CAS failure the save is dropped and the row refetched; saveTacticsMetrics
+// broadcasts the fresh state so read-side consumers converge on server truth.
+// Live metrics are DERIVED from chip state (the Plan page recomputes and
+// autosaves them on every chip change), so no page-side conflict handler is
+// needed: once the chips layer converges (it has its own guard), the next
+// recompute re-saves correct metrics under the adopted version.
+//
+// The sent snapshot stays unguarded on purpose — explicit Send to System is
+// last-press-wins, same as chips.
+//
+// yearNumber -> live_version corresponding to the live row this TAB last
+// loaded/saved. The version rides on the row itself, so the cached row (which
+// is mirrored to localStorage) carries it too: a tab hydrating from cache
+// adopts the version that was current when that cached row was written, not
+// the DB's current version — otherwise a stale tab's save would pass the CAS
+// and wipe the other tab's metrics. Adoption happens at state-application
+// moments only (peekTacticsMetricsCache and cache-hit reads), never at save
+// time. Mirrors _chipLiveVersions in tacticsStorage.js.
+const _metricsLiveVersions = new Map();
+
+function adoptLiveVersionFromCachedRow(yearNumber, row) {
+  if (yearNumber == null) return;
+  const v = row?.live_version;
+  if (typeof v === 'number') _metricsLiveVersions.set(yearNumber, v);
+}
+
+// Serializes live-metrics saves per year so concurrent read-then-write
+// cycles can't interleave (writeMetricsRow reads the existing row before
+// deciding update vs insert). Mirrors the chip save queue.
+const _metricsSaveQueues = new Map();
+
+async function withMetricsSaveLock(key, fn) {
+  const prior = _metricsSaveQueues.get(key);
+  const run = (async () => {
+    if (prior) {
+      try { await prior; } catch { /* swallow prior errors so they don't block follow-on saves */ }
+    }
+    return fn();
+  })();
+  _metricsSaveQueues.set(key, run);
+  try {
+    return await run;
+  } finally {
+    if (_metricsSaveQueues.get(key) === run) _metricsSaveQueues.delete(key);
+  }
+}
+
+// JSON.stringify with recursively sorted keys — postgres jsonb reorders
+// object keys, so a naive stringify of the jsonb columns would compare
+// unequal on every round-trip. Mirrors stableStringify in
+// utils/planner/storage.js.
+function stableStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value === undefined ? null : value);
+}
+
+const METRICS_COLUMN_KEYS = [
+  'project_weekly_quotas', 'daily_bounds',
+  'weekly_total_available_minutes', 'weekly_total_working_minutes',
+];
+
+function metricsColumnsEqual(columns, row) {
+  if (!row) return false;
+  for (const key of METRICS_COLUMN_KEYS) {
+    if (stableStringify(columns[key] ?? null) !== stableStringify(row[key] ?? null)) return false;
+  }
+  return true;
+}
+
+async function fetchLiveMetricsRowFromDb({ userId, yearId }) {
+  const { data, error } = await supabase
+    .from('tactics_metrics')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('year_id', yearId)
+    .eq('is_sent', false)
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? null;
+}
+
 async function readMetricsRow({ userId, yearId, yearNumber, isSent, bypassCache = false }) {
   if (yearNumber != null && !bypassCache) {
     const key = metricsKey(yearNumber, isSent);
-    if (hasCached(CACHE_NS, key)) return getCached(CACHE_NS, key);
+    if (hasCached(CACHE_NS, key)) {
+      const cached = getCached(CACHE_NS, key);
+      if (!isSent) adoptLiveVersionFromCachedRow(yearNumber, cached);
+      return cached;
+    }
   }
   const { data, error } = await supabase
     .from('tactics_metrics')
@@ -177,16 +275,20 @@ async function readMetricsRow({ userId, yearId, yearNumber, isSent, bypassCache 
   const row = data ?? null;
   if (yearNumber != null) {
     setCached(CACHE_NS, metricsKey(yearNumber, isSent), row);
+    if (!isSent) adoptLiveVersionFromCachedRow(yearNumber, row);
   }
   return row;
 }
 
 async function writeMetricsRow({ userId, yearId, yearNumber, isSent, columns }) {
+  if (!isSent) {
+    return withMetricsSaveLock(`${userId}:${yearNumber ?? 'global'}`, () =>
+      writeLiveMetricsRowGuarded({ userId, yearId, yearNumber, columns }));
+  }
   const existing = await readMetricsRow({ userId, yearId, yearNumber, isSent });
   let updatedRow;
   if (existing) {
-    const update = { ...columns };
-    if (isSent) update.sent_at = new Date().toISOString();
+    const update = { ...columns, sent_at: new Date().toISOString() };
     const { data, error } = await supabase
       .from('tactics_metrics')
       .update(update)
@@ -200,9 +302,9 @@ async function writeMetricsRow({ userId, yearId, yearNumber, isSent, columns }) 
       user_id: userId,
       year_id: yearId,
       is_sent: isSent,
+      sent_at: new Date().toISOString(),
       ...columns,
     };
-    if (isSent) insert.sent_at = new Date().toISOString();
     const { data, error } = await supabase
       .from('tactics_metrics')
       .insert(insert)
@@ -214,6 +316,94 @@ async function writeMetricsRow({ userId, yearId, yearNumber, isSent, columns }) 
   if (yearNumber != null) {
     setCached(CACHE_NS, metricsKey(yearNumber, isSent), updatedRow);
   }
+  return undefined;
+}
+
+/**
+ * Guarded live-row write (HIGH-2). Returns undefined on success, or
+ * `{ conflict: true, fresh }` when another client saved first — the caller
+ * drops the stale payload and broadcasts `fresh` (a raw DB row or null)
+ * instead.
+ */
+async function writeLiveMetricsRowGuarded({ userId, yearId, yearNumber, columns }) {
+  let expected = yearNumber != null ? _metricsLiveVersions.get(yearNumber) : null;
+
+  if (expected == null) {
+    // No version observed this session (module reloaded, or nothing loaded
+    // yet). Fetch the row fresh and compare it to the last state this client
+    // knew: a difference means another client wrote since — conflict, don't
+    // overwrite. Mirrors the chips first-save path.
+    const knownBefore = yearNumber != null ? getCached(CACHE_NS, metricsKey(yearNumber, false)) : undefined;
+    const fresh = await fetchLiveMetricsRowFromDb({ userId, yearId });
+    // knownBefore === null means this tab observed "no live row yet"; a row
+    // appearing since is another client's insert — also a conflict.
+    if (
+      knownBefore !== undefined && fresh &&
+      (knownBefore === null ||
+        !metricsColumnsEqual(
+          Object.fromEntries(METRICS_COLUMN_KEYS.map((k) => [k, knownBefore[k] ?? null])),
+          fresh,
+        ))
+    ) {
+      return { conflict: true, fresh };
+    }
+    expected = fresh?.live_version ?? 0;
+  }
+
+  // Skip the write when nothing changed relative to the row this tab last
+  // observed — a no-op rewrite would still bump the version and force every
+  // other tab into a spurious conflict.
+  const cachedRow = yearNumber != null ? getCached(CACHE_NS, metricsKey(yearNumber, false)) : undefined;
+  if (cachedRow && cachedRow.live_version === expected && metricsColumnsEqual(columns, cachedRow)) {
+    return undefined;
+  }
+
+  // Compare-and-set on the live row's version: claim the next version or
+  // lose to a faster client. Keyed on the (user, year, is_sent=false) slice
+  // so no row-id fetch is needed (one_live_metrics_per_year guarantees at
+  // most one match).
+  const { data, error } = await supabase
+    .from('tactics_metrics')
+    .update({ ...columns, live_version: expected + 1 })
+    .eq('user_id', userId)
+    .eq('year_id', yearId)
+    .eq('is_sent', false)
+    .eq('live_version', expected)
+    .select();
+  if (error) throw error;
+
+  let updatedRow;
+  if (Array.isArray(data) && data.length > 0) {
+    updatedRow = data[0];
+  } else if (expected === 0) {
+    // No row matched and none was expected: first-ever live save for this
+    // year. A concurrent insert from another client loses on the
+    // one_live_metrics_per_year unique index (23505) — treat that as a
+    // conflict rather than throwing.
+    const { data: insData, error: insErr } = await supabase
+      .from('tactics_metrics')
+      .insert({ user_id: userId, year_id: yearId, is_sent: false, live_version: 1, ...columns })
+      .select()
+      .single();
+    if (insErr) {
+      if (insErr.code === '23505') {
+        const fresh = await fetchLiveMetricsRowFromDb({ userId, yearId });
+        return { conflict: true, fresh };
+      }
+      throw insErr;
+    }
+    updatedRow = insData;
+  } else {
+    // Version mismatch: another client bumped it first.
+    const fresh = await fetchLiveMetricsRowFromDb({ userId, yearId });
+    return { conflict: true, fresh };
+  }
+
+  if (yearNumber != null) {
+    setCached(CACHE_NS, metricsKey(yearNumber, false), updatedRow);
+    adoptLiveVersionFromCachedRow(yearNumber, updatedRow);
+  }
+  return undefined;
 }
 
 function dispatchEvent(payload, yearNumber) {
@@ -261,7 +451,24 @@ export async function saveTacticsMetrics(payload, yearNumber) {
       return;
     }
     const columns = payloadToDbColumns(payload);
-    await writeMetricsRow({ userId, yearId, yearNumber, isSent: false, columns });
+    const res = await writeMetricsRow({ userId, yearId, yearNumber, isSent: false, columns });
+    if (res?.conflict) {
+      // Another client saved the live row since we last read it. Drop this
+      // stale save, adopt the server's state, and broadcast it so read-side
+      // consumers converge. No page-side snap is needed: live metrics are
+      // derived from chip state, and the chips layer has its own guard —
+      // once chips converge, the next recompute re-saves correct metrics
+      // under the version adopted here.
+      console.warn(
+        `[tactics-metrics] save conflict for year ${yearNumber}: another client saved first; refreshing from server`,
+      );
+      if (yearNumber != null) {
+        setCached(CACHE_NS, metricsKey(yearNumber, false), res.fresh ?? null);
+        adoptLiveVersionFromCachedRow(yearNumber, res.fresh);
+      }
+      dispatchEvent(dbRowToPayload(res.fresh), yearNumber);
+      return;
+    }
     dispatchEvent(payload, yearNumber);
   } catch (error) {
     console.error('Failed to save tactics metrics', error);

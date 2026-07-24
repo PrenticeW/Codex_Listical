@@ -221,6 +221,65 @@ function isCachedFormatValid(cached) {
   });
 }
 
+// --- diff-save bookkeeping (HIGH-2 guard, ported from utils/planner/storage.js) ---
+//
+// _knownProjectIds: `projects` row ids this client's state incorporates
+// (populated by loadStagingState on both the cache-hit and DB-fetch paths,
+// and maintained by saves). A desired row missing from the DB is only
+// INSERTed when its id is NOT known — a known id missing from the DB means
+// another client deleted it, and re-inserting it would resurrect the
+// deletion from this tab's stale snapshot. Symmetrically, a DB row absent
+// from this tab's desired state is only DELETEd when its id IS known — an
+// unknown id means another client inserted it after this tab's last load,
+// and deleting it would erase that write.
+const _knownProjectIds = new Map(); // yearNumber -> Set<id>
+
+function recordKnownIds(yearNumber, ids) {
+  if (yearNumber == null) return;
+  _knownProjectIds.set(yearNumber, new Set(ids));
+}
+
+// Serialize staging saves so concurrent read-diff-write cycles can't
+// interleave. saveStagingState reads the server's current rows, diffs them
+// against the desired state, and writes only the difference; two saves
+// running concurrently would both diff against the same pre-save snapshot
+// and double-apply. Mirrors _taskRowsSaveQueue in utils/planner/storage.js.
+let _stagingSaveQueue = Promise.resolve();
+
+// JSON.stringify with recursively sorted keys — postgres jsonb reorders
+// object keys, so a naive stringify of plan_table_entries would diff every
+// row. Mirrors stableStringify in utils/planner/storage.js.
+function stableStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value === undefined ? null : value);
+}
+
+// Columns the staging save owns. id/user_id/year_id are identity; anything
+// else produced by itemToDbRow is compared against the DB row so unchanged
+// rows are not rewritten (a rewrite of an unchanged row would clobber a
+// remote field edit this tab hasn't seen).
+const STAGING_DIFF_KEYS = [
+  'text', 'project_name', 'project_nickname', 'color',
+  'plan_table_visible', 'plan_table_collapsed', 'has_plan', 'added_to_plan',
+  'show_outcome_totals', 'show_action_times', 'is_simple_table',
+  'plan_reason_row_count', 'plan_outcome_row_count',
+  'plan_outcome_question_row_count', 'plan_needs_question_row_count',
+  'plan_needs_plan_row_count', 'plan_schedule_row_count',
+  'plan_subproject_row_count', 'plan_table_entries',
+  'is_archived', 'display_order',
+];
+
+function stagingRowDiffers(desired, dbRow) {
+  for (const key of STAGING_DIFF_KEYS) {
+    if (stableStringify(desired[key] ?? null) !== stableStringify(dbRow[key] ?? null)) return true;
+  }
+  return false;
+}
+
 function dispatchStagingEvent(payload, yearNumber) {
   if (typeof window === 'undefined') return;
   const detail = { ...(payload || {}), __eventYear: yearNumber };
@@ -248,6 +307,11 @@ export async function loadStagingState(yearNumber) {
       if (isCachedFormatValid(cached)) {
         // Cache entries are in the serialised { cells, _rowType, … } form —
         // safe to deserialise directly without a Supabase round-trip.
+        // Record the ids this state incorporates so the diff save knows
+        // which rows this tab has actually seen (see _knownProjectIds).
+        recordKnownIds(yearNumber, [
+          ...(cached.shortlist ?? []), ...(cached.archived ?? []),
+        ].map((item) => item?.id).filter(Boolean));
         return {
           shortlist: (cached.shortlist ?? []).map(deserializeItemFromCache),
           archived: (cached.archived ?? []).map(deserializeItemFromCache),
@@ -266,6 +330,7 @@ export async function loadStagingState(yearNumber) {
     if (!yearId) {
       const empty = { shortlist: [], archived: [] };
       setCached(CACHE_NS, cacheKey, empty);
+      recordKnownIds(yearNumber, []);
       return empty;
     }
 
@@ -290,6 +355,7 @@ export async function loadStagingState(yearNumber) {
     }
     const result = { shortlist, archived };
     setCached(CACHE_NS, cacheKey, result);
+    recordKnownIds(yearNumber, rows.map((r) => r.id));
     return result;
   } catch (error) {
     console.error('Failed to read staging shortlist', error);
@@ -310,13 +376,25 @@ export async function getStagingShortlist(yearNumber) {
 // --- public write API --------------------------------------------------
 
 /**
- * Save the full shortlist + archived state for a year. Performs a three-step
- * sync against the existing rows for the year:
+ * Save the full shortlist + archived state for a year.
  *
- *   1. Delete rows in the DB whose id is no longer in the payload.
- *   2. Upsert every row in the payload (shortlist + archived), tagging
- *      is_archived and display_order from the array position.
- *   3. Fire the staging-state-update event so listeners refresh.
+ * Diff-based save (HIGH-2, ported from the planner_rows pattern,
+ * 2026-07-24 — replaced the delete-everything-not-in-payload + upsert-all
+ * sync). Saves are serialized on a queue, then the server's current rows are
+ * read and only the difference is written, with _knownProjectIds guarding
+ * both directions:
+ *
+ *   - a DB row absent from this tab's state is deleted ONLY if this tab has
+ *     seen it (otherwise it was created on another device — leave it);
+ *   - a payload row missing from the DB is inserted ONLY if this tab has
+ *     never seen it on the server (otherwise another device deleted it —
+ *     don't resurrect it);
+ *   - rows whose columns match the DB are not rewritten, so a stale tab no
+ *     longer clobbers remote field edits on rows it didn't touch. Rows this
+ *     tab DID change remain last-write-wins at the row level — same accepted
+ *     trade-off as planner_rows.
+ *
+ * Fires the staging-state-update event after every successful save.
  *
  * Callers should debounce calls to this function — every invocation is a
  * round-trip to Supabase and unthrottled per-keystroke saves will saturate
@@ -325,7 +403,17 @@ export async function getStagingShortlist(yearNumber) {
  * @param {{ shortlist: object[], archived: object[] }} payload
  * @param {number} yearNumber
  */
-export async function saveStagingState(payload, yearNumber) {
+export function saveStagingState(payload, yearNumber) {
+  // Always run the next save regardless of whether the previous one threw,
+  // so a transient network error doesn't permanently block future saves.
+  _stagingSaveQueue = _stagingSaveQueue.then(
+    () => _saveStagingStateImpl(payload, yearNumber),
+    () => _saveStagingStateImpl(payload, yearNumber),
+  );
+  return _stagingSaveQueue;
+}
+
+async function _saveStagingStateImpl(payload, yearNumber) {
   try {
     if (!payload || typeof payload !== 'object') return;
 
@@ -349,32 +437,61 @@ export async function saveStagingState(payload, yearNumber) {
     ];
     const desiredIds = new Set(desiredRows.map((r) => r.id).filter(Boolean));
 
-    // Find ids already in the DB so we can compute deletions.
+    // Read the server's current rows (full rows, not just ids — the diff
+    // needs the column values) inside the serialized queue.
     const { data: existingRows, error: existingErr } = await supabase
       .from('projects')
-      .select('id')
+      .select('*')
       .eq('user_id', userId)
       .eq('year_id', yearId);
     if (existingErr) throw existingErr;
 
-    const idsToDelete = (existingRows ?? [])
-      .map((r) => r.id)
-      .filter((id) => !desiredIds.has(id));
+    const currentById = new Map((existingRows ?? []).map((r) => [r.id, r]));
+    // Fallback (save before any load this pageload — shouldn't happen, since
+    // autosave requires hydration): treat the server's rows as known, which
+    // reduces to last-writer-wins for deletes but still never resurrects.
+    const known = _knownProjectIds.get(yearNumber) || new Set(currentById.keys());
 
-    if (idsToDelete.length > 0) {
+    const toUpsert = [];
+    for (const d of desiredRows) {
+      const cur = currentById.get(d.id);
+      if (!cur) {
+        // Missing from the DB. Known id → another client deleted it since we
+        // last looked; do NOT resurrect it. Unknown id → a row this tab
+        // created.
+        if (!known.has(d.id)) toUpsert.push(d);
+      } else if (stagingRowDiffers(d, cur)) {
+        toUpsert.push(d);
+      }
+    }
+    const toDelete = [];
+    for (const id of currentById.keys()) {
+      // In the DB but not in this tab's state. Unknown id → another client
+      // inserted it since this tab's last load; leave it — the next
+      // loadStagingState will bring it into view.
+      if (!desiredIds.has(id) && known.has(id)) toDelete.push(id);
+    }
+
+    if (toDelete.length > 0) {
       const { error: deleteErr } = await supabase
         .from('projects')
         .delete()
-        .in('id', idsToDelete);
+        .eq('user_id', userId)
+        .in('id', toDelete);
       if (deleteErr) throw deleteErr;
     }
 
-    if (desiredRows.length > 0) {
+    if (toUpsert.length > 0) {
       const { error: upsertErr } = await supabase
         .from('projects')
-        .upsert(desiredRows, { onConflict: 'id' });
+        .upsert(toUpsert, { onConflict: 'id' });
       if (upsertErr) throw upsertErr;
     }
+
+    const nextKnown = new Set(known);
+    for (const d of toUpsert) { if (d.id) nextKnown.add(d.id); }
+    for (const id of toDelete) nextKnown.delete(id);
+    _knownProjectIds.set(yearNumber, nextKnown);
 
     // Schedule a snapshot after 30s of inactivity so the captured state
     // includes this edit but rapid/mid-thought edits don't produce partials.
