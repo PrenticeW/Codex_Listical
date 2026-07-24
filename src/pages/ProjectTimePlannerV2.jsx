@@ -10,6 +10,7 @@ import { Archive } from 'lucide-react';
 import { useYear } from '../contexts/YearContext';
 import usePlannerStorage from '../hooks/planner/usePlannerStorage';
 import usePageSize from '../hooks/usePageSize';
+import usePanelInset from '../hooks/usePanelInset';
 import usePlannerColumns from '../hooks/planner/usePlannerColumns';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
@@ -578,6 +579,11 @@ export default function ProjectTimePlannerV2() {
   const [isDragging, setIsDragging] = useState(false); // Track if user is dragging to select
   const [dragStartCell, setDragStartCell] = useState(null); // { rowId, columnId }
   const tableBodyRef = useRef(null);
+  // Space covered by an open side panel (Gear / System) on the right edge of
+  // the viewport. Applied as paddingRight on the table wrapper below so the
+  // horizontal scroll range extends past the panel and the last weeks can
+  // always be scrolled fully into view. Tracks live resize drags too.
+  const { inset: panelInset, isResizing: panelResizing } = usePanelInset();
   // Set to true by the panel archive action so the post-archive effect expands + scrolls
   const expandNextArchiveRef = useRef(false);
   // Always-current mirror of visibleDayColumns used inside the min/max effect and
@@ -2979,7 +2985,17 @@ export default function ProjectTimePlannerV2() {
         </div>
       )}
 
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-4 pb-4">
+      <div
+        className="flex-1 flex flex-col min-h-0 overflow-hidden pl-4 pb-4"
+        style={{
+          // Reserve space for the open side panel (matches its current width,
+          // including mid-drag) so the table's scroll viewport ends at the
+          // panel's left edge instead of running underneath it. Falls back to
+          // the page's own 16px gutter when no panel is open.
+          paddingRight: panelInset > 0 ? panelInset + 8 : 16,
+          transition: panelResizing ? 'none' : 'padding-right 0.25s cubic-bezier(0.4,0,0.2,1)',
+        }}
+      >
         <PlannerTable
           tableBodyRef={tableBodyRef}
         table={table}

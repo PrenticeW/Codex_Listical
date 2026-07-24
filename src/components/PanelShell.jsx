@@ -25,6 +25,15 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
+// Broadcast while the resize handle is being dragged so page content can
+// track the live panel width (see hooks/usePanelInset.js). detail is the
+// current width in px during the drag, or null once the drag ends.
+export const PANEL_LIVE_WIDTH_EVENT = 'panel-live-width';
+
+const emitLiveWidth = (value) => {
+  window.dispatchEvent(new CustomEvent(PANEL_LIVE_WIDTH_EVENT, { detail: value }));
+};
+
 const MAUVE = (a) => `rgba(130,155,210,${a})`;
 const EASE  = '0.25s cubic-bezier(0.4,0,0.2,1)';
 
@@ -57,6 +66,7 @@ export default function PanelShell({
     const delta = startXRef.current - e.clientX;
     const nextWidth = Math.min(maxWidth, Math.max(minWidth, startWidthRef.current + delta));
     setLiveWidth(nextWidth);
+    emitLiveWidth(nextWidth);
   }, [minWidth, maxWidth]);
 
   const handleMouseUp = useCallback(() => {
@@ -70,6 +80,7 @@ export default function PanelShell({
       if (current != null) onWidthChange?.(current);
       return null;
     });
+    emitLiveWidth(null);
   }, [handleMouseMove, onWidthChange]);
 
   const handleMouseDown = useCallback((e) => {
@@ -78,6 +89,7 @@ export default function PanelShell({
     startXRef.current = e.clientX;
     startWidthRef.current = width;
     setLiveWidth(width);
+    emitLiveWidth(width);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
     window.addEventListener('mousemove', handleMouseMove);

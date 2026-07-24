@@ -12,6 +12,7 @@ import { revertArchive } from '../utils/planner/revertArchive';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { ArchiveYearModal } from '../components/ArchiveYearModal';
 import usePageSize from '../hooks/usePageSize';
+import usePanelInset from '../hooks/usePanelInset';
 import {
   useShortlistState,
   usePlanTableState,
@@ -996,6 +997,19 @@ export default function StagingPageV2() {
   // has hit its floor, and that overflow width becomes the min-width for both
   // boxes. ResizeObserver re-checks on every card resize (i.e. window resize).
   const tableCardRef = useRef(null);
+
+  // Space covered by an open side panel (Goal / Gear) on the right edge of
+  // the viewport. Instead of a hardcoded 320px reservation, the goal table
+  // and prompt box shrink to exactly the panel's current width (tracking
+  // live resize drags too) and reclaim the full page width when no panel is
+  // open. `panelGap` is the visual gutter kept between content and the
+  // panel's left edge (or the page edge when closed).
+  const { inset: panelInset, isResizing: panelResizing } = usePanelInset();
+  const panelGap = 16;
+  const contentRightReserve = panelInset + panelGap;
+  const contentMaxWidthTransition = panelResizing
+    ? 'none'
+    : 'max-width 0.25s cubic-bezier(0.4,0,0.2,1)';
   const [boxMinWidth, setBoxMinWidth] = useState(null);
   useLayoutEffect(() => {
     const el = tableCardRef.current;
@@ -1122,7 +1136,10 @@ export default function StagingPageV2() {
           />
           <div
             style={{
-              maxWidth: 'calc(100% - 372px)',
+              // Right edge stays aligned with the table card below: same
+              // panel reserve, plus this box's own 36px marginLeft.
+              maxWidth: `calc(100% - ${contentRightReserve + 36}px)`,
+              transition: contentMaxWidthTransition,
               minWidth: boxMinWidth ? boxMinWidth - 36 : undefined,
               marginLeft: 36,
               background: '#fff',
@@ -1177,7 +1194,16 @@ export default function StagingPageV2() {
         <div className="px-4 pb-4" style={{ isolation: 'isolate' }}>
           <div
             ref={tableCardRef}
-            style={{ maxWidth: 'calc(100% - 336px)', minWidth: boxMinWidth ?? undefined, display: 'flex', flexDirection: 'column', gap: 8 }}
+            style={{
+              // Shrink to make room for the open panel at its current width;
+              // full page width (minus the gutter) when no panel is open.
+              maxWidth: `calc(100% - ${contentRightReserve}px)`,
+              transition: contentMaxWidthTransition,
+              minWidth: boxMinWidth ?? undefined,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+            }}
           >
               {shortlist.map((item) => {
                 const planEntries = clonePlanTableEntries(item.planTableEntries);
