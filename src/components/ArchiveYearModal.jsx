@@ -145,7 +145,7 @@ export function ArchiveYearModal({ isOpen, onClose, yearNumber }) {
               onClick={handleCancel}
               disabled={isArchiving}
               style={{ padding:'7px 16px', fontSize:13, fontWeight:500, color:'#616161', background:'transparent', border:'1px solid #e8e8e4', borderRadius:8, cursor: isArchiving ? 'not-allowed' : 'pointer', fontFamily:FONT, opacity: isArchiving ? 0.5 : 1, transition:'background .1s' }}
-              onMouseEnter={e=>{ if (!isArchiving) e.currentTarget.style.background='rgba(43,89,182,0.05)'; }}
+              onMouseEnter={e=>{ if (!isArchiving) e.currentTarget.style.background='color-mix(in srgb, var(--th-44) 5%, transparent)'; }}
               onMouseLeave={e=>e.currentTarget.style.background='transparent'}
             >
               Cancel

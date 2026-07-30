@@ -10,23 +10,51 @@
      so the whole page participates in zoom. Defaults to 1 (100%). */
   --pz: 1;
 
-  /* ── Brand (blue theme) ── */
-  --brand:          #5A84D8;
-  --brand-deep:     #2B59B6;
-  --brand-tint:     #E8F0FC;
-  --brand-ink:      #1E3F8A;
-  --brand-bd:       rgba(90,132,216,0.18);
-  --brand-hover-bg: rgba(43,89,182,0.06);
-  --brand-hover-bd: rgba(43,89,182,0.22);
+  /* ── Theme family inputs ──
+     The four palette steps of the active theme family (L68/60/52/44 from
+     the 120-swatch PALETTE in src/utils/staging/projectColour.js) plus the
+     per-family selection hue (SEL map, see src/lib/theme.js). Defaults are
+     the blue family; applyThemeFamily() overrides these five vars on
+     document.documentElement at runtime. Everything below derives from
+     them with color-mix, per the approved theme sampler
+     (Theme Families.html / theme-derived.css). */
+  --th-68: hsl(220, 62%, 68%);
+  --th-60: hsl(220, 62%, 60%);
+  --th-52: hsl(220, 62%, 52%);
+  --th-44: hsl(220, 62%, 44%);
+  --th-sel:      hsl(25, 78%, 52%); /* blue → orange L52 */
+  --th-sel-base: hsl(25, 78%, 60%); /* orange L60, base for the row wash */
 
-  /* ── Selection ── */
-  --sel-ring:          #2B59B6;
-  --sel-row:           #E8F0FC;
-  --sel-gutter:        #8090A8;
-  --sel-row-overlay:   rgba(43,89,182,0.12);
+  /* ── Derived theme roles (do not set directly — derive from inputs) ── */
+  --th-header:      color-mix(in srgb, var(--th-60) 62%, white);  /* project header band / Year pill / Daily Total */
+  --th-header-text: color-mix(in srgb, var(--th-44) 78%, black);
+  --th-section:     color-mix(in srgb, var(--th-60) 20%, white);  /* section subheader / filter row / day cell fill */
+  --th-min:         color-mix(in srgb, var(--th-60) 36%, white);  /* Daily Min band */
+  --th-max:         color-mix(in srgb, var(--th-60) 22%, white);  /* Daily Max band */
+  --th-min-line:    color-mix(in srgb, var(--th-60) 48%, white);
+  --th-gutter:      color-mix(in srgb, var(--th-60) 16%, #E4E4E4); /* row-number gutter */
+  --th-gutter-text: color-mix(in srgb, var(--th-44) 55%, #808080);
+  --th-gutter-line: color-mix(in srgb, var(--th-60) 24%, #D6D6D6);
+  --th-check:       var(--th-52);                                  /* checked checkbox */
+  --th-check-cell:  var(--th-max);                                 /* checked-cell wash */
+
+  /* ── Brand (derived from theme) ── */
+  --brand:          var(--th-60);
+  --brand-deep:     var(--th-44);
+  --brand-tint:     color-mix(in srgb, var(--th-60) 12%, white);
+  --brand-ink:      var(--th-header-text);
+  --brand-bd:       color-mix(in srgb, var(--th-60) 18%, transparent);
+  --brand-hover-bg: color-mix(in srgb, var(--th-44) 6%, transparent);
+  --brand-hover-bd: color-mix(in srgb, var(--th-44) 22%, transparent);
+
+  /* ── Selection (contrasting hue, per-family SEL map) ── */
+  --sel-ring:          var(--th-sel);
+  --sel-row:           color-mix(in srgb, var(--th-sel-base) 12%, white);
+  --sel-gutter:        color-mix(in srgb, var(--th-sel) 38%, #909090);
+  --sel-row-overlay:   color-mix(in srgb, var(--th-sel) 12%, transparent);
 
   /* ── Page grid ── */
-  --grid-line: rgba(130,155,210,0.15);
+  --grid-line: color-mix(in srgb, var(--th-60) 15%, transparent);
 
   /* ── Type ── */
   --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -323,11 +351,11 @@ option.estimate-highlight {
 }
 
 .check-cell:has(input:checked) {
-  background-color: #E0E8F5;
+  background-color: var(--th-check-cell);
 }
 
 .check-cell input:checked {
-  accent-color: #4A70C8;
+  accent-color: var(--th-check);
 }
 
 .status-pill-select:focus {

@@ -249,7 +249,7 @@ function HistoryEntry({ status, fromStatus, time, note, isLast }) {
             </>
           )}
           <StatusChipSm status={status} />
-          <span style={{ fontSize: 10.5, color: '#8090A8', fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" }}>{time}</span>
+          <span style={{ fontSize: 10.5, color: 'var(--th-gutter-text)', fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" }}>{time}</span>
         </div>
         {note && (
           <div style={{ fontSize: 12, color: C.textFaint, marginTop: 2, lineHeight: 1.45 }}>{linkifyText(note)}</div>
@@ -274,7 +274,7 @@ function CreatedEntry({ date, agePill }) {
           }}>
             Created
           </span>
-          <span style={{ fontSize: 10.5, color: '#8090A8', fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" }}>
+          <span style={{ fontSize: 10.5, color: 'var(--th-gutter-text)', fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" }}>
             {date}
             {agePill && (
               <span style={{

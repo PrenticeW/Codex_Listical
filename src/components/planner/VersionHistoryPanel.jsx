@@ -58,10 +58,10 @@ function RestoreBtn({ onClick, disabled }) {
       style={{
         fontSize: 11, fontFamily: FONT, fontWeight: 500,
         color: hov ? 'var(--brand-deep)' : '#616161',
-        border: `1px solid ${hov ? 'rgba(43,89,182,0.3)' : '#e8e8e4'}`,
+        border: `1px solid ${hov ? 'color-mix(in srgb, var(--th-44) 30%, transparent)' : '#e8e8e4'}`,
         borderRadius: 6, padding: '4px 10px', flexShrink: 0,
         cursor: disabled ? 'not-allowed' : 'pointer',
-        background: hov ? 'rgba(43,89,182,0.06)' : '#fff',
+        background: hov ? 'color-mix(in srgb, var(--th-44) 6%, transparent)' : '#fff',
         opacity: disabled ? 0.5 : 1,
         transition: 'color .15s, border-color .15s, background .15s',
         userSelect: 'none',
@@ -108,7 +108,7 @@ function ConfirmRestoreModal({ snapshot, onConfirm, onCancel, isRestoring }) {
             onClick={onCancel}
             disabled={isRestoring}
             style={{ padding:'7px 16px', fontSize:13, fontWeight:500, color:'#616161', background:'transparent', border:'1px solid #e8e8e4', borderRadius:8, cursor:'pointer', fontFamily:FONT, opacity: isRestoring ? 0.5 : 1, transition:'background .1s' }}
-            onMouseEnter={e=>e.currentTarget.style.background='rgba(43,89,182,0.05)'}
+            onMouseEnter={e=>e.currentTarget.style.background='color-mix(in srgb, var(--th-44) 5%, transparent)'}
             onMouseLeave={e=>e.currentTarget.style.background='transparent'}
           >
             Cancel
@@ -210,7 +210,7 @@ export default function VersionHistoryPanel({ onClose }) {
         {/* Header */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderBottom:'1px solid var(--brand-bd)', flexShrink:0 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <svg width="14" height="14" viewBox="0 0 13 13" fill="none" style={{ color:'#8090A8' }}>
+            <svg width="14" height="14" viewBox="0 0 13 13" fill="none" style={{ color:'var(--th-gutter-text)' }}>
               <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" strokeWidth="1.2"/>
               <path d="M6.5 4v3l2 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
@@ -221,7 +221,7 @@ export default function VersionHistoryPanel({ onClose }) {
             type="button"
             onClick={onClose}
             style={{ width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center', border:'none', background:'transparent', borderRadius:6, cursor:'pointer', color:'#9E9E9E', transition:'color .1s, background .1s' }}
-            onMouseEnter={e=>{ e.currentTarget.style.color='#1F1F1F'; e.currentTarget.style.background='rgba(43,89,182,0.06)'; }}
+            onMouseEnter={e=>{ e.currentTarget.style.color='#1F1F1F'; e.currentTarget.style.background='color-mix(in srgb, var(--th-44) 6%, transparent)'; }}
             onMouseLeave={e=>{ e.currentTarget.style.color='#9E9E9E'; e.currentTarget.style.background='transparent'; }}
           >
             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z"/></svg>
@@ -265,7 +265,7 @@ export default function VersionHistoryPanel({ onClose }) {
           {!isLoading && !error && snapshots.length > 0 && (
             <ul style={{ listStyle:'none', margin:0, padding:0 }}>
               {snapshots.map((snap, idx) => (
-                <li key={snap.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, padding:'12px 16px', borderBottom: idx < snapshots.length - 1 ? '1px solid rgba(130,155,210,0.18)' : 'none' }}>
+                <li key={snap.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, padding:'12px 16px', borderBottom: idx < snapshots.length - 1 ? '1px solid color-mix(in srgb, var(--th-60) 18%, transparent)' : 'none' }}>
                   <div style={{ minWidth:0 }}>
                     <p style={{ fontSize:13, fontWeight:500, color:'#1F1F1F', marginBottom:3, display:'flex', alignItems:'center', gap:6 }}>
                       <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
@@ -277,7 +277,7 @@ export default function VersionHistoryPanel({ onClose }) {
                         </span>
                       )}
                     </p>
-                    <p style={{ fontSize:10.5, color:'#8090A8', fontFamily:MONO, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    <p style={{ fontSize:10.5, color:'var(--th-gutter-text)', fontFamily:MONO, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                       {snapshotSummary(snap)}
                     </p>
                   </div>

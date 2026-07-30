@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { getContrastTextColor } from '../utils/colorUtils';
+import { gridSvgLayer, useThemeVersion } from '../utils/themeBackground';
 import { SquarePlus } from 'lucide-react';
 import { GOAL_PANEL_ACTION_EVENT, GOAL_PANEL_STATE_EVENT, GOAL_PANEL_SELECTION_EVENT, GOAL_PANEL_ROW_SELECTION_EVENT } from '../components/GoalPanel';
 import { useYear } from '../contexts/YearContext';
@@ -95,6 +96,8 @@ const calculateTimeTotals = (planEntries) => {
  * Manages project shortlist and planning tables with unified row rendering
  */
 export default function StagingPageV2() {
+  // Recompute theme-tinted background layers when the theme changes
+  useThemeVersion();
   const navigate = useNavigate();
   const { currentYear, draftYear, activeYear, allYears, isCurrentYearArchived, refreshMetadata, switchToYear } = useYear();
 
@@ -983,7 +986,7 @@ export default function StagingPageV2() {
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
         <div className="text-center">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style={{ animation:'spin 1s linear infinite', margin:'0 auto 16px' }}>
-            <circle cx="12" cy="12" r="10" stroke="rgba(43,89,182,0.15)" strokeWidth="2.5"/>
+            <circle cx="12" cy="12" r="10" stroke="color-mix(in srgb, var(--th-44) 15%, transparent)" strokeWidth="2.5"/>
             <path d="M22 12a10 10 0 0 0-10-10" stroke="var(--brand-deep)" strokeWidth="2.5" strokeLinecap="round"/>
           </svg>
           <p className="text-gray-600">Loading...</p>
@@ -1113,15 +1116,15 @@ export default function StagingPageV2() {
   const PAGE_BG = {
     backgroundColor: '#ffffff',
     backgroundImage: [
-      'radial-gradient(ellipse 80% 60% at 105% -10%, rgba(130,155,210,0.45) 0%, transparent 62%)',
-      'radial-gradient(ellipse 60% 45% at -5% 110%, rgba(130,155,210,0.28) 0%, transparent 58%)',
-      'radial-gradient(ellipse 160% 65% at 95% 112%, rgba(130,155,210,0.38) 0%, transparent 60%)',
-      'radial-gradient(ellipse 140% 55% at 45% 112%, rgba(130,155,210,0.25) 0%, transparent 58%)',
+      'radial-gradient(ellipse 80% 60% at 105% -10%, color-mix(in srgb, var(--th-60) 45%, transparent) 0%, transparent 62%)',
+      'radial-gradient(ellipse 60% 45% at -5% 110%, color-mix(in srgb, var(--th-60) 28%, transparent) 0%, transparent 58%)',
+      'radial-gradient(ellipse 160% 65% at 95% 112%, color-mix(in srgb, var(--th-60) 38%, transparent) 0%, transparent 60%)',
+      'radial-gradient(ellipse 140% 55% at 45% 112%, color-mix(in srgb, var(--th-60) 25%, transparent) 0%, transparent 58%)',
       // Grid lines as an SVG tile rather than 1px gradient hard-stops:
       // gradient hairlines round to zero device pixels and vanish when the
       // effective DPR drops below 1 (browser zoom < 100% on a 1x monitor).
       // The SVG stroke antialiases instead, so the grid survives any zoom.
-      'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2732%27 height=%2732%27%3E%3Cpath d=%27M0 0.5 H32 M0.5 0 V32%27 stroke=%27rgba(130,155,210,0.15)%27 stroke-width=%271%27/%3E%3C/svg%3E")',
+      gridSvgLayer(0.15),
     ].join(','),
     backgroundSize: '100% 100%, 100% 100%, 100% 100%, 100% 100%, 32px 32px',
     backgroundPosition: '0 0, 0 0, 0 0, 0 0, -1px -1px',

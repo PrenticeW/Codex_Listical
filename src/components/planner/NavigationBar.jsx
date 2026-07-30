@@ -8,6 +8,7 @@ import { useSystemPanel } from '../../contexts/SystemPanelContext';
 import { usePlanPanel } from '../../contexts/PlanPanelContext';
 import { useGoalPanel } from '../../contexts/GoalPanelContext';
 import wordmark from '../../assets/brand/tacular-wordmark-black.svg';
+import { gridSvgLayer, useThemeVersion } from '../../utils/themeBackground';
 
 // Map routes to page identifiers and display names
 const PAGE_CONFIG = {
@@ -23,22 +24,24 @@ const DRAFT_NAV_ITEMS = [
 ];
 
 // Nav background: grid + gradient orbs, seamlessly continues the page background
-const NAV_BG_STYLE = {
+// Function, not a module const: the grid SVG layer bakes in the resolved
+// theme colour, so it must recompute per render (useThemeVersion).
+const navBgStyle = () => ({
   backgroundColor: '#ffffff',
   backgroundImage: [
-    'radial-gradient(ellipse 80% 60% at 105% -10%, rgba(130,155,210,0.45) 0%, transparent 62%)',
-    'radial-gradient(ellipse 60% 45% at -5% 110%, rgba(130,155,210,0.28) 0%, transparent 58%)',
+    'radial-gradient(ellipse 80% 60% at 105% -10%, color-mix(in srgb, var(--th-60) 45%, transparent) 0%, transparent 62%)',
+    'radial-gradient(ellipse 60% 45% at -5% 110%, color-mix(in srgb, var(--th-60) 28%, transparent) 0%, transparent 58%)',
     // Grid lines as an SVG tile rather than 1px gradient hard-stops:
     // gradient hairlines round to zero device pixels and vanish when the
     // effective DPR drops below 1 (browser zoom < 100% on a 1x monitor).
     // The SVG stroke antialiases instead, so the grid survives any zoom.
-    'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2732%27 height=%2732%27%3E%3Cpath d=%27M0 0.5 H32 M0.5 0 V32%27 stroke=%27rgba(130,155,210,0.15)%27 stroke-width=%271%27/%3E%3C/svg%3E")',
+    gridSvgLayer(0.15),
   ].join(','),
   backgroundSize: '100% 100%, 100% 100%, 32px 32px',
   backgroundPosition: '0 0, 0 0, -1px -1px',
   backgroundAttachment: 'fixed',
-  borderBottom: '1px solid rgba(130,155,210,0.3)',
-};
+  borderBottom: '1px solid color-mix(in srgb, var(--th-60) 30%, transparent)',
+});
 
 const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
@@ -46,6 +49,8 @@ export default function NavigationBar({
   listicalButton = null,
   actionButton = null,
 }) {
+  // Recompute the nav background (grid SVG layer) on theme change
+  useThemeVersion();
   const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
@@ -110,7 +115,7 @@ export default function NavigationBar({
     <div
       data-nav=""
       style={{
-        ...NAV_BG_STYLE,
+        ...navBgStyle(),
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -143,7 +148,7 @@ export default function NavigationBar({
         {/* Draft year nav — only when a draft exists */}
         {draftYear && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 1, height: 20, background: 'rgba(130,155,210,0.4)' }} />
+            <div style={{ width: 1, height: 20, background: 'color-mix(in srgb, var(--th-60) 40%, transparent)' }} />
             <span style={{
               fontSize: 10, fontWeight: 700,
               letterSpacing: '0.12em', textTransform: 'uppercase',
@@ -181,7 +186,7 @@ export default function NavigationBar({
         {user && (
           <div style={{
             display: 'inline-flex', alignItems: 'center',
-            background: '#8BA8D8',
+            background: 'var(--th-header)',
             borderRadius: '999px',
             padding: '4px 4px 4px 16px',
             boxShadow: '0 1px 3px rgba(0,0,0,0.06)',

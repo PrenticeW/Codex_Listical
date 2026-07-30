@@ -151,7 +151,7 @@ const TaskRow = React.memo(function TaskRow({
                   boxSizing: 'border-box',
                   position: 'sticky',
                   left: 0,
-                  backgroundColor: '#E8ECF5',
+                  backgroundColor: 'var(--th-gutter)',
                   zIndex: rowNumZIndex,
                 }}
                 className="p-0"
@@ -167,7 +167,7 @@ const TaskRow = React.memo(function TaskRow({
                   // Row-number gutter is Mulish per the design handover
                   // (NUM_FONT in reference/SystemView.jsx) -- not Tailwind's
                   // generic `font-mono` stack, which was never the intended font.
-                  style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, lineHeight: 1, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
+                  style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, lineHeight: 1, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : 'var(--th-gutter)', color: isRowSelected ? '#fff' : 'var(--th-gutter-text)' }}
                   onClick={(e) => {
                     handleRowNumberClick(e, rowId);
                     window.dispatchEvent(new CustomEvent(TASK_ROW_PANEL_CLOSE_EVENT));
@@ -271,7 +271,7 @@ const TaskRow = React.memo(function TaskRow({
             >
               <div
                 className={`h-full flex items-center w-full ${
-                  isCellDrop ? 'ring-2 ring-inset ring-black bg-[#E8F0FC]' : ''
+                  isCellDrop ? 'ring-2 ring-inset ring-black bg-[var(--sel-row)]' : ''
                 }`}
                 style={{
                   fontSize: `${cellFontSize}px`,
@@ -398,7 +398,7 @@ const TaskRow = React.memo(function TaskRow({
                           backgroundColor: (value === 'true' || value === true) ? '#276436' : 'white',
                           // 1px border -- 2px read as a thick ring around
                           // unchecked boxes.
-                          border: `1px solid ${(value === 'true' || value === true) ? '#276436' : '#D0D8E8'}`,
+                          border: `1px solid ${(value === 'true' || value === true) ? '#276436' : 'var(--th-gutter-line)'}`,
                           borderRadius: '3px',
                         }}
                       >

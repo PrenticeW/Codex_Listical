@@ -35,6 +35,8 @@ All planning data is stored in Supabase via four named modules:
 - `tacticsMetricsStorage` — Plan page metrics (`src/lib/tacticsMetricsStorage.js`)
 - `plannerStorage` — System page task rows (`src/utils/planner/storage.js`)
 
+A fifth module, `themeStorage` (`src/lib/themeStorage.js`), persists the per-account colour theme (`profiles.theme_family`). It is deliberately **not** year-scoped — one theme per account. Pure colour logic (family steps, SEL map, `applyThemeFamily`) lives in `src/lib/theme.js`; all derived surface colours come from the `--th-*` CSS variables in `src/index.css`.
+
 **Never call Supabase or `localStorage` directly in page or component code.** Always go through these modules.
 
 ### Cross-page communication — custom events only
@@ -49,8 +51,10 @@ Pages communicate via custom browser events. **Do not add direct imports between
 | `tactics-settings-state-update` | `tacticsStorage.saveTacticsYearSettings` | No current consumer |
 | `tactics-send-to-system` | TacticsPage `handleSendToSystem` | `ProjectTimePlannerV2` |
 | `yearMetadataStorage` | `yearMetadataStorage.saveYearMetadata` | `YearContext` |
+| `theme-state-update` | `themeStorage.saveThemeFamily` | Layout (applies theme) |
+| `theme-applied` | `theme.applyThemeFamily` | `useThemeVersion` (background layers) |
 
-**Year-scoping on events:** Every year-scoped event carries `__eventYear` in `CustomEvent.detail`. Listeners short-circuit if `event.detail.__eventYear` does not match their own `currentYear`. `yearMetadataStorage` is intentionally not tagged. Include `__eventYear` in any new year-scoped cross-page event.
+**Year-scoping on events:** Every year-scoped event carries `__eventYear` in `CustomEvent.detail`. Listeners short-circuit if `event.detail.__eventYear` does not match their own `currentYear`. `yearMetadataStorage` and the two theme events are intentionally not tagged (not year-scoped). Include `__eventYear` in any new year-scoped cross-page event.
 
 ### Year scoping
 

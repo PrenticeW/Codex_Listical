@@ -65,7 +65,7 @@ export function AddTasksModal({ isOpen, onClose, onConfirm }) {
           <button
             onClick={onClose}
             style={{ width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center', border:'none', background:'transparent', borderRadius:6, cursor:'pointer', color:'#9E9E9E', transition:'color .1s, background .1s' }}
-            onMouseEnter={e=>{ e.currentTarget.style.color='#1F1F1F'; e.currentTarget.style.background='rgba(43,89,182,0.06)'; }}
+            onMouseEnter={e=>{ e.currentTarget.style.color='#1F1F1F'; e.currentTarget.style.background='color-mix(in srgb, var(--th-44) 6%, transparent)'; }}
             onMouseLeave={e=>{ e.currentTarget.style.color='#9E9E9E'; e.currentTarget.style.background='transparent'; }}
             aria-label="Close modal"
           >
@@ -104,7 +104,7 @@ export function AddTasksModal({ isOpen, onClose, onConfirm }) {
               </div>
             )}
 
-            <div style={{ fontSize:12, color:'#616161', background:'rgba(43,89,182,0.04)', borderRadius:8, padding:12, border:'1px solid var(--brand-bd)' }}>
+            <div style={{ fontSize:12, color:'#616161', background:'color-mix(in srgb, var(--th-44) 4%, transparent)', borderRadius:8, padding:12, border:'1px solid var(--brand-bd)' }}>
               Tasks will be added below the currently selected row, or at the end if no row is selected.
             </div>
           </div>
@@ -116,7 +116,7 @@ export function AddTasksModal({ isOpen, onClose, onConfirm }) {
             type="button"
             onClick={onClose}
             style={{ padding:'7px 16px', fontSize:13, fontWeight:500, color:'#616161', background:'transparent', border:'1px solid #e8e8e4', borderRadius:8, cursor:'pointer', fontFamily:FONT, transition:'background .1s' }}
-            onMouseEnter={e=>e.currentTarget.style.background='rgba(43,89,182,0.05)'}
+            onMouseEnter={e=>e.currentTarget.style.background='color-mix(in srgb, var(--th-44) 5%, transparent)'}
             onMouseLeave={e=>e.currentTarget.style.background='transparent'}
           >
             Cancel

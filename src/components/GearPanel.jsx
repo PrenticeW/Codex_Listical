@@ -36,6 +36,9 @@ import {
   loadTacticsYearSettings,
   saveTacticsYearSettings,
 } from '../lib/tacticsStorage';
+import ColourPicker from './ColourPicker';
+import { applyThemeFamily, colourToFamily, familyDisplayName, themeSwatch, DEFAULT_THEME_FAMILY } from '../lib/theme';
+import { loadThemeFamily, saveThemeFamily } from '../lib/themeStorage';
 
 // Dispatched by GearPanel so TacticsPage can sync state without a double-save
 export const GEAR_TACTICS_SETTINGS_EVENT = 'gear-tactics-settings-update';
@@ -848,6 +851,136 @@ function AccountSection({ onClose }) {
   );
 }
 
+// ─── Appearance (colour theme) ────────────────────────────────────────────────
+
+const PALETTE_ICON = (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/>
+    <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>
+    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
+  </svg>
+);
+
+// The Appearance card in the main settings view. Shows the current theme
+// family (14px dot + name + chevron) and opens the theme picker sub-view.
+function AppearanceSection({ themeFamily, onShowTheme }) {
+  return (
+    <div style={BENTO_CARD}>
+      <SectionLabel>Appearance</SectionLabel>
+      <button
+        onClick={onShowTheme}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+          fontFamily: FONT, fontSize: 13, color: C.textMed,
+        }}
+      >
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ color: C.textFaint, display: 'inline-flex' }}>{PALETTE_ICON}</span>
+          Theme colour
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 500, color: C.text }}>
+          <span style={{
+            width: 14, height: 14, borderRadius: 4, flexShrink: 0,
+            background: themeSwatch(themeFamily, 60) ?? 'var(--th-60)',
+            boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.10)',
+          }} />
+          {familyDisplayName(themeFamily)}
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: C.textFaint }}>
+            <path d="m9 18 6-6-6-6"/>
+          </svg>
+        </span>
+      </button>
+    </div>
+  );
+}
+
+// Theme picker sub-view — reuses the chip colour picker (ColourPicker) on
+// the 120-swatch palette. Apply-on-confirm only: swatch clicks stage a
+// pending colour, Confirm resolves it to a family (exact swatch match,
+// else nearest by RGB distance to the family L52 step — colourToFamily),
+// applies the derived scheme, persists it, and returns to settings.
+function ThemeView({ themeFamily, onBack, onCommit }) {
+  const [pending, setPending] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Reset staged colour whenever the view is (re)entered with a new family
+  useEffect(() => { setPending(null); }, [themeFamily]);
+
+  const pendingFamily = pending ? colourToFamily(pending) : themeFamily;
+
+  const handleConfirm = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      await onCommit(pendingFamily);
+      setPending(null);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ paddingTop: 20, paddingBottom: 24 }}>
+      {/* Back button */}
+      <div style={{ margin: '0 11px 7px' }}>
+        <button
+          onClick={onBack}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'none', border: 'none', padding: '4px 2px', cursor: 'pointer',
+            fontFamily: FONT, fontSize: 13, fontWeight: 500, color: C.textMed,
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m15 18-6-6 6-6"/>
+          </svg>
+          Back
+        </button>
+      </div>
+
+      <div style={BENTO_CARD}>
+        <SectionLabel>Theme colour</SectionLabel>
+
+        {/* Current / staged selection summary */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <span style={{
+            width: 14, height: 14, borderRadius: 4, flexShrink: 0,
+            background: themeSwatch(pendingFamily, 60) ?? 'var(--th-60)',
+            boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.10)',
+          }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{familyDisplayName(pendingFamily)}</span>
+          {pending && pendingFamily !== themeFamily && (
+            <span style={{ fontSize: 11, color: C.textFaint }}>(was {familyDisplayName(themeFamily)})</span>
+          )}
+        </div>
+
+        {/* Chip colour picker on the 120-swatch palette. No live preview —
+            the scheme only changes on Confirm. */}
+        <ColourPicker
+          value={pending ?? (themeSwatch(themeFamily, 60) || undefined)}
+          onChange={setPending}
+          defaultOpen
+        />
+
+        <button
+          onClick={handleConfirm}
+          disabled={isSaving || (!pending && true)}
+          style={{
+            marginTop: 12, width: '100%', padding: '8px 0', borderRadius: 8,
+            border: 'none', cursor: (isSaving || !pending) ? 'default' : 'pointer',
+            fontFamily: FONT, fontSize: 13, fontWeight: 600,
+            background: (isSaving || !pending) ? '#D9D5E2' : 'var(--brand-deep)',
+            color: '#fff', transition: 'background 0.15s',
+          }}
+        >
+          {isSaving ? 'Applying…' : 'Confirm'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Version history view ─────────────────────────────────────────────────────
 
 
@@ -1055,6 +1188,25 @@ export default function GearPanel() {
   const { isOpen, close } = useGearPanel();
   const { currentYear } = useYear();
   const [showHistory, setShowHistory] = useState(false);
+  const [showTheme, setShowTheme] = useState(false);
+
+  // Colour theme family — loaded once, updated on commit from ThemeView
+  const [themeFamily, setThemeFamily] = useState(DEFAULT_THEME_FAMILY);
+  useEffect(() => {
+    loadThemeFamily().then(setThemeFamily);
+  }, []);
+
+  const handleThemeCommit = async (family) => {
+    applyThemeFamily(family);
+    setThemeFamily(family);
+    try {
+      await saveThemeFamily(family); // fires theme-state-update
+    } catch {
+      // Save failed — keep the applied theme for this session; it will
+      // fall back to the stored value on next load.
+    }
+    setShowTheme(false);
+  };
   const [navBottom, setNavBottom] = useState(0);
   const { width: panelWidth, setWidth: setPanelWidth, minWidth, maxWidth } = usePanelWidth();
 
@@ -1092,9 +1244,9 @@ export default function GearPanel() {
     };
   }, [isOpen]);
 
-  // Reset history view when panel closes
+  // Reset sub-views when panel closes
   useEffect(() => {
-    if (!isOpen) setShowHistory(false);
+    if (!isOpen) { setShowHistory(false); setShowTheme(false); }
   }, [isOpen]);
 
   // Escape key closes panel
@@ -1115,34 +1267,45 @@ export default function GearPanel() {
       minWidth={minWidth}
       maxWidth={maxWidth}
     >
-      {/* Two-view slider — 200% wide (two 50% panes), not fixed 640/320px.
+      {/* Three-view slider — 300% wide (three ⅓ panes), not fixed px.
           PanelShell's frosted tray is inset 7px from the panel's own width,
           so it's narrower than that width prop; percentage-based sizing
           always matches the tray's real width instead of overflowing past
-          its right edge. */}
+          its right edge. Main slides to History or to the Theme picker;
+          both sub-views share the same back-button flow. */}
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div
           style={{
             display: 'flex',
-            width: '200%',
+            width: '300%',
             flex: 1,
             minHeight: 0,
-            transform: showHistory ? 'translateX(-50%)' : 'translateX(0)',
+            transform: showHistory
+              ? 'translateX(-33.3333%)'
+              : showTheme
+                ? 'translateX(-66.6667%)'
+                : 'translateX(0)',
             transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
           }}
         >
           {/* Main view */}
-          <div style={{ width: '50%', flexShrink: 0, overflowY: 'auto', paddingTop: 20, paddingBottom: 24 }}>
+          <div style={{ width: '33.3333%', flexShrink: 0, overflowY: 'auto', paddingTop: 20, paddingBottom: 24 }}>
             <YourYearSection />
             <TimelineSection onShowHistory={() => setShowHistory(true)} />
+            <AppearanceSection themeFamily={themeFamily} onShowTheme={() => setShowTheme(true)} />
             <SystemSettingsSection />
             <PlanSettingsSection />
             <AccountSection onClose={close} />
           </div>
 
           {/* History view */}
-          <div style={{ width: '50%', flexShrink: 0, overflowY: 'auto' }}>
+          <div style={{ width: '33.3333%', flexShrink: 0, overflowY: 'auto' }}>
             <HistoryView onBack={() => setShowHistory(false)} isActive={showHistory && isOpen} use24Hour={use24Hour} />
+          </div>
+
+          {/* Theme picker view */}
+          <div style={{ width: '33.3333%', flexShrink: 0, overflowY: 'auto' }}>
+            <ThemeView themeFamily={themeFamily} onBack={() => setShowTheme(false)} onCommit={handleThemeCommit} />
           </div>
         </div>
       </div>

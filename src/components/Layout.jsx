@@ -13,6 +13,8 @@ import SystemPanel from './SystemPanel';
 import PlanPanel from './PlanPanel';
 import GoalPanel from './GoalPanel';
 import { saveSiteSnapshot } from '../lib/snapshotStorage';
+import { applyThemeFamily } from '../lib/theme';
+import { loadThemeFamily, THEME_UPDATE_EVENT } from '../lib/themeStorage';
 
 function YearKeyedOutlet() {
   const { currentYear } = useYear();
@@ -75,6 +77,24 @@ export default function Layout() {
   const { needsUserMigration } = useUser();
   const [isMigrationChecked, setIsMigrationChecked] = useState(false);
 
+  // Apply the saved colour theme on load, and re-apply whenever
+  // themeStorage broadcasts a change (GearPanel Appearance card).
+  useEffect(() => {
+    let cancelled = false;
+    loadThemeFamily().then((family) => {
+      if (!cancelled) applyThemeFamily(family);
+    });
+    const onThemeUpdate = (event) => {
+      const family = event.detail?.family;
+      if (family) applyThemeFamily(family);
+    };
+    window.addEventListener(THEME_UPDATE_EVENT, onThemeUpdate);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(THEME_UPDATE_EVENT, onThemeUpdate);
+    };
+  }, []);
+
   useEffect(() => {
     // TODO: Implement user-specific migration check
     // For now, just mark as checked immediately
@@ -107,7 +127,7 @@ export default function Layout() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style={{ animation:'spin 1s linear infinite', margin:'0 auto 16px' }}>
-            <circle cx="12" cy="12" r="10" stroke="rgba(43,89,182,0.15)" strokeWidth="2.5"/>
+            <circle cx="12" cy="12" r="10" stroke="color-mix(in srgb, var(--th-44) 15%, transparent)" strokeWidth="2.5"/>
             <path d="M22 12a10 10 0 0 0-10-10" stroke="var(--brand-deep)" strokeWidth="2.5" strokeLinecap="round"/>
           </svg>
           <p className="text-gray-600">Setting up your workspace...</p>

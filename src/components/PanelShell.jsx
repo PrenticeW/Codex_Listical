@@ -34,7 +34,8 @@ const emitLiveWidth = (value) => {
   window.dispatchEvent(new CustomEvent(PANEL_LIVE_WIDTH_EVENT, { detail: value }));
 };
 
-const MAUVE = (a) => `rgba(130,155,210,${a})`;
+// Theme-tinted: derives from the active family's main step (--th-60)
+const MAUVE = (a) => `color-mix(in srgb, var(--th-60) ${Math.round(a * 100)}%, transparent)`;
 const EASE  = '0.25s cubic-bezier(0.4,0,0.2,1)';
 
 export default function PanelShell({

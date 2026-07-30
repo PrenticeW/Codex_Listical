@@ -84,7 +84,7 @@ export function DeleteAccountModal({ isOpen, onClose }) {
             onClick={onClose}
             disabled={isLoading}
             style={{ width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center', border:'none', background:'transparent', borderRadius:6, cursor: isLoading ? 'not-allowed' : 'pointer', color:'#9E9E9E', opacity: isLoading ? 0.5 : 1, transition:'color .1s, background .1s' }}
-            onMouseEnter={e=>{ if (!isLoading) { e.currentTarget.style.color='#1F1F1F'; e.currentTarget.style.background='rgba(43,89,182,0.06)'; } }}
+            onMouseEnter={e=>{ if (!isLoading) { e.currentTarget.style.color='#1F1F1F'; e.currentTarget.style.background='color-mix(in srgb, var(--th-44) 6%, transparent)'; } }}
             onMouseLeave={e=>{ e.currentTarget.style.color='#9E9E9E'; e.currentTarget.style.background='transparent'; }}
             aria-label="Close modal"
           >
@@ -112,7 +112,7 @@ export function DeleteAccountModal({ isOpen, onClose }) {
             </div>
 
             {/* Retention notice */}
-            <div style={{ fontSize:13, color:'#616161', background:'rgba(43,89,182,0.04)', borderRadius:8, padding:'12px 14px', border:'1px solid var(--brand-bd)' }}>
+            <div style={{ fontSize:13, color:'#616161', background:'color-mix(in srgb, var(--th-44) 4%, transparent)', borderRadius:8, padding:'12px 14px', border:'1px solid var(--brand-bd)' }}>
               <p style={{ fontWeight:600, color:'#383838', marginBottom:6 }}>What we retain:</p>
               <p>Payment records (if applicable) are retained for 6 years for legal and tax compliance purposes.</p>
             </div>
@@ -161,7 +161,7 @@ export function DeleteAccountModal({ isOpen, onClose }) {
             onClick={onClose}
             disabled={isLoading}
             style={{ padding:'7px 16px', fontSize:13, fontWeight:500, color:'#616161', background:'transparent', border:'1px solid #e8e8e4', borderRadius:8, cursor: isLoading ? 'not-allowed' : 'pointer', fontFamily:FONT, opacity: isLoading ? 0.5 : 1, transition:'background .1s' }}
-            onMouseEnter={e=>{ if (!isLoading) e.currentTarget.style.background='rgba(43,89,182,0.05)'; }}
+            onMouseEnter={e=>{ if (!isLoading) e.currentTarget.style.background='color-mix(in srgb, var(--th-44) 5%, transparent)'; }}
             onMouseLeave={e=>e.currentTarget.style.background='transparent'}
           >
             Cancel

@@ -37,7 +37,7 @@ function MenuItem({ label, onClick, danger, hint, disabled }) {
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         width: '100%', padding: '5px 2px',
-        background: hovered && !disabled ? 'rgba(43,89,182,0.05)' : 'transparent',
+        background: hovered && !disabled ? 'color-mix(in srgb, var(--th-44) 5%, transparent)' : 'transparent',
         border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', textAlign: 'left',
         fontFamily: FONT, fontSize: 'calc(13px * var(--pz))', fontWeight: 400,
         color: disabled ? '#C0C0C0' : danger ? '#c0392b' : '#1F1F1F',

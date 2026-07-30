@@ -72,7 +72,7 @@ export default function ProjectRow({
   // Determine row styling based on type and archived status
   const isHeader = rowType === 'projectHeader' || rowType === 'archivedProjectHeader';
   const isSubprojectHeader = rowType === 'subprojectHeader';
-  const bgColor = isHeader ? '#8BA8D8' : '#DCE4F5'; // Blue project header, pale blue sections/subproject headers
+  const bgColor = isHeader ? 'var(--th-header)' : 'var(--th-section)'; // Blue project header, pale blue sections/subproject headers
 
   // Check if this project/subproject group is collapsed
   const isCollapsed = (isHeader || isSubprojectHeader) && groupId && collapsedGroups.has(groupId);
@@ -171,7 +171,7 @@ export default function ProjectRow({
                   boxSizing: 'border-box',
                   position: 'sticky',
                   left: 0,
-                  backgroundColor: '#E8ECF5',
+                  backgroundColor: 'var(--th-gutter)',
                   zIndex: rowNumZIndex,
                 }}
                 className="p-0"
@@ -187,7 +187,7 @@ export default function ProjectRow({
                   // Row-number gutter is Mulish per the design handover
                   // (NUM_FONT in reference/SystemView.jsx) -- not Tailwind's
                   // generic `font-mono` stack, which was never the intended font.
-                  style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, lineHeight: 1, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : '#E8ECF5', color: isRowSelected ? '#fff' : '#6A7A9E' }}
+                  style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, lineHeight: 1, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : 'var(--th-gutter)', color: isRowSelected ? '#fff' : 'var(--th-gutter-text)' }}
                   onClick={(e) => {
                     handleRowNumberClick(e, rowId);
                     window.dispatchEvent(new CustomEvent(TASK_ROW_PANEL_CLOSE_EVENT));
@@ -317,7 +317,7 @@ export default function ProjectRow({
                           right: chevronRight + 4,
                           top: '50%',
                           transform: 'translateY(-50%)',
-                          color: '#8090A8',
+                          color: 'var(--th-gutter-text)',
                           display: 'flex',
                           alignItems: 'center',
                           cursor: 'pointer',
@@ -336,7 +336,7 @@ export default function ProjectRow({
                         right: chevronRight + 4,
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        color: '#8090A8',
+                        color: 'var(--th-gutter-text)',
                         display: 'flex',
                         alignItems: 'center',
                         pointerEvents: 'none',

@@ -5,6 +5,7 @@ import {
   flexRender,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { gridSvgLayer, useThemeVersion } from '../utils/themeBackground';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Archive } from 'lucide-react';
 import { useYear } from '../contexts/YearContext';
@@ -282,6 +283,8 @@ function peekEnrichedChips(yearNumber) {
  */
 
 export default function ProjectTimePlannerV2() {
+  // Recompute theme-tinted background layers when the theme changes
+  useThemeVersion();
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -2973,15 +2976,15 @@ export default function ProjectTimePlannerV2() {
     <div className="w-full h-screen flex flex-col overflow-hidden" style={{
       backgroundColor: '#ffffff',
       backgroundImage: [
-        'radial-gradient(ellipse 80% 60% at 105% -10%, rgba(130,155,210,0.45) 0%, transparent 62%)',
-        'radial-gradient(ellipse 60% 45% at -5% 110%, rgba(130,155,210,0.28) 0%, transparent 58%)',
-        'radial-gradient(ellipse 160% 65% at 95% 112%, rgba(130,155,210,0.38) 0%, transparent 60%)',
-        'radial-gradient(ellipse 140% 55% at 45% 112%, rgba(130,155,210,0.25) 0%, transparent 58%)',
+        'radial-gradient(ellipse 80% 60% at 105% -10%, color-mix(in srgb, var(--th-60) 45%, transparent) 0%, transparent 62%)',
+        'radial-gradient(ellipse 60% 45% at -5% 110%, color-mix(in srgb, var(--th-60) 28%, transparent) 0%, transparent 58%)',
+        'radial-gradient(ellipse 160% 65% at 95% 112%, color-mix(in srgb, var(--th-60) 38%, transparent) 0%, transparent 60%)',
+        'radial-gradient(ellipse 140% 55% at 45% 112%, color-mix(in srgb, var(--th-60) 25%, transparent) 0%, transparent 58%)',
         // Grid lines as an SVG tile rather than 1px gradient hard-stops:
         // gradient hairlines round to zero device pixels and vanish when the
         // effective DPR drops below 1 (browser zoom < 100% on a 1x monitor).
         // The SVG stroke antialiases instead, so the grid survives any zoom.
-        'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2732%27 height=%2732%27%3E%3Cpath d=%27M0 0.5 H32 M0.5 0 V32%27 stroke=%27rgba(130,155,210,0.15)%27 stroke-width=%271%27/%3E%3C/svg%3E")',
+        gridSvgLayer(0.15),
       ].join(','),
       backgroundSize: '100% 100%, 100% 100%, 100% 100%, 100% 100%, 32px 32px',
       backgroundPosition: '0 0, 0 0, 0 0, 0 0, -1px -1px',
