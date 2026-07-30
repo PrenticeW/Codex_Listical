@@ -53,8 +53,10 @@
   --sel-gutter:        color-mix(in srgb, var(--th-sel) 38%, #909090);
   --sel-row-overlay:   color-mix(in srgb, var(--th-sel) 12%, transparent);
 
-  /* ── Page grid ── */
-  --grid-line: color-mix(in srgb, var(--th-60) 15%, transparent);
+  /* ── Page grid ──
+     Background grid/orbs use the lighter L68 step — the original mauve
+     rgb(130,155,210) sat at L68, so L60 read too heavy here. */
+  --grid-line: color-mix(in srgb, var(--th-68) 15%, transparent);
 
   /* ── Type ── */
   --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -209,7 +211,11 @@ tr.sys-sel-row::before {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 36px;
+  /* The rowNum column is 36px at 100% and scales with page zoom
+     (usePlannerColumns sz()), so the ring's start must scale too —
+     a fixed 36px left an unhighlighted strip after the gutter at any
+     zoom below 100% and hid the ring's edge above 100%. */
+  left: calc(36px * var(--pz));
   right: 0;
   border-left: 1px solid var(--sel-ring);
   pointer-events: none;

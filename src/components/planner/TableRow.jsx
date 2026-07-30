@@ -1349,10 +1349,9 @@ const TableRow = React.memo(function TableRow({
                     style={{
                       fontSize: `${headerFontSize}px`,
                       fontWeight: 700,
-                      // Dark ink -- matches the Subproject row's default
-                      // (unset/inherited black) text now that the
-                      // background is pale blue rather than dark chrome.
-                      color: 'var(--th-header-text)',
+                      // Plain black ink for column labels -- these are
+                      // structural chrome, not themed surfaces.
+                      color: '#000000',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -1617,7 +1616,10 @@ const TableRow = React.memo(function TableRow({
                     // the text: darker band + inset ring, so the centered
                     // total never shifts when a filter toggles on.
                     backgroundColor: isFilterActive ? 'var(--brand)' : 'var(--th-header)',
-                    boxShadow: isFilterActive ? `inset 0 0 0 1.5px ${FILTER_ACTIVE_COLOR}` : undefined,
+                    // Active-filter ring uses the theme's highlight colour
+                    // (--sel-ring, same as the row-selection ring) rather
+                    // than the hardcoded filter-icon blue.
+                    boxShadow: isFilterActive ? 'inset 0 0 0 1.5px var(--sel-ring)' : undefined,
                     borderBottom: '1px solid #d3d3d3',
                     borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3',
                     cursor: 'pointer',

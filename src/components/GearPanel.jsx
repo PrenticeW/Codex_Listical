@@ -36,7 +36,8 @@ import {
   loadTacticsYearSettings,
   saveTacticsYearSettings,
 } from '../lib/tacticsStorage';
-import { PALETTE } from '../utils/staging/projectColour';
+import { JUNE_GROUPS } from '../constants/palettePickerGroups';
+import { ColourPicker as ColourMixer } from './GoalPanel';
 import { applyThemeFamily, colourToFamily, familyDisplayName, themeSwatch, DEFAULT_THEME_FAMILY } from '../lib/theme';
 import { loadThemeFamily, saveThemeFamily } from '../lib/themeStorage';
 
@@ -895,36 +896,16 @@ function AppearanceSection({ themeFamily, onShowTheme }) {
   );
 }
 
-// Theme picker sub-view — same panel as the Goal page colour picker
-// (ColourView in GoalPanel.jsx): bento back button up top, one BentoCard
-// per hue group with each family rendered as a horizontal strip of its
-// shades, and a Custom card. The strips come from the real 120-swatch
-// PALETTE (30 families × 4 steps, L68→L44) so a click maps to a theme
-// family exactly; the Neutrals card is omitted because a theme must be
-// one of the 30 hue families (handoff §5 caveat). One deliberate
-// difference from the chip picker: apply-on-confirm only (no live
-// preview), so a Confirm button sits beside Back and swatch clicks only
-// stage the selection.
+// Theme picker sub-view — the Goal page colour picker panel (ColourView
+// in GoalPanel.jsx), reusing its exact palette (JUNE_GROUPS) and bento
+// treatment. A picked shade resolves to one of the 30 theme families on
+// Confirm — exact swatch match first, else nearest by RGB distance to
+// each family's L52 step (colourToFamily). Clicking a shade previews the
+// resolved theme live across the app; Confirm persists it, and leaving
+// the view (Back or panel close) without confirming reverts to the saved
+// family. No Neutrals card (a theme must be a hue family).
 
-// Palette families bucketed into the Goal page's group cards (hue order).
-const THEME_GROUPS = [
-  { label: 'Purples & Pinks', families: ['violet', 'grape', 'plum', 'magenta', 'blush', 'rose'] },
-  { label: 'Reds',            families: ['red', 'scarlet', 'crimson'] },
-  { label: 'Oranges',         families: ['orange', 'tangerine', 'amber'] },
-  { label: 'Yellows',         families: ['gold', 'yellow', 'chartr.'] },
-  { label: 'Greens',          families: ['lime', 'fern', 'sage', 'green', 'pine', 'juniper'] },
-  { label: 'Teals & Aquas',   families: ['teal', 'cyan', 'aqua', 'sky'] },
-  { label: 'Blues & Indigos', families: ['cerulean', 'denim', 'blue', 'cobalt', 'indigo'] },
-];
-
-const THEME_LIGHTNESS = [68, 60, 52, 44]; // strip order, light → dark
-
-function themeFamilyShades(family) {
-  return THEME_LIGHTNESS
-    .map((l) => PALETTE.find((p) => p.name === family && p.l === l))
-    .filter(Boolean)
-    .map((e) => `hsl(${e.h}, ${e.s}%, ${e.l}%)`);
-}
+const hslStr = ([h, s, l]) => `hsl(${h}, ${s}%, ${l}%)`;
 
 // Bento-style back button — same as the Goal page colour picker's
 function ThemeBackButton({ onClick }) {
@@ -955,11 +936,10 @@ function ThemeBackButton({ onClick }) {
   );
 }
 
-// Matching confirm button (apply-on-confirm — the Goal picker applies
-// immediately, the theme must not, per the handoff)
+// Solid confirm button — filled with the brand colour so the commit
+// action is unmissable next to the quiet back button
 function ThemeConfirmButton({ onClick, disabled }) {
   const [hov, setHov] = useState(false);
-  const active = hov && !disabled;
   return (
     <button
       onClick={onClick}
@@ -968,32 +948,49 @@ function ThemeConfirmButton({ onClick, disabled }) {
       onMouseLeave={() => setHov(false)}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 8,
-        padding: '6px 11px',
-        background: active ? C.greenBg : C.bg,
-        border: `1px solid ${active ? C.greenBorder : C.border}`,
+        padding: '6px 14px',
+        background: disabled ? '#D9D5E2' : (hov ? 'var(--brand-ink)' : 'var(--brand-deep)'),
+        border: '1px solid transparent',
         borderRadius: 8,
-        boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.07)',
+        boxShadow: disabled ? 'none' : '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.12)',
         cursor: disabled ? 'default' : 'pointer',
-        color: disabled ? C.textLight : (active ? C.greenDark : C.textDim),
-        fontFamily: FONT, fontSize: 13, fontWeight: 500,
-        opacity: disabled ? 0.6 : 1,
+        color: '#fff',
+        fontFamily: FONT, fontSize: 13, fontWeight: 600,
         transition: 'all 0.15s',
       }}
     >
-      <svg width="10" height="8" viewBox="0 0 12 10" fill="none">
-        <path d="M1 5l3.5 3.5L11 1" stroke={disabled ? C.textLight : C.green} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      <svg width="11" height="9" viewBox="0 0 12 10" fill="none">
+        <path d="M1 5l3.5 3.5L11 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
       Confirm
     </button>
   );
 }
 
-function ThemeView({ themeFamily, onBack, onCommit }) {
+function ThemeView({ themeFamily, isActive, onBack, onCommit }) {
   const [pending, setPending] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [mixerOpen, setMixerOpen] = useState(false);
 
   // Reset staged colour whenever the committed family changes
   useEffect(() => { setPending(null); }, [themeFamily]);
+
+  // Stage a colour and preview its resolved theme live
+  const stage = (colour) => {
+    setPending(colour);
+    applyThemeFamily(colourToFamily(colour));
+  };
+
+  // Leaving the view (Back or panel close) without confirming reverts
+  // the live preview to the saved family. The pane stays mounted in the
+  // slider, so this keys off isActive rather than unmount.
+  useEffect(() => {
+    if (!isActive && pending) {
+      applyThemeFamily(themeFamily);
+      setPending(null);
+    }
+    if (!isActive) setMixerOpen(false);
+  }, [isActive, pending, themeFamily]);
 
   const currentSwatch = themeSwatch(themeFamily, 60);
   const selectedColour = pending ?? currentSwatch;
@@ -1003,7 +1000,7 @@ function ThemeView({ themeFamily, onBack, onCommit }) {
     if (!('EyeDropper' in window)) return;
     try {
       const result = await new window.EyeDropper().open();
-      setPending(result.sRGBHex);
+      stage(result.sRGBHex);
     } catch { /* cancelled */ }
   };
 
@@ -1025,23 +1022,25 @@ function ThemeView({ themeFamily, onBack, onCommit }) {
     marginBottom: 2,
   };
 
-  // A family's shades as a horizontal strip — same treatment as the Goal
-  // page picker's renderFamilyRow
-  const renderFamilyRow = (family) => (
-    <div key={family} style={{ display: 'flex', gap: 2, marginTop: 4 }}>
-      {themeFamilyShades(family).map((bg, idx) => {
+  // A family's 6 shades as a horizontal strip — same as the Goal page
+  // picker's renderFamilyRow
+  const renderFamilyRow = (shades, keyPrefix) => (
+    <div key={keyPrefix} style={{ display: 'flex', gap: 2, marginTop: 4 }}>
+      {shades.map((hsl, idx) => {
+        const bg = hslStr(hsl);
         const active = selectedColour === bg;
+        const paleBorder = hsl[2] >= 95 ? { outline: '0.5px solid #ddd', outlineOffset: -1 } : {};
         return (
           <button
-            key={`${family}-${idx}`}
-            onClick={() => setPending(bg)}
-            title={`${familyDisplayName(family)}`}
+            key={`${keyPrefix}-${idx}`}
+            onClick={() => stage(bg)}
             style={{
               flex: 1, height: 14, borderRadius: 2, background: bg,
               border: 'none', cursor: 'pointer', padding: 0, position: 'relative',
               transition: 'transform 0.1s',
               outline: active ? '2px solid rgba(0,0,0,0.35)' : 'none',
               outlineOffset: -1,
+              ...paleBorder,
             }}
             onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.12)'}
             onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -1053,7 +1052,7 @@ function ThemeView({ themeFamily, onBack, onCommit }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* Back + Confirm — bento button style */}
+      {/* Back + Confirm */}
       <div style={{ padding: '16px 12px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <ThemeBackButton onClick={onBack} />
         <ThemeConfirmButton onClick={handleConfirm} disabled={isSaving || !pending} />
@@ -1079,11 +1078,12 @@ function ThemeView({ themeFamily, onBack, onCommit }) {
         </div>
       </div>
 
-      {/* Palette sections — one card per THEME_GROUPS entry */}
-      {THEME_GROUPS.map(({ label, families }) => (
+      {/* Palette sections — one card per JUNE_GROUPS entry, minus Neutrals
+          (a theme must resolve to a hue family) */}
+      {JUNE_GROUPS.filter(({ label }) => label !== 'Neutrals').map(({ label, families }) => (
         <div key={label} style={{ ...BENTO_CARD, margin: '8px 12px 0', padding: '10px 12px' }}>
           <div style={cardLabel}>{label}</div>
-          {families.map(renderFamilyRow)}
+          {families.map(({ name, shades }) => renderFamilyRow(shades, `${label}-${name}`))}
         </div>
       ))}
 
@@ -1110,30 +1110,38 @@ function ThemeView({ themeFamily, onBack, onCommit }) {
               </svg>
             </button>
           )}
-          <label style={{ position: 'relative', display: 'inline-flex' }}>
-            <span
-              title="Custom colour"
-              style={{
-                width: 26, height: 26, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: C.bgBlock, border: `1px solid ${C.border}`,
-                cursor: 'pointer', color: C.textFaint,
-                transition: 'color 0.15s, border-color 0.15s, background 0.15s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.color = C.text; e.currentTarget.style.borderColor = '#aaa'; e.currentTarget.style.background = C.borderLight; }}
-              onMouseLeave={e => { e.currentTarget.style.color = C.textFaint; e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.bgBlock; }}
-            >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 11l-8-8-8.5 8.5a5.5 5.5 0 007.78 7.78L19 11z"/><path d="M20 23a2 2 0 001.4-3.4L16 14"/>
-                <line x1="3.5" y1="11.5" x2="13" y2="2"/>
-              </svg>
-            </span>
-            <input
-              type="color"
-              onChange={e => setPending(e.target.value)}
-              style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
-            />
-          </label>
+          <button
+            title="Custom colour mixer"
+            onClick={() => setMixerOpen(v => !v)}
+            style={{
+              width: 26, height: 26, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: mixerOpen ? C.borderLight : C.bgBlock,
+              border: `1px solid ${mixerOpen ? '#aaa' : C.border}`,
+              cursor: 'pointer', color: mixerOpen ? C.text : C.textFaint,
+              transition: 'color 0.15s, border-color 0.15s, background 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = C.text; e.currentTarget.style.borderColor = '#aaa'; e.currentTarget.style.background = C.borderLight; }}
+            onMouseLeave={e => {
+              if (!mixerOpen) {
+                e.currentTarget.style.color = C.textFaint;
+                e.currentTarget.style.borderColor = C.border;
+                e.currentTarget.style.background = C.bgBlock;
+              }
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 11l-8-8-8.5 8.5a5.5 5.5 0 007.78 7.78L19 11z"/><path d="M20 23a2 2 0 001.4-3.4L16 14"/>
+              <line x1="3.5" y1="11.5" x2="13" y2="2"/>
+            </svg>
+          </button>
         </div>
+        {mixerOpen && (
+          <ColourMixer
+            currentColor={selectedColour}
+            onSelect={stage}
+            onConfirm={c => { stage(c); setMixerOpen(false); }}
+          />
+        )}
       </div>
     </div>
   );
@@ -1463,7 +1471,7 @@ export default function GearPanel() {
 
           {/* Theme picker view */}
           <div style={{ width: '33.3333%', flexShrink: 0, overflowY: 'auto' }}>
-            <ThemeView themeFamily={themeFamily} onBack={() => setShowTheme(false)} onCommit={handleThemeCommit} />
+            <ThemeView themeFamily={themeFamily} isActive={showTheme && isOpen} onBack={() => setShowTheme(false)} onCommit={handleThemeCommit} />
           </div>
         </div>
       </div>

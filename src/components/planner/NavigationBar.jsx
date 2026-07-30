@@ -29,8 +29,8 @@ const DRAFT_NAV_ITEMS = [
 const navBgStyle = () => ({
   backgroundColor: '#ffffff',
   backgroundImage: [
-    'radial-gradient(ellipse 80% 60% at 105% -10%, color-mix(in srgb, var(--th-60) 45%, transparent) 0%, transparent 62%)',
-    'radial-gradient(ellipse 60% 45% at -5% 110%, color-mix(in srgb, var(--th-60) 28%, transparent) 0%, transparent 58%)',
+    'radial-gradient(ellipse 80% 60% at 105% -10%, color-mix(in srgb, var(--th-68) 45%, transparent) 0%, transparent 62%)',
+    'radial-gradient(ellipse 60% 45% at -5% 110%, color-mix(in srgb, var(--th-68) 28%, transparent) 0%, transparent 58%)',
     // Grid lines as an SVG tile rather than 1px gradient hard-stops:
     // gradient hairlines round to zero device pixels and vanish when the
     // effective DPR drops below 1 (browser zoom < 100% on a 1x monitor).
@@ -40,7 +40,7 @@ const navBgStyle = () => ({
   backgroundSize: '100% 100%, 100% 100%, 32px 32px',
   backgroundPosition: '0 0, 0 0, -1px -1px',
   backgroundAttachment: 'fixed',
-  borderBottom: '1px solid color-mix(in srgb, var(--th-60) 30%, transparent)',
+  borderBottom: '1px solid color-mix(in srgb, var(--th-68) 30%, transparent)',
 });
 
 const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
@@ -148,7 +148,7 @@ export default function NavigationBar({
         {/* Draft year nav — only when a draft exists */}
         {draftYear && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 1, height: 20, background: 'color-mix(in srgb, var(--th-60) 40%, transparent)' }} />
+            <div style={{ width: 1, height: 20, background: 'color-mix(in srgb, var(--th-68) 40%, transparent)' }} />
             <span style={{
               fontSize: 10, fontWeight: 700,
               letterSpacing: '0.12em', textTransform: 'uppercase',

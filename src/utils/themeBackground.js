@@ -2,7 +2,8 @@
  * Theme background helpers.
  *
  * The page/nav/panel backgrounds tint their grid lines and corner orbs
- * from the active theme family (--th-60, see src/index.css). Gradient
+ * from the active theme family's lighter L68 step (--th-68) — the
+ * original mauve rgb(130,155,210) sat at L68, so L60 reads too heavy. Gradient
  * layers can use color-mix() directly via themeTint(); the grid-line SVG
  * data-URL tile cannot reference CSS variables, so gridSvgLayer() resolves
  * the current --th-60 to a concrete rgba() at render time, and
@@ -16,14 +17,14 @@ export const THEME_APPLIED_EVENT = 'theme-applied';
 
 /** CSS colour: the theme's main step at the given opacity (0–1). */
 export const themeTint = (alpha) =>
-  `color-mix(in srgb, var(--th-60) ${Math.round(alpha * 100)}%, transparent)`;
+  `color-mix(in srgb, var(--th-68) ${Math.round(alpha * 100)}%, transparent)`;
 
-// Resolve the current --th-60 custom property to "R,G,B" (via canvas
+// Resolve the current --th-68 custom property to "R,G,B" (via canvas
 // normalisation so hsl()/hex both work). Falls back to the blue default.
-function resolveTheme60Rgb() {
+function resolveThemeGridRgb() {
   try {
     const raw = getComputedStyle(document.documentElement)
-      .getPropertyValue('--th-60')
+      .getPropertyValue('--th-68')
       .trim();
     const ctx = document.createElement('canvas').getContext('2d');
     ctx.fillStyle = raw;
@@ -34,7 +35,7 @@ function resolveTheme60Rgb() {
   } catch {
     /* fall through to default */
   }
-  return '90,132,216'; // blue-60 default
+  return '130,155,210'; // original mauve (≈ blue L68) default
 }
 
 /**
@@ -43,7 +44,7 @@ function resolveTheme60Rgb() {
  * theme colour at the given opacity.
  */
 export function gridSvgLayer(alpha = 0.15) {
-  const stroke = `rgba(${resolveTheme60Rgb()},${alpha})`;
+  const stroke = `rgba(${resolveThemeGridRgb()},${alpha})`;
   return `url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2732%27 height=%2732%27%3E%3Cpath d=%27M0 0.5 H32 M0.5 0 V32%27 stroke=%27${encodeURIComponent(stroke)}%27 stroke-width=%271%27/%3E%3C/svg%3E")`;
 }
 
