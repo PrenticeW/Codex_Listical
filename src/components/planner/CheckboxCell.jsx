@@ -13,9 +13,11 @@ function CheckboxCell({
 }) {
   // Derive the box size from the row height (same formula the view-mode
   // checkbox in TaskRow.jsx uses) so it scales with page zoom instead of
-  // staying a fixed 20px regardless of row size. Falls back to a sane
-  // default if rowHeight isn't passed in.
-  const boxSize = Math.max(14, (rowHeight ?? 32) - 6);
+  // staying a fixed 20px regardless of row size. Sized as a proportion of
+  // the row (~2/3) rather than row-height-minus-margin, so it stays
+  // visually smaller than the cell at every zoom level. Falls back to a
+  // sane default if rowHeight isn't passed in.
+  const boxSize = Math.max(12, Math.round((rowHeight ?? 24) * (2 / 3)));
   // Parse initial value - accept boolean, string "true"/"false", or empty string
   const parseValue = (val) => {
     if (typeof val === 'boolean') return val;

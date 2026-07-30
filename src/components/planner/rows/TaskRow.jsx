@@ -387,22 +387,25 @@ const TaskRow = React.memo(function TaskRow({
                         }}
                         className="flex items-center justify-center cursor-pointer"
                         style={{
-                          // Was rowHeight-12 -- left the box looking tiny at the
-                          // default 24px row height (only 12px). Scale off a
-                          // smaller margin so it actually fills the cell.
-                          width: `${Math.max(14, rowHeight - 6)}px`,
-                          height: `${Math.max(14, rowHeight - 6)}px`,
-                          minWidth: `${Math.max(14, rowHeight - 6)}px`,
-                          minHeight: `${Math.max(14, rowHeight - 6)}px`,
+                          // Sized as a proportion of the row (~2/3) so it
+                          // scales with zoom but stays visually smaller than
+                          // the cell -- rowHeight-6 filled the whole cell and
+                          // read as oversized.
+                          width: `${Math.max(12, Math.round(rowHeight * (2 / 3)))}px`,
+                          height: `${Math.max(12, Math.round(rowHeight * (2 / 3)))}px`,
+                          minWidth: `${Math.max(12, Math.round(rowHeight * (2 / 3)))}px`,
+                          minHeight: `${Math.max(12, Math.round(rowHeight * (2 / 3)))}px`,
                           backgroundColor: (value === 'true' || value === true) ? '#276436' : 'white',
-                          border: `2px solid ${(value === 'true' || value === true) ? '#276436' : '#D0D8E8'}`,
+                          // 1px border -- 2px read as a thick ring around
+                          // unchecked boxes.
+                          border: `1px solid ${(value === 'true' || value === true) ? '#276436' : '#D0D8E8'}`,
                           borderRadius: '3px',
                         }}
                       >
                         {(value === 'true' || value === true) && (
                           <svg
-                            width={`${Math.max(10, rowHeight - 10)}`}
-                            height={`${Math.max(10, rowHeight - 10)}`}
+                            width={`${Math.max(8, Math.round(rowHeight * (2 / 3)) - 4)}`}
+                            height={`${Math.max(8, Math.round(rowHeight * (2 / 3)) - 4)}`}
                             viewBox="0 0 14 14"
                             fill="none"
                             xmlns="http://www.w3.org/2000/svg"

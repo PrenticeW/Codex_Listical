@@ -1363,7 +1363,9 @@ const TableRow = React.memo(function TableRow({
                 )}
                 {hasFilter && filterClickHandler && (
                   <FilterIcon
-                    size={14}
+                    // Scale with page zoom (rowHeight = 24 * sizeScale)
+                    // instead of staying fixed-size chrome.
+                    size={Math.max(10, Math.round(14 * (rowHeight / 24)))}
                     active={isFilterActive}
                     activeColor={FILTER_ACTIVE_COLOR}
                     // Inactive: same muted blue-grey used for the Subproject
