@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { JUNE_GROUPS } from '../constants/palettePickerGroups';
 import { useLocation } from 'react-router-dom';
 import PanelShell from './PanelShell';
@@ -272,6 +273,136 @@ function FieldRow({ label, children }) {
       </span>
       {children}
     </div>
+  );
+}
+
+// ─── Area selector ────────────────────────────────────────────────────────────
+// Fixed set of areas a goal can belong to. Stored lowercase; display casing
+// handled here. Unset is a valid, neutral state — the dropdown's first option
+// ("No area") selects it and reads as a default, not an error.
+
+const AREAS = ['personal', 'social', 'growth', 'duties'];
+
+const capitalise = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// Floating option list — same portal pattern as PlanPanel's GoalDropdown
+// (fixed-position popup under the anchor, closes on outside mousedown).
+function AreaDropdown({ value, anchorRect, onSelect, onClose }) {
+  useEffect(() => {
+    const handler = (e) => {
+      if (!e.target.closest('[data-area-picker]')) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  if (!anchorRect) return null;
+
+  const width = Math.max(anchorRect.width, 120);
+  const left = Math.min(anchorRect.left, window.innerWidth - width - 8);
+  const top = anchorRect.bottom + 4;
+
+  const OptionRow = ({ area }) => {
+    const [hovered, setHovered] = useState(false);
+    const isActive = (value || null) === area;
+    const isUnsetOption = area === null;
+    return (
+      <button
+        onClick={() => { onSelect(area); onClose(); }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          width: '100%', border: 'none', borderRadius: 4,
+          padding: '7px 10px', textAlign: 'left',
+          fontFamily: FONT, fontSize: 12,
+          fontWeight: isActive ? 600 : 400,
+          color: isUnsetOption && !hovered ? C.textFaint : (hovered ? C.greenDark : C.textDim),
+          background: hovered ? 'var(--brand-hover-bg)' : 'transparent',
+          cursor: 'pointer', transition: 'background 0.12s, color 0.12s',
+        }}
+      >
+        {isUnsetOption ? 'No area' : capitalise(area)}
+        {isActive && (
+          <svg width="10" height="8" viewBox="0 0 12 10" fill="none">
+            <path d="M1 5l3.5 3.5L11 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        )}
+      </button>
+    );
+  };
+
+  return createPortal(
+    <div
+      data-area-picker=""
+      style={{
+        position: 'fixed', zIndex: 999999,
+        top, left, width,
+        background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8,
+        boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 8px 24px rgba(72,50,75,0.16)',
+        padding: 4, boxSizing: 'border-box',
+        fontFamily: FONT,
+      }}
+    >
+      <OptionRow area={null} />
+      <div style={{ margin: '3px 6px', borderTop: `1px solid ${C.borderLight}` }} />
+      {AREAS.map((area) => <OptionRow key={area} area={area} />)}
+    </div>,
+    document.body
+  );
+}
+
+// Trigger button — matches PlanPanel's GoalChip trigger (28px control with a
+// right chevron) restyled neutrally, sized like the Nickname input beside it.
+// Unset shows "No area" in the faint placeholder colour, not an error state.
+function AreaSelector({ value, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const [anchorRect, setAnchorRect] = useState(null);
+  const [hovered, setHovered] = useState(false);
+  const btnRef = useRef(null);
+  const unset = !value;
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        data-area-picker=""
+        onClick={() => {
+          setAnchorRect(btnRef.current?.getBoundingClientRect() ?? null);
+          setOpen((v) => !v);
+        }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          width: 120, height: 28, boxSizing: 'border-box', flexShrink: 0,
+          position: 'relative',
+          display: 'flex', alignItems: 'center',
+          border: `1px solid ${hovered || open ? '#aaa' : C.border}`,
+          borderRadius: 8, padding: '0 22px 0 10px',
+          background: 'none', cursor: 'pointer',
+          fontFamily: FONT, fontSize: 13,
+          color: unset ? C.textFaint : C.text,
+          transition: 'border-color 0.15s',
+        }}
+      >
+        <span style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {unset ? 'No area' : capitalise(value)}
+        </span>
+        <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', display: 'flex', color: C.textFaint }}>
+          <svg width="9" height="6" viewBox="0 0 9 6" fill="none">
+            <path d="M1 1l3.5 3.5L8 1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </span>
+      </button>
+      {open && (
+        <AreaDropdown
+          value={value}
+          anchorRect={anchorRect}
+          onSelect={onSelect}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
   );
 }
 
@@ -828,6 +959,14 @@ function GoalSection({ goal, onOpenColour }) {
           A nickname is required to add to plan
         </p>
       )}
+
+      {/* Area */}
+      <FieldRow label="Area">
+        <AreaSelector
+          value={goal.area || null}
+          onSelect={(area) => dispatchGoalAction('setArea', { goalId: goal.id, area })}
+        />
+      </FieldRow>
 
       {/* Subprojects */}
       <FieldRow label="Subprojects">

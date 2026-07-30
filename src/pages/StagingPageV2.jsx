@@ -192,6 +192,7 @@ export default function StagingPageV2() {
           tagline: item.projectTagline ?? '',
           color: item.color ?? '',
           projectNickname: item.projectNickname ?? '',
+          area: item.area ?? null,
           addedToPlan: !!item.addedToPlan,
           subprojects,
         },
@@ -319,7 +320,7 @@ export default function StagingPageV2() {
     const g = shortlist.find((i) => i.id === selectedGoalId);
     if (!g) return null;
     return [
-      g.color, g.projectNickname, g.addedToPlan,
+      g.color, g.projectNickname, g.addedToPlan, g.area,
       g.projectName, g.projectTagline,
       g.showOutcomeTotals, g.showActionTimes,
     ].join('\x00');
@@ -781,6 +782,15 @@ export default function StagingPageV2() {
         handleInlineProjectUpdate(goalId, 'projectNickname', nickname);
         const item = shortlist.find((i) => i.id === goalId);
         if (item) fireGoalSelection({ ...item, projectNickname: nickname });
+      }
+
+      if (action === 'setArea' && goalId) {
+        // area is one of the four lowercase values, or null to clear back to
+        // unset. Normalise null → undefined so itemToDbRow writes NULL.
+        const nextArea = e.detail?.area ?? undefined;
+        handleInlineProjectUpdate(goalId, 'area', nextArea);
+        const item = shortlist.find((i) => i.id === goalId);
+        if (item) fireGoalSelection({ ...item, area: nextArea });
       }
 
       if (action === 'deleteGoal' && goalId) {
@@ -1295,9 +1305,27 @@ export default function StagingPageV2() {
                           <div></div>
                           <div style={{ width: 'calc(140px * var(--pz))', minWidth: 'calc(140px * var(--pz))' }}></div>
                           <div
-                            style={{ width: 'calc(24px * var(--pz))', minWidth: 'calc(24px * var(--pz))' }}
+                            // Both tags live in this one right-anchored flex
+                            // container so they share a fixed gap and can
+                            // never overlap; extra width overflows leftward
+                            // into the empty 140px column beside it.
+                            style={{ width: 'calc(24px * var(--pz))', minWidth: 'calc(24px * var(--pz))', gap: 'calc(8px * var(--pz))' }}
                             className="flex items-center justify-end"
                           >
+                            {item.area && (
+                              <span style={{
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: 'calc(9px * var(--pz))',
+                                color: '#1A1A1A',
+                                background: 'rgba(255,255,255,0.88)',
+                                borderRadius: 999,
+                                padding: 'calc(2px * var(--pz)) calc(8px * var(--pz))',
+                                textTransform: 'uppercase',
+                                letterSpacing: '.05em',
+                                flexShrink: 0,
+                                whiteSpace: 'nowrap',
+                              }}>{item.area}</span>
+                            )}
                             {item.addedToPlan && (
                               <span style={{
                                 fontFamily: 'var(--font-mono)',

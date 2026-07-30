@@ -614,31 +614,53 @@ export default function TableRow({
     );
   }
 
-  // DATA ROW - generic row with all cells editable (fallback)
+  // DATA ROW — the blank white separator at the bottom of each section.
+  // Rendered as a single inert spacer cell: no drag handle, no editable
+  // cells, no selection or context menu. It stays a drop target so rows
+  // can still be dragged to the end of a section.
   return (
-    <tr key={`${item.id}-row-${rowIdx}`} {...rowProps}>
-      <DragHandleCell
-        isRowSelected={isRowSelected}
-        isDropTarget={isDropTarget}
-        rowType="data"
-        onClick={(e) => onHandleClick(e, item.id, rowIdx)}
+    <tr
+      key={`${item.id}-row-${rowIdx}`}
+      onDragOver={(e) => onDragOver(e, item.id, rowIdx)}
+      onDrop={(e) => onDrop(e, item.id, rowIdx)}
+    >
+      {/* Gutter cell — kept for visual consistency with the rows above,
+          but static: no drag/click behaviour. A faint end-cap glyph marks
+          the section boundary so the row reads as deliberate. */}
+      <td
+        style={{
+          width: 24, minWidth: 24,
+          height: 24,
+          backgroundColor: isDropTarget ? '#fff5fc' : '#D2D7E1',
+          borderRight: '1px solid #C9C5BC',
+          borderBottom: '1px solid #DAD8C8',
+          borderTop: isDropTarget ? '2px solid #1A1A1A' : 'none',
+          padding: 0,
+          textAlign: 'center',
+          verticalAlign: 'middle',
+        }}
+      >
+        <span
+          aria-hidden="true"
+          style={{
+            // Same grip glyph as the drag handles above, but lightened so it
+            // reads as part of the gutter pattern rather than an affordance.
+            fontSize: 'calc(9px * var(--pz))',
+            lineHeight: 1,
+            color: '#BFB9AF',
+            userSelect: 'none',
+          }}
+        >⠿</span>
+      </td>
+      <td
+        colSpan={PLAN_TABLE_COLS}
+        style={{
+          height: 24,
+          backgroundColor: isDropTarget ? '#fff5fc' : '#ffffff',
+          borderTop: isDropTarget ? '2px solid #1A1A1A' : 'none',
+          padding: 0,
+        }}
       />
-      {rowValues.map((cellValue, cellIdx) => (
-        <TextInputCell
-          key={`${item.id}-row-${rowIdx}-cell-${cellIdx}`}
-          value={cellValue}
-          onChange={(val) => onCellChange(item.id, rowIdx, cellIdx, val)}
-          onKeyDown={(e) => onEnterKeyAddRow(e, item.id, rowIdx, rowValues.__rowType || 'data', sectionType)}
-          onMouseDown={(e) => cellMouseDown(e, cellIdx)}
-          onMouseEnter={() => cellMouseEnter(cellIdx)}
-          onFocus={onInputFocus}
-          isSelected={isCellSelected(item.id, rowIdx, cellIdx)}
-          isDropTarget={isDropTarget}
-          rowType="data"
-          textSizeScale={textSizeScale}
-          dataAttributes={dataAttrs(cellIdx)}
-        />
-      ))}
     </tr>
   );
 }
