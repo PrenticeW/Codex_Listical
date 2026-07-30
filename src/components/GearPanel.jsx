@@ -895,69 +895,108 @@ function AppearanceSection({ themeFamily, onShowTheme }) {
   );
 }
 
-// Theme picker sub-view — same layout as the production chip colour
-// picker (ColourView in PlanPanel.jsx): header with Back + Confirm check
-// button, preview bar, labelled 10-column swatch groups, Custom row.
-// Swatches come from the real 120-swatch PALETTE (30 families × 4 steps)
-// so a click maps to a theme family exactly; the Neutrals group is
-// omitted because a theme must be one of the 30 hue families (handoff §5
-// caveat). Apply-on-confirm only — no live preview while picking.
+// Theme picker sub-view — same panel as the Goal page colour picker
+// (ColourView in GoalPanel.jsx): bento back button up top, one BentoCard
+// per hue group with each family rendered as a horizontal strip of its
+// shades, and a Custom card. The strips come from the real 120-swatch
+// PALETTE (30 families × 4 steps, L68→L44) so a click maps to a theme
+// family exactly; the Neutrals card is omitted because a theme must be
+// one of the 30 hue families (handoff §5 caveat). One deliberate
+// difference from the chip picker: apply-on-confirm only (no live
+// preview), so a Confirm button sits beside Back and swatch clicks only
+// stage the selection.
 
-const THEME_LIGHTNESS = [68, 60, 52, 44];
-const THEME_PALETTE_GROUPS = (() => {
-  // Families in hue order, split into 3 groups of 10; each group renders
-  // as 4 rows (one per lightness step) × 10 columns, like the chip picker.
-  const sorted = [...PALETTE].sort((a, b) => a.h - b.h || b.l - a.l);
-  const families = [];
-  for (let i = 0; i < sorted.length; i += 4) families.push(sorted.slice(i, i + 4));
-  const groups = [];
-  for (let g = 0; g < 3; g++) {
-    const fams = families.slice(g * 10, g * 10 + 10);
-    const flat = [];
-    for (const l of THEME_LIGHTNESS) {
-      for (const fam of fams) {
-        const entry = fam.find((e) => e.l === l);
-        flat.push(`hsl(${entry.h}, ${entry.s}%, ${entry.l}%)`);
-      }
-    }
-    groups.push(flat);
-  }
-  return groups;
-})();
-const THEME_PALETTE_LABELS = ['Warm tones', 'Cool tones', 'Blues & purples'];
+// Palette families bucketed into the Goal page's group cards (hue order).
+const THEME_GROUPS = [
+  { label: 'Purples & Pinks', families: ['violet', 'grape', 'plum', 'magenta', 'blush', 'rose'] },
+  { label: 'Reds',            families: ['red', 'scarlet', 'crimson'] },
+  { label: 'Oranges',         families: ['orange', 'tangerine', 'amber'] },
+  { label: 'Yellows',         families: ['gold', 'yellow', 'chartr.'] },
+  { label: 'Greens',          families: ['lime', 'fern', 'sage', 'green', 'pine', 'juniper'] },
+  { label: 'Teals & Aquas',   families: ['teal', 'cyan', 'aqua', 'sky'] },
+  { label: 'Blues & Indigos', families: ['cerulean', 'denim', 'blue', 'cobalt', 'indigo'] },
+];
 
-function ThemeToolBtn({ children, onClick, title, as: Tag = 'button' }) {
-  const [hovered, setHovered] = useState(false);
+const THEME_LIGHTNESS = [68, 60, 52, 44]; // strip order, light → dark
+
+function themeFamilyShades(family) {
+  return THEME_LIGHTNESS
+    .map((l) => PALETTE.find((p) => p.name === family && p.l === l))
+    .filter(Boolean)
+    .map((e) => `hsl(${e.h}, ${e.s}%, ${e.l}%)`);
+}
+
+// Bento-style back button — same as the Goal page colour picker's
+function ThemeBackButton({ onClick }) {
+  const [hov, setHov] = useState(false);
   return (
-    <Tag
+    <button
       onClick={onClick}
-      title={title}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
       style={{
-        width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: hovered ? C.borderLight : C.bgBlock,
-        border: `1px solid ${hovered ? '#aaa' : C.border}`, borderRadius: 2,
-        cursor: 'pointer', color: hovered ? C.text : C.textFaint,
-        transition: 'color 0.15s, border-color 0.15s, background 0.15s',
-        padding: 0,
+        display: 'inline-flex', alignItems: 'center', gap: 8,
+        padding: '6px 11px',
+        background: hov ? C.greenBg : C.bg,
+        border: `1px solid ${hov ? C.greenBorder : C.border}`,
+        borderRadius: 8,
+        boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.07)',
+        cursor: 'pointer',
+        color: hov ? C.greenDark : C.textDim,
+        fontFamily: FONT, fontSize: 13, fontWeight: 500,
+        transition: 'all 0.15s',
       }}
     >
-      {children}
-    </Tag>
+      <svg width="5" height="9" viewBox="0 0 5 9" fill="none">
+        <path d="M4.5 1L1 4.5l3.5 3.5" stroke={C.green} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      Back
+    </button>
+  );
+}
+
+// Matching confirm button (apply-on-confirm — the Goal picker applies
+// immediately, the theme must not, per the handoff)
+function ThemeConfirmButton({ onClick, disabled }) {
+  const [hov, setHov] = useState(false);
+  const active = hov && !disabled;
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 8,
+        padding: '6px 11px',
+        background: active ? C.greenBg : C.bg,
+        border: `1px solid ${active ? C.greenBorder : C.border}`,
+        borderRadius: 8,
+        boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.07)',
+        cursor: disabled ? 'default' : 'pointer',
+        color: disabled ? C.textLight : (active ? C.greenDark : C.textDim),
+        fontFamily: FONT, fontSize: 13, fontWeight: 500,
+        opacity: disabled ? 0.6 : 1,
+        transition: 'all 0.15s',
+      }}
+    >
+      <svg width="10" height="8" viewBox="0 0 12 10" fill="none">
+        <path d="M1 5l3.5 3.5L11 1" stroke={disabled ? C.textLight : C.green} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      Confirm
+    </button>
   );
 }
 
 function ThemeView({ themeFamily, onBack, onCommit }) {
   const [pending, setPending] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
-  const colourInputRef = useRef(null);
 
   // Reset staged colour whenever the committed family changes
   useEffect(() => { setPending(null); }, [themeFamily]);
 
   const currentSwatch = themeSwatch(themeFamily, 60);
-  const previewColour = pending ?? currentSwatch;
+  const selectedColour = pending ?? currentSwatch;
   const pendingFamily = pending ? colourToFamily(pending) : themeFamily;
 
   const handleEyedropper = async () => {
@@ -969,7 +1008,7 @@ function ThemeView({ themeFamily, onBack, onCommit }) {
   };
 
   const handleConfirm = async () => {
-    if (isSaving) return;
+    if (isSaving || !pending) return;
     setIsSaving(true);
     try {
       await onCommit(pendingFamily);
@@ -979,129 +1018,121 @@ function ThemeView({ themeFamily, onBack, onCommit }) {
     }
   };
 
-  const monoLabel = {
+  const cardLabel = {
     fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
-    fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
-    textTransform: 'uppercase', color: 'var(--brand-ink)',
+    fontSize: 10, fontWeight: 700,
+    letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--brand-ink)',
+    marginBottom: 2,
   };
 
+  // A family's shades as a horizontal strip — same treatment as the Goal
+  // page picker's renderFamilyRow
+  const renderFamilyRow = (family) => (
+    <div key={family} style={{ display: 'flex', gap: 2, marginTop: 4 }}>
+      {themeFamilyShades(family).map((bg, idx) => {
+        const active = selectedColour === bg;
+        return (
+          <button
+            key={`${family}-${idx}`}
+            onClick={() => setPending(bg)}
+            title={`${familyDisplayName(family)}`}
+            style={{
+              flex: 1, height: 14, borderRadius: 2, background: bg,
+              border: 'none', cursor: 'pointer', padding: 0, position: 'relative',
+              transition: 'transform 0.1s',
+              outline: active ? '2px solid rgba(0,0,0,0.35)' : 'none',
+              outlineOffset: -1,
+            }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.12)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+          />
+        );
+      })}
+    </div>
+  );
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      {/* Header — Back | label | Confirm check button */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '12px 22px 10px', borderBottom: `1px solid ${C.borderLight}`,
-        flexShrink: 0, background: C.bg,
-      }}>
-        <button
-          onClick={onBack}
-          title="Back"
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: 24, height: 24, background: 'none', border: 'none',
-            cursor: 'pointer', color: C.textMed, padding: 0,
-          }}
-        >
-          <svg width="9" height="14" viewBox="0 0 7 11" fill="none">
-            <path d="M6 1L1 5.5 6 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
-        <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: C.text }}>
-          Theme colour
-        </span>
-        <button
-          onClick={handleConfirm}
-          disabled={isSaving}
-          title="Confirm"
-          style={{
-            marginLeft: 'auto', width: 44, height: 26,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: C.bgBlock, border: `1px solid ${C.border}`, borderRadius: 7,
-            cursor: isSaving ? 'default' : 'pointer', color: C.green, padding: 0,
-            transition: 'border-color 0.15s, background 0.15s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = C.green; e.currentTarget.style.background = C.greenBg; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.bgBlock; }}
-        >
-          <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
-            <path d="M1 5l3.5 3.5L11 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* Back + Confirm — bento button style */}
+      <div style={{ padding: '16px 12px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <ThemeBackButton onClick={onBack} />
+        <ThemeConfirmButton onClick={handleConfirm} disabled={isSaving || !pending} />
       </div>
 
-      {/* Preview bar — staged family name on its main step */}
-      <div style={{
-        margin: '10px 22px 0', height: 30, borderRadius: 6,
-        border: '1px solid rgba(0,0,0,0.1)',
-        background: themeSwatch(pendingFamily, 60) ?? previewColour,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-        color: '#fff', flexShrink: 0, fontFamily: FONT,
-      }}>
-        {familyDisplayName(pendingFamily)}
+      {/* Staged selection — dot + family name */}
+      <div style={{ ...BENTO_CARD, margin: '8px 12px 0', padding: '10px 12px' }}>
+        <div style={cardLabel}>Theme colour</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+          <span style={{
+            width: 14, height: 14, borderRadius: 4, flexShrink: 0,
+            background: themeSwatch(pendingFamily, 60) ?? 'var(--th-60)',
+            boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.10)',
+          }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: C.text, fontFamily: FONT }}>
+            {familyDisplayName(pendingFamily)}
+          </span>
+          {pending && pendingFamily !== themeFamily && (
+            <span style={{ fontSize: 11, color: C.textFaint, fontFamily: FONT }}>
+              (was {familyDisplayName(themeFamily)})
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Scrollable palette */}
-      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-        {THEME_PALETTE_GROUPS.map((group, gi) => (
-          <div key={gi}>
-            <div style={{ ...monoLabel, padding: '8px 22px 2px' }}>
-              {THEME_PALETTE_LABELS[gi]}
-            </div>
-            <div style={{
-              display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)',
-              gap: 2, padding: '4px 22px 6px',
-            }}>
-              {group.map((colour, ci) => (
-                <button
-                  key={ci}
-                  onClick={() => setPending(colour)}
-                  title={colour}
-                  style={{
-                    aspectRatio: '1', borderRadius: 2, border: 'none',
-                    background: colour, cursor: 'pointer', padding: 0,
-                    outline: (pending ?? currentSwatch) === colour ? '2px solid rgba(0,0,0,0.35)' : 'none',
-                    outlineOffset: -2,
-                    transition: 'transform 0.1s',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.2)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
+      {/* Palette sections — one card per THEME_GROUPS entry */}
+      {THEME_GROUPS.map(({ label, families }) => (
+        <div key={label} style={{ ...BENTO_CARD, margin: '8px 12px 0', padding: '10px 12px' }}>
+          <div style={cardLabel}>{label}</div>
+          {families.map(renderFamilyRow)}
+        </div>
+      ))}
 
-        {/* Custom colour row — resolves to the nearest family on Confirm */}
-        <div style={{
-          borderTop: `1px solid ${C.borderLight}`,
-          margin: '6px 22px 0', padding: '2px 0 14px',
-        }}>
-          <div style={{ ...monoLabel, marginBottom: 6, paddingTop: 4 }}>
-            Custom
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            {'EyeDropper' in window && (
-              <ThemeToolBtn title="Pick from screen" onClick={handleEyedropper}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/>
-                </svg>
-              </ThemeToolBtn>
-            )}
-            <label style={{ position: 'relative' }}>
-              <ThemeToolBtn title="Custom colour" as="div">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M19 11l-8-8-8.5 8.5a5.5 5.5 0 007.78 7.78L19 11z"/><path d="M20 23a2 2 0 001.4-3.4L16 14"/><line x1="3.5" y1="11.5" x2="13" y2="2"/>
-                </svg>
-              </ThemeToolBtn>
-              <input
-                ref={colourInputRef}
-                type="color"
-                onChange={e => setPending(e.target.value)}
-                style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
-              />
-            </label>
-          </div>
+      {/* Custom */}
+      <div style={{ ...BENTO_CARD, margin: '8px 12px 12px', padding: '10px 12px' }}>
+        <div style={{ ...cardLabel, marginBottom: 6 }}>Custom</div>
+        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+          {'EyeDropper' in window && (
+            <button
+              onClick={handleEyedropper}
+              title="Pick from screen"
+              style={{
+                width: 26, height: 26, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: C.bgBlock, border: `1px solid ${C.border}`,
+                cursor: 'pointer', color: C.textFaint,
+                transition: 'color 0.15s, border-color 0.15s, background 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = C.text; e.currentTarget.style.borderColor = '#aaa'; e.currentTarget.style.background = C.borderLight; }}
+              onMouseLeave={e => { e.currentTarget.style.color = C.textFaint; e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.bgBlock; }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
+                <path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/>
+              </svg>
+            </button>
+          )}
+          <label style={{ position: 'relative', display: 'inline-flex' }}>
+            <span
+              title="Custom colour"
+              style={{
+                width: 26, height: 26, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: C.bgBlock, border: `1px solid ${C.border}`,
+                cursor: 'pointer', color: C.textFaint,
+                transition: 'color 0.15s, border-color 0.15s, background 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = C.text; e.currentTarget.style.borderColor = '#aaa'; e.currentTarget.style.background = C.borderLight; }}
+              onMouseLeave={e => { e.currentTarget.style.color = C.textFaint; e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.bgBlock; }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 11l-8-8-8.5 8.5a5.5 5.5 0 007.78 7.78L19 11z"/><path d="M20 23a2 2 0 001.4-3.4L16 14"/>
+                <line x1="3.5" y1="11.5" x2="13" y2="2"/>
+              </svg>
+            </span>
+            <input
+              type="color"
+              onChange={e => setPending(e.target.value)}
+              style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+            />
+          </label>
         </div>
       </div>
     </div>
