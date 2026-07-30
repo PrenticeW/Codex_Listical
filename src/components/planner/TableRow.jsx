@@ -21,10 +21,11 @@ const FILTER_ACTIVE_COLOR = '#0066FF';
 // Shared filter funnel icon for column headers + day-total cells. Same
 // glyph at rest and active (color-only state change per design review).
 // On hover: solid white fill behind the icon, icon turns black.
-function FilterIcon({ size, active, activeColor, inactiveColor, onClick, title, className = '' }) {
+function FilterIcon({ size, active, activeColor, inactiveColor, onClick, title, className = '', wrapperClassName = '' }) {
   const [hovered, setHovered] = React.useState(false);
   return (
     <span
+      className={wrapperClassName}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -1179,10 +1180,13 @@ const TableRow = React.memo(function TableRow({
                 borderTop: isDayRow ? '1.5px solid black' : (isDayOfWeekRow ? '1.5px solid black' : undefined),
                 borderBottom: (isDayOfWeekRow || isDailyMaxRow) ? '1.5px solid black' : (isDailyMinRow ? 'none' : (isDayRow ? '1px solid black' : '1px solid #d3d3d3')),
                 borderRight: isLastDayOfWeek ? '1.5px solid black' : (isDayRow ? '1px solid black' : '1px solid #d3d3d3'),
-                // Align text right-edge with filter row: button(10px) + gap(8px) + right-pad(2px) = 20px
-                paddingRight: (isDailyMinRow || isDailyMaxRow) ? '20px' : undefined,
-                paddingLeft: (isDailyMinRow || isDailyMaxRow) ? '2px' : undefined,
-                justifyContent: (isDailyMinRow || isDailyMaxRow) ? 'flex-end' : 'center',
+                // Min/max figures are centered like the date and day-of-week
+                // cells above them. They used to right-align against a fixed
+                // 20px pad reserved for the Daily Total row's filter-icon
+                // chrome; the day column shrinks with page zoom while that pad
+                // didn't, so at reduced zoom the figures overflowed out of
+                // their cells to the left. The icon is hover-reveal overlay
+                // now (takes no layout space), so nothing to align against.
               }}
             >
               {value || '\u00A0'}
@@ -1597,7 +1601,7 @@ const TableRow = React.memo(function TableRow({
                 className="p-0"
               >
                 <div
-                  className="h-full flex items-center justify-between"
+                  className="h-full flex items-center justify-center group/daycell"
                   style={{
                     position: 'relative',
                     minHeight: `${rowHeight}px`,
@@ -1607,30 +1611,60 @@ const TableRow = React.memo(function TableRow({
                     // header color (P.headerSet[0]) -- same #8BA8D8 band
                     // used for project header rows elsewhere in this table
                     // -- not the whisper-blue wash that was here before.
-                    backgroundColor: '#8BA8D8',
+                    // Active-filter feedback lives in the cell chrome, not
+                    // the text: darker band + inset ring, so the centered
+                    // total never shifts when a filter toggles on.
+                    backgroundColor: isFilterActive ? '#5A84D8' : '#8BA8D8',
+                    boxShadow: isFilterActive ? `inset 0 0 0 1.5px ${FILTER_ACTIVE_COLOR}` : undefined,
                     borderBottom: '1px solid #d3d3d3',
                     borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3',
-                    paddingLeft: '2px',
-                    // Was 2px -- left the filter icon sitting almost flush
-                    // against the cell's right border.
-                    paddingRight: '6px',
+                    cursor: 'pointer',
                   }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (handleDayColumnFilterToggle) {
+                      handleDayColumnFilterToggle(columnId);
+                    }
+                  }}
+                  title={isFilterActive ? 'Filter active — click to clear' : 'Filter by this day'}
                 >
-                  {/* Matches reference/SystemView.jsx H7 dayTotals span (fontSize: 11) -- fixed chrome size, not the cellFontSize zoom scale. */}
-                  <span className="text-right flex-1 pr-2" style={{ fontFamily: "'Mulish', sans-serif", fontSize: 'calc(11px * var(--pz))', fontWeight: 'bold', lineHeight: 1 }}>{value}</span>
-                  <FilterIcon
-                    size={10}
-                    active={isFilterActive}
-                    activeColor={FILTER_ACTIVE_COLOR}
-                    inactiveColor="#000000"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (handleDayColumnFilterToggle) {
-                        handleDayColumnFilterToggle(columnId);
-                      }
+                  {/* Matches reference/SystemView.jsx H7 dayTotals span (fontSize: 11) -- fixed chrome size, not the cellFontSize zoom scale.
+                      Centered like the date/min/max cells above. On hover the
+                      value swaps out for the filter icon (opacity swap, both
+                      absolutely centered, so nothing moves or spills outside
+                      the cell). When the filter is active the value stays
+                      visible -- white on the darker band is the "on" state. */}
+                  <span
+                    className={`text-center flex-1 ${isFilterActive ? '' : 'group-hover/daycell:opacity-0'}`}
+                    style={{
+                      fontFamily: "'Mulish', sans-serif",
+                      fontSize: 'calc(11px * var(--pz))',
+                      fontWeight: 'bold',
+                      lineHeight: 1,
+                      color: isFilterActive ? '#FFFFFF' : undefined,
+                      transition: 'opacity 0.1s',
                     }}
-                    title={isFilterActive ? 'Filter active' : 'Add filter'}
-                  />
+                  >
+                    {value}
+                  </span>
+                  {!isFilterActive && (
+                    // transform: scale(--pz) keeps the icon inside the cell
+                    // bounds at any zoom level (the icon itself is fixed-size
+                    // chrome; the cell shrinks with the page scale).
+                    <span
+                      className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/daycell:opacity-100 transition-opacity pointer-events-none"
+                      style={{ transform: 'scale(var(--pz))' }}
+                    >
+                      <FilterIcon
+                        size={10}
+                        active={false}
+                        activeColor={FILTER_ACTIVE_COLOR}
+                        inactiveColor="#000000"
+                        onClick={undefined}
+                        title=""
+                      />
+                    </span>
+                  )}
                 </div>
               </td>
             );
