@@ -36,7 +36,7 @@ import {
   loadTacticsYearSettings,
   saveTacticsYearSettings,
 } from '../lib/tacticsStorage';
-import ColourPicker from './ColourPicker';
+import { PALETTE } from '../utils/staging/projectColour';
 import { applyThemeFamily, colourToFamily, familyDisplayName, themeSwatch, DEFAULT_THEME_FAMILY } from '../lib/theme';
 import { loadThemeFamily, saveThemeFamily } from '../lib/themeStorage';
 
@@ -895,19 +895,78 @@ function AppearanceSection({ themeFamily, onShowTheme }) {
   );
 }
 
-// Theme picker sub-view — reuses the chip colour picker (ColourPicker) on
-// the 120-swatch palette. Apply-on-confirm only: swatch clicks stage a
-// pending colour, Confirm resolves it to a family (exact swatch match,
-// else nearest by RGB distance to the family L52 step — colourToFamily),
-// applies the derived scheme, persists it, and returns to settings.
+// Theme picker sub-view — same layout as the production chip colour
+// picker (ColourView in PlanPanel.jsx): header with Back + Confirm check
+// button, preview bar, labelled 10-column swatch groups, Custom row.
+// Swatches come from the real 120-swatch PALETTE (30 families × 4 steps)
+// so a click maps to a theme family exactly; the Neutrals group is
+// omitted because a theme must be one of the 30 hue families (handoff §5
+// caveat). Apply-on-confirm only — no live preview while picking.
+
+const THEME_LIGHTNESS = [68, 60, 52, 44];
+const THEME_PALETTE_GROUPS = (() => {
+  // Families in hue order, split into 3 groups of 10; each group renders
+  // as 4 rows (one per lightness step) × 10 columns, like the chip picker.
+  const sorted = [...PALETTE].sort((a, b) => a.h - b.h || b.l - a.l);
+  const families = [];
+  for (let i = 0; i < sorted.length; i += 4) families.push(sorted.slice(i, i + 4));
+  const groups = [];
+  for (let g = 0; g < 3; g++) {
+    const fams = families.slice(g * 10, g * 10 + 10);
+    const flat = [];
+    for (const l of THEME_LIGHTNESS) {
+      for (const fam of fams) {
+        const entry = fam.find((e) => e.l === l);
+        flat.push(`hsl(${entry.h}, ${entry.s}%, ${entry.l}%)`);
+      }
+    }
+    groups.push(flat);
+  }
+  return groups;
+})();
+const THEME_PALETTE_LABELS = ['Warm tones', 'Cool tones', 'Blues & purples'];
+
+function ThemeToolBtn({ children, onClick, title, as: Tag = 'button' }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <Tag
+      onClick={onClick}
+      title={title}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: hovered ? C.borderLight : C.bgBlock,
+        border: `1px solid ${hovered ? '#aaa' : C.border}`, borderRadius: 2,
+        cursor: 'pointer', color: hovered ? C.text : C.textFaint,
+        transition: 'color 0.15s, border-color 0.15s, background 0.15s',
+        padding: 0,
+      }}
+    >
+      {children}
+    </Tag>
+  );
+}
+
 function ThemeView({ themeFamily, onBack, onCommit }) {
   const [pending, setPending] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const colourInputRef = useRef(null);
 
-  // Reset staged colour whenever the view is (re)entered with a new family
+  // Reset staged colour whenever the committed family changes
   useEffect(() => { setPending(null); }, [themeFamily]);
 
+  const currentSwatch = themeSwatch(themeFamily, 60);
+  const previewColour = pending ?? currentSwatch;
   const pendingFamily = pending ? colourToFamily(pending) : themeFamily;
+
+  const handleEyedropper = async () => {
+    if (!('EyeDropper' in window)) return;
+    try {
+      const result = await new window.EyeDropper().open();
+      setPending(result.sRGBHex);
+    } catch { /* cancelled */ }
+  };
 
   const handleConfirm = async () => {
     if (isSaving) return;
@@ -920,62 +979,130 @@ function ThemeView({ themeFamily, onBack, onCommit }) {
     }
   };
 
+  const monoLabel = {
+    fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
+    fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
+    textTransform: 'uppercase', color: 'var(--brand-ink)',
+  };
+
   return (
-    <div style={{ paddingTop: 20, paddingBottom: 24 }}>
-      {/* Back button */}
-      <div style={{ margin: '0 11px 7px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      {/* Header — Back | label | Confirm check button */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '12px 22px 10px', borderBottom: `1px solid ${C.borderLight}`,
+        flexShrink: 0, background: C.bg,
+      }}>
         <button
           onClick={onBack}
+          title="Back"
           style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            background: 'none', border: 'none', padding: '4px 2px', cursor: 'pointer',
-            fontFamily: FONT, fontSize: 13, fontWeight: 500, color: C.textMed,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 24, height: 24, background: 'none', border: 'none',
+            cursor: 'pointer', color: C.textMed, padding: 0,
           }}
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m15 18-6-6 6-6"/>
+          <svg width="9" height="14" viewBox="0 0 7 11" fill="none">
+            <path d="M6 1L1 5.5 6 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-          Back
+        </button>
+        <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: C.text }}>
+          Theme colour
+        </span>
+        <button
+          onClick={handleConfirm}
+          disabled={isSaving}
+          title="Confirm"
+          style={{
+            marginLeft: 'auto', width: 44, height: 26,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: C.bgBlock, border: `1px solid ${C.border}`, borderRadius: 7,
+            cursor: isSaving ? 'default' : 'pointer', color: C.green, padding: 0,
+            transition: 'border-color 0.15s, background 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = C.green; e.currentTarget.style.background = C.greenBg; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.bgBlock; }}
+        >
+          <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
+            <path d="M1 5l3.5 3.5L11 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
         </button>
       </div>
 
-      <div style={BENTO_CARD}>
-        <SectionLabel>Theme colour</SectionLabel>
+      {/* Preview bar — staged family name on its main step */}
+      <div style={{
+        margin: '10px 22px 0', height: 30, borderRadius: 6,
+        border: '1px solid rgba(0,0,0,0.1)',
+        background: themeSwatch(pendingFamily, 60) ?? previewColour,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+        color: '#fff', flexShrink: 0, fontFamily: FONT,
+      }}>
+        {familyDisplayName(pendingFamily)}
+      </div>
 
-        {/* Current / staged selection summary */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <span style={{
-            width: 14, height: 14, borderRadius: 4, flexShrink: 0,
-            background: themeSwatch(pendingFamily, 60) ?? 'var(--th-60)',
-            boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.10)',
-          }} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{familyDisplayName(pendingFamily)}</span>
-          {pending && pendingFamily !== themeFamily && (
-            <span style={{ fontSize: 11, color: C.textFaint }}>(was {familyDisplayName(themeFamily)})</span>
-          )}
+      {/* Scrollable palette */}
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+        {THEME_PALETTE_GROUPS.map((group, gi) => (
+          <div key={gi}>
+            <div style={{ ...monoLabel, padding: '8px 22px 2px' }}>
+              {THEME_PALETTE_LABELS[gi]}
+            </div>
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)',
+              gap: 2, padding: '4px 22px 6px',
+            }}>
+              {group.map((colour, ci) => (
+                <button
+                  key={ci}
+                  onClick={() => setPending(colour)}
+                  title={colour}
+                  style={{
+                    aspectRatio: '1', borderRadius: 2, border: 'none',
+                    background: colour, cursor: 'pointer', padding: 0,
+                    outline: (pending ?? currentSwatch) === colour ? '2px solid rgba(0,0,0,0.35)' : 'none',
+                    outlineOffset: -2,
+                    transition: 'transform 0.1s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.2)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {/* Custom colour row — resolves to the nearest family on Confirm */}
+        <div style={{
+          borderTop: `1px solid ${C.borderLight}`,
+          margin: '6px 22px 0', padding: '2px 0 14px',
+        }}>
+          <div style={{ ...monoLabel, marginBottom: 6, paddingTop: 4 }}>
+            Custom
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {'EyeDropper' in window && (
+              <ThemeToolBtn title="Pick from screen" onClick={handleEyedropper}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/>
+                </svg>
+              </ThemeToolBtn>
+            )}
+            <label style={{ position: 'relative' }}>
+              <ThemeToolBtn title="Custom colour" as="div">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 11l-8-8-8.5 8.5a5.5 5.5 0 007.78 7.78L19 11z"/><path d="M20 23a2 2 0 001.4-3.4L16 14"/><line x1="3.5" y1="11.5" x2="13" y2="2"/>
+                </svg>
+              </ThemeToolBtn>
+              <input
+                ref={colourInputRef}
+                type="color"
+                onChange={e => setPending(e.target.value)}
+                style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+              />
+            </label>
+          </div>
         </div>
-
-        {/* Chip colour picker on the 120-swatch palette. No live preview —
-            the scheme only changes on Confirm. */}
-        <ColourPicker
-          value={pending ?? (themeSwatch(themeFamily, 60) || undefined)}
-          onChange={setPending}
-          defaultOpen
-        />
-
-        <button
-          onClick={handleConfirm}
-          disabled={isSaving || (!pending && true)}
-          style={{
-            marginTop: 12, width: '100%', padding: '8px 0', borderRadius: 8,
-            border: 'none', cursor: (isSaving || !pending) ? 'default' : 'pointer',
-            fontFamily: FONT, fontSize: 13, fontWeight: 600,
-            background: (isSaving || !pending) ? '#D9D5E2' : 'var(--brand-deep)',
-            color: '#fff', transition: 'background 0.15s',
-          }}
-        >
-          {isSaving ? 'Applying…' : 'Confirm'}
-        </button>
       </div>
     </div>
   );
