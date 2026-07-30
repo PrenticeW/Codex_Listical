@@ -154,7 +154,7 @@ export default function PanelShell({
             zIndex: 0,
             pointerEvents: 'none',
             backgroundImage: [
-              `radial-gradient(ellipse 130% 50% at 110% -5%, ${MAUVE(0.45)} 0%, transparent 62%)`,
+              `radial-gradient(ellipse 130% 50% at 110% -5%, ${MAUVE(0.14)} 0%, transparent 62%)`,
               `linear-gradient(180deg, ${MAUVE(0.04)} 0%, ${MAUVE(0.22)} 100%)`,
               `linear-gradient(to top right, ${MAUVE(0.28)} 0%, ${MAUVE(0.12)} 45%, transparent 70%)`,
             ].join(','),
