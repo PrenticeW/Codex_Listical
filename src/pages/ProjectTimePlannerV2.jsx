@@ -16,7 +16,7 @@ import usePlannerColumns from '../hooks/planner/usePlannerColumns';
 import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
 import { TACTICS_SEND_TO_SYSTEM_EVENT, getSendToSystemTimestamp, loadSentChipsSnapshot, loadTacticsYearSettings } from '../lib/tacticsStorage';
-import { SYSTEM_PANEL_ACTION_EVENT, SYSTEM_PANEL_SELECTION_EVENT, SYSTEM_PANEL_SCALE_EVENT, SYSTEM_PANEL_DAY_FILTER_EVENT, SYSTEM_PANEL_PROJECT_NAMES_EVENT, SYSTEM_PANEL_PROJECT_FILTER_EVENT } from '../components/SystemPanel';
+import { SYSTEM_PANEL_ACTION_EVENT, SYSTEM_PANEL_SELECTION_EVENT, SYSTEM_PANEL_SCALE_EVENT, SYSTEM_PANEL_DAY_FILTER_EVENT, SYSTEM_PANEL_PROJECT_NAMES_EVENT, SYSTEM_PANEL_PROJECT_FILTER_EVENT, SYSTEM_PANEL_ARCHIVE_WEEK_EVENT } from '../components/SystemPanel';
 import { useTaskRowPanel, TASK_ROW_DETAIL_UPDATE_EVENT } from '../contexts/TaskRowPanelContext';
 import { loadSentMetricsSnapshot, peekTacticsMetricsCache } from '../lib/tacticsMetricsStorage';
 import { peekTacticsCache } from '../lib/tacticsStorage';
@@ -87,6 +87,7 @@ import {
   insertRecurringSnapshots,
   resetRecurringTasks,
 } from '../utils/planner/archiveHelpers';
+import { buildArchiveWeekPanelData } from '../utils/planner/archiveWeekPanelData';
 import { useArchiveTotals } from '../hooks/planner/useArchiveTotals';
 
 // Sortable status values for the "Sort Inbox" feature
@@ -664,7 +665,7 @@ export default function ProjectTimePlannerV2() {
   const [addTasksCount, setAddTasksCount] = useState('');
 
   // Load projects and subprojects from Staging
-  const { projects, subprojects, projectSubprojectsMap, projectNamesMap, projectTaglinesMap, projectIdByNickname, isProjectsLoaded } = useProjectsData();
+  const { projects, subprojects, projectSubprojectsMap, projectNamesMap, projectTaglinesMap, projectIdByNickname, projectInfoById, isProjectsLoaded } = useProjectsData();
 
   // Import tasks from active year into draft (single action, no wizard)
   const handleImportTasks = useCallback(async () => {
@@ -819,6 +820,21 @@ export default function ProjectTimePlannerV2() {
       detail: { task: updatedRow },
     }));
   }, [filteredData, panelTask?.id, panelTask?.status]);
+
+  // Archive Week detail panel — when the selected panel row is an archive
+  // week, derive the read-only panel payload from the table data and publish
+  // it to SystemPanel. Pure derivation + event dispatch, no setData.
+  useEffect(() => {
+    if (panelTask?._rowType !== 'archiveRow') return;
+    const week = buildArchiveWeekPanelData(data, panelTask.id, {
+      projectInfoById,
+      projectIdByNickname,
+    });
+    if (!week) return;
+    window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_ARCHIVE_WEEK_EVENT, {
+      detail: { week },
+    }));
+  }, [panelTask, data, projectInfoById, projectIdByNickname]);
 
   // Keep latestVisibleDayColumnsRef in sync so the event handler can always read
   // the current pole-position without needing to be in its dep array.
@@ -2358,6 +2374,12 @@ export default function ProjectTimePlannerV2() {
       archiveWeekRow.archiveWeekLabel = `Year ${weekNumber.year}, ${customWeekName}`;
     }
 
+    // Freeze the calendar week's user-given name (week_names map) onto the
+    // archive row at archive time. Later renames in planner_settings must not
+    // change what this archive week shows — the panel reads only this copy.
+    // Persists automatically via the archived_weeks snapshot round-trip.
+    archiveWeekRow.archiveCalendarWeekName = customWeekName || null;
+
     // Step 3: Copy project structure as archived (including subproject sections)
     const projectRows = data.filter(row =>
       row._rowType === 'projectHeader' ||
@@ -2368,7 +2390,11 @@ export default function ProjectTimePlannerV2() {
       row._rowType === 'subprojectGeneral' ||
       row._rowType === 'subprojectUnscheduled'
     );
-    const archivedProjects = createArchivedProjectStructure(projectRows, subprojectRows, archiveWeekRow.id, totalDays, projectWeeklyQuotas, projectIdByNickname);
+    // Area assignments resolve by projectId from staging, exactly like the
+    // weekly quotas — frozen onto each archived project header as archivedArea.
+    const projectAreaById = new Map();
+    projectInfoById.forEach((info, id) => projectAreaById.set(id, info?.area ?? null));
+    const archivedProjects = createArchivedProjectStructure(projectRows, subprojectRows, archiveWeekRow.id, totalDays, projectWeeklyQuotas, projectIdByNickname, projectAreaById);
 
     // Step 4: Collect non-recurring Done/Abandoned tasks
     const nonRecurringTasks = collectTasksForArchive(data, task =>
@@ -2418,7 +2444,7 @@ export default function ProjectTimePlannerV2() {
     };
 
     executeCommand(archiveCommand);
-  }, [data, dates, startDate, dailyMinValues, dailyMaxValues, totalDays, executeCommand, collapsedGroups, visibleDayColumns, projectWeeklyQuotas, projectIdByNickname, metricsLoaded, weekNames]);
+  }, [data, dates, startDate, dailyMinValues, dailyMaxValues, totalDays, executeCommand, collapsedGroups, visibleDayColumns, projectWeeklyQuotas, projectIdByNickname, projectInfoById, metricsLoaded, weekNames]);
 
   const handleHideWeek = useCallback(() => {
     setIsListicalMenuOpen(false);

@@ -21,6 +21,7 @@ import { useSystemPanel } from '../contexts/SystemPanelContext';
 import usePanelWidth from '../hooks/usePanelWidth';
 import { useTaskRowPanel } from '../contexts/TaskRowPanelContext';
 import { TaskDetailContent } from './planner/TaskRowPanel';
+import { ArchiveWeekContent } from './planner/ArchiveWeekPanel';
 import { useYear } from '../contexts/YearContext';
 import { peekTacticsCache, loadTacticsYearSettings } from '../lib/tacticsStorage';
 import { GEAR_TACTICS_SETTINGS_EVENT } from './GearPanel';
@@ -37,6 +38,9 @@ export const SYSTEM_PANEL_DAY_FILTER_EVENT = 'system-panel-day-filter';
 export const SYSTEM_PANEL_PROJECT_NAMES_EVENT = 'system-panel-project-names';
 // Fired by ProjectTimePlannerV2 when the project filter changes
 export const SYSTEM_PANEL_PROJECT_FILTER_EVENT = 'system-panel-project-filter';
+// Fired by ProjectTimePlannerV2 with the derived Archive Week panel payload
+// whenever the selected panel row is an archive week (or its data changes)
+export const SYSTEM_PANEL_ARCHIVE_WEEK_EVENT = 'system-panel-archive-week';
 
 function dispatchSystemAction(action, payload = {}) {
   window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_ACTION_EVENT, { detail: { action, ...payload } }));
@@ -871,6 +875,16 @@ export default function SystemPanel() {
   const { currentYear } = useYear();
   const { width: panelWidth, setWidth: setPanelWidth, minWidth, maxWidth } = usePanelWidth();
 
+  // Archive Week detail payload, computed and broadcast by ProjectTimePlannerV2
+  // (buildArchiveWeekPanelData). Kept in state so the detail pane re-renders
+  // when the pager changes weeks or the underlying data reloads.
+  const [archiveWeek, setArchiveWeek] = useState(null);
+  useEffect(() => {
+    const handler = (e) => { if (e.detail?.week) setArchiveWeek(e.detail.week); };
+    window.addEventListener(SYSTEM_PANEL_ARCHIVE_WEEK_EVENT, handler);
+    return () => window.removeEventListener(SYSTEM_PANEL_ARCHIVE_WEEK_EVENT, handler);
+  }, []);
+
   const [use24Hour, setUse24Hour] = useState(
     () => peekTacticsCache(currentYear).yearSettings?.use24Hour ?? false
   );
@@ -921,6 +935,9 @@ export default function SystemPanel() {
   if (pathname !== '/') return null;
 
   const showTaskDetail = Boolean(selectedTask);
+  // Archive week rows get their own read-only detail view instead of the
+  // task detail card. Same outer slide, different pane content.
+  const showArchiveDetail = selectedTask?._rowType === 'archiveRow';
 
   return (
     <PanelShell
@@ -963,9 +980,16 @@ export default function SystemPanel() {
             </div>
           </div>
 
-          {/* Task detail view */}
+          {/* Task detail / Archive week detail view */}
           <div style={{ width: '50%', flexShrink: 0, overflow: 'hidden', height: '100%' }}>
-            <TaskDetailContent selectedTask={selectedTask} onBack={closePanel} use24Hour={use24Hour} />
+            {showArchiveDetail ? (
+              <ArchiveWeekContent
+                week={archiveWeek && archiveWeek.id === selectedTask.id ? archiveWeek : null}
+                onBack={closePanel}
+              />
+            ) : (
+              <TaskDetailContent selectedTask={selectedTask} onBack={closePanel} use24Hour={use24Hour} />
+            )}
           </div>
         </div>
       </div>

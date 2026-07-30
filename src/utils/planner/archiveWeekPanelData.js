@@ -1,0 +1,190 @@
+/**
+ * Archive Week panel data builder
+ *
+ * Pure derivation of the Archive Week detail panel payload
+ * (05_ARCHIVE_WEEK_PANEL spec) from the System table's data array.
+ * No storage access, no side effects — the page computes this and
+ * broadcasts it to SystemPanel.
+ *
+ * Notes on field mapping (see the spec + docs/known-issues.md):
+ * - label / week number    → archiveWeekLabel ("Year X, Week Y"; the week
+ *                            part is user-editable and may be a custom name)
+ * - range                  → archiveLabel (date range, user-editable — when
+ *                            the user has replaced it with free context text
+ *                            it is shown as an italic name line instead)
+ * - week name lines        → frozen archiveCalendarWeekName (stamped at
+ *                            archive time), then the edited archiveLabel
+ *                            context text when it differs from a plain range
+ * - quota                  → archivedWeeklyQuota, frozen per project header
+ * - delta                  → current − last week (NOT vs quota; the quota
+ *                            variant is deferred, see known-issues.md).
+ *                            Projects with no quota (null) render '—'.
+ */
+
+import { ARCHIVE_ROW_TYPES } from '../../constants/planner/rowTypes';
+
+export const AREA_ORDER = ['personal', 'social', 'growth', 'duties'];
+
+const AREA_LABELS = {
+  personal: 'Personal',
+  social: 'Social',
+  growth: 'Growth',
+  duties: 'Duties',
+};
+
+// Matches the generated archive range format, e.g. "Dec 29 - Jan 4"
+// (calculateWeekRange in archiveHelpers.js). Anything else in archiveLabel
+// is treated as user context text.
+const DATE_RANGE_RE = /^[A-Za-z]{3,9}\.?\s?\d{1,2}\s*[-–—]\s*[A-Za-z]{3,9}\.?\s?\d{1,2}$/;
+
+const round1 = (v) => Math.round(v * 10) / 10;
+
+const sumRowDayEntries = (row) => {
+  let total = 0;
+  for (const [key, value] of Object.entries(row)) {
+    if (!key.startsWith('day-')) continue;
+    const n = parseFloat(value);
+    if (Number.isFinite(n)) total += n;
+  }
+  return total;
+};
+
+// "Year X, Week Y" → { yearPart: "Year X", weekPart: "Week Y" }
+const splitWeekLabel = (label = '') => {
+  const i = label.indexOf(', ');
+  if (i === -1) return { yearPart: '', weekPart: label };
+  return { yearPart: label.slice(0, i), weekPart: label.slice(i + 2) };
+};
+
+// Parse "Week 6" → 6; custom week names fall back to the caller's ordinal.
+const weekNumberOf = (weekPart, fallback) => {
+  const m = /^week\s+(\d+)$/i.exec((weekPart || '').trim());
+  return m ? parseInt(m[1], 10) : fallback;
+};
+
+// Stable identity for matching a project across adjacent archive weeks.
+const projectKey = (header) =>
+  header.projectId || header.projectNickname || header.project || header.id;
+
+// All archived project headers under one archive week, each with the summed
+// day-entry hours of the rows hanging under its group (archived tasks +
+// section rows; section rows carry no day values so they contribute 0).
+const projectEntriesForWeek = (data, archiveWeekId) => {
+  const headers = data.filter(
+    (r) =>
+      r._rowType === ARCHIVE_ROW_TYPES.ARCHIVED_PROJECT_HEADER &&
+      r.parentGroupId === archiveWeekId,
+  );
+  return headers.map((header) => {
+    const hours = data
+      .filter((r) => r.parentGroupId === header.groupId)
+      .reduce((sum, r) => sum + sumRowDayEntries(r), 0);
+    return { header, hours: round1(hours) };
+  });
+};
+
+const parseQuota = (raw) => {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    const n = parseFloat(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+};
+
+/**
+ * Build the Archive Week panel payload for one archive week row.
+ *
+ * @param {object[]} data - The System table data array
+ * @param {string} archiveRowId - id of the selected archive week row
+ * @param {object} maps - { projectInfoById, projectIdByNickname } from useProjectsData
+ * @returns {object|null} Panel payload, or null when the row isn't found
+ */
+export function buildArchiveWeekPanelData(
+  data,
+  archiveRowId,
+  { projectInfoById = new Map(), projectIdByNickname = new Map() } = {},
+) {
+  const weeks = data.filter((r) => r._rowType === ARCHIVE_ROW_TYPES.ARCHIVE_WEEK);
+  const index = weeks.findIndex((r) => r.id === archiveRowId);
+  if (index === -1) return null;
+
+  const row = weeks[index];
+  const prevRow = index > 0 ? weeks[index - 1] : null;
+  const nextRow = index < weeks.length - 1 ? weeks[index + 1] : null;
+
+  const entries = projectEntriesForWeek(data, row.id);
+  const prevByKey = new Map(
+    (prevRow ? projectEntriesForWeek(data, prevRow.id) : []).map((e) => [
+      projectKey(e.header),
+      e.hours,
+    ]),
+  );
+
+  const projects = entries.map(({ header, hours }) => {
+    const pid = header.projectId || projectIdByNickname.get(header.projectNickname) || null;
+    const info = pid != null ? projectInfoById.get(pid) : null;
+    return {
+      name: header.projectNickname || header.project || 'Project',
+      color: info?.color || 'var(--n-slate)',
+      last: prevRow ? (prevByKey.get(projectKey(header)) ?? null) : null,
+      current: hours,
+      quota: parseQuota(header.archivedWeeklyQuota),
+      area: header.archivedArea ?? null,
+    };
+  });
+
+  // Group current hours by frozen area; missing/unknown area → Unassigned.
+  const areaTotals = new Map();
+  projects.forEach((p) => {
+    const key = AREA_ORDER.includes(p.area) ? p.area : 'unassigned';
+    areaTotals.set(key, (areaTotals.get(key) || 0) + p.current);
+  });
+  const areas = AREA_ORDER.filter((a) => (areaTotals.get(a) || 0) > 0).map((a) => ({
+    name: AREA_LABELS[a],
+    hours: round1(areaTotals.get(a)),
+  }));
+  const unassignedHours = areaTotals.get('unassigned') || 0;
+  if (unassignedHours > 0) {
+    areas.push({ name: 'Unassigned', hours: round1(unassignedHours), unassigned: true });
+  }
+
+  const { weekPart } = splitWeekLabel(row.archiveWeekLabel || '');
+  const thisNum = weekNumberOf(weekPart, index + 1);
+  const lastNum = prevRow
+    ? weekNumberOf(splitWeekLabel(prevRow.archiveWeekLabel || '').weekPart, index)
+    : null;
+
+  const rawLabel = (row.archiveLabel || '').trim();
+  const isPlainRange = DATE_RANGE_RE.test(rawLabel);
+  const calendarName =
+    typeof row.archiveCalendarWeekName === 'string' && row.archiveCalendarWeekName.trim()
+      ? row.archiveCalendarWeekName.trim()
+      : null;
+  const contextText = rawLabel && !isPlainRange ? rawLabel : null;
+
+  const nameLines = [];
+  if (calendarName) nameLines.push(calendarName);
+  if (contextText && contextText !== calendarName) nameLines.push(contextText);
+
+  return {
+    id: row.id,
+    label: weekPart || `Week ${thisNum}`,
+    range: isPlainRange ? rawLabel : null,
+    nameLines,
+    isFirstWeek: index === 0,
+    isLatestWeek: index === weeks.length - 1,
+    lastLabel: lastNum != null ? `Wk ${lastNum}` : '—',
+    thisLabel: `Wk ${thisNum}`,
+    quotaRange: [
+      parseFloat(row.archiveWeeklyMin) || 0,
+      parseFloat(row.archiveWeeklyMax) || 0,
+    ],
+    projects,
+    areas,
+    // Adjacent archive week rows — the panel pager re-selects these via the
+    // same TASK_ROW_DETAIL_EVENT used by table row clicks.
+    prevRow,
+    nextRow,
+  };
+}

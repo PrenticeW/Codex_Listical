@@ -125,9 +125,10 @@ export const createArchiveWeekRow = ({
  * @param {number} totalDays - Total number of days
  * @param {Map} projectWeeklyQuotas - Map of projectId → weeklyHours (snapshot from sent metrics)
  * @param {Map} projectIdByNickname - Map of projectNickname → projectId
+ * @param {Map} projectAreaById - Map of projectId → area ('personal' | 'social' | 'growth' | 'duties' | null), from staging
  * @returns {object[]} Array of archived project rows (including subproject sections)
  */
-export const createArchivedProjectStructure = (projectRows, subprojectRows, archiveWeekId, totalDays = 84, projectWeeklyQuotas = new Map(), projectIdByNickname = new Map()) => {
+export const createArchivedProjectStructure = (projectRows, subprojectRows, archiveWeekId, totalDays = 84, projectWeeklyQuotas = new Map(), projectIdByNickname = new Map(), projectAreaById = new Map()) => {
   const archivedRows = [];
 
   // Group rows by project
@@ -158,6 +159,13 @@ export const createArchivedProjectStructure = (projectRows, subprojectRows, arch
       ? (projectWeeklyQuotas.get(projectId) ?? 0)
       : 0;
 
+    // Snapshot the staging area assignment the same way — frozen at archive
+    // time so later area changes on the Goal page don't rewrite history.
+    // null = unassigned (and old archives without this field read as null).
+    const archivedArea = projectId != null
+      ? (projectAreaById.get(projectId) ?? null)
+      : null;
+
     // Create archived project header
     const archivedHeader = {
       ...headerRow,
@@ -167,6 +175,10 @@ export const createArchivedProjectStructure = (projectRows, subprojectRows, arch
       groupId: groupId,
       isGroupHeader: false,
       archivedWeeklyQuota,
+      archivedArea,
+      // Stamp the stable project id so the archived header keeps resolving
+      // staging metadata (colour) even after nickname renames.
+      projectId: projectId ?? headerRow.projectId ?? null,
     };
     archivedRows.push(archivedHeader);
 

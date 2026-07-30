@@ -28,6 +28,9 @@ export const TASK_ROW_PANEL_CLOSE_EVENT = 'task-row-panel-close';
  * button; instead we clear the selection so the panel slides back to the top
  * System view.
  * (Mirrors getStructuralRowMessage in components/planner/TaskRowPanel.jsx.)
+ *
+ * 'archiveRow' (the Archive week header row) is deliberately NOT structural:
+ * selecting it opens the Archive Week detail panel (ArchiveWeekPanel.jsx).
  */
 const STRUCTURAL_ROW_TYPES = new Set([
   'projectHeader',
@@ -40,7 +43,6 @@ const STRUCTURAL_ROW_TYPES = new Set([
   'subprojectGeneral',
   'subprojectUnscheduled',
   'archiveHeader',
-  'archiveRow',
 ]);
 
 export function TaskRowPanelProvider({ children }) {

@@ -53,6 +53,24 @@
   --sel-gutter:        color-mix(in srgb, var(--th-sel) 38%, #909090);
   --sel-row-overlay:   color-mix(in srgb, var(--th-sel) 12%, transparent);
 
+  /* ── Archive Week panel (05_ARCHIVE_WEEK_PANEL spec) ──
+     Wheel ramp (4 steps) + darkened label ramp (4 steps), themed per family:
+     applyThemeFamily() in src/lib/theme.js overrides these eight vars from
+     the family's palette steps. The defaults below are the spec's hex values
+     and correspond to the default (blue) family. The Unassigned segment and
+     the delta green/red are theme-neutral (not overridden per family). */
+  --th-wheel-1: #2B59B6;
+  --th-wheel-2: #5B84D6;
+  --th-wheel-3: #8FB0E8;
+  --th-wheel-4: #C3D4F2;
+  --th-wheel-label-1: #2B59B6;
+  --th-wheel-label-2: #3F67B9;
+  --th-wheel-label-3: #5674AC;
+  --th-wheel-label-4: #6D7F9E;
+  --th-wheel-unassigned: #D9D6E0;
+  --th-delta-pos: #11734B;
+  --th-delta-neg: #B3552E;
+
   /* ── Page grid ──
      Background grid/orbs use the lighter L68 step — the original mauve
      rgb(130,155,210) sat at L68, so L60 read too heavy here. */

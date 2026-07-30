@@ -72,6 +72,7 @@ export function extractProjectsData(shortlist) {
       projectNamesMap: {},
       projectTaglinesMap: {},
       projectIdByNickname: new Map(),
+      projectInfoById: new Map(),
     };
   }
 
@@ -81,6 +82,7 @@ export function extractProjectsData(shortlist) {
   const projectNamesMap = {}; // Map from nickname/key to full project name
   const projectTaglinesMap = {}; // Map from nickname/key to tagline
   const projectIdByNickname = new Map(); // Nickname/key -> stable project id (join key for quotas)
+  const projectInfoById = new Map(); // Project id -> { area, color } (live staging metadata)
 
   shortlist.forEach(item => {
     const fullProjectName = (item.projectName || item.text || '').trim();
@@ -104,6 +106,12 @@ export function extractProjectsData(shortlist) {
       // survives project renames.
       if (item.id) {
         projectIdByNickname.set(projectKey, item.id);
+        // Area + colour keyed by stable id. Area feeds the archive-time
+        // archivedArea stamp; colour feeds the Archive Week panel chips.
+        projectInfoById.set(item.id, {
+          area: item.area ?? null,
+          color: item.color ?? null,
+        });
       }
 
       // Extract subprojects by scanning for rows in the Subprojects section.
@@ -146,5 +154,6 @@ export function extractProjectsData(shortlist) {
     projectNamesMap,
     projectTaglinesMap,
     projectIdByNickname,
+    projectInfoById,
   };
 }

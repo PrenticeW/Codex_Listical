@@ -66,6 +66,7 @@ export function themeVarsForFamily(family) {
   const sel = SEL_FAMILY[family] || 'orange';
   const selRing = sel.startsWith('#') ? sel : hslStr(familyStep(sel, 52));
   const selBase = sel.startsWith('#') ? sel : hslStr(familyStep(sel, 60));
+  const [s68, s60, , s44] = steps.map(hslStr);
   return {
     '--th-68': hslStr(steps[0]),
     '--th-60': hslStr(steps[1]),
@@ -73,6 +74,18 @@ export function themeVarsForFamily(family) {
     '--th-44': hslStr(steps[3]),
     '--th-sel': selRing,
     '--th-sel-base': selBase,
+    // Archive Week panel wheel ramp + darkened label ramp. The color-mix
+    // recipes reproduce the spec's blue-family hexes (the :root defaults in
+    // index.css) when applied to the blue steps, and scale to every other
+    // family the same way.
+    '--th-wheel-1': s44,
+    '--th-wheel-2': s60,
+    '--th-wheel-3': `color-mix(in srgb, ${s68} 82%, white)`,
+    '--th-wheel-4': `color-mix(in srgb, ${s68} 45%, white)`,
+    '--th-wheel-label-1': s44,
+    '--th-wheel-label-2': `color-mix(in srgb, ${s44} 60%, ${s60})`,
+    '--th-wheel-label-3': `color-mix(in srgb, ${s60} 65%, var(--ink-mute))`,
+    '--th-wheel-label-4': `color-mix(in srgb, ${s68} 50%, var(--ink-mute))`,
   };
 }
 
@@ -95,7 +108,11 @@ export function applyThemeFamily(family) {
 /** Remove runtime overrides, restoring the stylesheet default (blue). */
 export function resetThemeFamily() {
   const root = document.documentElement;
-  for (const k of ['--th-68', '--th-60', '--th-52', '--th-44', '--th-sel', '--th-sel-base']) {
+  for (const k of [
+    '--th-68', '--th-60', '--th-52', '--th-44', '--th-sel', '--th-sel-base',
+    '--th-wheel-1', '--th-wheel-2', '--th-wheel-3', '--th-wheel-4',
+    '--th-wheel-label-1', '--th-wheel-label-2', '--th-wheel-label-3', '--th-wheel-label-4',
+  ]) {
     root.style.removeProperty(k);
   }
 }
