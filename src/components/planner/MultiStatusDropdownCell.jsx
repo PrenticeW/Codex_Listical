@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { DROPDOWN_OPTIONS, PILLBOX_COLORS } from './DropdownCell';
 import { getMultiInstances, getCurrentInstanceIndex } from '../../utils/planner/multiStatus';
+import { getPageZoom } from '../../utils/pageZoom';
 
 /**
  * MultiStatusDropdownCell
@@ -40,11 +41,16 @@ function FooterArrow({ dir, disabled, onClick }) {
       }}
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '3px 8px', cursor: disabled ? 'default' : 'pointer', flexShrink: 0,
-        transition: 'color .15s', userSelect: 'none',
+        width: 'calc(26px * var(--pz))', height: 'calc(22px * var(--pz))',
+        borderRadius: 6, flexShrink: 0,
+        border: disabled ? '1px solid #efefec' : '1px solid var(--brand-bd)',
+        background: disabled ? '#fafafa' : (hov ? 'var(--brand-deep)' : 'var(--brand-hover-bg)'),
+        cursor: disabled ? 'default' : 'pointer',
+        transition: 'background .15s, border-color .15s',
+        userSelect: 'none',
       }}
     >
-      <Icon size={15} strokeWidth={2.5} style={{ color: disabled ? '#E4E4E4' : hov ? 'var(--brand)' : 'var(--brand-deep)' }} />
+      <Icon size={16} strokeWidth={2.75} style={{ color: disabled ? '#D9D9D9' : (hov ? '#ffffff' : 'var(--brand-deep)') }} />
     </span>
   );
 }
@@ -89,7 +95,8 @@ function MultiStatusDropdownCell({
   const anchorRef = useRef(null);
   const closeRef = useRef(null);
 
-  const PANEL_WIDTH = 176;
+  const pz = getPageZoom();
+  const PANEL_WIDTH = 176 * pz;
   const safeShownIdx = Math.min(shownIdx, instances.length - 1);
   const shown = instances[safeShownIdx];
   // While the panel is open, the trigger pill mirrors the SHOWN instance —
@@ -129,13 +136,14 @@ function MultiStatusDropdownCell({
     }
     if (anchorRef.current) {
       const rect = anchorRef.current.getBoundingClientRect();
-      const estimatedHeight = 320;
+      const estimatedHeight = 320 * pz;
       const fitsBelow = rect.bottom + estimatedHeight < window.innerHeight - 8;
       setPanelPos({
         top: fitsBelow ? rect.bottom : rect.top - estimatedHeight,
         left: Math.min(rect.left, window.innerWidth - PANEL_WIDTH - 8),
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // Tell the row which day cell to focus-ring: the shown instance's cell
@@ -204,7 +212,7 @@ function MultiStatusDropdownCell({
         </span>
         <span
           style={{
-            fontFamily: 'monospace', fontSize: '10.5px', fontWeight: 700,
+            fontFamily: 'monospace', fontSize: 'calc(10.5px * var(--pz))', fontWeight: 700,
             letterSpacing: '.04em', opacity: 0.9, flexShrink: 0, userSelect: 'none',
           }}
         >
@@ -246,16 +254,16 @@ function MultiStatusDropdownCell({
                   handleSelect(option);
                 }}
                 style={{
-                  display: 'flex', alignItems: 'center', padding: '2px 12px',
+                  display: 'flex', alignItems: 'center', padding: 'calc(2px * var(--pz)) calc(12px * var(--pz))',
                   cursor: 'pointer',
                   background: i === hovered ? '#f3f4f6' : 'transparent',
                 }}
               >
                 <div
                   style={{
-                    minHeight: 22, display: 'flex', alignItems: 'center', flex: 1, borderRadius: 5,
-                    background: colors.bg, color: colors.text, fontSize: '11.5px', fontWeight: 500,
-                    paddingLeft: 8, paddingRight: 8,
+                    minHeight: 'calc(22px * var(--pz))', display: 'flex', alignItems: 'center', flex: 1, borderRadius: 5,
+                    background: colors.bg, color: colors.text, fontSize: 'calc(11.5px * var(--pz))', fontWeight: 500,
+                    paddingLeft: 'calc(8px * var(--pz))', paddingRight: 'calc(8px * var(--pz))',
                     boxShadow: isCurrent ? 'inset 0 0 0 1.5px var(--brand-deep)' : 'none',
                   }}
                 >
@@ -278,7 +286,7 @@ function MultiStatusDropdownCell({
                 disabled={safeShownIdx === 0}
                 onClick={() => setShownIdx((i) => Math.max(0, i - 1))}
               />
-              <span style={{ fontSize: 11, fontWeight: 500, color: '#999999', userSelect: 'none', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: 'calc(11px * var(--pz))', fontWeight: 600, color: 'var(--brand-deep)', userSelect: 'none', whiteSpace: 'nowrap' }}>
                 {formatInstanceDate(dates[shown.dayIndex])}
               </span>
               <FooterArrow
@@ -287,7 +295,7 @@ function MultiStatusDropdownCell({
                 onClick={() => setShownIdx((i) => Math.min(instances.length - 1, i + 1))}
               />
             </div>
-            <div style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 600, color: 'var(--brand-deep)', userSelect: 'none' }}>
+            <div style={{ textAlign: 'center', fontSize: 'calc(11.5px * var(--pz))', fontWeight: 600, color: '#777777', userSelect: 'none' }}>
               {safeShownIdx + 1}/{instances.length}
             </div>
           </div>

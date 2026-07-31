@@ -2015,18 +2015,33 @@ export default function ProjectTimePlannerV2() {
 
   const ROW_SELECTOR_COLUMNS = new Set(['rowNum', 'checkbox']);
 
+  // Open the context menu for a right-click. One focus at a time: opening a
+  // row menu on a row that is NOT part of the current row selection clears
+  // that selection, so only the menu's target gutter stays highlighted.
+  // Right-clicking within a selected block keeps it (the menu acts on the
+  // whole block).
+  const openContextMenu = useCallback((e, rowId, columnId) => {
+    const isRowMenu = ROW_SELECTOR_COLUMNS.has(columnId);
+    let effectiveSelectedRows = selectedRows;
+    if (isRowMenu && !selectedRows.has(rowId)) {
+      effectiveSelectedRows = new Set();
+      if (selectedRows.size > 0) setSelectedRows(effectiveSelectedRows);
+    }
+    handleContextMenu(e, {
+      rowId,
+      columnId,
+      cellKey: getCellKey(rowId, columnId),
+      selectedCells,
+      selectedRows: effectiveSelectedRows,
+      contextType: isRowMenu ? 'row' : 'cell',
+    });
+  }, [handleContextMenu, getCellKey, selectedCells, selectedRows, setSelectedRows]);
+
   // Wrap cell mouse down to handle right-click for context menu
   const handleCellMouseDownWithContext = useCallback((e, rowId, columnId) => {
     if (e.button === 2) { // Right-click
       e.preventDefault();
-      handleContextMenu(e, {
-        rowId,
-        columnId,
-        cellKey: getCellKey(rowId, columnId),
-        selectedCells,
-        selectedRows,
-        contextType: ROW_SELECTOR_COLUMNS.has(columnId) ? 'row' : 'cell',
-      });
+      openContextMenu(e, rowId, columnId);
       return;
     }
     // Commit any active edit before moving to another cell
@@ -2034,20 +2049,19 @@ export default function ProjectTimePlannerV2() {
       handleEditComplete(editingCell.rowId, editingCell.columnId, editValue);
     }
     handleCellMouseDown(e, rowId, columnId);
-  }, [handleCellMouseDown, handleContextMenu, getCellKey, selectedCells, selectedRows, editingCell, editValue, handleEditComplete]);
+  }, [handleCellMouseDown, openContextMenu, editingCell, editValue, handleEditComplete]);
 
   // Handle context menu event (right-click) to prevent default browser menu
   const handleCellContextMenu = useCallback((e, rowId, columnId) => {
     e.preventDefault();
-    handleContextMenu(e, {
-      rowId,
-      columnId,
-      cellKey: getCellKey(rowId, columnId),
-      selectedCells,
-      selectedRows,
-      contextType: ROW_SELECTOR_COLUMNS.has(columnId) ? 'row' : 'cell',
-    });
-  }, [handleContextMenu, getCellKey, selectedCells, selectedRows]);
+    openContextMenu(e, rowId, columnId);
+  }, [openContextMenu]);
+
+  // Row whose gutter opened the row context menu — used to keep that gutter
+  // cell visually highlighted while the menu is up.
+  const contextMenuTargetRowId = (contextMenu.isOpen && contextMenu.contextType === 'row')
+    ? contextMenu.rowId
+    : null;
 
   // Drag and drop hook
   const {
@@ -3180,6 +3194,7 @@ export default function ProjectTimePlannerV2() {
         handleCellMouseEnter={handleCellMouseEnter}
         handleCellDoubleClick={handleCellDoubleClick}
         handleCellContextMenu={handleCellContextMenu}
+        contextMenuTargetRowId={contextMenuTargetRowId}
         handleEditComplete={handleEditComplete}
         handleEditCancel={handleEditCancel}
         handleEditKeyDown={handleEditKeyDown}

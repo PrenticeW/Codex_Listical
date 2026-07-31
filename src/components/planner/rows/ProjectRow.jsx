@@ -16,6 +16,7 @@ export default function ProjectRow({
   row,
   virtualRow,
   isRowSelected,
+  isContextMenuTarget = false,
   isTopOfSelectionBlock,
   isBottomOfSelectionBlock,
   handleRowNumberClick,
@@ -187,7 +188,7 @@ export default function ProjectRow({
                   // Row-number gutter is Mulish per the design handover
                   // (NUM_FONT in reference/SystemView.jsx) -- not Tailwind's
                   // generic `font-mono` stack, which was never the intended font.
-                  style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, lineHeight: 1, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : 'var(--th-gutter)', color: isRowSelected ? '#fff' : 'var(--th-gutter-text)' }}
+                  style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, lineHeight: 1, minHeight: `${rowHeight}px`, backgroundColor: (isRowSelected || isContextMenuTarget) ? 'var(--sel-gutter)' : 'var(--th-gutter)', color: (isRowSelected || isContextMenuTarget) ? '#fff' : 'var(--th-gutter-text)' }}
                   onClick={(e) => {
                     handleRowNumberClick(e, rowId);
                     window.dispatchEvent(new CustomEvent(TASK_ROW_PANEL_CLOSE_EVENT));

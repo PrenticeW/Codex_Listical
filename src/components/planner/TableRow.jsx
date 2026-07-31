@@ -81,6 +81,7 @@ const TableRow = React.memo(function TableRow({
   handleCellMouseEnter,
   handleCellDoubleClick,
   handleCellContextMenu,
+  isContextMenuTarget = false,
   handleEditComplete,
   handleEditCancel,
   handleEditKeyDown,
@@ -260,6 +261,7 @@ const TableRow = React.memo(function TableRow({
         handleCellMouseEnter={handleCellMouseEnter}
         handleCellDoubleClick={handleCellDoubleClick}
         handleCellContextMenu={handleCellContextMenu}
+        isContextMenuTarget={isContextMenuTarget}
         handleEditComplete={handleEditComplete}
         handleEditCancel={handleEditCancel}
         handleEditKeyDown={handleEditKeyDown}
@@ -304,6 +306,7 @@ const TableRow = React.memo(function TableRow({
         handleCellMouseEnter={handleCellMouseEnter}
         handleCellDoubleClick={handleCellDoubleClick}
         handleCellContextMenu={handleCellContextMenu}
+        isContextMenuTarget={isContextMenuTarget}
         handleEditComplete={handleEditComplete}
         handleEditCancel={handleEditCancel}
         handleEditKeyDown={handleEditKeyDown}
@@ -330,6 +333,7 @@ const TableRow = React.memo(function TableRow({
         handleCellMouseEnter={handleCellMouseEnter}
         handleCellDoubleClick={handleCellDoubleClick}
         handleCellContextMenu={handleCellContextMenu}
+        isContextMenuTarget={isContextMenuTarget}
         handleEditComplete={handleEditComplete}
         handleEditCancel={handleEditCancel}
         handleEditKeyDown={handleEditKeyDown}
@@ -494,7 +498,7 @@ const TableRow = React.memo(function TableRow({
                       // Row-number gutter is Mulish per the design handover
                       // (NUM_FONT in reference/SystemView.jsx) -- not Tailwind's
                       // generic `font-mono` stack, which was never the intended font.
-                      style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, lineHeight: 1, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : 'var(--th-gutter)', color: isRowSelected ? '#fff' : 'var(--th-gutter-text)' }}
+                      style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, lineHeight: 1, minHeight: `${rowHeight}px`, backgroundColor: (isRowSelected || isContextMenuTarget) ? 'var(--sel-gutter)' : 'var(--th-gutter)', color: (isRowSelected || isContextMenuTarget) ? '#fff' : 'var(--th-gutter-text)' }}
                       onClick={(e) => handleRowNumberClick(e, rowId)}
                       onContextMenu={(e) => handleCellContextMenu?.(e, rowId, 'rowNum')}
                       title="Drag to reorder"

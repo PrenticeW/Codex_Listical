@@ -6,7 +6,7 @@ import useClickOutside from '../../hooks/useClickOutside';
 const PANEL_STYLE = {
   position: 'fixed',
   zIndex: 50,
-  minWidth: 160,
+  minWidth: 'calc(160px * var(--pz))',
   overflow: 'hidden',
   background: '#ffffff',
   border: '1px solid #e8e8e4',
@@ -27,7 +27,7 @@ function FilterItem({ name, isSelected, onClick }) {
       onMouseLeave={() => setHovered(false)}
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        width: '100%', height: 26, padding: '0 10px 0 12px',
+        width: '100%', height: 'calc(26px * var(--pz))', padding: '0 calc(10px * var(--pz)) 0 calc(12px * var(--pz))',
         background: isSelected ? 'var(--sel-row)' : (hovered ? 'var(--brand-hover-bg)' : '#ffffff'),
         fontFamily: FONT, fontSize: 'calc(12px * var(--pz))',
         fontWeight: isSelected ? 600 : 400,

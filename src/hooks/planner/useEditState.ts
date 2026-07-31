@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { UseEditStateReturn, CellReference, PlannerRow, Command } from '../../types/planner';
-import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../../constants/planner/rowTypes';
-import { forEachDayColumn } from '../../utils/planner/dayColumnHelpers';
+import { parseEstimateLabelToMinutes, formatMinutesToHHmm, ESTIMATE_VALUES } from '../../constants/planner/rowTypes';
+import { forEachDayColumn, isDayColumn } from '../../utils/planner/dayColumnHelpers';
 import { writeTaskEvent } from '../../utils/planner/storage';
 import { MULTI_STATUS_KEY_RE, deriveMultiRowStatus } from '../../utils/planner/multiStatus';
 import { TASK_ROW_DETAIL_UPDATE_EVENT, TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
@@ -85,7 +85,10 @@ export default function useEditState({
   const [editingCell, setEditingCell] = useState<CellReference | null>(null);
   const [editValue, setEditValue] = useState('');
 
-  const handleEditComplete = useCallback((rowId: string, columnId: string, newValue: string, options?: { timeValueOverride?: string }) => {
+  const handleEditComplete = useCallback((rowId: string, columnId: string, newValue: string, options?: { timeValueOverride?: string; keepEditing?: boolean }) => {
+    // keepEditing: the write comes from a panel that stays open across
+    // several commits (the multi-estimate dropdown live-writing day cells),
+    // so completing this edit must not tear down the editing cell.
     // Get the old value before updating
     const row = data.find(r => r.id === rowId);
 
@@ -109,8 +112,10 @@ export default function useEditState({
       && options?.timeValueOverride !== undefined
       && options.timeValueOverride !== (row?.timeValue || '0.00');
     if (oldValue === newValue && !timeValueOverrideChanged) {
-      setEditingCell(null);
-      setEditValue('');
+      if (!options?.keepEditing) {
+        setEditingCell(null);
+        setEditValue('');
+      }
       return;
     }
 
@@ -166,6 +171,59 @@ export default function useEditState({
       // the multi-status panel, which stays open so several dates can be set
       // in one visit.
       return;
+    }
+
+    // Special handling for day columns — typing a time into a day cell also
+    // updates the time cells (Estimate + Value). Input follows the HH.mm
+    // convention: "2" = 2 hours, ".2" = 2 minutes, "1.30" = 1 hour 30 minutes.
+    // A total that matches a preset estimate selects it; anything not on the
+    // list becomes Custom. Multi rows are excluded (per-instance times are
+    // user-controlled and don't map to a single estimate), and non-numeric or
+    // cleared input falls through to the generic edit path untouched.
+    if (isDayColumn(columnId) && row?.estimate !== 'Multi') {
+      const trimmed = (newValue ?? '').trim();
+      const timeMatch = trimmed.match(/^(\d*)(?:\.(\d{1,2}))?$/);
+      if (timeMatch && trimmed !== '' && trimmed !== '.') {
+        const hours = parseInt(timeMatch[1] || '0', 10);
+        const minutes = parseInt(timeMatch[2] || '0', 10);
+        const totalMinutes = hours * 60 + minutes;
+        const formatted = formatMinutesToHHmm(totalMinutes);
+        const matchedEstimate = ESTIMATE_VALUES.find(
+          label => parseEstimateLabelToMinutes(label) === totalMinutes
+        ) ?? 'Custom';
+
+        const oldDayValue = (row?.[columnId as `day-${number}`] ?? '').toString();
+        const oldEstimate = row?.estimate || '';
+        const oldTimeValue = row?.timeValue || '0.00';
+
+        const command: Command = {
+          execute: () => {
+            setData(prev => prev.map(r => r.id === rowId
+              ? { ...r, [columnId]: formatted, estimate: matchedEstimate, timeValue: formatted }
+              : r));
+          },
+          undo: () => {
+            setData(prev => prev.map(r => r.id === rowId
+              ? { ...r, [columnId]: oldDayValue, estimate: oldEstimate, timeValue: oldTimeValue }
+              : r));
+          },
+        };
+
+        executeCommand(command);
+
+        // Push fresh task data to the detail panel
+        if (row?.id) {
+          window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_UPDATE_EVENT, {
+            detail: { task: { ...row, [columnId]: formatted, estimate: matchedEstimate, timeValue: formatted } },
+          }));
+        }
+
+        if (!options?.keepEditing) {
+          setEditingCell(null);
+          setEditValue('');
+        }
+        return;
+      }
     }
 
     // Special handling for status column when set to a status that should clear day columns.
@@ -448,8 +506,10 @@ export default function useEditState({
       }));
     }
 
-    setEditingCell(null);
-    setEditValue('');
+    if (!options?.keepEditing) {
+      setEditingCell(null);
+      setEditValue('');
+    }
   }, [data, executeCommand, totalDays, setData]);
 
   const handleEditCancel = useCallback((rowId: string, columnId: string) => {

@@ -16,7 +16,7 @@ const BENTO_SHELL = {
   padding: '11px 13px',
   border: '1px solid #e8e8e4',
   boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 12px rgba(72,50,75,0.10)',
-  minWidth: 200,
+  minWidth: 240,
   userSelect: 'none',
   fontFamily: FONT,
 };
@@ -71,21 +71,28 @@ function MenuItem({ label, onClick, danger, hint, style }) {
 // Inline count input + Add button, used for row insertion
 // (reference/SystemContextMenu.jsx → CMCountRight).
 function CountAddControl({ onAdd }) {
-  const [value, setValue] = React.useState(1);
+  // Held as a string and starting empty — coercing to a number on every
+  // keystroke made the field permanently show "1" and impossible to clear.
+  // Empty input defaults to 1 on Add.
+  const [value, setValue] = React.useState('');
   const [focused, setFocused] = React.useState(false);
+  const commitCount = () => {
+    const parsed = parseInt(value, 10);
+    onAdd?.(Number.isNaN(parsed) ? 1 : Math.min(99, Math.max(1, parsed)));
+  };
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
       <input
-        type="number"
-        min={1}
-        max={99}
+        type="text"
+        inputMode="numeric"
         value={value}
-        onChange={(e) => setValue(Math.max(1, parseInt(e.target.value, 10) || 1))}
+        onChange={(e) => setValue(e.target.value.replace(/\D/g, '').slice(0, 2))}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitCount(); } }}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         className="no-spinner"
         style={{
-          width: 28, height: 22,
+          width: 34, height: 22,
           border: `1px solid ${focused ? 'var(--brand)' : '#e8e8e4'}`,
           borderRadius: 5,
           fontFamily: FONT, fontSize: 'calc(12px * var(--pz))', fontWeight: 500, color: '#1a1a1a',
@@ -95,7 +102,7 @@ function CountAddControl({ onAdd }) {
       />
       <div
         role="button"
-        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAdd?.(value); }}
+        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); commitCount(); }}
         style={{
           height: 22, padding: '0 9px',
           background: 'var(--brand-deep)', borderRadius: 5,
@@ -162,7 +169,7 @@ export default function ContextMenu({
   const rowLabel = `Row${isMulti ? 's' : ''}`;
   const showInsertRows = Boolean(rowId) && !isMulti;
 
-  const MENU_WIDTH = 200;
+  const MENU_WIDTH = 240;
   // Header (optional) + 2 insert rows (single-row context) + divider + duplicate + delete,
   // or just header + duplicate + delete (multi-row context).
   const MENU_HEIGHT = (hasSelectedRows ? 28 : 0) + (showInsertRows ? 68 : 0) + 68;

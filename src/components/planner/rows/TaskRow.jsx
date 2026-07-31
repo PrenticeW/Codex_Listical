@@ -12,7 +12,7 @@ import { ChevronDown } from 'lucide-react';
 import { getSelectionEdgeClassNames } from '../../../utils/planner/selectionEdgeClasses';
 import { linkifyText } from '../../../utils/linkify';
 import MultiStatusDropdownCell from '../MultiStatusDropdownCell';
-import { isMultiStatusRow, getMultiInstances } from '../../../utils/planner/multiStatus';
+import { isMultiStatusRow, getMultiInstances, getCurrentInstanceIndex } from '../../../utils/planner/multiStatus';
 
 /**
  * TaskRow Component
@@ -25,6 +25,7 @@ const TaskRow = React.memo(function TaskRow({
   row,
   virtualRow,
   isRowSelected,
+  isContextMenuTarget = false,
   isTopOfSelectionBlock,
   isBottomOfSelectionBlock,
   isCellSelected,
@@ -202,7 +203,7 @@ const TaskRow = React.memo(function TaskRow({
                   // Row-number gutter is Mulish per the design handover
                   // (NUM_FONT in reference/SystemView.jsx) -- not Tailwind's
                   // generic `font-mono` stack, which was never the intended font.
-                  style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, lineHeight: 1, minHeight: `${rowHeight}px`, backgroundColor: isRowSelected ? 'var(--sel-gutter)' : 'var(--th-gutter)', color: isRowSelected ? '#fff' : 'var(--th-gutter-text)' }}
+                  style={{ fontFamily: "'Mulish', sans-serif", fontSize: `${headerFontSize}px`, lineHeight: 1, minHeight: `${rowHeight}px`, backgroundColor: (isRowSelected || isContextMenuTarget) ? 'var(--sel-gutter)' : 'var(--th-gutter)', color: (isRowSelected || isContextMenuTarget) ? '#fff' : 'var(--th-gutter-text)' }}
                   onClick={(e) => {
                     handleRowNumberClick(e, rowId);
                     window.dispatchEvent(new CustomEvent(TASK_ROW_PANEL_CLOSE_EVENT));
@@ -400,6 +401,12 @@ const TaskRow = React.memo(function TaskRow({
                       cellFontSize={cellFontSize}
                       rowHeight={rowHeight}
                       autoOpen={true}
+                      multiInstances={multiInstances}
+                      rowData={row.original}
+                      dates={dates}
+                      focusDayIndex={focusInstanceDayIndex}
+                      onInstanceTimeChange={(dayIndex, newValue) => handleEditComplete(rowId, `day-${dayIndex}`, newValue, { keepEditing: true })}
+                      onShownInstanceChange={(dayIndex) => { if (dayIndex !== null) selectCell?.(rowId, `day-${dayIndex}`); }}
                     />
                   ) : (
                     <EditableCell
@@ -650,6 +657,20 @@ const TaskRow = React.memo(function TaskRow({
                         }}
                       >
                         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value || '-'}>{value || '-'}</span>
+                        {isMultiStatus && multiInstances && (
+                          <span
+                            style={{
+                              fontFamily: 'monospace', fontSize: 'calc(10.5px * var(--pz))', fontWeight: 700,
+                              letterSpacing: '.04em', opacity: 0.75, flexShrink: 0, userSelect: 'none',
+                            }}
+                          >
+                            {(Math.max(0,
+                              focusInstanceDayIndex != null
+                                ? multiInstances.findIndex(inst => inst.dayIndex === focusInstanceDayIndex)
+                                : getCurrentInstanceIndex(multiInstances)
+                            )) + 1}/{multiInstances.length}
+                          </span>
+                        )}
                         <ChevronDown
                           size={12}
                           style={{ color: '#9ca3af', cursor: 'pointer' }}
