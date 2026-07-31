@@ -111,7 +111,17 @@ export const ARCHIVE_ROW_TYPES = {
  * Archive row styling constants
  */
 export const ARCHIVE_ROW_STYLE = {
-  backgroundColor: '#d9f6e0', // Light green
+  backgroundColor: '#dce8d6', // Light green (odd archive week rows: 1st, 3rd, ...)
+  color: '#000000',
+};
+
+// Alternate shade for every other archive week row (2nd, 4th, ...) — a
+// slightly darker step of the same green so the archive section reads as
+// alternating bands. Parity comes from `_archiveAltIndex`, tagged onto each
+// archive week row in display order (see numberedData in
+// ProjectTimePlannerV2.jsx).
+export const ARCHIVE_ROW_ALT_STYLE = {
+  backgroundColor: '#cdd8c7',
   color: '#000000',
 };
 

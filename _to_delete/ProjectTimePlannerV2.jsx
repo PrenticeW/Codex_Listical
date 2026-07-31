@@ -786,7 +786,6 @@ export default function ProjectTimePlannerV2() {
     coerceNumber,
     dayFilter,
     projectFilter,
-    totalDays,
   });
 
   // Sequential number shown in the left gutter column. Skips rows that
@@ -2005,14 +2004,6 @@ export default function ProjectTimePlannerV2() {
     handleCellDoubleClick,
   } = selection;
 
-  // Programmatic single-cell select — used by the multi-status dropdown so
-  // the focused instance's day cell IS the table selection (one focus ring
-  // on screen), and paging the panel's chevrons moves it.
-  const selectCell = useCallback((rowId, columnId) => {
-    setSelectedCells(new Set([getCellKey(rowId, columnId)]));
-    setAnchorCell({ rowId, columnId });
-  }, [getCellKey]);
-
   const ROW_SELECTOR_COLUMNS = new Set(['rowNum', 'checkbox']);
 
   // Wrap cell mouse down to handle right-click for context menu
@@ -3199,7 +3190,6 @@ export default function ProjectTimePlannerV2() {
         cellFontSize={cellFontSize}
         gripIconSize={gripIconSize}
         dates={dates}
-        selectCell={selectCell}
         data={data}
         selectedCells={selectedCells}
         undoStack={undoStack}

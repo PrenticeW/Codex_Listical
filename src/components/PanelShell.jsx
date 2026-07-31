@@ -19,6 +19,12 @@
  *                             caller can persist the final value.
  *   minWidth      number    — clamp floor while dragging (default 280)
  *   maxWidth      number    — clamp ceiling while dragging (default 600)
+ *   scaleBaseWidth number   — width at which content renders 1:1 (default 420).
+ *                             Widened past this, the tray content keeps its
+ *                             base-width layout and scales up uniformly
+ *                             (text, fields, spacing) via CSS zoom. At or
+ *                             below it, the panel stretches/squeezes exactly
+ *                             as before.
  *   children      ReactNode — rendered inside the frosted tray
  */
 
@@ -46,6 +52,7 @@ export default function PanelShell({
   onWidthChange,
   minWidth = 280,
   maxWidth = 600,
+  scaleBaseWidth = 420,
   children,
 }) {
   const nb = navBottom;
@@ -55,6 +62,15 @@ export default function PanelShell({
   const [liveWidth, setLiveWidth] = useState(null);
   const [handleHovered, setHandleHovered] = useState(false);
   const effectiveWidth = liveWidth ?? width;
+
+  // Uniform content scale. Above the base width the tray content keeps its
+  // base-width layout and is magnified via CSS zoom (which, unlike
+  // transform:scale, participates in layout — scrolling, hit-testing and
+  // overflow all stay correct). At or below the base width, scale is 1 and
+  // the content reflows (stretch/squeeze) as it always did.
+  const contentScale = effectiveWidth > scaleBaseWidth
+    ? effectiveWidth / scaleBaseWidth
+    : 1;
 
   const draggingRef = useRef(false);
   const startXRef = useRef(0);
@@ -177,7 +193,17 @@ export default function PanelShell({
             boxShadow: '0 2px 12px rgba(72,50,75,0.06)',
           }}
         >
-          {children}
+          {/* Scale wrapper — zoom > 1 makes this lay out at the base width
+              and render magnified to fill the tray */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zoom: contentScale,
+            }}
+          >
+            {children}
+          </div>
         </div>
 
         {/* Resize handle — left edge of the panel itself (outside the tray

@@ -17,6 +17,7 @@ import { getEstimateWithHabitCheck } from './useHabitPatternDetection';
 import { assignParentGroupIds } from './useParentGroupAssignment';
 import { writeTaskEvent } from '../../utils/planner/storage';
 import { TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
+import { MULTI_STATUS_KEY_RE, isScheduledDayValue, deriveMultiRowStatus } from '../../utils/planner/multiStatus';
 
 export default function useComputedDataV2({
   data,
@@ -56,9 +57,35 @@ export default function useComputedDataV2({
         timeValue = calculateTimeValue(estimate);
       }
 
+      // Multi-instance hygiene: a multiStatus-<i> key is only valid while
+      // day-i still holds a time value. Stale keys (times removed, or removed
+      // and later re-added) would otherwise resurrect old per-instance
+      // statuses — strip them here and in the sync-back effect below.
+      const staleMultiKeys: string[] = [];
+      for (const key of Object.keys(row)) {
+        const match = key.match(MULTI_STATUS_KEY_RE);
+        if (match && !isScheduledDayValue(row[`day-${match[1]}` as `day-${number}`] as string)) {
+          staleMultiKeys.push(key);
+        }
+      }
+
+      // Aggregate status for Multi rows, derived from per-instance statuses
+      // (first non-terminal instance, else the last). The multi dropdown owns
+      // per-date statuses, so the manual/auto logic below is skipped for
+      // these rows. Null when the row has < 2 scheduled instances.
+      const multiAggregateStatus = deriveMultiRowStatus(row, totalDays);
+
       // Auto-update status based on task content and day columns
       let status = row.status;
       const taskContent = row.task || '';
+
+      // A row that just dropped out of Multi (stale instance keys, no
+      // aggregate) had a derived status, not a user-set one — reset it so the
+      // auto logic below lands on Scheduled / Not Scheduled / '-' afresh
+      // instead of the derived value surviving as a protected manual status.
+      if (multiAggregateStatus === null && staleMultiKeys.length > 0) {
+        status = '-';
+      }
 
       // Check if any day column has a time value (including '0.00')
       let hasScheduledTime = false;
@@ -78,7 +105,10 @@ export default function useComputedDataV2({
       // If task is empty or only whitespace, set status to '-'
       // If task has content and day columns have time values, set status to 'Scheduled'
       // If task has content but no time values, set status to 'Not Scheduled' (always)
-      if (taskContent.trim() === '') {
+      if (multiAggregateStatus !== null && taskContent.trim() !== '') {
+        // Multi row: status is the derived aggregate, full stop.
+        status = multiAggregateStatus;
+      } else if (taskContent.trim() === '') {
         if (status !== '-') {
           status = '-';
         }
@@ -103,13 +133,17 @@ export default function useComputedDataV2({
         }
       }
 
-      return {
+      const computedRow: PlannerRow = {
         ...row,
         estimate,
         timeValue,
         status,
         ...(shouldStoreOriginal && { _originalEstimate: originalEstimate }),
       };
+      for (const key of staleMultiKeys) {
+        delete (computedRow as any)[key];
+      }
+      return computedRow;
     });
 
     // Step 2: Assign parent group IDs
@@ -130,7 +164,9 @@ export default function useComputedDataV2({
         row.status !== computed.status ||
         row.estimate !== computed.estimate ||
         row.timeValue !== computed.timeValue ||
-        row._originalEstimate !== computed._originalEstimate
+        row._originalEstimate !== computed._originalEstimate ||
+        // Stale multiStatus-<i> keys stripped in the compute step
+        Object.keys(row).some(key => MULTI_STATUS_KEY_RE.test(key) && !(key in computed))
       );
     });
 
@@ -176,6 +212,15 @@ export default function useComputedDataV2({
           } else {
             // Explicitly delete _originalEstimate if it should be cleared
             delete updatedRow._originalEstimate;
+          }
+
+          // Drop stale multiStatus-<i> keys the compute step stripped, so
+          // they don't persist to storage and resurrect old statuses when
+          // times are re-added to those day cells.
+          for (const key of Object.keys(updatedRow)) {
+            if (MULTI_STATUS_KEY_RE.test(key) && !(key in computed)) {
+              delete updatedRow[key];
+            }
           }
 
           return updatedRow;

@@ -3,6 +3,7 @@ import type { UseEditStateReturn, CellReference, PlannerRow, Command } from '../
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../../constants/planner/rowTypes';
 import { forEachDayColumn } from '../../utils/planner/dayColumnHelpers';
 import { writeTaskEvent } from '../../utils/planner/storage';
+import { MULTI_STATUS_KEY_RE, deriveMultiRowStatus } from '../../utils/planner/multiStatus';
 import { TASK_ROW_DETAIL_UPDATE_EVENT, TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
 
 /** Day-of-week patterns for auto-detecting a day tag from subheader text */
@@ -113,10 +114,57 @@ export default function useEditState({
       return;
     }
 
-    // Prevent manually setting status to "Scheduled" — only the system sets this
-    if (columnId === 'status' && newValue === 'Scheduled') {
-      setEditingCell(null);
-      setEditValue('');
+    // 'Scheduled' is normally system-assigned (auto-status in useComputedDataV2),
+    // but it is deliberately still user-selectable — e.g. to move a task or a
+    // multi instance back to Scheduled after wrongly marking it Done/Blocked.
+
+    // Per-instance status for Multi rows (multiStatus-<dayIndex> keys).
+    // Sets the instance's status and re-derives the row's aggregate `status`
+    // (first non-terminal instance, else last) so filters/sorting/the trigger
+    // pill stay coherent. See utils/planner/multiStatus.js.
+    if (MULTI_STATUS_KEY_RE.test(columnId)) {
+      const oldStatus = row?.status || '';
+      const nextRow = { ...(row ?? { id: rowId }), [columnId]: newValue } as PlannerRow;
+      const newStatus = deriveMultiRowStatus(nextRow, totalDays) ?? oldStatus;
+
+      const command: Command = {
+        execute: () => {
+          setData(prev => prev.map(r => r.id === rowId
+            ? { ...r, [columnId]: newValue, status: newStatus }
+            : r));
+        },
+        undo: () => {
+          setData(prev => prev.map(r => r.id === rowId
+            ? { ...r, [columnId]: oldValue, status: oldStatus }
+            : r));
+        },
+      };
+      executeCommand(command);
+
+      // Only log a status event when the aggregate row status actually moved
+      if (row?.id && newStatus !== oldStatus) {
+        writeTaskEvent(rowId, {
+          field: 'status',
+          oldValue: oldStatus || null,
+          newValue: newStatus,
+          isRecurring: row?.recurring === 'true' || (row?.recurring as any) === true,
+        }).then(() => {
+          window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
+            detail: { taskId: rowId },
+          }));
+        });
+      }
+
+      // Push fresh task data to the detail panel
+      if (row?.id) {
+        window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_UPDATE_EVENT, {
+          detail: { task: { ...row, [columnId]: newValue, status: newStatus } },
+        }));
+      }
+
+      // Deliberately do NOT clear editingCell here: instance edits come from
+      // the multi-status panel, which stays open so several dates can be set
+      // in one visit.
       return;
     }
 

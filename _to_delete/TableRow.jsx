@@ -103,7 +103,6 @@ const TableRow = React.memo(function TableRow({
   gripIconSize,
   table,
   dates,
-  selectCell,
   projects = ['-'],
   projectSubprojectsMap = {},
   rowData,
@@ -355,8 +354,6 @@ const TableRow = React.memo(function TableRow({
         rowData={rowData}
         dates={dates}
         totalDays={totalDays}
-        selectCell={selectCell}
-        statusFilters={selectedStatusFilters}
       />
     );
   }

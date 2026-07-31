@@ -12,7 +12,7 @@ import { ChevronDown } from 'lucide-react';
 import { getSelectionEdgeClassNames } from '../../../utils/planner/selectionEdgeClasses';
 import { linkifyText } from '../../../utils/linkify';
 import MultiStatusDropdownCell from '../MultiStatusDropdownCell';
-import { isMultiStatusRow, getMultiInstances } from '../../../utils/planner/multiStatus';
+import { isMultiStatusRow } from '../../../utils/planner/multiStatus';
 
 /**
  * TaskRow Component
@@ -62,39 +62,14 @@ const TaskRow = React.memo(function TaskRow({
   rowData,
   dates = [],
   totalDays,
-  selectCell,
-  statusFilters,
 }) {
   const rowId = row.original.id;
   // Multi rows (estimate 'Multi', >1 scheduled date) get the per-instance
   // status dropdown in the status column instead of the plain pill.
   const isMultiStatus = isMultiStatusRow(row.original, totalDays);
-  // The focused instance is simply the row's selected day cell (the table's
-  // own selection — one focus ring on screen). Clicking an instance's day
-  // cell points the status chip at that entry; the panel's footer chevrons
-  // move the selection itself.
-  const multiInstances = isMultiStatus ? getMultiInstances(row.original, totalDays) : null;
-  const statusFilterActive = !!statusFilters?.size;
-  // The row's selected day cell normally decides which instance the chip
-  // rests on — but while a status filter is active, a lingering selection
-  // (the multi-status panel moves the selection to the last-viewed date via
-  // onShownInstanceChange, and it stays there after close) only wins when
-  // that instance's status actually matches the filter. Otherwise the chip
-  // must jump to the earliest matching date (filterFocusDayIndex below).
-  const selectedInstance = multiInstances
-    ? (multiInstances.find(inst => isCellSelected(rowId, `day-${inst.dayIndex}`)) ?? null)
-    : null;
-  const selectedInstanceDayIndex =
-    selectedInstance && (!statusFilterActive || statusFilters.has(selectedInstance.status))
-      ? selectedInstance.dayIndex
-      : null;
-  // With a status filter active, rest the chip on the FIRST instance whose
-  // status matches the filter — instances are in day order, so "first" is
-  // the earliest date (the reason this row is in the results).
-  const filterFocusDayIndex = multiInstances && statusFilterActive
-    ? (multiInstances.find(inst => statusFilters.has(inst.status))?.dayIndex ?? null)
-    : null;
-  const focusInstanceDayIndex = selectedInstanceDayIndex ?? filterFocusDayIndex;
+  // While the multi-status panel is open, the shown instance's day cell gets
+  // a focus ring; paging the panel's footer chevrons advances it.
+  const [multiFocusDayIndex, setMultiFocusDayIndex] = useState(null);
   const isDragging = Array.isArray(draggedRowId) && draggedRowId.includes(rowId);
 
   // Tracks which cell the pointer is over and whether it's on the border (for drag-to-move gating)
@@ -267,7 +242,7 @@ const TaskRow = React.memo(function TaskRow({
                 position: 'relative',
                 overflow: isEditing ? 'visible' : 'hidden',
               }}
-              className={`p-0 ${isSelected && !isEditing ? `selected-cell ${getSelectionEdgeClassNames(getCellSelectionEdges?.(rowId, columnId))} ${hasMultiCellSelection ? 'sel-fill' : ''}` : ''}`}
+              className={`p-0 ${isSelected && !isEditing ? `selected-cell ${getSelectionEdgeClassNames(getCellSelectionEdges?.(rowId, columnId))} ${hasMultiCellSelection ? 'sel-fill' : ''}` : ''} ${isDayColumn && multiFocusDayIndex !== null && columnId === `day-${multiFocusDayIndex}` ? 'selected-cell sel-edge-top sel-edge-bottom sel-edge-left sel-edge-right' : ''}`}
               onDragOver={(e) => handleCellDragOver?.(e, rowId, columnId)}
               onDragLeave={(e) => handleCellDragLeave?.(e)}
               onDrop={(e) => handleCellDrop?.(e, rowId, columnId)}
@@ -375,8 +350,7 @@ const TaskRow = React.memo(function TaskRow({
                         cellFontSize={cellFontSize}
                         autoOpen={true}
                         onInstanceStatusChange={(dayIndex, status) => handleEditComplete(rowId, `multiStatus-${dayIndex}`, status)}
-                        focusDayIndex={focusInstanceDayIndex}
-                        onShownInstanceChange={(dayIndex) => { if (dayIndex !== null) selectCell?.(rowId, `day-${dayIndex}`); }}
+                        onShownInstanceChange={setMultiFocusDayIndex}
                         onRequestClose={() => handleEditCancel(rowId, columnId)}
                       />
                     ) : (
@@ -580,8 +554,7 @@ const TaskRow = React.memo(function TaskRow({
                         totalDays={totalDays}
                         cellFontSize={cellFontSize}
                         onInstanceStatusChange={(dayIndex, status) => handleEditComplete(rowId, `multiStatus-${dayIndex}`, status)}
-                        focusDayIndex={focusInstanceDayIndex}
-                        onShownInstanceChange={(dayIndex) => { if (dayIndex !== null) selectCell?.(rowId, `day-${dayIndex}`); }}
+                        onShownInstanceChange={setMultiFocusDayIndex}
                       />
                     ) : (
                     <div className="w-full h-full flex items-center overflow-hidden" style={{ paddingLeft: '3px', paddingRight: '3px' }}>

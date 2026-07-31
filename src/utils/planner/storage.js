@@ -949,29 +949,60 @@ function archiveRowDbToPayload(dbRow) {
   };
 }
 
+// Convert the Plan page's "H.MM" hours representation (number like 1.3 or
+// string like "1.30", where the decimal part is minutes/100, NOT a fraction
+// of an hour) into integer minutes. Mirrors hmmToMinutes in
+// tacticsMetricsStorage.js — loadTacticsMetrics returns dailyBounds entries
+// already converted back to this camelCase H.MM payload shape.
+function hmmHoursToMinutes(hmm) {
+  if (hmm == null) return 0;
+  if (typeof hmm === 'number') {
+    if (!Number.isFinite(hmm) || hmm <= 0) return 0;
+    const h = Math.floor(hmm);
+    const mm = Math.round((hmm - h) * 100);
+    return h * 60 + Math.min(Math.max(mm, 0), 59);
+  }
+  if (typeof hmm !== 'string') return 0;
+  const trimmed = hmm.trim();
+  if (!trimmed) return 0;
+  const [hPart, mPart = '0'] = trimmed.split('.');
+  const h = parseInt(hPart, 10) || 0;
+  const m = parseInt(mPart.padEnd(2, '0').slice(0, 2), 10) || 0;
+  return h * 60 + Math.min(Math.max(m, 0), 59);
+}
+
 function applyDailyBoundsToHeaders(headers, dailyBounds, startDate) {
-  // dailyBounds is an array of 7 { day, daily_max_minutes, daily_min_minutes }
-  // returned by loadTacticsMetrics. Each day index in the cycle maps to a
-  // specific calendar date (startDate + i days); we look up the bound by
-  // that date's weekday name.
-  if (!Array.isArray(dailyBounds) || dailyBounds.length === 0) return headers;
+  // dailyBounds is the camelCase payload from loadTacticsMetrics:
+  // [{ day, weekNumber, dailyMaxHours, dailyMinHours }] with H.MM hour
+  // values (weekNumber null = legacy global entry). This function used to
+  // read snake_case minute fields (daily_min_minutes) that the payload does
+  // not contain, so every cell resolved to '' — the System page's Daily
+  // Min/Max rows came back BLANK from every readTaskRows call, and each
+  // realtime refetch flashed them empty until the page's min/max effect
+  // refilled them (which re-triggered a save → echo → refetch loop).
+  // Now the mapping mirrors mapDailyBoundsToTimeline: per-week entries win
+  // over the global fallback, and missing bounds render as '0.00' (matching
+  // the page's formatting) rather than ''.
+  const dailyMinRow = headers.find((r) => r._isDailyMinRow);
+  const dailyMaxRow = headers.find((r) => r._isDailyMaxRow);
+  if (!dailyMinRow && !dailyMaxRow) return headers;
 
   const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-  const boundsByDay = new Map();
-  for (const entry of dailyBounds) {
-    if (entry && typeof entry.day === 'string') boundsByDay.set(entry.day, entry);
+  // perWeekMap: weekNumber -> Map(dayName -> entry); globalMap: dayName -> entry
+  const perWeekMap = new Map();
+  const globalMap = new Map();
+  for (const entry of (Array.isArray(dailyBounds) ? dailyBounds : [])) {
+    if (!entry || typeof entry.day !== 'string') continue;
+    if (entry.weekNumber != null) {
+      if (!perWeekMap.has(entry.weekNumber)) perWeekMap.set(entry.weekNumber, new Map());
+      perWeekMap.get(entry.weekNumber).set(entry.day, entry);
+    } else {
+      globalMap.set(entry.day, entry);
+    }
   }
 
-  const formatMinutes = (m) => {
-    if (typeof m !== 'number' || !Number.isFinite(m)) return '';
-    return (m / 60).toFixed(2);
-  };
-
-  const dailyMinRow = headers.find((r) => r._isDailyMinRow);
-  const dailyMaxRow = headers.find((r) => r._isDailyMaxRow);
-
-  if (!dailyMinRow && !dailyMaxRow) return headers;
+  const formatHours = (hmm) => (hmmHoursToMinutes(hmm) / 60).toFixed(2);
 
   const baseDate = new Date(startDate || todayIso());
 
@@ -982,9 +1013,10 @@ function applyDailyBoundsToHeaders(headers, dailyBounds, startDate) {
     const d = new Date(baseDate);
     d.setDate(baseDate.getDate() + i);
     const weekday = daysOfWeek[d.getDay()];
-    const bound = boundsByDay.get(weekday);
-    if (dailyMinRow) dailyMinRow[key] = formatMinutes(bound?.daily_min_minutes);
-    if (dailyMaxRow) dailyMaxRow[key] = formatMinutes(bound?.daily_max_minutes);
+    const weekNum = Math.floor(i / 7) + 1;
+    const bound = perWeekMap.get(weekNum)?.get(weekday) ?? globalMap.get(weekday);
+    if (dailyMinRow) dailyMinRow[key] = formatHours(bound?.dailyMinHours);
+    if (dailyMaxRow) dailyMaxRow[key] = formatHours(bound?.dailyMaxHours);
     i += 1;
     if (i > 365) break; // safety guard
   }

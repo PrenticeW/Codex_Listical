@@ -63,10 +63,10 @@ function showSnapshotToast() {
   el.textContent = `📸 Snapshot taken at ${time}`;
   Object.assign(el.style, {
     position:     'fixed',
-    // Bottom-left, stacked above the 40px debug snapshot button that sits
-    // at bottom:24/left:24 (Layout.jsx) so the two never overlap.
-    bottom:       '76px',
-    left:         '24px',
+    // Bottom-left, to the right of the 40px debug snapshot button that sits
+    // at bottom:24/left:24 (Layout.jsx), vertically centred against it.
+    bottom:       '26px',
+    left:         '76px',
     zIndex:       '999999',
     background:   '#1e293b',
     color:        '#f8fafc',

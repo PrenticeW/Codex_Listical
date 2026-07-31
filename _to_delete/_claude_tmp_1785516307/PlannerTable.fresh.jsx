@@ -42,7 +42,6 @@ function PlannerTable({
   cellFontSize,
   gripIconSize,
   dates,
-  selectCell,
   data,
   selectedCells,
   undoStack,
@@ -192,7 +191,6 @@ function PlannerTable({
                   gripIconSize={gripIconSize}
                   table={table}
                   dates={dates}
-                  selectCell={selectCell}
                   projects={projects}
                   subprojects={subprojects}
                   projectSubprojectsMap={projectSubprojectsMap}
@@ -291,7 +289,6 @@ function PlannerTable({
                   gripIconSize={gripIconSize}
                   table={table}
                   dates={dates}
-                  selectCell={selectCell}
                   projects={projects}
                   subprojects={subprojects}
                   projectSubprojectsMap={projectSubprojectsMap}

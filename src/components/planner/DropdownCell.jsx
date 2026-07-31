@@ -6,7 +6,7 @@ import { ChevronDown } from 'lucide-react';
  * DropdownCell Component
  * Dropdown selector for spreadsheet cells with keyboard navigation
  */
-const DROPDOWN_OPTIONS = [
+export const DROPDOWN_OPTIONS = [
   '-',
   'Not Scheduled',
   'Scheduled',

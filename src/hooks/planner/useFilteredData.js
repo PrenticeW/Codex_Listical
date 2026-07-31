@@ -27,6 +27,7 @@ import {
   isTimelineRow,
 } from '../../utils/planner/rowTypeChecks';
 import { getNormalizedColumnValue } from '../../utils/planner/valueNormalizers';
+import { getMultiInstances, MULTI_STATUS_KEY_RE, isScheduledDayValue } from '../../utils/planner/multiStatus';
 
 /**
  * Custom hook for filtering planner data
@@ -58,6 +59,7 @@ export const useFilteredData = ({
   coerceNumber,
   dayFilter = null,
   projectFilter = null,
+  totalDays = 0,
 }) => {
   return useMemo(() => {
     // Strip tombstone rows — these are internal bookkeeping only and must never render
@@ -200,6 +202,15 @@ export const useFilteredData = ({
       if (!selectedStatusFilters.size) return true;
       if (shouldBypassFilters(row)) {
         return !isSectionDivider(row) && !isProjectStructureRow(row);
+      }
+      // Multi rows: match when ANY instance carries a filtered status, not
+      // just the aggregate — the chip then rests on the first matching
+      // instance (see TaskRow's filter-focus logic).
+      if (row.estimate === 'Multi' && totalDays > 0) {
+        const instances = getMultiInstances(row, totalDays);
+        if (instances.length > 1) {
+          return instances.some(inst => selectedStatusFilters.has(inst.status));
+        }
       }
       return selectedStatusFilters.has(getNormalizedColumnValue(row, 'status'));
     };
@@ -422,6 +433,7 @@ export const useFilteredData = ({
     coerceNumber,
     dayFilter,
     projectFilter,
+    totalDays,
   ]);
 };
 
@@ -450,6 +462,20 @@ export const useFilterValues = (computedData) => {
       subprojects.add(getNormalizedColumnValue(row, 'subproject'));
       statuses.add(getNormalizedColumnValue(row, 'status'));
       estimates.add(getNormalizedColumnValue(row, 'estimate'));
+
+      // Multi rows: per-instance statuses are filterable too, so a status
+      // that only exists on one date (e.g. Blocked on 2/3 while the chip
+      // rests on Scheduled) still appears as a filter option.
+      if (row.estimate === 'Multi') {
+        for (const key of Object.keys(row)) {
+          const match = key.match(MULTI_STATUS_KEY_RE);
+          if (match && row[key] && isScheduledDayValue(row[`day-${match[1]}`])) {
+            statuses.add(row[key] === '-' ? 'Scheduled' : row[key]);
+          }
+        }
+        // Unset instances read as 'Scheduled' (see getMultiInstances)
+        statuses.add('Scheduled');
+      }
     });
 
     return {

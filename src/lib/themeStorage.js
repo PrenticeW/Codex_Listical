@@ -12,12 +12,44 @@
  * The `theme-state-update` window event fires after every successful save
  * with `{ family }` in detail, so any listener (Layout applies the theme)
  * can react without refetching.
+ *
+ * A localStorage mirror of the last-known family lets startup code apply
+ * the theme synchronously before first paint (see peekThemeFamily and the
+ * pre-render call in src/main.jsx) — without it, every refresh painted the
+ * stylesheet's blue defaults for the moment the Supabase read was in
+ * flight. The mirror is a cache only; Supabase stays the source of truth
+ * and loadThemeFamily refreshes the mirror on every successful read.
  */
 
 import { supabase } from './supabase';
 import { DEFAULT_THEME_FAMILY, THEME_FAMILIES } from './theme';
 
 export const THEME_UPDATE_EVENT = 'theme-state-update';
+
+const THEME_CACHE_KEY = 'listical-theme-family';
+
+function cacheThemeFamily(family) {
+  try {
+    localStorage.setItem(THEME_CACHE_KEY, family);
+  } catch {
+    // Storage unavailable (private mode / quota) — cache is best-effort.
+  }
+}
+
+/**
+ * Synchronously read the cached theme family from localStorage.
+ * Returns null when nothing valid is cached (first visit, cleared storage),
+ * so callers can leave the stylesheet defaults untouched.
+ * @returns {string|null}
+ */
+export function peekThemeFamily() {
+  try {
+    const family = localStorage.getItem(THEME_CACHE_KEY);
+    return THEME_FAMILIES.includes(family) ? family : null;
+  } catch {
+    return null;
+  }
+}
 
 async function requireUserId() {
   const { data: { user }, error } = await supabase.auth.getUser();
@@ -42,7 +74,9 @@ export async function loadThemeFamily() {
       .single();
     if (error) throw error;
     const family = data?.theme_family;
-    return THEME_FAMILIES.includes(family) ? family : DEFAULT_THEME_FAMILY;
+    const resolved = THEME_FAMILIES.includes(family) ? family : DEFAULT_THEME_FAMILY;
+    cacheThemeFamily(resolved);
+    return resolved;
   } catch {
     return DEFAULT_THEME_FAMILY;
   }
@@ -64,6 +98,8 @@ export async function saveThemeFamily(family) {
     .update({ theme_family: family })
     .eq('id', userId);
   if (error) throw error;
+
+  cacheThemeFamily(family);
 
   window.dispatchEvent(new CustomEvent(THEME_UPDATE_EVENT, {
     detail: { family },
