@@ -513,3 +513,74 @@ export const resetRecurringTasks = (data, totalDays = 84) => {
     return row;
   });
 };
+
+/**
+ * Resolve the archive context for rows inserted at a given position.
+ *
+ * When the user adds task rows while anchored inside the Archive section
+ * (right-clicked or selected an archive week row, an archived project
+ * header/section row, or an archived task), the new rows must be stamped as
+ * archive members — otherwise the Supabase load path (which rebuilds the
+ * archive block purely from the parentGroupId chain) relocates them out of
+ * the section on the next realtime refresh, and they never count toward the
+ * week's totals or appear in the Archive Week panel.
+ *
+ * Returns { parentGroupId, projectNickname, project } for the archived
+ * project group the new rows should join, or null when the insert position
+ * is not inside the archive section.
+ *
+ * @param {object[]} data - Data array
+ * @param {number} insertIndex - Index the new rows will be spliced at
+ * @returns {object|null} Archive context, or null outside the archive
+ */
+export const getArchiveInsertContext = (data, insertIndex) => {
+  const anchorIdx = insertIndex - 1;
+  const anchor = data[anchorIdx];
+  if (!anchor) return null;
+
+  const isWeek = (r) => r._rowType === ARCHIVE_ROW_TYPES.ARCHIVE_WEEK;
+  const isHeader = (r) => r._rowType === ARCHIVE_ROW_TYPES.ARCHIVED_PROJECT_HEADER;
+  const headerCtx = (header) => ({
+    parentGroupId: header.groupId,
+    projectNickname: header.projectNickname || header.project || '',
+    project: header.projectNickname || header.project || '',
+  });
+
+  // Is the anchor row part of the archive section at all?
+  const inArchive =
+    isWeek(anchor) ||
+    isHeader(anchor) ||
+    anchor._isArchivedTask === true ||
+    (typeof anchor._rowType === 'string' && anchor._rowType.startsWith('archived')) ||
+    (!!anchor.parentGroupId && data.some((r) => isWeek(r) && r.id === anchor.parentGroupId)) ||
+    (!!anchor.parentGroupId && data.some((r) => isHeader(r) && r.groupId === anchor.parentGroupId));
+  if (!inArchive) return null;
+
+  // Anchored on the week row itself: attach to its first archived project
+  // header (rows join that group; on reload they render under it). A week
+  // with no project headers falls back to the week id so the rows at least
+  // stay inside the week block.
+  if (isWeek(anchor)) {
+    const firstHeader = data.find((r) => isHeader(r) && r.parentGroupId === anchor.id);
+    if (firstHeader) return headerCtx(firstHeader);
+    return { parentGroupId: anchor.id, projectNickname: '', project: '' };
+  }
+
+  // Otherwise use the nearest archived project header at or above the anchor,
+  // stopping at the top of the current archive week.
+  for (let i = anchorIdx; i >= 0; i--) {
+    const row = data[i];
+    if (isHeader(row)) return headerCtx(row);
+    if (isWeek(row)) break;
+  }
+
+  // Anchor sits inside a week but above any project header (e.g. a snapshot
+  // row parented directly to the week): keep the rows in the week block.
+  const weekParent = data.find((r) => isWeek(r) && r.id === anchor.parentGroupId);
+  if (weekParent) return { parentGroupId: weekParent.id, projectNickname: '', project: '' };
+
+  const headerParent = data.find((r) => isHeader(r) && r.groupId === anchor.parentGroupId);
+  if (headerParent) return headerCtx(headerParent);
+
+  return null;
+};

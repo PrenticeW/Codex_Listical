@@ -86,6 +86,7 @@ import {
   moveTasksToArchive,
   insertRecurringSnapshots,
   resetRecurringTasks,
+  getArchiveInsertContext,
 } from '../utils/planner/archiveHelpers';
 import { buildArchiveWeekPanelData } from '../utils/planner/archiveWeekPanelData';
 import { useArchiveTotals } from '../hooks/planner/useArchiveTotals';
@@ -2272,6 +2273,22 @@ export default function ProjectTimePlannerV2() {
       }
     }
 
+
+    // If the insertion point is inside the Archive section, stamp the new
+    // rows as archived tasks so they persist inside the archive block,
+    // count toward the week's total, and show in the Archive Week panel.
+    const archiveCtx = getArchiveInsertContext(data, insertIndex);
+    const stampedRows = archiveCtx
+      ? newRows.map(r => ({
+          ...r,
+          _rowType: 'projectTask',
+          _isArchivedTask: true,
+          parentGroupId: archiveCtx.parentGroupId,
+          project: r.project || archiveCtx.project,
+          projectNickname: archiveCtx.projectNickname,
+        }))
+      : newRows;
+
     // Store the insertion index for undo
     const savedInsertIndex = insertIndex;
 
@@ -2280,7 +2297,7 @@ export default function ProjectTimePlannerV2() {
       execute: () => {
         setData(prev => {
           const newData = [...prev];
-          newData.splice(savedInsertIndex, 0, ...newRows);
+          newData.splice(savedInsertIndex, 0, ...stampedRows);
           return newData;
         });
       },
@@ -2801,11 +2818,26 @@ export default function ProjectTimePlannerV2() {
     // Create the new empty rows
     const newRows = createEmptyTaskRows(count, totalDays);
 
+    // If the insertion point is inside the Archive section, stamp the new
+    // rows as archived tasks so they persist inside the archive block,
+    // count toward the week's total, and show in the Archive Week panel.
+    const archiveCtx = getArchiveInsertContext(data, insertIndex);
+    const stampedRows = archiveCtx
+      ? newRows.map(r => ({
+          ...r,
+          _rowType: 'projectTask',
+          _isArchivedTask: true,
+          parentGroupId: archiveCtx.parentGroupId,
+          project: r.project || archiveCtx.project,
+          projectNickname: archiveCtx.projectNickname,
+        }))
+      : newRows;
+
     const command = {
       execute: () => {
         setData(prev => {
           const newData = [...prev];
-          newData.splice(insertIndex, 0, ...newRows);
+          newData.splice(insertIndex, 0, ...stampedRows);
           return newData;
         });
       },
@@ -2819,7 +2851,7 @@ export default function ProjectTimePlannerV2() {
     };
 
     executeCommand(command);
-    setSelectedRows(new Set(newRows.map(r => r.id)));
+    setSelectedRows(new Set(stampedRows.map(r => r.id)));
   }, [selectedRows, contextMenu.rowId, data, totalDays, executeCommand, setSelectedRows]);
 
   // System panel action events

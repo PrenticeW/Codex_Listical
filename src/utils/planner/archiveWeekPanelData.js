@@ -32,10 +32,12 @@ const AREA_LABELS = {
   duties: 'Duties',
 };
 
-// Matches the generated archive range format, e.g. "Dec 29 - Jan 4"
-// (calculateWeekRange in archiveHelpers.js). Anything else in archiveLabel
-// is treated as user context text.
-const DATE_RANGE_RE = /^[A-Za-z]{3,9}\.?\s?\d{1,2}\s*[-–—]\s*[A-Za-z]{3,9}\.?\s?\d{1,2}$/;
+// Matches the generated archive range format at the START of archiveLabel,
+// e.g. "Dec 29 - Jan 4" (calculateWeekRange in archiveHelpers.js). The field
+// is auto-populated with the range and user-editable — users append context
+// text after the date, so capture the range prefix and treat whatever
+// follows (after an optional separator) as the context line.
+const DATE_RANGE_PREFIX_RE = /^([A-Za-z]{3,9}\.?\s?\d{1,2}\s*[-–—]\s*[A-Za-z]{3,9}\.?\s?\d{1,2})\s*[-–—:,·|]*\s*([\s\S]*)$/;
 
 const round1 = (v) => Math.round(v * 10) / 10;
 
@@ -62,9 +64,22 @@ const weekNumberOf = (weekPart, fallback) => {
   return m ? parseInt(m[1], 10) : fallback;
 };
 
-// Stable identity for matching a project across adjacent archive weeks.
-const projectKey = (header) =>
-  header.projectId || header.projectNickname || header.project || header.id;
+// Identity keys for matching a project across adjacent archive weeks.
+// Older archive weeks (created before projectId was stamped on archived
+// headers, July 2026) only carry a nickname, while newer ones carry the
+// stable id — so a single-key comparison would never match across the two
+// eras. Register/try every identity the header has, most stable first.
+const projectKeysOf = (header, projectIdByNickname) => {
+  const keys = [];
+  const pid = header.projectId || projectIdByNickname?.get(header.projectNickname) || null;
+  if (pid) keys.push(`id:${pid}`);
+  const nick = typeof header.projectNickname === 'string' ? header.projectNickname.trim().toLowerCase() : '';
+  if (nick) keys.push(`nick:${nick}`);
+  const proj = typeof header.project === 'string' ? header.project.trim().toLowerCase() : '';
+  if (proj) keys.push(`proj:${proj}`);
+  if (keys.length === 0) keys.push(`row:${header.id}`);
+  return keys;
+};
 
 // All archived project headers under one archive week, each with the summed
 // day-entry hours of the rows hanging under its group (archived tasks +
@@ -114,12 +129,24 @@ export function buildArchiveWeekPanelData(
   const nextRow = index < weeks.length - 1 ? weeks[index + 1] : null;
 
   const entries = projectEntriesForWeek(data, row.id);
-  const prevByKey = new Map(
-    (prevRow ? projectEntriesForWeek(data, prevRow.id) : []).map((e) => [
-      projectKey(e.header),
-      e.hours,
-    ]),
-  );
+
+  // Previous week's hours, registered under every identity each header has,
+  // so lookups succeed across mixed-era rows (id vs nickname keyed).
+  const prevByKey = new Map();
+  if (prevRow) {
+    for (const e of projectEntriesForWeek(data, prevRow.id)) {
+      for (const key of projectKeysOf(e.header, projectIdByNickname)) {
+        if (!prevByKey.has(key)) prevByKey.set(key, e.hours);
+      }
+    }
+  }
+  const lookupLast = (header) => {
+    if (!prevRow) return null;
+    for (const key of projectKeysOf(header, projectIdByNickname)) {
+      if (prevByKey.has(key)) return prevByKey.get(key);
+    }
+    return null;
+  };
 
   const projects = entries.map(({ header, hours }) => {
     const pid = header.projectId || projectIdByNickname.get(header.projectNickname) || null;
@@ -127,7 +154,7 @@ export function buildArchiveWeekPanelData(
     return {
       name: header.projectNickname || header.project || 'Project',
       color: info?.color || 'var(--n-slate)',
-      last: prevRow ? (prevByKey.get(projectKey(header)) ?? null) : null,
+      last: lookupLast(header),
       current: hours,
       quota: parseQuota(header.archivedWeeklyQuota),
       area: header.archivedArea ?? null,
@@ -156,12 +183,18 @@ export function buildArchiveWeekPanelData(
     : null;
 
   const rawLabel = (row.archiveLabel || '').trim();
-  const isPlainRange = DATE_RANGE_RE.test(rawLabel);
+  // Split the editable header text into the auto-populated date range prefix
+  // and any user-appended context text after it. No date prefix at all means
+  // the user replaced the whole field — show it all as context, no range.
+  const rangeMatch = DATE_RANGE_PREFIX_RE.exec(rawLabel);
+  const range = rangeMatch ? rangeMatch[1].trim() : null;
+  const contextText = rangeMatch
+    ? (rangeMatch[2].trim() || null)
+    : (rawLabel || null);
   const calendarName =
     typeof row.archiveCalendarWeekName === 'string' && row.archiveCalendarWeekName.trim()
       ? row.archiveCalendarWeekName.trim()
       : null;
-  const contextText = rawLabel && !isPlainRange ? rawLabel : null;
 
   const nameLines = [];
   if (calendarName) nameLines.push(calendarName);
@@ -170,7 +203,7 @@ export function buildArchiveWeekPanelData(
   return {
     id: row.id,
     label: weekPart || `Week ${thisNum}`,
-    range: isPlainRange ? rawLabel : null,
+    range,
     nameLines,
     isFirstWeek: index === 0,
     isLatestWeek: index === weeks.length - 1,
