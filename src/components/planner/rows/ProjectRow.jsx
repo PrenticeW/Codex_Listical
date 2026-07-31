@@ -309,10 +309,19 @@ export default function ProjectRow({
                       outlineOffset: '-2px',
                     }}
                   >
-                    {isSubprojectHeader && groupId && (
+                    {/* Collapse toggle: subproject headers, and archived project
+                        headers — the post-archive flow collapses each archived
+                        project group by default, so without a toggle here the
+                        archived tasks (incl. Done rows) were unreachable.
+                        Subproject headers keep the right-edge absolute position;
+                        archived project headers place the chevron inline BEFORE
+                        the name (like the archive week row) — the merged header
+                        cell's right edge sits under the day-columns pane, so a
+                        right-edge chevron there is invisible. */}
+                    {(isSubprojectHeader || (isHeader && isArchived)) && groupId && (
                       <span
                         data-group-toggle
-                        style={{
+                        style={isSubprojectHeader ? {
                           position: 'absolute',
                           right: chevronRight + 4,
                           top: '50%',
@@ -321,6 +330,11 @@ export default function ProjectRow({
                           display: 'flex',
                           alignItems: 'center',
                           cursor: 'pointer',
+                        } : {
+                          display: 'flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          flexShrink: 0,
                         }}
                         onClick={(e) => {
                           e.stopPropagation();

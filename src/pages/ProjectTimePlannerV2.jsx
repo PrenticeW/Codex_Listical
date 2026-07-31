@@ -2434,8 +2434,16 @@ export default function ProjectTimePlannerV2() {
           return newData;
         });
 
-        // Collapse archive week group by default
-        setCollapsedGroups(prev => new Set([...prev, archiveWeekRow.id]));
+        // Archived weeks start fully unfurled: make sure neither the new week
+        // nor any of its archived project groups are in the collapsed set.
+        setCollapsedGroups(prev => {
+          const next = new Set(prev);
+          next.delete(archiveWeekRow.id);
+          archivedProjects.forEach(row => {
+            if (row.groupId) next.delete(row.groupId);
+          });
+          return next;
+        });
       },
       undo: () => {
         setData(originalData);
@@ -2867,8 +2875,9 @@ export default function ProjectTimePlannerV2() {
     return () => window.removeEventListener(SYSTEM_PANEL_ACTION_EVENT, handler);
   }, [addTasksWithCount, addLabelsWithCount, addWeeksWithCount, removeWeek, duplicateSelectedRows, handleHideWeek, handleShowWeek, handleArchiveWeek, undo, redo, increaseSize, decreaseSize, data, setData, executeCommand, handleEditComplete]);
 
-  // After a panel-triggered archive, expand the archive row, collapse its project
-  // headers, then scroll to the bottom
+  // After a panel-triggered archive, expand the archive row and all of its
+  // project groups (archived weeks always start unfurled), then scroll to
+  // the bottom
   useEffect(() => {
     if (!expandNextArchiveRef.current) return;
     const latestArchive = [...data].reverse().find(r => r.archiveWeekLabel);
@@ -2883,8 +2892,8 @@ export default function ProjectTimePlannerV2() {
 
     setCollapsedGroups(prev => {
       const next = new Set(prev);
-      next.delete(latestArchive.id);                    // expand the archive week
-      archivedProjectGroupIds.forEach(id => next.add(id)); // collapse project headers inside
+      next.delete(latestArchive.id);                       // expand the archive week
+      archivedProjectGroupIds.forEach(id => next.delete(id)); // expand project groups inside
       return next;
     });
 

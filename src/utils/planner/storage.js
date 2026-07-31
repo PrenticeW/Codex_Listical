@@ -1057,12 +1057,55 @@ export const readTaskRows = async (
       // some blank rows so the table renders the empty grid the user expects.
       result = [...headers, ...createInitialData(100, totalDays, startDate).slice(8)];
     } else {
-      // Archive rows are appended after the live task rows. The original code
-      // interleaved them inline based on `archive-week-*` ids in `task-rows`;
-      // post-port they live in a separate table, so appending in week_number
-      // order is the simplest faithful reconstruction. If insertion order
-      // matters more than weekly order we can revisit.
-      result = [...headers, ...taskRows, ...archiveRows];
+      // Archive week rows live in a separate table (archived_weeks), so their
+      // position in the row list must be reconstructed on read. Each archived
+      // project header (and stray archived task) carries parentGroupId equal
+      // to its archive week's id, so re-insert every week row immediately
+      // BEFORE its first child. Appending at the end (the previous behaviour)
+      // put the green week row BELOW its own archived project rows after a
+      // refresh, which also broke collapse — the week looked like it hadn't
+      // taken its tasks with it.
+      result = [...headers, ...taskRows];
+      if (archiveRows.length > 0) {
+        // Rebuild the archive section in canonical order. Week rows live in a
+        // separate table (archived_weeks) and planner_rows display_order can
+        // drift (older bugs persisted scrambled orders), so instead of trusting
+        // stored positions we regroup by the parentGroupId chain:
+        //   archive week → its archived project headers → each header's
+        //   section rows and archived tasks (kept in their stored relative
+        //   order within the group).
+        const weekIds = new Set(archiveRows.map((w) => w.id));
+        const headerGroupIds = new Set(
+          result
+            .filter((r) => r.parentGroupId && weekIds.has(r.parentGroupId) && r.groupId)
+            .map((r) => r.groupId),
+        );
+        const isArchiveMember = (r) =>
+          !!r.parentGroupId && (weekIds.has(r.parentGroupId) || headerGroupIds.has(r.parentGroupId));
+
+        const remaining = result.filter((r) => !isArchiveMember(r));
+        const block = [];
+        for (const week of archiveRows) {
+          block.push(week);
+          const weekHeaders = result.filter((r) => r.parentGroupId === week.id);
+          for (const header of weekHeaders) {
+            block.push(header);
+            if (header.groupId) {
+              block.push(...result.filter((r) => r.parentGroupId === header.groupId));
+            }
+          }
+        }
+
+        // Insert the rebuilt block right after the Archive header row; if it
+        // is missing (shouldn't happen), append at the end.
+        const archiveHeaderIdx = remaining.findIndex((r) => r._rowType === 'archiveHeader');
+        if (archiveHeaderIdx !== -1) {
+          remaining.splice(archiveHeaderIdx + 1, 0, ...block);
+        } else {
+          remaining.push(...block);
+        }
+        result = remaining;
+      }
     }
 
     // Deduplicate by row id — a safety net against the concurrent-save race

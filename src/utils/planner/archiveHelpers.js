@@ -235,6 +235,11 @@ export const createArchivedProjectStructure = (projectRows, subprojectRows, arch
  */
 export const collectTasksForArchive = (data, filterFn) => {
   return data.filter(row => {
+    // Never re-collect rows that already live inside an archive week —
+    // without this, each new archive drains the previous archives' Done
+    // and Abandoned tasks into itself.
+    if (row._isArchivedTask) return false;
+
     // Exclude special header rows, but INCLUDE subproject section rows
     if (row._isMonthRow || row._isWeekRow || row._isDayRow ||
         row._isDayOfWeekRow || row._isDailyMinRow || row._isDailyMaxRow ||
@@ -486,6 +491,10 @@ export const insertRecurringSnapshots = (data, snapshots, archiveWeekId) => {
  */
 export const resetRecurringTasks = (data, totalDays = 84) => {
   return data.map(row => {
+    // Archived snapshots are a frozen record — never reset them, or a later
+    // archive wipes the Done statuses recorded in earlier archive weeks.
+    if (row._isArchivedTask || row.archiveWeekLabel) return row;
+
     // Only reset recurring tasks with Done or Abandoned status
     if (row.recurring && ['Done', 'Abandoned'].includes(row.status)) {
       const updates = {
