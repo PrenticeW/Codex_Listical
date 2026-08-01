@@ -30,6 +30,7 @@ export interface Database {
           email: string
           full_name: string | null
           avatar_url: string | null
+          theme_family: string | null
           date_of_birth: string | null
           deletion_requested_at: string | null
           deleted_at: string | null
@@ -41,6 +42,7 @@ export interface Database {
           email: string
           full_name?: string | null
           avatar_url?: string | null
+          theme_family?: string | null
           date_of_birth?: string | null
           deletion_requested_at?: string | null
           deleted_at?: string | null
@@ -52,6 +54,7 @@ export interface Database {
           email?: string
           full_name?: string | null
           avatar_url?: string | null
+          theme_family?: string | null
           date_of_birth?: string | null
           deletion_requested_at?: string | null
           deleted_at?: string | null
@@ -126,6 +129,18 @@ export interface Database {
           audit_log_id: string
         }
         Returns: boolean
+      }
+      check_export_rate_limit: {
+        Args: {
+          target_user_id: string
+        }
+        Returns: boolean
+      }
+      record_export_attempt: {
+        Args: {
+          target_user_id: string
+        }
+        Returns: undefined
       }
       purge_user_data: {
         Args: {

@@ -2,25 +2,36 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { requestAccountDeletion } from '../lib/api/accountDeletion';
+import { useAuth } from '../contexts/AuthContext';
 
 /**
  * DeleteAccountModal Component
  *
- * Confirmation modal for account deletion with password verification.
+ * Confirmation modal for account deletion. Password accounts verify with
+ * their password; OAuth-only accounts (Google, Apple) have no password and
+ * verify by typing DELETE instead. The Edge Function enforces the same
+ * distinction server-side from the user's identities.
  */
 
 const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
+const CONFIRMATION_PHRASE = 'DELETE';
+
 export function DeleteAccountModal({ isOpen, onClose }) {
   const navigate = useNavigate();
-  const [password, setPassword] = useState('');
+  const { user } = useAuth();
+  const [confirmation, setConfirmation] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef(null);
 
+  // Password accounts have an 'email' identity; pure Google/Apple sign-ins
+  // don't, so they confirm by typing DELETE instead.
+  const hasPassword = (user?.identities ?? []).some(i => i.provider === 'email');
+
   useEffect(() => {
     if (isOpen) {
-      setPassword('');
+      setConfirmation('');
       setError('');
       setIsLoading(false);
       setTimeout(() => inputRef.current?.focus(), 50);
@@ -29,16 +40,27 @@ export function DeleteAccountModal({ isOpen, onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!password) { setError('Please enter your password'); return; }
+    if (!confirmation) {
+      setError(hasPassword ? 'Please enter your password' : `Please type ${CONFIRMATION_PHRASE} to confirm`);
+      return;
+    }
+    if (!hasPassword && confirmation !== CONFIRMATION_PHRASE) {
+      setError(`Please type ${CONFIRMATION_PHRASE} exactly to confirm.`);
+      return;
+    }
     setIsLoading(true);
     setError('');
     try {
-      const result = await requestAccountDeletion(password);
+      const result = await requestAccountDeletion(
+        hasPassword ? { password: confirmation } : { confirmationPhrase: confirmation }
+      );
       if (result.success) {
         navigate('/account-deleted');
       } else {
         if (result.error === 'Invalid password') {
           setError('The password you entered is incorrect. Please try again.');
+        } else if (result.error === 'Invalid confirmation') {
+          setError(`Please type ${CONFIRMATION_PHRASE} exactly to confirm.`);
         } else if (result.error === 'Too many attempts. Please try again later.') {
           setError('Too many failed attempts. Please wait a few minutes and try again.');
         } else if (result.error === 'Not authenticated') {
@@ -123,22 +145,25 @@ export function DeleteAccountModal({ isOpen, onClose }) {
               <p>You have 30 days to cancel your deletion request by contacting support. After this period, your data will be permanently deleted.</p>
             </div>
 
-            {/* Password */}
+            {/* Verification — password, or typed DELETE for OAuth accounts */}
             <div>
-              <label htmlFor="delete-password" style={{ display:'block', fontSize:13, fontWeight:600, color:'#383838', marginBottom:8 }}>
-                Enter your password to confirm
+              <label htmlFor="delete-confirmation" style={{ display:'block', fontSize:13, fontWeight:600, color:'#383838', marginBottom:8 }}>
+                {hasPassword
+                  ? 'Enter your password to confirm'
+                  : `Type ${CONFIRMATION_PHRASE} to confirm`}
               </label>
               <input
                 ref={inputRef}
-                id="delete-password"
-                type="password"
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                id="delete-confirmation"
+                type={hasPassword ? 'password' : 'text'}
+                autoComplete={hasPassword ? 'current-password' : 'off'}
+                value={confirmation}
+                onChange={(e) => { setConfirmation(e.target.value); setError(''); }}
                 disabled={isLoading}
                 style={{ width:'100%', border:'1px solid #e8e8e4', borderRadius:8, padding:'10px 14px', fontSize:14, color:'#1F1F1F', background: isLoading ? '#f9f9f9' : '#fff', outline:'none', boxSizing:'border-box', cursor: isLoading ? 'not-allowed' : 'text', transition:'border-color .15s' }}
                 onFocus={e=>e.target.style.borderColor='#c0392b'}
                 onBlur={e=>e.target.style.borderColor='#e8e8e4'}
-                placeholder="Enter your password..."
+                placeholder={hasPassword ? 'Enter your password...' : CONFIRMATION_PHRASE}
               />
             </div>
 
@@ -169,10 +194,10 @@ export function DeleteAccountModal({ isOpen, onClose }) {
           <button
             type="submit"
             onClick={handleSubmit}
-            disabled={isLoading || !password}
-            style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 18px', fontSize:13, fontWeight:600, color:'#fff', background:'#c0392b', border:'none', borderRadius:8, cursor: (isLoading || !password) ? 'not-allowed' : 'pointer', fontFamily:FONT, opacity: (isLoading || !password) ? 0.5 : 1, transition:'opacity .1s' }}
-            onMouseEnter={e=>{ if (!isLoading && password) e.currentTarget.style.opacity='0.85'; }}
-            onMouseLeave={e=>e.currentTarget.style.opacity= (isLoading || !password) ? '0.5' : '1'}
+            disabled={isLoading || !confirmation}
+            style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 18px', fontSize:13, fontWeight:600, color:'#fff', background:'#c0392b', border:'none', borderRadius:8, cursor: (isLoading || !confirmation) ? 'not-allowed' : 'pointer', fontFamily:FONT, opacity: (isLoading || !confirmation) ? 0.5 : 1, transition:'opacity .1s' }}
+            onMouseEnter={e=>{ if (!isLoading && confirmation) e.currentTarget.style.opacity='0.85'; }}
+            onMouseLeave={e=>e.currentTarget.style.opacity= (isLoading || !confirmation) ? '0.5' : '1'}
           >
             {isLoading && (
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ animation:'spin 1s linear infinite' }}>

@@ -8,6 +8,20 @@ Users include students at dance conservatoires and universities, potentially inc
 
 All user data must be deletable on request. The `deletion_audit_log` table and `deletion_requested_at` field on `profiles` are the start of this. The Supabase migration must extend Right to Erasure to all planning data tables.
 
+**Deletion verification by account type:** the `account-delete` Edge Function decides the check from the user's own identities (never from which request fields were sent). Password accounts (an `email` identity exists) must supply their password; OAuth-only accounts (Google, Apple) have no password and must type the confirmation phrase `DELETE` instead. `DeleteAccountModal` mirrors this client-side.
+
+### Data export (Right of Access / Portability — UK GDPR Art. 15 / Art. 20)
+
+The privacy policy promises users a machine readable copy of their data. This is served by "Download my data" in the gear panel's Account section.
+
+- **Endpoint:** `POST /api/export-data` (Vercel serverless, `api/export-data.ts`, logic in `src/lib/server/dataExport.ts`). Authenticates the caller from their Supabase JWT (`Authorization: Bearer`) — a user id is never accepted from the request body. Returns a JSON attachment named `listical-export-YYYY-MM-DD.json` shaped `{ exportedAt, user: { email, dateOfBirth }, data: { <tableName>: [rows] } }`.
+- **Scope:** all years (deliberately not year-scoped, unlike the client storage modules). Includes profiles (minus internal deletion flags `deletion_requested_at` / `deleted_at`), all planning tables, and the theme preference (`profiles.theme_family`). Excludes `deletion_audit_log` and the rate-limit bookkeeping tables.
+- **Table list source of truth:** `EXPORT_TABLES` in `src/lib/server/dataExport.ts` must match the deletion flow's explicit purge list (`purge_user_data` in `supabase/migrations/20260801000001_complete_deletion_purge.sql`). `node scripts/verify-export-tables.mjs` parses both, cross-checks against every table created in `supabase/migrations` with a `user_id` column, and fails on undocumented drift — run it whenever either list or the schema changes.
+- **Rate limit:** 3 exports per hour per user, via `export_rate_limits` and `check_export_rate_limit` / `record_export_attempt` (migration `20260801000002_add_export_rate_limiting.sql`, mirroring the deletion rate limiting in `20260120000003`).
+- **Client:** components call `downloadDataExport()` in `src/lib/api/dataExport.ts` (mirrors `src/lib/api/accountDeletion.ts`); never fetch or call Supabase directly from components.
+
+**Gear panel Account section:** shows Log out and an "Edit account" button (both in the panel's standard bento button style with the brand-tint hover state) — Edit account expands in place to reveal Download my data (local loading/disabled state — intentionally not wrapped with `useAsyncHandler`, see the signup flow note below) and Delete account (destructive, last, opens `DeleteAccountModal`).
+
 ### Database rules (all future Supabase tables)
 
 - Every new table must include a `user_id` FK referencing `auth.users(id)`

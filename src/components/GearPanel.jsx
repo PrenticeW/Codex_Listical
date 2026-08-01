@@ -40,6 +40,7 @@ import { JUNE_GROUPS } from '../constants/palettePickerGroups';
 import { ColourPicker as ColourMixer } from './GoalPanel';
 import { applyThemeFamily, colourToFamily, familyDisplayName, themeSwatch, DEFAULT_THEME_FAMILY } from '../lib/theme';
 import { loadThemeFamily, saveThemeFamily } from '../lib/themeStorage';
+import { downloadDataExport } from '../lib/api/dataExport';
 
 // Dispatched by GearPanel so TacticsPage can sync state without a double-save
 export const GEAR_TACTICS_SETTINGS_EVENT = 'gear-tactics-settings-update';
@@ -796,6 +797,13 @@ function AccountSection({ onClose }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Local loading/error state for the export — deliberately NOT wired
+  // through useAsyncHandler: flipping global isLoading unmounts routes
+  // mid-flow (see the signup flow warning in docs/compliance.md).
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState(null);
 
   const handleLogout = async () => {
     onClose();
@@ -807,23 +815,49 @@ function AccountSection({ onClose }) {
     setIsDeleteModalOpen(true);
   };
 
-  const baseBtn = {
-    background: 'none', borderRadius: 8, padding: '7px 14px',
-    fontSize: 12, fontWeight: 500, cursor: 'pointer',
-    display: 'flex', alignItems: 'center', gap: 6,
+  const handleDownloadData = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    setExportError(null);
+    const result = await downloadDataExport();
+    setIsExporting(false);
+    if (!result.success) {
+      setExportError(result.error ?? 'Export failed. Please try again.');
+    }
   };
+
+  // Bento-style button — same treatment and hover state as the panel's
+  // other buttons (see ThemeBackButton): white card, brand-tint hover.
+  const bentoBtnStyle = (hov, disabled = false) => ({
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '6px 11px',
+    background: hov && !disabled ? C.greenBg : C.bg,
+    border: `1px solid ${hov && !disabled ? C.greenBorder : C.border}`,
+    borderRadius: 8,
+    boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.07)',
+    cursor: disabled ? 'default' : 'pointer',
+    color: disabled ? C.textFaint : (hov ? C.greenDark : C.textDim),
+    fontFamily: FONT, fontSize: 13, fontWeight: 500,
+    transition: 'all 0.15s',
+  });
+
+  const [logoutHov, setLogoutHov] = useState(false);
+  const [editHov, setEditHov] = useState(false);
+  const [downloadHov, setDownloadHov] = useState(false);
+  const [deleteHov, setDeleteHov] = useState(false);
 
   return (
     <div style={{ ...BENTO_CARD, marginBottom: 11 }}>
       <SectionLabel>Account</SectionLabel>
       <div style={{ fontSize: 12, color: C.textFaint, marginBottom: 4 }}>Signed in as</div>
       <div style={{ fontSize: 14, color: C.text, fontWeight: 500, marginBottom: 14 }}>{user?.email ?? ''}</div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <button
           onClick={handleLogout}
-          style={{ ...baseBtn, border: `1px solid ${C.border}`, color: C.textMed }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = '#999'; e.currentTarget.style.color = C.text; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textMed; }}
+          onMouseEnter={() => setLogoutHov(true)}
+          onMouseLeave={() => setLogoutHov(false)}
+          style={bentoBtnStyle(logoutHov)}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <path d="M5 2H2.5A.5.5 0 002 2.5v7a.5.5 0 00.5.5H5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
@@ -831,17 +865,78 @@ function AccountSection({ onClose }) {
           </svg>
           Log out
         </button>
+
         <button
-          onClick={handleDeleteAccount}
-          style={{ ...baseBtn, border: `1px solid ${C.dangerBorder}`, color: C.danger }}
-          onMouseEnter={e => e.currentTarget.style.background = C.dangerBg}
-          onMouseLeave={e => e.currentTarget.style.background = 'none'}
+          onClick={() => setIsExpanded(prev => !prev)}
+          aria-expanded={isExpanded}
+          onMouseEnter={() => setEditHov(true)}
+          onMouseLeave={() => setEditHov(false)}
+          style={{ ...bentoBtnStyle(editHov), justifyContent: 'space-between' }}
         >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M1.5 3h9M4.5 3V2a.5.5 0 01.5-.5h2a.5.5 0 01.5.5v1M10.5 3l-.5 7a1 1 0 01-1 .5H3a1 1 0 01-1-.5L1.5 3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <circle cx="6" cy="4" r="2.2" stroke="currentColor" strokeWidth="1.1" />
+              <path d="M1.8 10.4c.6-2 2.2-3 4.2-3s3.6 1 4.2 3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+            </svg>
+            Edit account
+          </span>
+          <svg
+            width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            style={{
+              color: C.textFaint,
+              transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+              transition: 'transform 0.2s',
+            }}
+          >
+            <path d="m9 18 6-6-6-6" />
           </svg>
-          Delete account
         </button>
+
+        {isExpanded && (
+          <div style={{
+            // Same inset block treatment as the panel's other grouped
+            // content (e.g. the Your Year card's blockStyle)
+            background: C.bgBlock, border: `1px solid ${C.border}`,
+            borderRadius: 10, padding: '11px 14px',
+            display: 'flex', flexDirection: 'column', gap: 8,
+          }}>
+            <button
+              onClick={handleDownloadData}
+              disabled={isExporting}
+              onMouseEnter={() => setDownloadHov(true)}
+              onMouseLeave={() => setDownloadHov(false)}
+              style={bentoBtnStyle(downloadHov, isExporting)}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M6 1.5v6M3.5 5.5L6 8l2.5-2.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2 8.5v1a1 1 0 001 1h6a1 1 0 001-1v-1" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+              </svg>
+              {isExporting ? 'Preparing export…' : 'Download my data'}
+            </button>
+            {exportError && (
+              <div style={{ fontSize: 11.5, color: C.danger, padding: '0 2px' }}>
+                {exportError}
+              </div>
+            )}
+            <button
+              onClick={handleDeleteAccount}
+              onMouseEnter={() => setDeleteHov(true)}
+              onMouseLeave={() => setDeleteHov(false)}
+              style={{
+                ...bentoBtnStyle(deleteHov),
+                background: deleteHov ? C.dangerBg : C.bg,
+                border: `1px solid ${C.dangerBorder}`,
+                color: C.danger,
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M1.5 3h9M4.5 3V2a.5.5 0 01.5-.5h2a.5.5 0 01.5.5v1M10.5 3l-.5 7a1 1 0 01-1 .5H3a1 1 0 01-1-.5L1.5 3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Delete account
+            </button>
+          </div>
+        )}
       </div>
 
       <DeleteAccountModal

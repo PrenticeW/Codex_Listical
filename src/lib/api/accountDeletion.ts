@@ -6,20 +6,30 @@ export interface DeleteAccountResponse {
   error?: string;
 }
 
+export interface DeleteAccountCredentials {
+  /** For password accounts: the user's current password. */
+  password?: string;
+  /** For OAuth-only accounts (Google, Apple): the typed confirmation phrase. */
+  confirmationPhrase?: string;
+}
+
 /**
  * Request account deletion via the Edge Function.
- * Requires the user's current password for verification.
  *
- * @param password - The user's current password for verification
- * @returns DeleteAccountResponse with success status and message/error
+ * Password accounts verify with their password; OAuth-only accounts
+ * (Google, Apple) verify by typing the confirmation phrase instead. The
+ * Edge Function decides which check applies from the user's own identities
+ * — the fields sent here are just the credentials for that check.
  */
 export async function requestAccountDeletion(
-  password: string
+  credentials: DeleteAccountCredentials
 ): Promise<DeleteAccountResponse> {
-  if (!password) {
+  const { password, confirmationPhrase } = credentials ?? {};
+
+  if (!password && !confirmationPhrase) {
     return {
       success: false,
-      error: 'Password is required',
+      error: 'Verification is required',
     };
   }
 
@@ -36,7 +46,7 @@ export async function requestAccountDeletion(
 
     // Call the Edge Function
     const response = await supabase.functions.invoke('account-delete', {
-      body: { password },
+      body: password ? { password } : { confirmationPhrase },
     });
 
     if (response.error) {
@@ -45,7 +55,10 @@ export async function requestAccountDeletion(
         return { success: false, error: 'Unauthorized' };
       }
       if (status === 403) {
-        return { success: false, error: 'Invalid password' };
+        return {
+          success: false,
+          error: password ? 'Invalid password' : 'Invalid confirmation',
+        };
       }
       if (status === 429) {
         return { success: false, error: 'Too many attempts. Please try again later.' };
