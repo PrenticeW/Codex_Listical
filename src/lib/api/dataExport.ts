@@ -42,7 +42,7 @@ export async function downloadDataExport(): Promise<DataExportResponse> {
     const disposition = response.headers.get('Content-Disposition') ?? '';
     const match = disposition.match(/filename="([^"]+)"/);
     const filename =
-      match?.[1] ?? `listical-export-${new Date().toISOString().slice(0, 10)}.json`;
+      match?.[1] ?? `Tacular-data-export-${new Date().toISOString().slice(0, 10)}.json`;
 
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);

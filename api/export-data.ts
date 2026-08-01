@@ -15,7 +15,7 @@ import {
  * id is never accepted from the request body or query string. Rate limited
  * to 3 exports per hour per user (export_rate_limits, migration
  * 20260801000002). Returns the full export as a JSON attachment named
- * listical-export-YYYY-MM-DD.json.
+ * Tacular-data-export-YYYY-MM-DD.json.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -54,7 +54,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="listical-export-${date}.json"`
+      `attachment; filename="Tacular-data-export-${date}.json"`
     );
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).send(JSON.stringify(result.payload, null, 2));
