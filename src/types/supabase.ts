@@ -127,6 +127,24 @@ export interface Database {
         }
         Returns: boolean
       }
+      purge_user_data: {
+        Args: {
+          target_user_id: string
+        }
+        Returns: {
+          table_name: string
+          rows_deleted: number
+        }[]
+      }
+      count_remaining_user_data: {
+        Args: {
+          target_user_id: string
+        }
+        Returns: {
+          table_name: string
+          remaining_rows: number
+        }[]
+      }
     }
     Enums: {
       deletion_status: 'pending' | 'completed' | 'failed'

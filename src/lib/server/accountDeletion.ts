@@ -372,12 +372,66 @@ async function hashUserId(client: SupabaseClient<Database>, userId: string): Pro
 }
 
 /**
+ * Explicitly purges all of a user's data via the purge_user_data database
+ * function (migration 20260801000001). Covers every table with user data,
+ * including task_events, chip_task_notes, site_snapshots, archived_weeks,
+ * the tactics_* tables, planner_settings, deletion_rate_limits, and the
+ * profiles row itself (email, name, DOB, theme).
+ */
+async function purgeUserData(
+  client: SupabaseClient<Database>,
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  const { data, error } = await client.rpc('purge_user_data', {
+    target_user_id: userId,
+  });
+
+  if (error) {
+    console.error('[purgeUserData] Purge failed:', error);
+    return { success: false, error: error.message };
+  }
+
+  console.log('[purgeUserData] Purged tables:', data);
+  return { success: true };
+}
+
+/**
+ * Verifies that zero rows of user data remain anywhere in the public schema.
+ * Uses count_remaining_user_data, which dynamically discovers every table
+ * with a user_id column at call time — so tables added in the future are
+ * automatically covered and a deletion is never marked 'completed' while
+ * any user data survives.
+ */
+async function verifyUserDataPurged(
+  client: SupabaseClient<Database>,
+  userId: string
+): Promise<{ clean: boolean; leftovers?: unknown; error?: string }> {
+  const { data, error } = await client.rpc('count_remaining_user_data', {
+    target_user_id: userId,
+  });
+
+  if (error) {
+    console.error('[verifyUserDataPurged] Verification query failed:', error);
+    return { clean: false, error: error.message };
+  }
+
+  const leftovers = (data as Array<{ table_name: string; remaining_rows: number }>) || [];
+  if (leftovers.length > 0) {
+    console.error('[verifyUserDataPurged] User data remains after purge:', leftovers);
+    return { clean: false, leftovers };
+  }
+
+  return { clean: true };
+}
+
+/**
  * Performs hard deletion of a single user's data.
  *
  * This function:
- * 1. Deletes all user data from related database tables
- * 2. Deletes the Supabase auth user
- * 3. Marks the profile as deleted and updates audit log
+ * 1. Explicitly purges all user data from every table (purge_user_data)
+ * 2. Deletes the Supabase auth user (FK cascades act as a second layer)
+ * 3. Verifies zero user rows remain anywhere (count_remaining_user_data)
+ * 4. Marks the audit log entry 'completed' only if verification passes
  *
  * @param user - The user to hard delete
  * @returns Success/failure result
@@ -388,18 +442,35 @@ export async function hardDeleteUser(
   console.log('[hardDeleteUser] Starting hard deletion for user:', user.id);
 
   try {
-    // Step 1: Delete user data from related tables
-    // Add explicit deletes here for any tables that don't have CASCADE delete
-    // For example: user_lists, user_preferences, etc.
-    // The profile will be soft-deleted (deleted_at set), not hard deleted, to maintain audit trail
+    const adminClient = createAdminClient();
 
-    // Step 2: Delete Supabase auth user
+    // Step 1: Explicitly delete user data from every table.
+    // We do NOT rely on ON DELETE CASCADE alone — a future table missing its
+    // FK would otherwise silently retain data.
+    const purgeResult = await purgeUserData(adminClient, user.id);
+    if (!purgeResult.success) {
+      throw new Error(`Data purge failed: ${purgeResult.error}`);
+    }
+
+    // Step 2: Delete Supabase auth user (removes credentials and identity;
+    // any FK cascades that still fire are a harmless second layer)
     const authResult = await deleteSupabaseAuthUser(user.id);
     if (!authResult.success) {
       throw new Error(`Auth deletion failed: ${authResult.error}`);
     }
 
-    // Step 3: Complete the deletion (sets deleted_at and updates audit log)
+    // Step 3: Verify erasure is actually complete before recording success.
+    const verifyResult = await verifyUserDataPurged(adminClient, user.id);
+    if (!verifyResult.clean) {
+      throw new Error(
+        verifyResult.error
+          ? `Purge verification failed: ${verifyResult.error}`
+          : `Purge incomplete, data remains in: ${JSON.stringify(verifyResult.leftovers)}`
+      );
+    }
+
+    // Step 4: Complete the deletion (updates audit log; the profile row is
+    // already hard-deleted by the purge, so its UPDATE is a no-op)
     const completeResult = await completeAccountDeletion(user.id, user.audit_log_id);
     if (!completeResult.success) {
       throw new Error(`Failed to complete deletion: ${completeResult.error}`);
