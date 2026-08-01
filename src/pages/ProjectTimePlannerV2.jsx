@@ -71,7 +71,7 @@ import {
 } from '../utils/planner/clipboardOperations';
 import { createSortInboxCommand } from '../utils/planner/sortInbox';
 import { createSortPlannerCommand } from '../utils/planner/sortPlanner';
-import { saveTaskRows, readTaskRows, invalidateTaskRowsCache, loadChipTaskNote, preloadChipTaskNotes } from '../utils/planner/storage';
+import { saveTaskRows, readTaskRows, invalidateTaskRowsCache, loadChipTaskNote, preloadChipTaskNotes, isTaskRowsSaveInFlight, getLastTaskRowsSaveCompletedAt } from '../utils/planner/storage';
 import { supabase } from '../lib/supabase';
 import { DEFAULT_PROJECT_ID } from '../constants/plannerStorageKeys';
 import {
@@ -439,6 +439,11 @@ export default function ProjectTimePlannerV2() {
   // Set true just before setData() swaps in rows fetched from the server, so
   // the debounced-save effect skips exactly one cycle (see realtime effect).
   const skipNextAutoSaveRef = useRef(false);
+  // Always-current mirror of editingCell (set below, after useEditState).
+  // Read inside the realtime refresh timer so a refetch never lands while
+  // the user is mid-edit — a wholesale rows replacement during typing tears
+  // down the input and reverts unsaved rows.
+  const editingCellRef = useRef(null);
 
   // Only after dataHydrated, so the initial blank skeleton doesn't get
   // pushed back to Supabase and wipe the loaded rows.
@@ -510,11 +515,24 @@ export default function ProjectTimePlannerV2() {
       if (cancelled) return;
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(async () => {
-        const sinceSave = Date.now() - lastSaveInitiatedRef.current;
-        if (sinceSave < MUTE_MS) {
+        // Never refetch while the user is mid-edit — replacing the rows
+        // array tears down the active input and reverts unsaved rows.
+        // Defer (not drop) until the edit completes.
+        if (editingCellRef.current) {
+          scheduleRefresh(1000);
+          return;
+        }
+        // Echo mute measured from save COMPLETION (not just initiation): a
+        // queued save can outlive the mute window, and a refetch landing
+        // before it finishes reads pre-save DB state and overwrites good
+        // in-memory rows. Also defer while any save is queued/in flight.
+        const lastSaveActivity = Math.max(lastSaveInitiatedRef.current, getLastTaskRowsSaveCompletedAt());
+        const sinceSave = Date.now() - lastSaveActivity;
+        if (isTaskRowsSaveInFlight() || sinceSave < MUTE_MS) {
+          const delay = isTaskRowsSaveInFlight() ? 1000 : MUTE_MS - sinceSave + 250;
           // TODO(debug): remove after realtime delivery is verified.
-          console.log('[realtime] muted, deferring refresh', MUTE_MS - sinceSave + 250);
-          scheduleRefresh(MUTE_MS - sinceSave + 250);
+          console.log('[realtime] muted, deferring refresh', delay);
+          scheduleRefresh(delay);
           return;
         }
         try {
@@ -524,7 +542,11 @@ export default function ProjectTimePlannerV2() {
           // A local edit may have landed while the refetch was in flight —
           // its save supersedes what we just read. Try again after ITS
           // mute window rather than discarding the pending refresh.
-          if (Date.now() - lastSaveInitiatedRef.current < MUTE_MS) {
+          if (
+            editingCellRef.current ||
+            isTaskRowsSaveInFlight() ||
+            Date.now() - Math.max(lastSaveInitiatedRef.current, getLastTaskRowsSaveCompletedAt()) < MUTE_MS
+          ) {
             scheduleRefresh(1000);
             return;
           }
@@ -1969,6 +1991,12 @@ export default function ProjectTimePlannerV2() {
     setSelectedCells,
     setAnchorCell,
   });
+
+  // Mirror editingCell into the ref read by the realtime refresh timer
+  // (declared above, before the realtime effect).
+  useEffect(() => {
+    editingCellRef.current = editingCell;
+  }, [editingCell]);
 
   // Cell and row selection handlers
   const selection = useSpreadsheetSelection({

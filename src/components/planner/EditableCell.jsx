@@ -15,11 +15,17 @@ function EditableCell({
   const inputRef = useRef(null);
   const shouldSaveRef = useRef(true); // Track if we should save on blur
   const localValueRef = useRef(localValue); // Track current value for unmount
+  const onCompleteRef = useRef(onComplete); // Keep latest onComplete without retriggering effects
+  const initialValueRef = useRef(initialValue);
 
-  // Update ref when local value changes
+  // Update refs when values change
   useEffect(() => {
     localValueRef.current = localValue;
   }, [localValue]);
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   // Auto-focus when component mounts
   useEffect(() => {
@@ -31,14 +37,16 @@ function EditableCell({
     }
   }, []);
 
-  // Save on unmount if we should save
+  // Save on true unmount only. Deliberately no dependencies: with deps,
+  // React runs this cleanup whenever a parent re-render changes the
+  // onComplete identity, which force-committed edits mid-type.
   useEffect(() => {
     return () => {
-      if (shouldSaveRef.current && localValueRef.current !== initialValue) {
-        onComplete(localValueRef.current);
+      if (shouldSaveRef.current && localValueRef.current !== initialValueRef.current) {
+        onCompleteRef.current(localValueRef.current);
       }
     };
-  }, [initialValue, onComplete]);
+  }, []);
 
   const handleBlur = () => {
     // Only save if we haven't cancelled (e.g., via Escape)

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { UseEditStateReturn, CellReference, PlannerRow, Command } from '../../types/planner';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm, ESTIMATE_VALUES } from '../../constants/planner/rowTypes';
 import { forEachDayColumn, isDayColumn } from '../../utils/planner/dayColumnHelpers';
@@ -85,12 +85,21 @@ export default function useEditState({
   const [editingCell, setEditingCell] = useState<CellReference | null>(null);
   const [editValue, setEditValue] = useState('');
 
+  // Keep the latest data in a ref so handleEditComplete stays referentially
+  // stable across data changes. If `data` were in the dep array, every
+  // background setData on the page would rebuild the handler, cascade a new
+  // onComplete prop into EditableCell, and tear down in-progress edits.
+  const dataRef = useRef(data);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+
   const handleEditComplete = useCallback((rowId: string, columnId: string, newValue: string, options?: { timeValueOverride?: string; keepEditing?: boolean }) => {
     // keepEditing: the write comes from a panel that stays open across
     // several commits (the multi-estimate dropdown live-writing day cells),
     // so completing this edit must not tear down the editing cell.
-    // Get the old value before updating
-    const row = data.find(r => r.id === rowId);
+    // Get the old value before updating (via ref — always current, never stale)
+    const row = dataRef.current.find(r => r.id === rowId);
 
     // For subproject header rows, save to subprojectName; for subproject section rows with custom labels, save to subprojectLabel;
     // for general/unscheduled rows, save to sectionLabel
@@ -510,7 +519,7 @@ export default function useEditState({
       setEditingCell(null);
       setEditValue('');
     }
-  }, [data, executeCommand, totalDays, setData]);
+  }, [executeCommand, totalDays, setData]);
 
   const handleEditCancel = useCallback((rowId: string, columnId: string) => {
     // Exit edit mode and keep cell selected

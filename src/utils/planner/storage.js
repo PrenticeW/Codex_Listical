@@ -1168,6 +1168,19 @@ export const readTaskRows = async (
 // execute one at a time.
 let _taskRowsSaveQueue = Promise.resolve();
 
+// Save-cycle bookkeeping for the realtime echo mute (ProjectTimePlannerV2).
+// The mute must be measured from save COMPLETION, not initiation: a queued
+// save can take longer than the mute window, and a refetch landing before it
+// finishes would read pre-save DB state and overwrite good in-memory rows.
+let _pendingTaskRowsSaves = 0;
+let _lastTaskRowsSaveCompletedAt = 0;
+
+/** True while any saveTaskRows call is queued or in flight. */
+export const isTaskRowsSaveInFlight = () => _pendingTaskRowsSaves > 0;
+
+/** Timestamp (ms) of the most recent saveTaskRows settle (success or failure). */
+export const getLastTaskRowsSaveCompletedAt = () => _lastTaskRowsSaveCompletedAt;
+
 // --- diff-save bookkeeping (per yearNumber) -------------------------------
 // _knownRowIds: planner_rows ids this client has observed on the server
 // (populated by readTaskRows fetches and maintained by saves). A desired row
@@ -1221,9 +1234,14 @@ export const saveTaskRows = (
 ) => {
   // Always run the next save regardless of whether the previous one threw, so
   // a transient network error doesn't permanently block future saves.
+  _pendingTaskRowsSaves += 1;
+  const settle = () => {
+    _pendingTaskRowsSaves = Math.max(0, _pendingTaskRowsSaves - 1);
+    _lastTaskRowsSaveCompletedAt = Date.now();
+  };
   _taskRowsSaveQueue = _taskRowsSaveQueue.then(
-    () => _saveTaskRowsImpl(taskRows, yearNumber),
-    () => _saveTaskRowsImpl(taskRows, yearNumber),
+    () => _saveTaskRowsImpl(taskRows, yearNumber).finally(settle),
+    () => _saveTaskRowsImpl(taskRows, yearNumber).finally(settle),
   );
   return _taskRowsSaveQueue;
 };
