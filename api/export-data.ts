@@ -3,7 +3,7 @@ import {
   getUserIdFromToken,
   checkAndRecordExportAttempt,
   exportUserData,
-} from '../src/lib/server/dataExport';
+} from '../src/lib/server/dataExport.js';
 
 /**
  * GDPR data export endpoint ("Download my data").

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { processScheduledDeletions } from '../../src/lib/server/accountDeletion';
+import { processScheduledDeletions } from '../../src/lib/server/accountDeletion.js';
 
 /**
  * Vercel Cron Job: Process Scheduled Account Deletions
