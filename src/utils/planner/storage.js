@@ -50,8 +50,19 @@ import {
   invalidate,
   setCached,
 } from '../../lib/storageCache';
+import {
+  localUserId,
+  loadPlannerSnapshot,
+  savePlannerSnapshot,
+  savePendingState,
+  clearPendingState,
+  setOfflineReplayHandler,
+  replayPendingSaves,
+  scheduleOfflineRetry,
+} from '../../lib/plannerOffline';
 
 export { DEFAULT_PROJECT_ID };
+export { hasPendingOfflineSave } from '../../lib/plannerOffline';
 
 // --- cache namespacing -------------------------------------------------
 //
@@ -1153,9 +1164,35 @@ export const readTaskRows = async (
     });
 
     setCached(CACHE_NS, cacheKey, result);
+    // Persist the freshly-read state (plus the known-id bookkeeping) so an
+    // offline page load can hydrate from IndexedDB, and kick the replay loop
+    // in case a pending save from a previous offline session is waiting.
+    savePlannerSnapshot(userId, yearNumber, {
+      rows: result,
+      knownIds: [...(_knownRowIds.get(yearNumber) || [])],
+      savedAt: Date.now(),
+    });
+    replayPendingSaves();
     return result;
   } catch (error) {
     console.error('Failed to read task rows', error);
+    // Offline (or transient) failure: hydrate from the IndexedDB snapshot so
+    // the System page still renders. Restoring _knownRowIds alongside the
+    // rows keeps the diff save's resurrection guards correct for any edits
+    // made against this snapshot.
+    try {
+      const uid = await localUserId();
+      if (uid) {
+        const snap = await loadPlannerSnapshot(uid, yearNumber);
+        if (Array.isArray(snap?.rows) && snap.rows.length > 0) {
+          if (!_knownRowIds.has(yearNumber)) {
+            _knownRowIds.set(yearNumber, new Set(snap.knownIds || []));
+          }
+          setCached(CACHE_NS, taskRowsKey(yearNumber), snap.rows);
+          return snap.rows;
+        }
+      }
+    } catch { /* fall through to the empty default */ }
     return [];
   }
 };
@@ -1227,11 +1264,39 @@ function plannerRowDiffers(desired, dbRow) {
   return false;
 }
 
+// Monotonic id for pending-state records. A save only clears the IndexedDB
+// pending record on success if no NEWER desired state has been persisted
+// since it was queued — otherwise a slow save's success would erase the
+// durability of edits made while it was in flight.
+let _pendingSaveSeq = 0;
+
 export const saveTaskRows = (
   taskRows,
   projectId = DEFAULT_PROJECT_ID,  // eslint-disable-line no-unused-vars
   yearNumber = null,
 ) => {
+  // OUTBOX (offline-sync-plan Phase 2): persist the desired state to
+  // IndexedDB BEFORE the network attempt — here in the wrapper, not the
+  // queued impl, so the latest edits are durable the moment the save is
+  // requested even if the tab closes while earlier saves are still queued.
+  // The known-id and synthetic-id maps ride along: a replay after reload
+  // must diff under the same bookkeeping or it could resurrect rows another
+  // client deleted (or re-mint UUIDs for synthetic rows and duplicate them).
+  const seq = ++_pendingSaveSeq;
+  localUserId().then((uid) => {
+    if (!uid) return;
+    savePendingState(uid, yearNumber, {
+      taskRows,
+      knownIds: [...(_knownRowIds.get(yearNumber) || [])],
+      synIds: [...(_syntheticRowIds.get(yearNumber) || new Map())],
+      seq,
+      queuedAt: Date.now(),
+    });
+  });
+  return _enqueueTaskRowsSave(taskRows, yearNumber, seq, null);
+};
+
+function _enqueueTaskRowsSave(taskRows, yearNumber, seq, bookkeeping) {
   // Always run the next save regardless of whether the previous one threw, so
   // a transient network error doesn't permanently block future saves.
   _pendingTaskRowsSaves += 1;
@@ -1240,13 +1305,19 @@ export const saveTaskRows = (
     _lastTaskRowsSaveCompletedAt = Date.now();
   };
   _taskRowsSaveQueue = _taskRowsSaveQueue.then(
-    () => _saveTaskRowsImpl(taskRows, yearNumber).finally(settle),
-    () => _saveTaskRowsImpl(taskRows, yearNumber).finally(settle),
+    () => _saveTaskRowsImpl(taskRows, yearNumber, seq, bookkeeping).finally(settle),
+    () => _saveTaskRowsImpl(taskRows, yearNumber, seq, bookkeeping).finally(settle),
   );
   return _taskRowsSaveQueue;
-};
+}
 
-async function _saveTaskRowsImpl(taskRows, yearNumber) {
+// bookkeeping (replay only): { knownIds, synIds } captured when the pending
+// state was queued. A replayed save MUST diff under the known-id set it was
+// made against: rows another client created AFTER the pending state was
+// queued are then unknown ids, which the diff leaves alone — diffing under a
+// fresher known set instead would mark those rows known-but-undesired and
+// DELETE them from a stale snapshot.
+async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = null) {
   try {
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
@@ -1279,6 +1350,14 @@ async function _saveTaskRowsImpl(taskRows, yearNumber) {
     // Stable UUIDs for synthetic-id rows (see _syntheticRowIds above).
     let synMap = _syntheticRowIds.get(yearNumber);
     if (!synMap) { synMap = new Map(); _syntheticRowIds.set(yearNumber, synMap); }
+    // Replay: adopt the persisted synthetic-id mapping (only for ids not
+    // already mapped this session) so a replayed save can't re-mint UUIDs
+    // for rows whose first attempt half-landed, duplicating them.
+    if (Array.isArray(bookkeeping?.synIds)) {
+      for (const [synthetic, uuid] of bookkeeping.synIds) {
+        if (!synMap.has(synthetic)) synMap.set(synthetic, uuid);
+      }
+    }
     const desiredRows = persistedTaskRows.map((row, idx) => {
       let id = row.id;
       if (!(typeof id === 'string' && UUID_RE.test(id))) {
@@ -1299,7 +1378,11 @@ async function _saveTaskRowsImpl(taskRows, yearNumber) {
     // Fallback (save before any read this pageload — shouldn't happen, since
     // autosave requires hydration): treat the server's rows as known, which
     // reduces to last-writer-wins for deletes but still never resurrects.
-    const known = _knownRowIds.get(yearNumber) || new Set(currentById.keys());
+    // Replay: the known set persisted WITH the pending state wins outright
+    // (see the bookkeeping note above _saveTaskRowsImpl).
+    const known = Array.isArray(bookkeeping?.knownIds)
+      ? new Set(bookkeeping.knownIds)
+      : _knownRowIds.get(yearNumber) || new Set(currentById.keys());
 
     const toUpsert = [];
     for (const d of desiredRows) {
@@ -1370,13 +1453,44 @@ async function _saveTaskRowsImpl(taskRows, yearNumber) {
       setCached(CACHE_NS, taskRowsKey(yearNumber), allRows);
     }
 
+    // Save confirmed: clear the pending record — unless a newer desired
+    // state was persisted while this save was in flight, in which case that
+    // newer record must stay durable until ITS save confirms. Refresh the
+    // offline snapshot with the just-saved state either way.
+    if (seq === _pendingSaveSeq) {
+      clearPendingState(userId, yearNumber);
+    }
+    savePlannerSnapshot(userId, yearNumber, {
+      rows: allRows,
+      knownIds: [...nextKnown],
+      savedAt: Date.now(),
+    });
+
     // Schedule a snapshot after 30s of inactivity so the captured state
     // includes this edit but rapid/mid-thought edits don't produce partials.
     debounceSiteSnapshot(yearNumber);
   } catch (error) {
     console.error('Failed to save task rows', error);
+    // The desired state is already durable in IndexedDB (persisted in the
+    // saveTaskRows wrapper). Arm the capped-backoff retry; the 'online' and
+    // visibilitychange listeners in plannerOffline also wake the replay.
+    scheduleOfflineRetry();
   }
 }
+
+// Replay handler for pending saves left over from an offline session (or an
+// earlier failed save). Restores the bookkeeping the pending state was
+// computed under, then re-runs it through the normal save path — the diff
+// against the server's live rows happens at replay time, so anything another
+// client wrote in the meantime is respected exactly as in an online save.
+setOfflineReplayHandler((yearNumber, payload) => {
+  if (!Array.isArray(payload?.taskRows)) return Promise.resolve();
+  const seq = ++_pendingSaveSeq;
+  return _enqueueTaskRowsSave(payload.taskRows, yearNumber, seq, {
+    knownIds: payload.knownIds,
+    synIds: payload.synIds,
+  });
+});
 
 // ============================================================
 // Legacy storage key helper (kept for any one-off consumer)
