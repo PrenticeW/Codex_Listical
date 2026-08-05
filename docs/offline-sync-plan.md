@@ -6,6 +6,21 @@
 
 ---
 
+## Implementation status (5 Aug 2026)
+
+| Piece | Status |
+|---|---|
+| Phase 1: mobile outbox + snapshot (`lib/outbox.js`, `lib/offlineStore.js`, `usePlannerData` rewiring) | Built. Needs the AsyncStorage native rebuild and a real-device airplane-mode test. |
+| Phase 2: web pending save + IndexedDB snapshot (`src/lib/plannerOffline.js`, `storage.js` wiring) | Built and deployed. Replay semantics covered by `src/utils/planner/__tests__/offlineReplay.test.js`. |
+| Phase 3: PWA shell (`vite-plugin-pwa` in `vite.config.js`) | Built and deployed. |
+| Phase 3: `planner_rows.updated_at` migration | Applied. Column is recording; no client reads it yet. |
+| Sync indicators (mobile pill, web `OfflineSyncBadge`) | Built. Debounced ~1s so normal online saves never flicker; transient "Synced" on drain. |
+| Phase 3: extend to staging/tactics/settings modules | Not started (deliberately parked until Phases 1 and 2 pass real-device testing). |
+| Phase 3: `updated_at <= queued_at` replay guard + queued-op max age | Not started. Needs a product decision on surfacing rejected ops. |
+| Known gap: System page task notes (`saveTaskNote`/`saveChipTaskNote`) | Still save directly; fail silently offline. Fold into the module-extension pass. |
+
+---
+
 ## 1. Why the tube edits vanished
 
 The mobile app is online-only by design today:
