@@ -9,6 +9,7 @@ import { PlanPanelProvider } from '../contexts/PlanPanelContext';
 import { GoalPanelProvider } from '../contexts/GoalPanelContext';
 import { TaskRowPanelProvider } from '../contexts/TaskRowPanelContext';
 import GearPanel from './GearPanel';
+import OfflineSyncBadge from './OfflineSyncBadge';
 import SystemPanel from './SystemPanel';
 import PlanPanel from './PlanPanel';
 import GoalPanel from './GoalPanel';
@@ -147,6 +148,7 @@ export default function Layout() {
             <TaskRowPanelProvider>
               <YearProvider>
                 <YearKeyedOutlet />
+                <OfflineSyncBadge />
                 <DebugSnapshotButton />
                 <GearPanel />
                 <SystemPanel />
