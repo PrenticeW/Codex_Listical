@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { hasPendingOfflineSave } from '../utils/planner/storage';
 
 /**
@@ -11,35 +11,90 @@ import { hasPendingOfflineSave } from '../utils/planner/storage';
  *     exists / was cleared in IndexedDB
  *   * window 'online' / 'offline' — browser connectivity
  *
+ * Every save passes through the pending record even online, so the pending
+ * flag flickers true → false in well under a second on a normal save. The
+ * "Syncing changes…" pill therefore only appears if the pending state
+ * LINGERS (~1s — genuinely offline or a struggling connection), and the
+ * transient "Synced" confirmation only shows after the pill (or the offline
+ * banner) was actually visible. Going offline shows immediately — no debounce.
+ *
  * Renders nothing in the common case (online, nothing pending).
  */
 export default function OfflineSyncBadge() {
-  const [pending, setPending] = useState(() => hasPendingOfflineSave());
   const [online, setOnline] = useState(() =>
     typeof navigator === 'undefined' ? true : navigator.onLine !== false,
   );
+  const [pending, setPending] = useState(() => hasPendingOfflineSave());
+  const [showPendingPill, setShowPendingPill] = useState(false);
+  const [synced, setSynced] = useState(false);
+
+  const pillShownRef = useRef(false);
+  const pillDelayTimerRef = useRef(null);
+  const syncedTimerRef = useRef(null);
+  const onlineRef = useRef(online);
+  onlineRef.current = online;
 
   useEffect(() => {
-    const onPending = (event) => setPending(event.detail?.pending === true);
+    const clearPillDelay = () => {
+      if (pillDelayTimerRef.current) {
+        clearTimeout(pillDelayTimerRef.current);
+        pillDelayTimerRef.current = null;
+      }
+    };
+    const onPending = (event) => {
+      const isPending = event.detail?.pending === true;
+      setPending(isPending);
+      if (isPending) {
+        if (syncedTimerRef.current) {
+          clearTimeout(syncedTimerRef.current);
+          syncedTimerRef.current = null;
+        }
+        setSynced(false);
+        if (!pillShownRef.current && !pillDelayTimerRef.current) {
+          pillDelayTimerRef.current = setTimeout(() => {
+            pillDelayTimerRef.current = null;
+            pillShownRef.current = true;
+            setShowPendingPill(true);
+          }, 900);
+        }
+      } else {
+        clearPillDelay();
+        // Confirm with "Synced" only if the user ever SAW an unsynced state
+        // (the lingering pill, or the offline banner while edits were made).
+        if (pillShownRef.current || onlineRef.current === false) {
+          pillShownRef.current = false;
+          setShowPendingPill(false);
+          setSynced(true);
+          syncedTimerRef.current = setTimeout(() => {
+            syncedTimerRef.current = null;
+            setSynced(false);
+          }, 2200);
+        }
+      }
+    };
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
     window.addEventListener('planner-offline-pending', onPending);
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
     return () => {
+      clearPillDelay();
+      if (syncedTimerRef.current) clearTimeout(syncedTimerRef.current);
       window.removeEventListener('planner-offline-pending', onPending);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
     };
   }, []);
 
-  if (online && !pending) return null;
+  if (online && !showPendingPill && !synced) return null;
 
   const label = !online
     ? pending
       ? 'Offline. Your changes are saved and will sync when you reconnect.'
       : 'Offline'
-    : 'Syncing changes…';
+    : showPendingPill
+      ? 'Syncing changes…'
+      : 'Synced';
 
   return (
     <div
