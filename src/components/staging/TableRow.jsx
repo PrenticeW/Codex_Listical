@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   DragHandleCell,
   TextInputCell,
@@ -186,14 +186,29 @@ export default function TableRow({
   // L68 swatch from the same palette family as the goal's header color.
   const promptBg = getPromptBg(item.color);
 
+  // Row dragging is armed only while the mouse is held down on the gutter
+  // drag handle. Making the whole <tr> permanently draggable hijacks text
+  // selection inside cell inputs — dragging across text becomes a row drag.
+  const [dragArmed, setDragArmed] = useState(false);
+
+  useEffect(() => {
+    if (!dragArmed) return undefined;
+    const disarm = () => setDragArmed(false);
+    window.addEventListener('mouseup', disarm);
+    return () => window.removeEventListener('mouseup', disarm);
+  }, [dragArmed]);
+
   // Common row props for drag and drop
   const rowProps = {
-    draggable: true,
+    draggable: dragArmed,
     className: `group/row${isRowSelected ? ' selected-row' : ''}`,
     onDragStart: (e) => onDragStart(e, item.id, rowIdx),
     onDragOver: (e) => onDragOver(e, item.id, rowIdx),
     onDrop: (e) => onDrop(e, item.id, rowIdx),
-    onDragEnd,
+    onDragEnd: (e) => {
+      setDragArmed(false);
+      onDragEnd?.(e);
+    },
     onContextMenu: onContextMenu ? (e) =>
       onContextMenu(e, {
         itemId: item.id,
@@ -207,7 +222,6 @@ export default function TableRow({
       }) : undefined,
     style: {
       opacity: isDragged ? 0.5 : 1,
-      cursor: 'grab',
     },
   };
 
@@ -316,6 +330,7 @@ export default function TableRow({
           isDropTarget={isDropTarget}
           rowType="prompt"
           onClick={(e) => onHandleClick(e, item.id, rowIdx)}
+          onMouseDown={() => setDragArmed(true)}
         />
         <TextInputCell
           value={rowValues[0]}
@@ -403,6 +418,7 @@ export default function TableRow({
           isDropTarget={isDropTarget}
           rowType="prompt"
           onClick={(e) => onHandleClick(e, item.id, rowIdx)}
+          onMouseDown={() => setDragArmed(true)}
         />
         <TextInputCell
           value={rowValues[0]}
@@ -481,6 +497,7 @@ export default function TableRow({
           isDropTarget={isDropTarget}
           rowType="response"
           onClick={(e) => onHandleClick(e, item.id, rowIdx)}
+          onMouseDown={() => setDragArmed(true)}
         />
         {/* Button cell */}
         <td
@@ -564,6 +581,7 @@ export default function TableRow({
           isDropTarget={isDropTarget}
           rowType="response"
           onClick={(e) => onHandleClick(e, item.id, rowIdx)}
+          onMouseDown={() => setDragArmed(true)}
         />
         {/* Button cell */}
         <td

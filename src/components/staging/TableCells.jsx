@@ -45,6 +45,7 @@ export function DragHandleCell({
   isDropTarget,
   rowType,
   onClick,
+  onMouseDown,
 }) {
   const bg = getHandleBackground({ isDropTarget, rowType });
   const isHeader = rowType === 'header';
@@ -64,6 +65,7 @@ export function DragHandleCell({
         padding: 0,
       }}
       onClick={onClick}
+      onMouseDown={onMouseDown}
     >
       <span style={{ fontSize: 'calc(9px * var(--pz))', color: isHeader ? 'rgba(255,255,255,.3)' : isRowSelected ? '#ffffff' : '#8A8278' }}>⠿</span>
     </td>
