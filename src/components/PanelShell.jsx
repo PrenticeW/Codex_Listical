@@ -1,11 +1,13 @@
 /**
  * PanelShell — shared bento panel wrapper.
  *
- * Three-layer background:
+ * Two-layer background:
  *   1. Grid layer  — portaled to document.body (no transformed ancestor →
- *                    background-attachment:fixed works correctly in Chrome)
- *   2. Gradient    — radial orbs inside the panel div
- *   3. Frosted tray — rgba(255,255,255,0.82) inset 7px, radius 14, clips children
+ *                    background-attachment:fixed works correctly in Chrome).
+ *                    Carries the panel's left-edge shadow (--sh-panel),
+ *                    applied only while open so nothing smudges the viewport
+ *                    edge when the panel is parked off-canvas.
+ *   2. Frosted tray — rgba(255,255,255,0.82) inset 7px, radius 14, clips children
  *
  * Props
  *   isOpen        boolean   — drives slide-in / slide-out
@@ -30,6 +32,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { gridSvgLayer, useThemeVersion } from '../utils/themeBackground';
 
 // Broadcast while the resize handle is being dragged so page content can
 // track the live panel width (see hooks/usePanelInset.js). detail is the
@@ -56,6 +59,10 @@ export default function PanelShell({
   children,
 }) {
   const nb = navBottom;
+
+  // Re-render when the theme family changes so the grid tile (which bakes in
+  // a resolved colour) recomputes.
+  useThemeVersion();
 
   // Live width while dragging the resize handle; null when not dragging, in
   // which case the committed `width` prop is used.
@@ -129,17 +136,22 @@ export default function PanelShell({
         bottom: 0,
         width: effectiveWidth,
         backgroundColor: '#fff',
-        backgroundImage: [
-          `linear-gradient(${MAUVE(0.15)} 1px, transparent 1px)`,
-          `linear-gradient(90deg, ${MAUVE(0.15)} 1px, transparent 1px)`,
-        ].join(','),
+        // Grid lines as an SVG tile rather than 1px gradient hard-stops:
+        // gradient hairlines round to zero device pixels and vanish when the
+        // effective DPR drops below 1 (browser zoom < 100% on a 1x monitor).
+        // The SVG stroke antialiases instead, so the grid survives any zoom.
+        backgroundImage: gridSvgLayer(0.15),
         backgroundSize: '32px 32px',
         backgroundPosition: '-1px -1px',
         backgroundAttachment: 'fixed',
         borderTopLeftRadius: 20,
         zIndex: zIndex - 1,
         pointerEvents: 'none',
-        transition: liveWidth != null ? 'none' : `right ${EASE}`,
+        // Left-edge shadow lives here (the rearmost, untransformed layer of
+        // the panel stack) and only while open — when parked off-canvas the
+        // blur would otherwise smudge the viewport's right edge.
+        boxShadow: isOpen ? 'var(--sh-panel)' : 'none',
+        transition: liveWidth != null ? 'none' : `right ${EASE}, box-shadow ${EASE}`,
       }}
     />,
     document.body,
@@ -166,21 +178,6 @@ export default function PanelShell({
           transition: liveWidth != null ? 'transform 0.25s cubic-bezier(0.4,0,0.2,1)' : `transform ${EASE}`,
         }}
       >
-        {/* Gradient layer */}
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            zIndex: 0,
-            pointerEvents: 'none',
-            backgroundImage: [
-              `radial-gradient(ellipse 130% 50% at 110% -5%, ${MAUVE(0.14)} 0%, transparent 62%)`,
-              `linear-gradient(180deg, ${MAUVE(0.04)} 0%, ${MAUVE(0.22)} 100%)`,
-              `linear-gradient(to top right, ${MAUVE(0.28)} 0%, ${MAUVE(0.12)} 45%, transparent 70%)`,
-            ].join(','),
-          }}
-        />
-
         {/* Frosted tray — clips children */}
         <div
           style={{

@@ -29,16 +29,14 @@ const DRAFT_NAV_ITEMS = [
 const navBgStyle = () => ({
   backgroundColor: '#ffffff',
   backgroundImage: [
-    'radial-gradient(ellipse 80% 60% at 105% -10%, color-mix(in srgb, var(--th-68) 14%, transparent) 0%, transparent 62%)',
-    'radial-gradient(ellipse 60% 45% at -5% 110%, color-mix(in srgb, var(--th-68) 8%, transparent) 0%, transparent 58%)',
     // Grid lines as an SVG tile rather than 1px gradient hard-stops:
     // gradient hairlines round to zero device pixels and vanish when the
     // effective DPR drops below 1 (browser zoom < 100% on a 1x monitor).
     // The SVG stroke antialiases instead, so the grid survives any zoom.
     gridSvgLayer(0.15),
   ].join(','),
-  backgroundSize: '100% 100%, 100% 100%, 32px 32px',
-  backgroundPosition: '0 0, 0 0, -1px -1px',
+  backgroundSize: '32px 32px',
+  backgroundPosition: '-1px -1px',
   backgroundAttachment: 'fixed',
   borderBottom: '1px solid color-mix(in srgb, var(--th-68) 30%, transparent)',
 });
