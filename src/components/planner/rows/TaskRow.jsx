@@ -692,6 +692,24 @@ const TaskRow = React.memo(function TaskRow({
                           it as 0.00 rather than leaking the raw token. */}
                       {(value === '=timeValue' ? '0.00' : value) || '\u00A0'}
                     </div>
+                  ) : columnId === 'task' ? (
+                    /* Mirrors mobile SystemScreen's notesMark: an asterisk in the
+                       theme family's accent colour marks tasks with notes. The
+                       asterisk sits outside the truncating span so an ellipsis on
+                       a long name never swallows it. */
+                    <div className="w-full flex items-center" style={{ paddingLeft: '8px', paddingRight: '3px', overflow: 'hidden', minWidth: 0 }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                        {value ? linkifyText(value) : '\u00A0'}
+                      </span>
+                      {((rowData?.notes ?? row.original.notes) || '').trim() !== '' && (
+                        <span
+                          aria-hidden="true"
+                          style={{ color: 'var(--brand)', fontWeight: 700, flexShrink: 0, marginLeft: '2px', userSelect: 'none' }}
+                        >
+                          *
+                        </span>
+                      )}
+                    </div>
                   ) : (
                     <div className="w-full" style={{ paddingLeft: '8px', paddingRight: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                       {value ? linkifyText(value) : '\u00A0'}
