@@ -31,6 +31,7 @@ export interface Database {
           full_name: string | null
           avatar_url: string | null
           theme_family: string | null
+          staging_table_width: number | null
           date_of_birth: string | null
           deletion_requested_at: string | null
           deleted_at: string | null
@@ -43,6 +44,7 @@ export interface Database {
           full_name?: string | null
           avatar_url?: string | null
           theme_family?: string | null
+          staging_table_width?: number | null
           date_of_birth?: string | null
           deletion_requested_at?: string | null
           deleted_at?: string | null
@@ -55,6 +57,7 @@ export interface Database {
           full_name?: string | null
           avatar_url?: string | null
           theme_family?: string | null
+          staging_table_width?: number | null
           date_of_birth?: string | null
           deletion_requested_at?: string | null
           deleted_at?: string | null

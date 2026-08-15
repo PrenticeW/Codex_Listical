@@ -14,6 +14,7 @@ import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { ArchiveYearModal } from '../components/ArchiveYearModal';
 import usePageSize, { usePageScaleVar } from '../hooks/usePageSize';
 import usePanelInset from '../hooks/usePanelInset';
+import useStagingTableWidth, { MIN_STAGING_TABLE_WIDTH } from '../hooks/staging/useStagingTableWidth';
 import {
   useShortlistState,
   usePlanTableState,
@@ -1023,10 +1024,53 @@ export default function StagingPageV2() {
   const { inset: panelInset, isResizing: panelResizing } = usePanelInset();
   const panelGap = 16;
   const contentRightReserve = panelInset + panelGap;
-  const contentMaxWidthTransition = panelResizing
+  const [boxMinWidth, setBoxMinWidth] = useState(null);
+
+  // Per-account width preference for the table card + prompt box (null =
+  // full width). Applied as min(userWidth, available space), so the side
+  // panel reactivity above is untouched: an open panel can only ever make
+  // the table narrower than the user's chosen width, never wider. Space
+  // lost to a narrower table comes out of the two flexible prompt/response
+  // columns only — every button/estimate/total column has a fixed width in
+  // the colgroup below.
+  const { width: userTableWidth, setWidth: setUserTableWidth } = useStagingTableWidth();
+  // Live width while the resize handle is being dragged; null otherwise.
+  const [liveTableWidth, setLiveTableWidth] = useState(null);
+  // Hover tooltip for the resize triangle above the prompt box.
+  const [resizeTipVisible, setResizeTipVisible] = useState(false);
+  const effectiveTableWidth = liveTableWidth ?? userTableWidth;
+  const tableCardMaxWidth = effectiveTableWidth != null
+    ? `min(${effectiveTableWidth}px, calc(100% - ${contentRightReserve}px))`
+    : `calc(100% - ${contentRightReserve}px)`;
+  // Prompt box keeps its right edge aligned with the table card: same
+  // width expression minus its own 36px marginLeft.
+  const promptBoxMaxWidth = effectiveTableWidth != null
+    ? `calc(min(${effectiveTableWidth}px, calc(100% - ${contentRightReserve}px)) - 36px)`
+    : `calc(100% - ${contentRightReserve + 36}px)`;
+  const contentMaxWidthTransition = (panelResizing || liveTableWidth != null)
     ? 'none'
     : 'max-width 0.25s cubic-bezier(0.4,0,0.2,1)';
-  const [boxMinWidth, setBoxMinWidth] = useState(null);
+
+  const handleTableResizeStart = useCallback((e) => {
+    e.preventDefault();
+    const el = tableCardRef.current;
+    if (!el) return;
+    const startX = e.clientX;
+    const startWidth = el.getBoundingClientRect().width;
+    const minWidth = Math.max(boxMinWidth ?? 0, MIN_STAGING_TABLE_WIDTH);
+    const widthAt = (ev) => Math.max(minWidth, Math.round(startWidth + (ev.clientX - startX)));
+    const onMove = (ev) => setLiveTableWidth(widthAt(ev));
+    const onUp = (ev) => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      setLiveTableWidth(null);
+      setUserTableWidth(widthAt(ev));
+    };
+    document.body.style.cursor = 'col-resize';
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [boxMinWidth, setUserTableWidth]);
   useLayoutEffect(() => {
     const el = tableCardRef.current;
     if (!el) return undefined;
@@ -1153,8 +1197,8 @@ export default function StagingPageV2() {
           <div
             style={{
               // Right edge stays aligned with the table card below: same
-              // panel reserve, plus this box's own 36px marginLeft.
-              maxWidth: `calc(100% - ${contentRightReserve + 36}px)`,
+              // width expression, minus this box's own 36px marginLeft.
+              maxWidth: promptBoxMaxWidth,
               transition: contentMaxWidthTransition,
               minWidth: boxMinWidth ? boxMinWidth - 36 : undefined,
               marginLeft: 36,
@@ -1163,14 +1207,72 @@ export default function StagingPageV2() {
               borderRadius: 10,
               padding: '0 16px',
               height: 50,
-              marginTop: 8,
+              // Extra headroom below the nav bar so the resize triangle
+              // (absolutely positioned above this box) has clear space.
+              marginTop: 34,
               display: 'flex',
               alignItems: 'center',
               gap: 12,
               boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
               boxSizing: 'border-box',
+              position: 'relative',
             }}
           >
+            {/* Width resize affordance: black triangle above the box's
+                right edge (shared with the table card below). Drag to
+                resize, double-click to reset to full width. */}
+            <div
+              onMouseDown={handleTableResizeStart}
+              onDoubleClick={() => setUserTableWidth(null)}
+              onMouseEnter={() => setResizeTipVisible(true)}
+              onMouseLeave={() => setResizeTipVisible(false)}
+              style={{
+                position: 'absolute',
+                top: -24,
+                right: -4,
+                width: 24,
+                height: 16,
+                cursor: 'col-resize',
+                zIndex: 5,
+                display: 'flex',
+                alignItems: 'flex-end',
+                justifyContent: 'flex-end',
+              }}
+            >
+              <div
+                style={{
+                  width: 0,
+                  height: 0,
+                  borderLeft: '6px solid transparent',
+                  borderRight: '6px solid transparent',
+                  borderTop: '8px solid #1A1A1A',
+                  marginRight: 2,
+                  marginBottom: 2,
+                }}
+              />
+              {resizeTipVisible && liveTableWidth == null && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: '100%',
+                    right: 0,
+                    marginBottom: 6,
+                    background: '#1A1A1A',
+                    color: '#fff',
+                    fontFamily: 'var(--font-sans)',
+                    fontSize: 12,
+                    lineHeight: 1.3,
+                    padding: '6px 10px',
+                    borderRadius: 6,
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+                    pointerEvents: 'none',
+                  }}
+                >
+                  Drag to resize
+                </div>
+              )}
+            </div>
             <input
               id="staging-input"
               type="text"
@@ -1212,16 +1314,51 @@ export default function StagingPageV2() {
           <div
             ref={tableCardRef}
             style={{
-              // Shrink to make room for the open panel at its current width;
-              // full page width (minus the gutter) when no panel is open.
-              maxWidth: `calc(100% - ${contentRightReserve}px)`,
+              // min(user preference, space left of any open panel); full
+              // page width (minus the gutter) when neither applies.
+              maxWidth: tableCardMaxWidth,
               transition: contentMaxWidthTransition,
               minWidth: boxMinWidth ?? undefined,
               display: 'flex',
               flexDirection: 'column',
               gap: 8,
+              position: 'relative',
             }}
           >
+              {/* Width resize handle: drag to narrow the table + prompt
+                  box; double-click to reset to full width. */}
+              <div
+                onMouseDown={handleTableResizeStart}
+                onDoubleClick={() => setUserTableWidth(null)}
+                title="Drag to resize · double-click for full width"
+                className="group"
+                style={{
+                  // Kept fully inside the card: anything hanging past the
+                  // right edge counts as overflow in the boxMinWidth
+                  // measurement above and makes the card grow forever.
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  width: 10,
+                  height: '100%',
+                  cursor: 'col-resize',
+                  zIndex: 5,
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  paddingRight: 1,
+                }}
+              >
+                <div
+                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{
+                    width: 3,
+                    height: '100%',
+                    borderRadius: 2,
+                    background: liveTableWidth != null ? '#1A1A1A' : 'rgba(26,26,26,0.35)',
+                    opacity: liveTableWidth != null ? 1 : undefined,
+                  }}
+                />
+              </div>
               {shortlist.map((item) => {
                 const planEntries = clonePlanTableEntries(item.planTableEntries);
                 const { projectTotal } = calculateTimeTotals(planEntries);

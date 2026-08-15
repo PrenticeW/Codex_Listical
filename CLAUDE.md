@@ -37,6 +37,8 @@ All planning data is stored in Supabase via four named modules:
 
 A fifth module, `themeStorage` (`src/lib/themeStorage.js`), persists the per-account colour theme (`profiles.theme_family`). It is deliberately **not** year-scoped — one theme per account. Pure colour logic (family steps, SEL map, `applyThemeFamily`) lives in `src/lib/theme.js`; all derived surface colours come from the `--th-*` CSS variables in `src/index.css`.
 
+`stagingLayoutStorage` (`src/lib/stagingLayoutStorage.js`) persists the per-account Goal page table width (`profiles.staging_table_width`, NULL = full width), consumed via the `useStagingTableWidth` hook. Like `themeStorage` it is **not** year-scoped. The width is applied as `min(userWidth, space left of any open side panel)`, so panel reactivity is unchanged.
+
 A sixth module, `plannerOffline` (`src/lib/plannerOffline.js`), is the System page's offline layer (see `docs/offline-sync-plan.md`, Phase 2): an IndexedDB snapshot of the last-read planner rows plus a durable pending-save record that `plannerStorage.saveTaskRows` writes before every network attempt and replays after reconnect. Only `plannerStorage` may call it for planner rows; a replayed save must diff under the bookkeeping persisted with the pending state (see the `bookkeeping` note in `storage.js`) — do not "simplify" that away.
 
 **Never call Supabase or `localStorage` directly in page or component code.** Always go through these modules.
