@@ -154,7 +154,14 @@ async function findYearRow(userId, yearNumber) {
     .limit(1);
   if (error) throw error;
   const row = (data && data.length > 0) ? data[0] : null;
-  setCached(CACHE_NS, key, row);
+  // Only cache a FOUND row. Caching null poisoned the whole session when a
+  // lookup raced ahead of the year row's insert (Plan Next Year: the draft
+  // year's `years` insert is async while the UI switches immediately, so an
+  // early save cached null for year N+1 and every later save became a silent
+  // no-op — the offline pending record never cleared and the "Syncing
+  // changes…" pill stuck for the session). A missing year is rare, so the
+  // extra round-trip on repeat misses is fine.
+  if (row) setCached(CACHE_NS, key, row);
   return row;
 }
 
@@ -1321,7 +1328,16 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
   try {
     const userId = await requireUserId();
     const yearId = await findYearId(userId, yearNumber);
-    if (!yearId) return;
+    if (!yearId) {
+      // No `years` row yet (e.g. a save racing ahead of Plan Next Year's
+      // async year insert). A silent return here would strand the durable
+      // pending record forever — the "Syncing changes…" pill would stick
+      // until a later session's replay. Treat it as a retryable failure:
+      // findYearRow no longer caches misses, so the backoff retry re-queries
+      // and succeeds once the year row lands.
+      scheduleOfflineRetry();
+      return;
+    }
 
     const allRows = Array.isArray(taskRows) ? taskRows : [];
     const persistedTaskRows = [];
