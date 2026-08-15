@@ -1081,6 +1081,10 @@ export const readTaskRows = async (
     // another client (mobile) created that web hasn't refreshed in yet",
     // and "row web deleted" apart from "row deleted remotely".
     _knownRowIds.set(yearNumber, new Set((tasksRes.data || []).map((r) => r.id)));
+    // Baseline for the three-way diff save: the server state these rows were
+    // read as. Saves advance it only with web's own writes, so fields another
+    // client changes after this read stay recognisable as remote.
+    _baselineRows.set(yearNumber, new Map((tasksRes.data || []).map((r) => [r.id, baselineSnap(r)])));
 
     const totalDays = yearRow.total_days || DEFAULT_TOTAL_DAYS;
     const startDate = yearRow.start_date || todayIso();
@@ -1271,6 +1275,23 @@ function plannerRowDiffers(desired, dbRow) {
   return false;
 }
 
+// --- three-way merge baseline (per yearNumber) ----------------------------
+// _baselineRows: for each row id, the DIFF_KEYS snapshot of the server state
+// this client's in-memory rows are BASED ON (set on read; advanced only by
+// this client's own writes). The diff save uses it to tell "web edited this
+// field" (desired ≠ baseline → web's value wins) apart from "another client
+// edited it after web's last refresh" (desired = baseline but server ≠
+// baseline → server's value is kept). Without it, any row mobile touched
+// between web's last refresh and web's next autosave read as "differs" and
+// was overwritten wholesale with web's stale copy.
+const _baselineRows = new Map(); // yearNumber -> Map<id, {DIFF_KEYS subset}>
+
+function baselineSnap(dbRow) {
+  const snap = {};
+  for (const key of DIFF_KEYS) snap[key] = dbRow[key] ?? null;
+  return snap;
+}
+
 // Monotonic id for pending-state records. A save only clears the IndexedDB
 // pending record on success if no NEWER desired state has been persisted
 // since it was queued — otherwise a slow save's success would erase the
@@ -1296,6 +1317,7 @@ export const saveTaskRows = (
       taskRows,
       knownIds: [...(_knownRowIds.get(yearNumber) || [])],
       synIds: [...(_syntheticRowIds.get(yearNumber) || new Map())],
+      baseline: [...(_baselineRows.get(yearNumber) || new Map())],
       seq,
       queuedAt: Date.now(),
     });
@@ -1400,16 +1422,58 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       ? new Set(bookkeeping.knownIds)
       : _knownRowIds.get(yearNumber) || new Set(currentById.keys());
 
+    // Baseline for the three-way merge. Replay: the baseline persisted WITH
+    // the pending state wins, for the same reason as the known set — it is
+    // the state the queued edits were made against.
+    const baseline = Array.isArray(bookkeeping?.baseline)
+      ? new Map(bookkeeping.baseline)
+      : _baselineRows.get(yearNumber) || new Map();
+    const nextBaseline = new Map(baseline);
+
     const toUpsert = [];
     for (const d of desiredRows) {
       const cur = currentById.get(d.id);
       if (!cur) {
         // Missing from the DB. Known id → another client deleted it since we
         // last looked; do NOT resurrect it. Unknown id → a row web created.
-        if (!known.has(d.id)) toUpsert.push(d);
-      } else if (plannerRowDiffers(d, cur)) {
-        toUpsert.push(d);
+        if (!known.has(d.id)) {
+          toUpsert.push(d);
+          nextBaseline.set(d.id, baselineSnap(d));
+        }
+        continue;
       }
+      if (!plannerRowDiffers(d, cur)) {
+        // In sync with the server — adopt it as the baseline (covers rows
+        // read before the baseline map existed, and convergent edits).
+        nextBaseline.set(d.id, baselineSnap(cur));
+        continue;
+      }
+      const base = baseline.get(d.id);
+      if (!base) {
+        // No baseline (pre-fix pending record, or a row that appeared
+        // without a read) — fall back to the old row-level last-writer-wins.
+        toUpsert.push(d);
+        nextBaseline.set(d.id, baselineSnap(d));
+        continue;
+      }
+      // Three-way merge per field: web's value wins only for fields web
+      // actually changed since its last read (desired ≠ baseline); fields
+      // web left alone keep the server's value, so a remote (mobile) edit
+      // web hasn't refreshed in yet is never overwritten by a stale copy.
+      // Both-changed conflicts resolve to web's value (last writer here).
+      const merged = { ...d };
+      const newBase = { ...base };
+      for (const key of DIFF_KEYS) {
+        const dv = stableStringify(d[key] ?? null);
+        const bv = stableStringify(base[key] ?? null);
+        if (dv === bv) {
+          merged[key] = cur[key] ?? null; // web untouched → server value stands
+        } else {
+          newBase[key] = d[key] ?? null; // web's own write advances the baseline
+        }
+      }
+      if (plannerRowDiffers(merged, cur)) toUpsert.push(merged);
+      nextBaseline.set(d.id, newBase);
     }
     const toDelete = [];
     for (const id of currentById.keys()) {
@@ -1439,8 +1503,12 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
 
     const nextKnown = new Set(known);
     for (const d of toUpsert) nextKnown.add(d.id);
-    for (const id of toDelete) nextKnown.delete(id);
+    for (const id of toDelete) {
+      nextKnown.delete(id);
+      nextBaseline.delete(id);
+    }
     _knownRowIds.set(yearNumber, nextKnown);
+    _baselineRows.set(yearNumber, nextBaseline);
 
     // archived_weeks keeps the replace-the-layer pattern: mobile never
     // writes it, so a full rewrite can't clobber another client.
@@ -1505,6 +1573,7 @@ setOfflineReplayHandler((yearNumber, payload) => {
   return _enqueueTaskRowsSave(payload.taskRows, yearNumber, seq, {
     knownIds: payload.knownIds,
     synIds: payload.synIds,
+    baseline: payload.baseline,
   });
 });
 

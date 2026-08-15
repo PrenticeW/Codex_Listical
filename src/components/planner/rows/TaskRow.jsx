@@ -687,7 +687,10 @@ const TaskRow = React.memo(function TaskRow({
                     </div>
                   ) : isDayColumn ? (
                     <div className="w-full text-center px-1">
-                      {value || '\u00A0'}
+                      {/* '=timeValue' is the zero-time placeholder (counts as a
+                          scheduled instance \u2014 see isScheduledDayValue); render
+                          it as 0.00 rather than leaking the raw token. */}
+                      {(value === '=timeValue' ? '0.00' : value) || '\u00A0'}
                     </div>
                   ) : (
                     <div className="w-full" style={{ paddingLeft: '8px', paddingRight: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
