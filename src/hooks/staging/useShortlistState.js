@@ -71,26 +71,103 @@ const createSimpleTable = () => {
     // 01 Reasons — prompt (reason) + response (detail)
     createRow(SECTION_CONFIG.Reasons.header, ROW_TYPE.HEADER, 'Reasons'),
     createPromptRow(''),
-    createResponseRow(''),
+    createRow('', ROW_TYPE.DATA), // inert spacer before next section
     // 02 Outcomes — two prompt+response pairs
     createRow(SECTION_CONFIG.Outcomes.header, ROW_TYPE.HEADER, 'Outcomes'),
     createPromptRow(''),
     createResponseRow(''),
     createPromptRow(''),
     createResponseRow(''),
+    createRow('', ROW_TYPE.DATA), // inert spacer before next section
     // 03 Actions — prompt (action) + response (sub + time)
     createRow(SECTION_CONFIG.Actions.header, ROW_TYPE.HEADER, 'Actions'),
     createPromptRow(''),
     createResponseRow(''),
+    createRow('', ROW_TYPE.DATA), // inert spacer before next section
     // Subprojects — panel-managed, hidden from table render
     createRow(SECTION_CONFIG.Subprojects.header, ROW_TYPE.HEADER, 'Subprojects'),
     createPromptRow(''),
     // 04 Schedule — prompt rows only (time + estimate)
     createRow(SECTION_CONFIG.Schedule.header, ROW_TYPE.HEADER, 'Schedule'),
     createSchedulePromptRow(''),
+    createRow('', ROW_TYPE.DATA), // inert spacer closing the table
   ];
   return rows;
 };
+
+/**
+ * Ensure every rendered section ends with a blank, inert 'data' spacer row
+ * before the next section header (and at the end of the table). Older
+ * tables — and tables whose spacer was deleted — otherwise end a section
+ * with an editable prompt/response row butted against the next header.
+ * The Subprojects section is panel-managed and hidden from the table, so
+ * the spacer that visually closes the section *before* it (Actions) is the
+ * one inserted ahead of the Subprojects header; a spacer inside the hidden
+ * Subprojects section itself is never added.
+ */
+const ensureSectionSpacerRows = (shortlist) =>
+  shortlist.map((item) => {
+    const entries = item.planTableEntries;
+    if (!Array.isArray(entries) || entries.length === 0) return item;
+
+    let changed = false;
+    let next = clonePlanTableEntries(entries, entries.length);
+
+    // The Reasons section holds prompt rows only — it has no response
+    // ("action") rows. Drop empty ones left over from older seeds; a
+    // response row the user actually typed in is converted to a prompt row
+    // (text moves from the response column to the prompt column) so no
+    // content is lost.
+    {
+      let inReasons = false;
+      next = next.filter((row) => {
+        if (row?.__rowType === 'header') {
+          inReasons = row.__sectionType === 'Reasons';
+          return true;
+        }
+        if (!inReasons || row?.__rowType !== 'response') return true;
+        const text = (row[2] ?? '').trim();
+        if (!text) {
+          changed = true;
+          return false; // empty leftover response row — remove
+        }
+        row[1] = text;
+        row[2] = '';
+        defineRowMetadata(row, { rowType: ROW_TYPE.PROMPT });
+        changed = true;
+        return true;
+      });
+    }
+
+    const prevSectionType = (idx) => {
+      for (let i = idx; i >= 0; i--) {
+        if (next[i]?.__rowType === 'header') return next[i].__sectionType || '';
+      }
+      return '';
+    };
+
+    // Insert before each header (except the first) when the preceding row
+    // isn't already a data spacer — walking backwards keeps indices stable.
+    for (let i = next.length - 1; i > 0; i--) {
+      if (next[i]?.__rowType !== 'header') continue;
+      const prevRow = next[i - 1];
+      const prevType = prevRow?.__rowType || 'data';
+      if (prevType === 'data' || prevType === 'header') continue;
+      if (prevSectionType(i - 1) === 'Subprojects') continue; // hidden section
+      next.splice(i, 0, createRow('', ROW_TYPE.DATA));
+      changed = true;
+    }
+
+    // Close the table with a spacer if the last visible section lacks one.
+    const last = next[next.length - 1];
+    const lastType = last?.__rowType || 'data';
+    if (lastType !== 'data' && prevSectionType(next.length - 1) !== 'Subprojects') {
+      next.push(createRow('', ROW_TYPE.DATA));
+      changed = true;
+    }
+
+    return changed ? { ...item, planTableEntries: next } : item;
+  });
 
 /**
  * One-time cleanup of legacy seeded text. Older tables stored the prompt
@@ -151,9 +228,9 @@ export default function useShortlistState({ currentYear, executeCommand, isCurre
       const data = await loadStagingState(currentYear);
       if (!cancelled) {
         setState({
-          shortlist: normalizeLegacySeedText(
+          shortlist: ensureSectionSpacerRows(normalizeLegacySeedText(
             Array.isArray(data?.shortlist) ? data.shortlist : []
-          ),
+          )),
           archived: Array.isArray(data?.archived) ? data.archived : [],
         });
         setHasInitialLoaded(true);
