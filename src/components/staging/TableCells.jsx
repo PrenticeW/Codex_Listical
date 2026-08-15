@@ -206,6 +206,7 @@ export function TextInputCell({
       <input
         ref={inputRef}
         type="text"
+        autoComplete="off"
         size={1}
         value={value || ''}
         onChange={(e) => { onChange(e.target.value); syncMirrorScroll(e); }}
@@ -384,6 +385,7 @@ export function TimeValueCell({
       <input
         type="text"
         size={1}
+        autoComplete="off"
         value={value || '0.00'}
         onChange={(e) => { if (!readOnly) onChange(e.target.value); }}
         onMouseDown={onMouseDown}

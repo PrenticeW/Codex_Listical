@@ -64,6 +64,7 @@ export default function InlineEditableText({
       <input
         ref={inputRef}
         type="text"
+        autoComplete="off"
         value={draft}
         maxLength={maxLength}
         onChange={(e) => setDraft(e.target.value)}

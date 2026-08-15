@@ -1174,6 +1174,7 @@ export default function StagingPageV2() {
             <input
               id="staging-input"
               type="text"
+              autoComplete="off"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => {
