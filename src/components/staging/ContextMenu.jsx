@@ -112,6 +112,7 @@ export default function ContextMenu({
 
   return (
     <div
+      data-selection-safe
       style={{ ...posStyle, ...BENTO_SHELL }}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}

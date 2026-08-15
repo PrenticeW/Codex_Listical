@@ -276,6 +276,24 @@ export default function StagingPageV2() {
     getSelectedCellsByItem,
   } = usePlanTableSelection();
 
+  // Clear cell/row highlights when clicking away from the tables. Clicks
+  // inside the table card keep their normal behaviour (cell mousedown
+  // re-selects), and clicks inside a side panel or the context menu
+  // (marked data-selection-safe) leave the selection alone so actions that
+  // operate on it still work.
+  const hasSelection = selectedCells.size > 0 || selectedRows.size > 0;
+  useEffect(() => {
+    if (!hasSelection) return undefined;
+    const onDocMouseDown = (e) => {
+      const card = tableCardRef.current;
+      if (card && card.contains(e.target)) return;
+      if (e.target.closest && e.target.closest('[data-selection-safe]')) return;
+      clearSelection();
+    };
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [hasSelection, clearSelection]);
+
   // Drag and drop for rows
   const {
     draggedRows,
@@ -1292,7 +1310,7 @@ export default function StagingPageV2() {
                 background: 'transparent',
                 fontSize: `${Math.round(14 * textSizeScale)}px`,
                 fontFamily: 'var(--font-sans)',
-                color: '#1F1F1F',
+                color: '#1A1A1A',
               }}
               placeholder="What would you like to get done?"
             />

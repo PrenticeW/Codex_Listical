@@ -133,7 +133,9 @@ export function TextInputCell({
   if (paddingLeft) style.paddingLeft = paddingLeft;
   if (paddingRight) style.paddingRight = paddingRight;
 
-  const inkColor = rowType === 'response' ? '#616161' : '#1F1F1F';
+  // User-entered text is always black; the textColor prop still overrides
+  // (e.g. header cells on coloured goal bars).
+  const inkColor = '#1A1A1A';
   const inputStyle = {
     fontSize: `${Math.round(12.5 * textSizeScale)}px`,
     fontFamily: 'var(--font-sans)',
@@ -332,7 +334,8 @@ export function EstimateSelectCell({
           width: '100%', background: 'transparent', border: 'none', outline: 'none',
           fontSize: `${Math.round(12 * textSizeScale)}px`,
           fontFamily: "'Mulish', sans-serif",
-          color: '#616161',
+          // Black once a real estimate is set; grey for the unset "-".
+          color: value && value !== '-' ? '#1A1A1A' : '#616161',
           paddingRight: 16,
         }}
         value={value || '-'}
@@ -397,7 +400,7 @@ export function TimeValueCell({
           textAlign: 'right',
           fontFamily: "'Mulish', sans-serif",
           fontSize: `${Math.round(12.5 * textSizeScale)}px`,
-          color: '#1F1F1F',
+          color: '#1A1A1A',
           fontVariantNumeric: 'tabular-nums',
         }}
         {...dataAttributes}

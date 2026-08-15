@@ -149,6 +149,10 @@ export default function PanelShell({
     <>
       {gridLayer}
       <div
+        // Marks the panel as a "safe" click target for selection-clearing
+        // listeners (e.g. the Goal page clears cell selection on outside
+        // clicks but must keep it while interacting with the panel).
+        data-selection-safe
         style={{
           position: 'fixed',
           right: 0,
