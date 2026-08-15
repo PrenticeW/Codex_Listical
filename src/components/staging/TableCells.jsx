@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { PLAN_ESTIMATE_OPTIONS } from '../../utils/staging/planTableHelpers';
 import { linkifyText, containsUrl, renderUrlSegments } from '../../utils/linkify';
+import EstimateDropdownCell from '../planner/EstimateDropdownCell';
 
 /**
  * Shared cell styling utilities
@@ -329,24 +329,31 @@ export function EstimateSelectCell({
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
     >
-      <select
-        style={{
-          width: '100%', background: 'transparent', border: 'none', outline: 'none',
-          fontSize: `${Math.round(12 * textSizeScale)}px`,
+      {/* System page's grouped Hours/Minutes dropdown, reused in place of the
+          old native <select>. Keyed on value so each committed estimate
+          remounts the cell with fresh internal state (the planner mounts it
+          per-edit; here it's persistent). An Hour + Minute combo commits
+          'Custom' with the summed time via options.timeValueOverride. */}
+      <EstimateDropdownCell
+        key={value || '-'}
+        initialValue={value || '-'}
+        // Outside click / Enter re-commit the current value — only forward a
+        // real change so unchanged closes don't trigger a save.
+        onComplete={(next, options) => {
+          if (next !== (value || '-') || options?.timeValueOverride != null) onChange(next, options);
+        }}
+        onKeyDown={() => {}}
+        cellFontSize={Math.round(12 * textSizeScale)}
+        rowHeight={CELL_HEIGHT}
+        triggerStyle={{
+          backgroundColor: 'transparent',
+          border: 'none',
           fontFamily: "'Mulish', sans-serif",
           // Black once a real estimate is set; grey for the unset "-".
           color: value && value !== '-' ? '#1A1A1A' : '#616161',
-          paddingRight: 16,
         }}
-        value={value || '-'}
-        onMouseDown={(e) => { onMouseDown(e); e.stopPropagation(); }}
-        onChange={(e) => onChange(e.target.value)}
-        {...dataAttributes}
-      >
-        {PLAN_ESTIMATE_OPTIONS.map((option) => (
-          <option key={option} value={option}>{option}</option>
-        ))}
-      </select>
+        triggerProps={dataAttributes}
+      />
     </td>
   );
 }

@@ -435,7 +435,7 @@ export default function usePlanTableState({ setState, executeCommand }) {
    * Update estimate and auto-calculate time value
    */
   const handlePlanEstimateChange = useCallback(
-    (itemId, rowIdx, nextEstimate) => {
+    (itemId, rowIdx, nextEstimate, options) => {
       if (rowIdx < 0) return;
       executeStateMutation((prev) => ({
         ...prev,
@@ -453,7 +453,9 @@ export default function usePlanTableState({ setState, executeCommand }) {
           if (minutes != null) {
             nextTimeValue = formatMinutesToHHmm(minutes);
           } else if (nextEstimate === 'Custom') {
-            nextTimeValue = '0.00';
+            // An Hour + Minute combo from the estimate dropdown commits
+            // 'Custom' with the summed time pre-filled (timeValueOverride).
+            nextTimeValue = options?.timeValueOverride ?? '0.00';
           }
           row[5] = nextTimeValue;
           return { ...item, planTableEntries: nextEntries };

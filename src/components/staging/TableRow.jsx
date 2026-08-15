@@ -375,7 +375,7 @@ export default function TableRow({
         />
         <EstimateSelectCell
           value={estimateValue}
-          onChange={(val) => onEstimateChange(item.id, rowIdx, val)}
+          onChange={(val, options) => onEstimateChange(item.id, rowIdx, val, options)}
           onMouseDown={(e) => cellMouseDown(e, 4)}
           onMouseEnter={() => cellMouseEnter(4)}
           isSelected={isCellSelected(item.id, rowIdx, 4)}
@@ -546,7 +546,7 @@ export default function TableRow({
         />
         <EstimateSelectCell
           value={estimateValue}
-          onChange={(val) => onEstimateChange(item.id, rowIdx, val)}
+          onChange={(val, options) => onEstimateChange(item.id, rowIdx, val, options)}
           onMouseDown={(e) => cellMouseDown(e, 4)}
           onMouseEnter={() => cellMouseEnter(4)}
           isSelected={isCellSelected(item.id, rowIdx, 4)}

@@ -23,6 +23,7 @@ import { fmtTimestamp } from '../utils/fmtTimestamp';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import { ArchiveYearModal } from './ArchiveYearModal';
+import CalendarPopup from './CalendarPopup';
 import { DeleteAccountModal } from './DeleteAccountModal';
 import {
   peekPlannerCache,
@@ -431,7 +432,8 @@ function YourYearSection() {
     return `${DAYS[dt.getUTCDay()]} ${dt.getUTCDate()} ${MONTHS[dt.getUTCMonth()]} ${dt.getUTCFullYear()}`;
   };
 
-  const dateInputRef = useRef(null);
+  const dateBlockRef = useRef(null);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   // Derive saved date from YearContext; fall back to today if metadata hasn't loaded yet
   const dateVal = currentYearInfo?.startDate ?? new Date().toISOString().split('T')[0];
 
@@ -504,22 +506,24 @@ function YourYearSection() {
         </select>
       </div>
 
-      {/* Cycle start date — WIRED */}
+      {/* Cycle start date — WIRED. Custom CalendarPopup replaces the old
+          hidden native date input + showPicker(). */}
       <label
+        ref={dateBlockRef}
         style={{ ...blockStyle, cursor: 'pointer', display: 'block' }}
-        onClick={() => dateInputRef.current?.showPicker?.()}
+        onClick={() => setIsCalendarOpen(open => !open)}
       >
         <div style={metaStyle}>Cycle start</div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ ...valueStyle, color: isDateDirty ? 'var(--brand-deep)' : C.text }}>
             {formatDate(pendingDate)}
           </span>
-          <input
-            ref={dateInputRef}
-            type="date"
+          <CalendarPopup
+            isOpen={isCalendarOpen}
+            anchorRef={dateBlockRef}
             value={pendingDate}
-            onChange={e => setPendingDate(e.target.value)}
-            style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
+            onSelect={setPendingDate}
+            onClose={() => setIsCalendarOpen(false)}
           />
           {isDateDirty && (
             <button

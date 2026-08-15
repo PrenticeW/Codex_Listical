@@ -43,17 +43,20 @@ import useFilterButtonHandler from '../hooks/planner/useFilterButtonHandler';
 import { MonthRow, WeekRow } from '../components/planner/rows';
 import TableRow from '../components/planner/TableRow';
 import NavigationBar from '../components/planner/NavigationBar';
-import ProjectListicalMenu from '../components/planner/ProjectListicalMenu';
 import PlannerTable from '../components/planner/PlannerTable';
 import FilterPanel from '../components/planner/FilterPanel';
 import ArchiveYearModal from '../components/ArchiveYearModal';
 import ContextMenu from '../components/planner/ContextMenu';
+import MultiPasteModal from '../components/MultiPasteModal';
 import useContextMenu from '../hooks/planner/useContextMenu';
 import { createInitialData, ensureDailyTotalRow } from '../utils/planner/dataCreators';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm } from '../constants/planner/rowTypes';
 import { minutesToEstimateLabel } from '../utils/staging/planTableHelpers';
 import { mapDailyBoundsToTimeline } from '../utils/planner/dailyBoundsMapper';
 import { createEmptyTaskRows } from '../utils/planner/taskRowGenerator';
+
+// Cap for the multi-line paste to tasks flow (mirrors AddTasksModal's limit)
+const MULTI_PASTE_MAX_TASKS = 100;
 import {
   getDayColumnId,
   forEachDayColumn,
@@ -71,7 +74,7 @@ import {
 } from '../utils/planner/clipboardOperations';
 import { createSortInboxCommand } from '../utils/planner/sortInbox';
 import { createSortPlannerCommand } from '../utils/planner/sortPlanner';
-import { saveTaskRows, readTaskRows, invalidateTaskRowsCache, loadChipTaskNote, preloadChipTaskNotes, isTaskRowsSaveInFlight, getLastTaskRowsSaveCompletedAt } from '../utils/planner/storage';
+import { saveTaskRows, readTaskRows, invalidateTaskRowsCache, loadChipTaskNote, preloadChipTaskNotes, isTaskRowsSaveInFlight, getLastTaskRowsSaveCompletedAt, writeTaskEvent } from '../utils/planner/storage';
 import { supabase } from '../lib/supabase';
 import { DEFAULT_PROJECT_ID } from '../constants/plannerStorageKeys';
 import {
@@ -703,6 +706,10 @@ export default function ProjectTimePlannerV2() {
   // Listical menu state
   const [isListicalMenuOpen, setIsListicalMenuOpen] = useState(false);
   const [addTasksCount, setAddTasksCount] = useState('');
+
+  // Multi-line paste into a single Task cell: pending confirmation payload
+  // { lines: string[], anchorRowId: string } or null when no prompt is open.
+  const [multiPastePrompt, setMultiPastePrompt] = useState(null);
 
   // Load projects and subprojects from Staging
   const { projects, subprojects, projectSubprojectsMap, projectNamesMap, projectTaglinesMap, projectIdByNickname, projectInfoById, isProjectsLoaded } = useProjectsData();
@@ -2161,23 +2168,65 @@ export default function ProjectTimePlannerV2() {
     // Nothing selected — let the browser handle it normally
     if (selectedCells.size === 0 && selectedRows.size === 0) return;
 
-    // Get clipboard data
-    const pastedText = e.clipboardData.getData('text');
+    // Shared paste logic for both the keyboard (⌘V event) and the context
+    // menu Paste button (no event — clipboard read via navigator.clipboard).
+    // Returns true when the paste was handled here.
+    const performPaste = (pastedText) => {
+      if (!pastedText) return false;
 
-    const command = handlePasteOperation({
-      pastedText,
-      selectedRows,
-      selectedCells,
-      data,
-      allColumnIds,
-      editingCell,
-      lastCopiedColumns: lastCopiedColumnsRef.current,
-      setData,
-    });
+      // MULTI-PASTE: multi-line text pasted into a single Task cell offers to
+      // create one task per line instead of flattening into the cell. Only
+      // plain task cells qualify; subheader names, custom section labels and
+      // general/unscheduled section rows keep the flatten behaviour.
+      if (selectedRows.size === 0 && selectedCells.size === 1) {
+        const [anchorRowId, anchorColumnId] = Array.from(selectedCells)[0].split('|');
+        if (anchorColumnId === 'task') {
+          const lines = pastedText
+            .split(/\r\n|\r|\n/)
+            .map(line => line.trim())
+            .filter(line => line !== '');
+          if (lines.length > 1) {
+            const row = data.find(r => r.id === anchorRowId);
+            const generalUnscheduledTypes = ['projectGeneral', 'projectUnscheduled', 'subprojectGeneral', 'subprojectUnscheduled',
+              'archivedProjectGeneral', 'archivedProjectUnscheduled'];
+            const isPlainTaskCell = !!row
+              && row._rowType !== 'subprojectHeader'
+              && !row.subprojectLabel
+              && !generalUnscheduledTypes.includes(row._rowType ?? '');
+            if (isPlainTaskCell) {
+              setMultiPastePrompt({ lines, anchorRowId });
+              return true;
+            }
+          }
+        }
+      }
 
-    if (command) {
-      e.preventDefault();
-      executeCommand(command);
+      const command = handlePasteOperation({
+        pastedText,
+        selectedRows,
+        selectedCells,
+        data,
+        allColumnIds,
+        editingCell,
+        lastCopiedColumns: lastCopiedColumnsRef.current,
+        setData,
+      });
+
+      if (command) {
+        executeCommand(command);
+        return true;
+      }
+      return false;
+    };
+
+    if (e?.clipboardData) {
+      const pastedText = e.clipboardData.getData('text');
+      if (performPaste(pastedText)) {
+        e.preventDefault();
+      }
+    } else {
+      // Context menu path: no clipboard event, read the clipboard directly.
+      navigator.clipboard.readText().then(performPaste).catch(() => {});
     }
   }, [selectedCells, selectedRows, data, editingCell, executeCommand, allColumnIds]);
 
@@ -2929,6 +2978,83 @@ export default function ProjectTimePlannerV2() {
     setSelectedRows(new Set(stampedRows.map(r => r.id)));
   }, [selectedRows, contextMenu.rowId, data, totalDays, executeCommand, setSelectedRows]);
 
+  // Multi-line paste confirmed: line 1 fills the anchor Task cell and each
+  // remaining line becomes a new task row inserted directly below it. Status
+  // stays the default ('-') so the usual auto-status logic applies; every
+  // other column starts blank. One command, one undo step.
+  const handleMultiPasteConfirm = useCallback(() => {
+    if (!multiPastePrompt) return;
+    const { lines, anchorRowId } = multiPastePrompt;
+    setMultiPastePrompt(null);
+
+    const anchorIndex = data.findIndex(r => r.id === anchorRowId);
+    if (anchorIndex === -1) return;
+    const anchorRow = data[anchorIndex];
+
+    const cappedLines = lines.slice(0, MULTI_PASTE_MAX_TASKS);
+    const [firstLine, ...restLines] = cappedLines;
+
+    const oldTask = anchorRow.task || '';
+    const nowIso = new Date().toISOString();
+    const stampAnchorCreatedAt = !anchorRow.taskCreatedAt && !oldTask && !!firstLine;
+    const oldAnchorCreatedAt = anchorRow.taskCreatedAt ?? null;
+
+    const insertIndex = anchorIndex + 1;
+    const emptyRows = createEmptyTaskRows(restLines.length, totalDays);
+
+    // Mirror addTasksWithCount: rows inserted inside the Archive section are
+    // stamped as archived tasks so they persist inside the archive block.
+    const archiveCtx = getArchiveInsertContext(data, insertIndex);
+    const newRows = emptyRows.map((r, i) => ({
+      ...r,
+      task: restLines[i],
+      taskCreatedAt: nowIso,
+      ...(archiveCtx ? {
+        _rowType: 'projectTask',
+        _isArchivedTask: true,
+        parentGroupId: archiveCtx.parentGroupId,
+        project: r.project || archiveCtx.project,
+        projectNickname: archiveCtx.projectNickname,
+      } : {}),
+    }));
+
+    const command = {
+      execute: () => {
+        setData(prev => {
+          const next = prev.map(r => r.id === anchorRowId
+            ? { ...r, task: firstLine, ...(stampAnchorCreatedAt ? { taskCreatedAt: nowIso } : {}) }
+            : r);
+          const idx = next.findIndex(r => r.id === anchorRowId);
+          next.splice(idx === -1 ? insertIndex : idx + 1, 0, ...newRows);
+          return next;
+        });
+      },
+      undo: () => {
+        setData(prev => {
+          const newIds = new Set(newRows.map(r => r.id));
+          return prev
+            .filter(r => !newIds.has(r.id))
+            .map(r => r.id === anchorRowId
+              ? { ...r, task: oldTask, ...(stampAnchorCreatedAt ? { taskCreatedAt: oldAnchorCreatedAt } : {}) }
+              : r);
+        });
+      },
+    };
+
+    executeCommand(command);
+
+    // Log the anchor row's name change like a normal Task cell edit. The new
+    // rows are not yet persisted, so no events are written for them —
+    // taskCreatedAt is stamped locally and persisted with the debounced save.
+    if (firstLine !== oldTask) {
+      writeTaskEvent(anchorRowId, { field: 'task_name', oldValue: oldTask || null, newValue: firstLine });
+    }
+
+    if (newRows.length > 0) {
+      setSelectedRows(new Set(newRows.map(r => r.id)));
+    }
+  }, [multiPastePrompt, data, totalDays, executeCommand, setSelectedRows]);
+
   // System panel action events
   useEffect(() => {
     const handler = (e) => {
@@ -3309,6 +3435,15 @@ export default function ProjectTimePlannerV2() {
         clearEstimateFilter={clearEstimateFilter}
       />
       </div>
+
+      {/* Multi-line paste confirmation */}
+      <MultiPasteModal
+        isOpen={!!multiPastePrompt}
+        taskCount={multiPastePrompt?.lines.length ?? 0}
+        maxTasks={MULTI_PASTE_MAX_TASKS}
+        onClose={() => setMultiPastePrompt(null)}
+        onConfirm={handleMultiPasteConfirm}
+      />
 
       {/* Archive Year Modal */}
       <ArchiveYearModal

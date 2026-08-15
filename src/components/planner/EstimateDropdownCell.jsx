@@ -174,7 +174,19 @@ function EstimateDropdownCell({
   onInstanceTimeChange = null,
   onShownInstanceChange = null, // (dayIndex | null) => void — moves the table selection while the panel is open
   rowData = null, // Multi mode: source of the day cells' current values (live-preview baseline)
+  // Goal-page reuse (staging EstimateSelectCell): overrides merged onto the
+  // trigger button's inline style so the trigger can match the host cell
+  // (transparent background, no ring) instead of the planner edit chrome.
+  triggerStyle = null,
+  // Extra attributes spread onto the trigger button (e.g. the Goal table's
+  // data-plan-* focus-targeting attributes).
+  triggerProps = null,
 }) {
+  // A value outside ESTIMATE_VALUES (the Goal table's saved 'Custom') has no
+  // list row — show it verbatim on the trigger and re-commit it unchanged on
+  // outside click / Enter, instead of collapsing it to '-' (index 0).
+  const initialKey = initialValue === '' || initialValue == null ? '-' : initialValue;
+  const initialInList = ESTIMATE_VALUES.includes(initialKey);
   const multiMode = Boolean(onInstanceTimeChange && multiInstances && multiInstances.length > 1);
   const instances = multiMode ? multiInstances : [];
 
@@ -254,7 +266,7 @@ function EstimateDropdownCell({
         if (multiMode) {
           handleCancel(); // per-date edits are already committed as they happen
         } else {
-          handleComplete(ESTIMATE_VALUES[selectedIndex]);
+          handleComplete(initialInList ? ESTIMATE_VALUES[selectedIndex] : initialKey);
         }
       }
     };
@@ -296,7 +308,7 @@ function EstimateDropdownCell({
       if (multiMode) {
         handleConfirmCombo(e);
       } else {
-        handleComplete(ESTIMATE_VALUES[selectedIndex]);
+        handleComplete(initialInList ? ESTIMATE_VALUES[selectedIndex] : initialKey);
       }
       return;
     }
@@ -462,11 +474,15 @@ function EstimateDropdownCell({
           fontSize: `${cellFontSize}px`,
           backgroundColor: '#ffffff',
           border: '2px solid var(--sel-ring)',
+          ...(triggerStyle || {}),
         }}
         onClick={() => setIsOpen(!isOpen)}
+        {...(triggerProps || {})}
       >
         <span className="flex-1 text-left">
-          {multiMode ? (initialValue || 'Multi') : (ESTIMATE_VALUES[selectedIndex] || ' ')}
+          {multiMode
+            ? (initialValue || 'Multi')
+            : (initialInList ? (ESTIMATE_VALUES[selectedIndex] || ' ') : initialKey)}
         </span>
         {multiMode && (
           <span

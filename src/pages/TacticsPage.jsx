@@ -4032,6 +4032,39 @@ export default function TacticsPage() {
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   }, [textSizeScale]);
+  // Shared column-resize grip. Same behaviour as the inline handles in the
+  // calendar header — used by the Totals card header below so both tables
+  // resize together (they share the columnWidths state).
+  const renderColumnResizeHandle = useCallback(
+    (columnIndex, fallbackWidth = 140) => (
+      <div
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const width = columnWidths[columnIndex] || fallbackWidth;
+          handleColumnResize(columnIndex, e.clientX, width);
+        }}
+        style={{
+          position: 'absolute',
+          right: '-2px',
+          top: 0,
+          bottom: 0,
+          width: '8px',
+          cursor: 'col-resize',
+          backgroundColor: 'transparent',
+          zIndex: 10,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = '#000000';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = 'transparent';
+        }}
+        title="Drag to resize column"
+      />
+    ),
+    [columnWidths, handleColumnResize]
+  );
   const renderExtraColumnCells = useCallback(
     (rowKey, showHeaderLabel = false) =>
       extendedStagingColumnConfigs.map((column, extraIndex) => {
@@ -5411,7 +5444,9 @@ export default function TacticsPage() {
                     borderTop: '1.5px solid #1A1A1A',
                     borderBottom: '1.5px solid #1A1A1A',
                   }}
-                />
+                >
+                  {renderColumnResizeHandle(0, 120)}
+                </td>
                 {displayedWeekDays.map((day, idx) => (
                   <td
                     key={`totals-head-${day}-${idx}`}
@@ -5422,9 +5457,11 @@ export default function TacticsPage() {
                       fontSize: `${12 * textSizeScale}px`,
                       borderTop: '1.5px solid #1A1A1A',
                       borderBottom: '1.5px solid #1A1A1A',
+                      position: 'relative',
                     }}
                   >
                     {day}
+                    {renderColumnResizeHandle(idx + 1)}
                   </td>
                 ))}
                 <td
@@ -5436,9 +5473,11 @@ export default function TacticsPage() {
                     borderTop: '1.5px solid #1A1A1A',
                     borderBottom: '1.5px solid #1A1A1A',
                     borderLeft: '2px solid rgba(0,0,0,.1)',
+                    position: 'relative',
                   }}
                 >
                   Total
+                  {renderColumnResizeHandle(displayedWeekDays.length + 1)}
                 </td>
                 {renderExtraColumnCells('summary-head')}
               </tr>

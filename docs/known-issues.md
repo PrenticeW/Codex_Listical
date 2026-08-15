@@ -28,6 +28,7 @@
 |---|---|
 | Blank task rows retain history after accidental edits | If a user types into an empty task row and commits (Enter/Tab/blur), `writeTaskEvent` fires and `task_created_at` is stamped on the row — even if they then delete the text and leave the row blank again. The row quietly carries that history and creation date, which will surface on the next task written into the same row. Fix considered (clearing `task_events` and `task_created_at` when task name is set to empty) but deferred — risk of unintended data loss outweighed the edge-case frequency. Workaround: delete and re-add the row instead. |
 | Archive Week panel delta compares weeks, not plan | The Comparison card's +/− column shows current week minus previous week. An alternative (or additional) delta of current week minus frozen quota ("over or under plan") was considered and deferred. The data exists: `archivedWeeklyQuota` is frozen on each archived project header at archive time. Revisit after the panel ships. |
+| Native browser `alert()` used for year-flow errors | Six error paths pop a native browser alert instead of an in-app dialog/toast: draft-year creation failure (`ProjectTimePlannerV2.jsx` ~340, `TacticsPage.jsx` ~362, `StagingPageV2.jsx` ~133) and archive-revert failure (`ProjectTimePlannerV2.jsx` ~359, `TacticsPage.jsx` ~350, `StagingPageV2.jsx` ~121). To trigger: press "Plan next year" or the dev-only "Revert Archive" nav button while the Supabase call fails (e.g. offline, or a draft year already exists at the DB level). Replace with a shared error dialog/toast component before launch — a modal pattern already exists (`ArchiveYearModal`, `DeleteAccountModal`). |
 | Legacy rows may lack `project_id` | The `projectNickname` quota-lookup bug was fixed June 2026 (`projectId` stamped at creation, stored in `project_id`, read on load). `ProjectRow.jsx` still falls back to the nickname map for rows created before the fix — renaming a project with such rows can break quota lookups until those rows are re-saved. |
 
 ---
@@ -85,6 +86,9 @@ Migrations written but not yet applied to the database. Apply as a batch.
 | `src/components/SupabaseTest.jsx` | Debug component, not rendered anywhere |
 | `src/hooks/planner/useCellSelection.js` | Not imported anywhere |
 | `src/hooks/planner/usePlannerRowRendering.js` | Not imported anywhere |
+| `src/hooks/planner/useRowRenderers.jsx` | Only imported by dead `usePlannerRowRendering.js`. Contains native `<select>` cell renderers superseded by the custom dropdown cells in `components/planner/rows/TaskRow.jsx` |
+| `src/components/staging/ColorSwatchGrid.jsx` | Not imported anywhere |
+| `src/components/planner/ProjectListicalMenu.jsx` | Removed Aug 2026 (moved to `_to_delete/`) — was imported in `ProjectTimePlannerV2.jsx` but never rendered; superseded by `SystemPanel.jsx` and its `SYSTEM_PANEL_*` events. The unused import was removed at the same time |
 | `src/hooks/planner/usePlannerInteractions.js` | Not imported anywhere |
 | `src/hooks/planner/useRowDragSelection.jsx` | Not imported anywhere |
 | `src/components/planner/VersionHistoryPanel.jsx` | Never imported anywhere; version history UI lives in `GearPanel.jsx` as `HistoryView` |
