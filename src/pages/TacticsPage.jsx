@@ -39,7 +39,8 @@ import { GEAR_TACTICS_SETTINGS_EVENT } from '../components/GearPanel';
 import { peekStagingCache } from '../lib/stagingStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
 import usePageSize, { usePageScaleVar } from '../hooks/usePageSize';
-import { PLAN_PANEL_ACTION_EVENT, PLAN_PANEL_STATE_EVENT, PLAN_PANEL_CHIP_EVENT, PLAN_PANEL_SCHEDULE_DATA_EVENT, PLAN_PANEL_NAV_EVENT } from '../components/PlanPanel';
+import { PLAN_PANEL_ACTION_EVENT, PLAN_PANEL_STATE_EVENT, PLAN_PANEL_CHIP_EVENT, PLAN_PANEL_SCHEDULE_DATA_EVENT, PLAN_PANEL_NAV_EVENT, PLAN_PANEL_CHIP_EDITOR_EVENT } from '../components/PlanPanel';
+import { chipContrastColour } from '../utils/chipEditorColours';
 import { getContrastTextColor } from '../utils/colorUtils';
 
 const DAYS_OF_WEEK = [
@@ -70,111 +71,6 @@ const buildInitialSleepBlocks = (days) =>
 const DEFAULT_SLEEP_CELL_HEIGHT = 16;
 let chipSequence = 0;
 
-// ── Chip editor colour palette (from design handover reference/ChipEditorUI.jsx) ──
-// Grouped hue families x 6 shades each, matching the "June palette" spec.
-const CHIP_EDITOR_GROUPS = [
-  { label: 'Purples & Pinks', families: [
-    { name: 'purple', shades: [[272, 72, 76], [272, 72, 68], [272, 72, 60], [272, 72, 52], [272, 72, 44], [272, 72, 36]] },
-    { name: 'plum', shades: [[290, 56, 76], [290, 58, 68], [290, 60, 60], [290, 62, 52], [290, 64, 44], [290, 66, 36]] },
-    { name: 'pink', shades: [[326, 72, 76], [326, 72, 68], [326, 72, 60], [326, 72, 52], [326, 72, 44], [326, 72, 36]] },
-  ] },
-  { label: 'Reds', families: [
-    { name: 'rose', shades: [[348, 77, 76], [348, 74, 68], [348, 70, 60], [348, 64, 52], [348, 59, 44], [348, 54, 36]] },
-    { name: 'red', shades: [[2, 72, 76], [2, 72, 68], [2, 72, 60], [2, 72, 52], [2, 72, 44], [2, 72, 36]] },
-    { name: 'scarlet', shades: [[12, 77, 76], [12, 72, 68], [12, 68, 60], [12, 62, 52], [12, 57, 44], [12, 52, 36]] },
-  ] },
-  { label: 'Oranges', families: [
-    { name: 'tangerine', shades: [[22, 100, 76], [22, 100, 68], [22, 100, 60], [22, 100, 52], [22, 100, 44], [22, 100, 36]] },
-    { name: 'orange', shades: [[28, 90, 76], [28, 90, 68], [28, 90, 60], [28, 90, 52], [28, 90, 44], [28, 90, 36]] },
-    { name: 'amber', shades: [[36, 80, 76], [36, 80, 68], [36, 80, 60], [36, 80, 52], [36, 80, 44], [36, 80, 36]] },
-  ] },
-  { label: 'Yellows', families: [
-    { name: 'gold', shades: [[54, 85, 76], [54, 85, 68], [54, 85, 60], [54, 85, 52], [54, 85, 44], [54, 85, 36]] },
-    { name: 'yellow', shades: [[58, 90, 76], [58, 90, 68], [58, 90, 60], [58, 90, 52], [58, 90, 44], [58, 90, 36]] },
-    { name: 'chartreuse', shades: [[62, 85, 76], [62, 85, 68], [62, 85, 60], [62, 85, 52], [62, 85, 44], [62, 85, 36]] },
-  ] },
-  { label: 'Greens', families: [
-    { name: 'lime', shades: [[82, 72, 76], [82, 72, 68], [82, 72, 60], [82, 72, 52], [82, 72, 44], [82, 72, 36]] },
-    { name: 'green', shades: [[110, 72, 76], [110, 72, 68], [110, 72, 60], [110, 72, 52], [110, 72, 44], [110, 72, 36]] },
-    { name: 'sage', shades: [[155, 34, 76], [155, 42, 68], [155, 50, 60], [155, 58, 52], [155, 66, 44], [155, 74, 36]] },
-  ] },
-  { label: 'Teals & Aquas', families: [
-    { name: 'teal', shades: [[173, 57, 76], [173, 60, 68], [173, 62, 60], [173, 65, 52], [173, 68, 44], [173, 71, 36]] },
-    { name: 'aqua', shades: [[188, 34, 76], [188, 42, 68], [188, 50, 60], [188, 58, 52], [188, 66, 44], [188, 74, 36]] },
-    { name: 'sky', shades: [[200, 72, 76], [200, 72, 68], [200, 72, 60], [200, 72, 52], [200, 72, 44], [200, 72, 36]] },
-  ] },
-  { label: 'Blues & Indigos', families: [
-    { name: 'blue', shades: [[217, 56, 76], [217, 58, 68], [217, 60, 60], [217, 62, 52], [217, 64, 44], [217, 66, 36]] },
-    { name: 'cobalt', shades: [[232, 34, 76], [232, 42, 68], [232, 50, 60], [232, 58, 52], [232, 66, 44], [232, 74, 36]] },
-    { name: 'indigo', shades: [[252, 72, 76], [252, 72, 68], [252, 72, 60], [252, 72, 52], [252, 72, 44], [252, 72, 36]] },
-  ] },
-  { label: 'Neutrals', families: [
-    { name: 'neutral', shades: [[0, 0, 100], [0, 0, 96], [0, 0, 72], [0, 0, 44], [0, 0, 25], [0, 0, 6]] },
-  ] },
-];
-const chipEditorIsActiveShade = (h, s, l, colour) => {
-  if (typeof colour !== 'string') return false;
-  const match = colour.match(/hsl\(\s*([\d.]+)[,\s]+([\d.]+)%?[,\s]+([\d.]+)%?\s*\)/i);
-  if (!match) return false;
-  return Math.abs(h - Number(match[1])) < 1 && Math.abs(s - Number(match[2])) < 2 && Math.abs(l - Number(match[3])) < 2;
-};
-
-// ── Chip editor "Custom" colour mixer helpers (HSB canvas + hue slider) ──
-const chipEditorHexToRgb = (hex) => {
-  const match = hex.replace('#', '').match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
-  return match ? match.slice(1).map((v) => parseInt(v, 16)) : [0, 0, 0];
-};
-const chipEditorRgbToHsb = (r, g, b) => {
-  const rr = r / 255, gg = g / 255, bb = b / 255;
-  const mx = Math.max(rr, gg, bb), mn = Math.min(rr, gg, bb), d = mx - mn;
-  let h = 0;
-  if (d) {
-    if (mx === rr) h = 60 * (((gg - bb) / d) % 6);
-    else if (mx === gg) h = 60 * ((bb - rr) / d + 2);
-    else h = 60 * ((rr - gg) / d + 4);
-  }
-  return { h: ((h % 360) + 360) % 360, s: mx ? d / mx : 0, b: mx };
-};
-const chipEditorHslToHsb = (h, s, l) => {
-  const s01 = s / 100;
-  const l01 = l / 100;
-  const bv = l01 + s01 * Math.min(l01, 1 - l01);
-  return { h, s: bv === 0 ? 0 : 2 * (1 - l01 / bv), b: bv };
-};
-const chipEditorParseToHsb = (colour) => {
-  if (typeof colour !== 'string') return { h: 0, s: 1, b: 1 };
-  const hslMatch = colour.match(/hsl\(\s*([\d.]+)[,\s]+([\d.]+)%?[,\s]+([\d.]+)%?\s*\)/i);
-  if (hslMatch) return chipEditorHslToHsb(Number(hslMatch[1]), Number(hslMatch[2]), Number(hslMatch[3]));
-  if (colour.startsWith('#') && colour.length >= 7) {
-    const [r, g, b] = chipEditorHexToRgb(colour);
-    return chipEditorRgbToHsb(r, g, b);
-  }
-  return { h: 0, s: 1, b: 1 };
-};
-const chipEditorHsbToHex = (h, s, b) => {
-  const i = Math.floor(h / 60) % 6;
-  const f = h / 60 - Math.floor(h / 60);
-  const p = b * (1 - s);
-  const q = b * (1 - f * s);
-  const t = b * (1 - (1 - f) * s);
-  const [r, g, bb] = [[b, t, p], [q, b, p], [p, b, t], [p, q, b], [t, p, b], [b, p, q]][i].map((v) =>
-    Math.round(v * 255)
-  );
-  return '#' + [r, g, bb].map((v) => v.toString(16).padStart(2, '0')).join('');
-};
-
-// Pick black/white text for a chip background by relative luminance.
-function chipContrastColour(colour) {
-  if (typeof document === 'undefined' || !colour) return '#fff';
-  const probe = document.createElement('div');
-  probe.style.color = colour;
-  document.body.appendChild(probe);
-  const match = getComputedStyle(probe).color.match(/\d+/g);
-  document.body.removeChild(probe);
-  if (!match) return '#fff';
-  const [r, g, b] = match.map(Number);
-  return (0.299 * r + 0.587 * g + 0.114 * b) > 170 ? '#000' : '#fff';
-}
 const createProjectChipId = () => {
   chipSequence += 1;
   // Include a timestamp so IDs remain unique even if chipSequence resets
@@ -2419,101 +2315,30 @@ export default function TacticsPage() {
     setColorEditorColor(currentColor || '#c9daf8');
   }, []);
 
-  // ── Unified chip editor sub-view (default / project / custom chips) ──
-  // chipEditor: null | { kind: 'default'|'project'|'custom', id, name, color }
-  const [chipEditor, setChipEditor] = useState(null);
-  const [chipEditorCustomOpen, setChipEditorCustomOpen] = useState(false);
-  const [chipEditorHsb, setChipEditorHsb] = useState({ h: 0, s: 1, b: 1 });
-  const chipEditorSbRef = useRef(null);
-  const chipEditorHueRef = useRef(null);
-  const openChipEditor = useCallback((kind, id, name, color, chipId = null) => {
-    setChipEditor({ kind, id, name: name ?? '', color: color || '#8a7fd6', chipId });
-    setChipEditorCustomOpen(false);
-  }, []);
-  const closeChipEditor = useCallback(() => setChipEditor(null), []);
-  const setChipEditorName = useCallback((value) => {
-    setChipEditor((prev) => (prev ? { ...prev, name: value } : prev));
-  }, []);
-  const setChipEditorColour = useCallback((colour) => {
-    setChipEditor((prev) => (prev ? { ...prev, color: colour } : prev));
-  }, []);
-  const chipEditorEyedropper = useCallback(async () => {
-    if (typeof window === 'undefined' || !('EyeDropper' in window)) return;
-    try {
-      const result = await new window.EyeDropper().open();
-      setChipEditorColour(result.sRGBHex);
-      setChipEditorHsb(chipEditorParseToHsb(result.sRGBHex));
-    } catch {
-      /* cancelled */
-    }
-  }, [setChipEditorColour]);
-  const toggleChipEditorCustom = useCallback(() => {
-    setChipEditorCustomOpen((open) => {
-      const next = !open;
-      if (next) {
-        setChipEditorHsb(chipEditorParseToHsb(chipEditor?.color));
-      }
-      return next;
-    });
-  }, [chipEditor]);
-  const updateChipEditorSb = useCallback((event) => {
-    const canvas = chipEditorSbRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const s = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-    const b = Math.max(0, Math.min(1, 1 - (event.clientY - rect.top) / rect.height));
-    setChipEditorHsb((prev) => {
-      const next = { ...prev, s, b };
-      setChipEditorColour(chipEditorHsbToHex(next.h, next.s, next.b));
-      return next;
-    });
-  }, [setChipEditorColour]);
-  const updateChipEditorHue = useCallback((event) => {
-    const track = chipEditorHueRef.current;
-    if (!track) return;
-    const rect = track.getBoundingClientRect();
-    const h = Math.max(0, Math.min(360, ((event.clientX - rect.left) / rect.width) * 360));
-    setChipEditorHsb((prev) => {
-      const next = { ...prev, h };
-      setChipEditorColour(chipEditorHsbToHex(next.h, next.s, next.b));
-      return next;
-    });
-  }, [setChipEditorColour]);
-  // Redraw the saturation/brightness canvas whenever the mixer is open or hue changes.
-  useEffect(() => {
-    if (!chipEditorCustomOpen) return;
-    const canvas = chipEditorSbRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const { width: w, height: h } = canvas;
-    ctx.fillStyle = `hsl(${chipEditorHsb.h}, 100%, 50%)`;
-    ctx.fillRect(0, 0, w, h);
-    const whiteGradient = ctx.createLinearGradient(0, 0, w, 0);
-    whiteGradient.addColorStop(0, 'rgba(255,255,255,1)');
-    whiteGradient.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = whiteGradient;
-    ctx.fillRect(0, 0, w, h);
-    const blackGradient = ctx.createLinearGradient(0, 0, 0, h);
-    blackGradient.addColorStop(0, 'rgba(0,0,0,0)');
-    blackGradient.addColorStop(1, 'rgba(0,0,0,1)');
-    ctx.fillStyle = blackGradient;
-    ctx.fillRect(0, 0, w, h);
-  }, [chipEditorCustomOpen, chipEditorHsb.h]);
+  // ── Chip editor ──
+  // The editor UI lives in PlanPanel (chip-editor view). Opening dispatches an
+  // event with the target chip definition; the panel sends the result back via
+  // PLAN_PANEL_ACTION_EVENT ('commitChipEditor'), handled below.
+  const openChipEditor = useCallback((kind, id, name, color, chipId = null, isNew = false, targetCell = null) => {
+    window.dispatchEvent(new CustomEvent(PLAN_PANEL_CHIP_EDITOR_EVENT, {
+      detail: { kind, id, name: name ?? '', colour: color || '#8a7fd6', chipId, isNew, targetCell },
+    }));
+    // The editor lives in the side panel — the popover's job is done.
+    closeCellMenu();
+  }, [closeCellMenu]);
   const handleCreateCustomProject = useCallback(() => {
-    customSequenceRef.current += 1;
-    const customId = `custom-${Date.now()}-${customSequenceRef.current}`;
-    const label = `Custom ${customSequenceRef.current}`.toUpperCase();
+    // Nothing is created yet — the editor opens seeded with a draft, and the
+    // custom chip only comes into existence when the user presses Confirm
+    // (see the isNew branch in applyChipEditorCommit). The origin cell rides
+    // along so the confirmed chip lands where the menu was opened.
+    const label = `Custom ${customSequenceRef.current + 1}`.toUpperCase();
     const colour = pickCustomChipColour(customProjects, stagingProjects);
-    const customProject = { id: customId, label, color: colour };
-    const prevCustomProjects = customProjectsRef.current;
-    const nextCustomProjects = [...prevCustomProjects, customProject];
-    executeCommand({
-      execute: () => setCustomProjects(nextCustomProjects),
-      undo: () => setCustomProjects(prevCustomProjects),
-    });
-    // Open the full edit sub-view seeded with the new chip (matches mockup).
-    openChipEditor('custom', customId, label, colour);
-  }, [customProjects, executeCommand, stagingProjects, openChipEditor]);
+    const target = cellMenu ?? selectedCell;
+    const targetCell = target && target.columnIndex != null && target.rowId
+      ? { columnIndex: target.columnIndex, rowId: target.rowId }
+      : null;
+    openChipEditor('custom', null, label, colour, null, true, targetCell);
+  }, [customProjects, stagingProjects, openChipEditor, cellMenu, selectedCell]);
 
   const handlePendingCustomConfirm = useCallback(() => {
     if (!pendingCustomId) return;
@@ -2566,12 +2391,58 @@ export default function TacticsPage() {
     },
     [colorEditorProjectId]
   );
-  const commitChipEditor = useCallback(() => {
-    const editor = chipEditor;
-    if (!editor) return;
+  // Applies a chip-editor result sent back from PlanPanel's editor view.
+  const applyChipEditorCommit = useCallback((payload) => {
+    const editor = payload;
+    if (!editor?.kind || (!editor?.id && !editor?.isNew)) return;
     const label = (editor.name || '').trim();
-    const colour = editor.color;
-    if (editor.kind === 'default') {
+    const colour = editor.colour;
+    if (editor.kind === 'custom' && editor.isNew) {
+      // "+ Add custom" flow — the chip is only created here, on Confirm.
+      customSequenceRef.current += 1;
+      const customId = `custom-${Date.now()}-${customSequenceRef.current}`;
+      const finalLabel = (label || `Custom ${customSequenceRef.current}`).toUpperCase();
+      const prevCustomProjects = customProjectsRef.current;
+      const nextCustomProjects = [...prevCustomProjects, { id: customId, label: finalLabel, color: colour }];
+      // Also place the new chip in the cell the menu was opened from, in the
+      // same command so a single undo removes both the chip and its placement.
+      const target = editor.targetCell;
+      const canPlace =
+        target &&
+        target.rowId &&
+        target.columnIndex != null &&
+        target.columnIndex >= 0 &&
+        target.columnIndex < totalColumnCount &&
+        (target.columnIndex >= DAY_COLUMN_COUNT || Boolean(displayedWeekDays[target.columnIndex]));
+      const prevChips = projectChipsRef.current;
+      let placedChipId = null;
+      let nextChips = prevChips;
+      if (canPlace) {
+        placedChipId = createProjectChipId();
+        nextChips = [
+          ...prevChips,
+          {
+            id: placedChipId,
+            columnIndex: target.columnIndex,
+            dayName: target.columnIndex < DAY_COLUMN_COUNT ? (displayedWeekDays[target.columnIndex] ?? null) : null,
+            startRowId: target.rowId,
+            endRowId: target.rowId,
+            projectId: customId,
+          },
+        ];
+      }
+      executeCommand({
+        execute: () => {
+          setCustomProjects(nextCustomProjects);
+          if (canPlace) setProjectChips(nextChips);
+        },
+        undo: () => {
+          setCustomProjects(prevCustomProjects);
+          if (canPlace) setProjectChips(prevChips);
+        },
+      });
+      if (placedChipId) setSelectedBlockId(placedChipId);
+    } else if (editor.kind === 'default') {
       setDefaultChipOverrides((prev) => ({
         ...prev,
         [editor.id]: { ...(label ? { label } : {}), color: colour },
@@ -2616,8 +2487,7 @@ export default function TacticsPage() {
         }
       }
     }
-    setChipEditor(null);
-  }, [chipEditor, executeCommand, currentYear, stagingProjects]);
+  }, [executeCommand, currentYear, stagingProjects, totalColumnCount, displayedWeekDays, setProjectChips, setSelectedBlockId]);
 
   const handleMenuRenameStart = useCallback((chipId, currentLabel) => {
     setMenuRenamingChipId(chipId);
@@ -2695,53 +2565,72 @@ export default function TacticsPage() {
     }
   }, [cellMenu, closeCellMenu, displayedWeekDays, totalColumnCount]);
   useLayoutEffect(() => {
-    if (!cellMenu) return;
-    if (cellMenu.position?.clamped) return;
+    if (!cellMenu) return undefined;
     const menuNode = cellMenuRef.current;
-    if (!menuNode) return;
+    if (!menuNode) return undefined;
     const VIEWPORT_PADDING = 8;
-    const menuHeight = menuNode.offsetHeight;
-    if (!menuHeight) return;
-    const { position } = cellMenu;
-    if (!position) return;
-    const stickyHeaderBottom = navBarRef.current
-      ? navBarRef.current.getBoundingClientRect().bottom
-      : 0;
-    // Full on-screen vertical range the menu is allowed to occupy.
-    const availableTop = stickyHeaderBottom + VIEWPORT_PADDING;
-    const availableBottom = window.innerHeight - VIEWPORT_PADDING;
-    const availableSpace = availableBottom - availableTop;
-    // If the menu is taller than the entire available viewport, it can never be
-    // fully on screen without its own scroll — fall back to a single contained
-    // scrollbar on the whole popover (rather than letting it spill off-screen).
-    const overflowsViewport = menuHeight > availableSpace;
-    const maxHeight = overflowsViewport ? availableSpace : undefined;
+    // Clamp the menu into the on-screen vertical range. Runs on open AND on
+    // every content resize (a one-shot clamp let later growth — e.g. the
+    // rename row appearing — spill off screen). The original anchor is kept
+    // in position.rawTop so re-clamps always compute from the same anchor.
+    const clamp = () => {
+      const menuHeight = menuNode.offsetHeight;
+      if (!menuHeight) return;
+      setCellMenu((prev) => {
+        if (!prev?.position) return prev;
+        const { position } = prev;
+        const rawTop = position.rawTop ?? position.top;
+        const stickyHeaderBottom = navBarRef.current
+          ? navBarRef.current.getBoundingClientRect().bottom
+          : 0;
+        // Full on-screen vertical range the menu is allowed to occupy.
+        const availableTop = stickyHeaderBottom + VIEWPORT_PADDING;
+        const availableBottom = window.innerHeight - VIEWPORT_PADDING;
+        const availableSpace = availableBottom - availableTop;
+        // If the menu is taller than the entire available viewport, it can never
+        // be fully on screen without its own scroll — fall back to a single
+        // contained scrollbar on the whole popover.
+        const overflowsViewport = menuHeight > availableSpace;
+        const maxHeight = overflowsViewport ? availableSpace : undefined;
 
-    let clampedTop;
-    if (position.openAbove) {
-      // `top` in this mode is the menu's *bottom* edge (anchored via CSS `bottom`).
-      if (overflowsViewport) {
-        clampedTop = availableBottom;
-      } else {
-        const desiredMenuTop = position.top - menuHeight;
-        if (desiredMenuTop < availableTop) {
-          clampedTop = availableTop + menuHeight;
-        } else if (position.top > availableBottom) {
-          clampedTop = availableBottom;
+        let clampedTop;
+        if (position.openAbove) {
+          // `top` in this mode is the menu's *bottom* edge (anchored via CSS `bottom`).
+          if (overflowsViewport) {
+            clampedTop = availableBottom;
+          } else {
+            const desiredMenuTop = rawTop - menuHeight;
+            if (desiredMenuTop < availableTop) {
+              clampedTop = availableTop + menuHeight;
+            } else if (rawTop > availableBottom) {
+              clampedTop = availableBottom;
+            } else {
+              clampedTop = rawTop;
+            }
+          }
+        } else if (overflowsViewport) {
+          clampedTop = availableTop;
         } else {
-          clampedTop = position.top;
+          clampedTop = Math.min(Math.max(rawTop, availableTop), availableBottom - menuHeight);
         }
-      }
-    } else if (overflowsViewport) {
-      clampedTop = availableTop;
-    } else {
-      clampedTop = Math.min(Math.max(position.top, availableTop), availableBottom - menuHeight);
-    }
 
-    setCellMenu((prev) =>
-      prev ? { ...prev, position: { ...prev.position, top: clampedTop, maxHeight, clamped: true } } : prev
-    );
-  }, [cellMenu]);
+        // No-op if nothing changed (keeps the resize loop stable).
+        if (
+          position.top === clampedTop &&
+          position.maxHeight === maxHeight &&
+          position.rawTop === rawTop
+        ) {
+          return prev;
+        }
+        return { ...prev, position: { ...position, rawTop, top: clampedTop, maxHeight } };
+      });
+    };
+    clamp();
+    const ro = new ResizeObserver(clamp);
+    ro.observe(menuNode);
+    return () => ro.disconnect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cellMenu?.rowId, cellMenu?.columnIndex]);
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.defaultPrevented) return;
@@ -3756,6 +3645,7 @@ export default function TacticsPage() {
       if (action === 'undo') { undo(); return; }
       if (action === 'redo') { redo(); return; }
       if (action === 'sendToSystem') { handleSendToSystem(); return; }
+      if (action === 'commitChipEditor') { applyChipEditorCommit(e.detail); return; }
 
       // ── Chip-specific actions ──────────────────────────────────────────────
 
@@ -3901,7 +3791,7 @@ export default function TacticsPage() {
     };
     window.addEventListener(PLAN_PANEL_ACTION_EVENT, handler);
     return () => window.removeEventListener(PLAN_PANEL_ACTION_EVENT, handler);
-  }, [undo, redo, handleToggleChipDisplayFlag, handleSendToSystem, executeCommand, minutesToNearestRowId, handleRemoveSelectedChip, handleProjectSelection]);
+  }, [undo, redo, handleToggleChipDisplayFlag, handleSendToSystem, executeCommand, minutesToNearestRowId, handleRemoveSelectedChip, handleProjectSelection, applyChipEditorCommit]);
 
   // Broadcast selected chip data to PlanPanel whenever selection changes.
   // Fires with chip: null on deselect so the panel reverts to the default view.
@@ -4680,170 +4570,6 @@ export default function TacticsPage() {
           ...(position?.maxHeight ? { maxHeight: position.maxHeight } : {}),
         }}
       >
-        {chipEditor ? (
-        /* ════════════════ EDIT SUB-VIEW ════════════════ */
-        <div onClick={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            style={{ display:'flex', alignItems:'center', gap:7, width:'100%', padding:'10px 12px 8px', background:'none', border:'none', cursor:'pointer', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:'calc(13px * var(--pz))', color:'var(--brand-ink)', textAlign:'left', transition:'color .15s' }}
-            onMouseEnter={e=>e.currentTarget.style.color='var(--brand-deep)'}
-            onMouseLeave={e=>e.currentTarget.style.color='var(--brand-ink)'}
-            onClick={closeChipEditor}
-          >
-            <svg width="7" height="11" viewBox="0 0 7 11" fill="none"><path d="M6 1L1 5.5 6 10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            <span>Back</span>
-          </button>
-          <div style={{ height:1, background:'rgba(200,174,198,0.35)', margin:'0 0 4px' }} />
-          <div className="px-3 pb-3">
-            <div
-              style={{ marginBottom:10, display:'flex', width:'100%', alignItems:'center', justifyContent:'center', borderRadius:4, padding:'8px 12px', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:'calc(11px * var(--pz))', fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', minHeight:32, background: chipEditor.color, color: chipContrastColour(chipEditor.color) }}
-            >
-              {chipEditor.name || ' '}
-            </div>
-
-            <div style={{ fontSize:'calc(9px * var(--pz))', fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', paddingBottom:3, marginBottom:6 }}>Name</div>
-            <input
-              type="text"
-              autoFocus
-              value={chipEditor.name}
-              onChange={(e) => setChipEditorName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.preventDefault(); commitChipEditor(); }
-                else if (e.key === 'Escape') { e.preventDefault(); closeChipEditor(); }
-              }}
-              style={{ width:'100%', border:'1px solid #e8e8e4', borderRadius:4, padding:'5px 8px', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:'calc(11px * var(--pz))', fontWeight:700, textTransform:'uppercase', color:'#1A1A1A', outline:'none', boxSizing:'border-box', background:'#fff', marginBottom:10, transition:'border-color .15s' }}
-              onFocus={e=>e.target.style.borderColor='var(--brand)'}
-              onBlur={e=>e.target.style.borderColor='#e8e8e4'}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
-            />
-
-            <div style={{ fontSize:'calc(9px * var(--pz))', fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', paddingBottom:3, marginBottom:6 }}>Colour</div>
-            <div style={{ marginBottom:8 }} onClick={(e) => e.stopPropagation()}>
-              {CHIP_EDITOR_GROUPS.map(({ label: groupLabel, families }) => (
-                <div key={groupLabel} style={{ marginBottom:4 }}>
-                  <div style={{ fontSize:'calc(8px * var(--pz))', fontWeight:700, letterSpacing:'.1em', textTransform:'uppercase', color:'var(--brand-ink)', marginBottom:3, fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" }}>{groupLabel}</div>
-                  {families.map(({ name: familyName, shades }) => (
-                    <div key={familyName} style={{ display:'flex', gap:2, marginBottom:2 }}>
-                      {shades.map(([h, s, l], idx) => {
-                        const bg = `hsl(${h}, ${s}%, ${l}%)`;
-                        const isActive = chipEditorIsActiveShade(h, s, l, chipEditor.color);
-                        const pale = l >= 95 ? { border: `1px solid ${isActive ? 'rgba(255,255,255,0.6)' : '#d0d0d0'}` } : {};
-                        return (
-                          <button
-                            key={idx}
-                            type="button"
-                            title={`${familyName} ${idx + 1}`}
-                            onClick={() => setChipEditorColour(bg)}
-                            style={{ flex:1, height:14, border: isActive ? '1.5px solid #fff' : '1px solid transparent', borderRadius:1, background:bg, cursor:'pointer', padding:0, position:'relative', boxShadow: isActive ? '0 0 0 1.5px #1a1a1a' : 'none', transition:'transform .08s', ...pale }}
-                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.12)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                          >
-                            {isActive && (
-                              <span style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
-                                <svg width="7" height="6" viewBox="0 0 9 7" fill="none"><path d="M1 3.5l2 2L8 1" stroke={l < 50 ? 'rgba(255,255,255,0.95)' : 'rgba(0,0,0,0.7)'} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-
-            {/* ── Custom colour mixer ─────────────────────────────── */}
-            <div style={{ borderTop:'1px solid var(--brand-bd)', paddingTop:8 }} onClick={(e) => e.stopPropagation()}>
-              <div style={{ fontSize:'calc(8px * var(--pz))', fontWeight:700, letterSpacing:'.1em', textTransform:'uppercase', color:'var(--brand-ink)', marginBottom:3, fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" }}>Custom</div>
-              <div style={{ display:'flex', gap:2 }}>
-                <button
-                  type="button"
-                  title="Pick colour from screen"
-                  onClick={chipEditorEyedropper}
-                  style={{ width:24, height:22, borderRadius:2, display:'flex', alignItems:'center', justifyContent:'center', background:'#f7f7f5', border:'1px solid #e0e0e0', cursor:'pointer', color:'#b0b0b0', flexShrink:0, transition:'color .15s,border-color .15s,background .15s' }}
-                  onMouseEnter={e=>{ e.currentTarget.style.color='#333'; e.currentTarget.style.borderColor='#aaa'; e.currentTarget.style.background='#ececea'; }}
-                  onMouseLeave={e=>{ e.currentTarget.style.color='#b0b0b0'; e.currentTarget.style.borderColor='#e0e0e0'; e.currentTarget.style.background='#f7f7f5'; }}
-                >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/>
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  title="Mix a custom colour"
-                  onClick={toggleChipEditorCustom}
-                  style={{ width:24, height:22, borderRadius:2, display:'flex', alignItems:'center', justifyContent:'center', background: chipEditorCustomOpen ? 'var(--brand-hover-bg)' : '#f7f7f5', border: chipEditorCustomOpen ? '1px solid var(--brand-hover-bd)' : '1px solid #e0e0e0', cursor:'pointer', color: chipEditorCustomOpen ? 'var(--brand-ink)' : '#b0b0b0', flexShrink:0, transition:'color .15s,border-color .15s,background .15s' }}
-                  onMouseEnter={e=>{ if(!chipEditorCustomOpen){ e.currentTarget.style.color='#333'; e.currentTarget.style.borderColor='#aaa'; e.currentTarget.style.background='#ececea'; } }}
-                  onMouseLeave={e=>{ if(!chipEditorCustomOpen){ e.currentTarget.style.color='#b0b0b0'; e.currentTarget.style.borderColor='#e0e0e0'; e.currentTarget.style.background='#f7f7f5'; } }}
-                >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M19 11l-8-8-8.5 8.5a5.5 5.5 0 007.78 7.78L19 11z"/><path d="M20 23a2 2 0 001.4-3.4L16 14"/><line x1="3.5" y1="11.5" x2="13" y2="2"/>
-                  </svg>
-                </button>
-              </div>
-
-              {chipEditorCustomOpen ? (
-                <>
-                  <div
-                    style={{ position:'relative', borderRadius:4, overflow:'hidden', cursor:'crosshair', touchAction:'none', marginTop:8 }}
-                    onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); updateChipEditorSb(e); }}
-                    onPointerMove={(e) => { if (e.buttons) updateChipEditorSb(e); }}
-                  >
-                    <canvas ref={chipEditorSbRef} width={220} height={96} style={{ display:'block', width:'100%', height:96 }} />
-                    <div
-                      style={{
-                        position:'absolute',
-                        left:`${chipEditorHsb.s * 100}%`,
-                        top:`${(1 - chipEditorHsb.b) * 100}%`,
-                        transform:'translate(-50%,-50%)',
-                        width:10, height:10, borderRadius:'50%',
-                        border:'2px solid #fff',
-                        boxShadow:'0 0 0 1px rgba(0,0,0,.3)',
-                        pointerEvents:'none',
-                        background: chipEditor.color,
-                      }}
-                    />
-                  </div>
-                  <div
-                    ref={chipEditorHueRef}
-                    style={{ height:10, borderRadius:5, cursor:'pointer', position:'relative', touchAction:'none', marginTop:8, background:'linear-gradient(to right,#f00 0%,#ff0 17%,#0f0 33%,#0ff 50%,#00f 67%,#f0f 83%,#f00 100%)' }}
-                    onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); updateChipEditorHue(e); }}
-                    onPointerMove={(e) => { if (e.buttons) updateChipEditorHue(e); }}
-                  >
-                    <div
-                      style={{
-                        position:'absolute',
-                        left:`${(chipEditorHsb.h / 360) * 100}%`,
-                        top:'50%',
-                        transform:'translate(-50%,-50%)',
-                        width:16, height:16, borderRadius:'50%',
-                        background:`hsl(${chipEditorHsb.h},100%,50%)`,
-                        border:'2.5px solid #fff',
-                        boxShadow:'0 0 0 1px rgba(0,0,0,.2)',
-                        pointerEvents:'none',
-                        boxSizing:'border-box',
-                      }}
-                    />
-                  </div>
-                </>
-              ) : null}
-            </div>
-
-            <button
-              type="button"
-              title="Confirm"
-              onClick={commitChipEditor}
-              style={{ marginTop:10, width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'7px 0', background:'var(--brand-deep)', color:'#fff', border:'1px solid var(--brand-deep)', borderRadius:4, cursor:'pointer', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:'calc(11px * var(--pz))', fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', transition:'opacity .1s' }}
-              onMouseEnter={e=>e.currentTarget.style.opacity='0.85'}
-              onMouseLeave={e=>e.currentTarget.style.opacity='1'}
-            >
-              <svg width="11" height="9" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              Confirm
-            </button>
-          </div>
-        </div>
-        ) : (
         <>
         {/* ── Default chips section (top) ───────────────────────── */}
         <div style={{ fontSize:'calc(9px * var(--pz))', fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--brand-ink)', fontFamily:"'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace", borderBottom:'1px solid var(--brand-bd)', padding:'10px 12px 5px', marginBottom:4 }}>
@@ -5029,7 +4755,6 @@ export default function TacticsPage() {
           </button>
         </div>
         </>
-        )}
       </div>
     );
   }, [
@@ -5049,19 +4774,10 @@ export default function TacticsPage() {
     setMenuRenamingLabel,
     scheduleLayout,
     projectMetadata,
-    chipEditor,
-    chipEditorCustomOpen,
-    chipEditorHsb,
     openChipEditor,
-    closeChipEditor,
-    setChipEditorName,
-    setChipEditorColour,
-    chipEditorEyedropper,
-    toggleChipEditorCustom,
-    updateChipEditorSb,
-    updateChipEditorHue,
-    commitChipEditor,
   ]);
+
+
 
   // Sync sticky header horizontal scroll with table container
   useEffect(() => {
