@@ -17,12 +17,6 @@ const PAGE_CONFIG = {
   '/': { id: 'system', name: 'System' },
 };
 
-const DRAFT_NAV_ITEMS = [
-  { label: 'Goal', path: '/staging' },
-  { label: 'Plan', path: '/tactics' },
-  { label: 'System', path: '/' },
-];
-
 // Nav background: grid + gradient orbs, seamlessly continues the page background
 // Function, not a module const: the grid SVG layer bakes in the resolved
 // theme colour, so it must recompute per render (useThemeVersion).
@@ -53,7 +47,7 @@ export default function NavigationBar({
   const location = useLocation();
   const currentPath = location.pathname;
   const { logout, user } = useAuth();
-  const { draftYear, currentYear, switchToYear, isCurrentYearArchived } = useYear();
+  const { draftYear, currentYear, activeYear, switchToYear, isCurrentYearArchived } = useYear();
 
   const currentPageConfig = useMemo(() => {
     return PAGE_CONFIG[currentPath] || { id: 'global', name: 'Page' };
@@ -80,10 +74,16 @@ export default function NavigationBar({
     navigate('/login');
   };
 
-  const handleDraftNav = (path) => {
+  const isViewingDraft = draftYear && currentYear === draftYear.yearNumber;
+
+  const handleDraftToggle = () => {
     if (!draftYear) return;
-    switchToYear(draftYear.yearNumber);
-    navigate(path);
+    if (isViewingDraft) {
+      // Switch back to the active year, stay on the same page
+      if (activeYear) switchToYear(activeYear.yearNumber);
+    } else {
+      switchToYear(draftYear.yearNumber);
+    }
   };
 
   const handlePanelToggle = () => {
@@ -143,41 +143,35 @@ export default function NavigationBar({
 
         {actionButton || null}
 
-        {/* Draft year nav — only when a draft exists */}
-        {draftYear && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 1, height: 20, background: 'color-mix(in srgb, var(--th-68) 40%, transparent)' }} />
-            <span style={{
-              fontSize: 10, fontWeight: 700,
-              letterSpacing: '0.12em', textTransform: 'uppercase',
-              color: '#7c3aed', fontFamily: "'IBM Plex Mono',monospace",
-            }}>
-              Y{draftYear.yearNumber}
-            </span>
-            {DRAFT_NAV_ITEMS.map((item) => {
-              const isActive = currentPath === item.path && currentYear === draftYear?.yearNumber;
-              return (
-                <button
-                  key={`draft-${item.path}`}
-                  type="button"
-                  onClick={() => handleDraftNav(item.path)}
-                  style={{
-                    fontFamily: FONT,
-                    fontSize: 13, fontWeight: 600,
-                    padding: '7px 18px',
-                    borderRadius: '999px',
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: isActive ? '#6d28d9' : 'transparent',
-                    color: isActive ? '#fff' : '#7c3aed',
-                    transition: 'background 0.15s, color 0.15s',
-                  }}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
+        {/* Draft pill — only when a draft exists; toggles between draft and active year */}
+        {user && draftYear && (
+          <button
+            type="button"
+            onClick={handleDraftToggle}
+            title={isViewingDraft ? `Back to Year ${activeYear?.yearNumber ?? ''}` : `View draft Year ${draftYear.yearNumber}`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              alignSelf: 'stretch',
+              fontFamily: FONT,
+              fontSize: 13, fontWeight: 600,
+              padding: '4px 16px',
+              borderRadius: '999px',
+              border: 'none',
+              cursor: 'pointer',
+              background: isViewingDraft
+                ? 'color-mix(in srgb, var(--th-sel) 78%, black)'
+                : 'var(--th-sel)',
+              color: '#ffffff',
+              boxShadow: isViewingDraft
+                ? 'inset 0 0 0 2px rgba(255,255,255,0.55), 0 1px 3px rgba(0,0,0,0.06)'
+                : '0 1px 3px rgba(0,0,0,0.06)',
+              transition: 'background 0.15s, box-shadow 0.15s',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {isViewingDraft ? 'Viewing Draft Year' : 'Open Draft Year'}
+          </button>
         )}
 
         {/* Eclipse pill: year label + tab buttons */}
@@ -207,7 +201,7 @@ export default function NavigationBar({
               padding: 4,
             }}>
               {navItems.map((item) => {
-                const isActive = currentPath === item.path && currentYear !== draftYear?.yearNumber;
+                const isActive = currentPath === item.path;
                 return (
                   <button
                     key={item.path}
