@@ -240,6 +240,15 @@ function EstimateDropdownCell({
     }
   }, [isOpen, rowHeight, multiMode]);
 
+  // Whenever the panel opens, make sure the trigger owns keyboard focus. On
+  // the System page the cell mounts already open (autoOpen) with focus left
+  // on <body>, so Enter / Escape never reached the wrapper's onKeyDown.
+  useEffect(() => {
+    if (isOpen && buttonRef.current && document.activeElement !== buttonRef.current) {
+      buttonRef.current.focus({ preventScroll: true });
+    }
+  }, [isOpen]);
+
   // Multi mode: keep the panel and the row's day cells in step, same rules
   // as MultiStatusDropdownCell.
   // 1) If the selection moves to another of this row's instance cells while
