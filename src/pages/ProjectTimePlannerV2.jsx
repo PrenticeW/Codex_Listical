@@ -460,6 +460,12 @@ export default function ProjectTimePlannerV2() {
       skipNextAutoSaveRef.current = false;
       return;
     }
+    // Stamp the edit NOW, not when the debounced save fires. The realtime
+    // refetch guard used to key only off save initiation, which left a
+    // ~500ms (+ fetch latency) hole right after an edit where an already
+    // scheduled refetch could land with pre-edit rows and silently revert
+    // the change — the "first attempt gets undone" bug.
+    lastSaveInitiatedRef.current = Date.now();
     const timeoutId = setTimeout(() => {
       lastSaveInitiatedRef.current = Date.now();
       setTaskRows(data);
