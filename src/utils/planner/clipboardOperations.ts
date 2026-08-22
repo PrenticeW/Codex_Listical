@@ -433,45 +433,59 @@ export const handlePasteOperation = (params: {
     }
   }
 
-  // CELL PASTE MODE: Continue with cell paste logic
-  // Check if it's a single cell value (no tabs or newlines)
-  const isSingleCell = !pastedText.includes('\t') && !pastedText.includes('\n');
+  // CELL PASTE MODE
+  // Parse the clipboard as a TSV grid (a trailing newline must not add an
+  // empty row, which would otherwise wipe the row below the paste range).
+  const grid = pastedText
+    .replace(/\r\n?/g, '\n')
+    .replace(/\n$/, '')
+    .split('\n')
+    .map(row => row.split('\t'));
+  const gridRows = grid.length;
+  const gridCols = Math.max(...grid.map(r => r.length));
+  const isSingleCell = gridRows === 1 && gridCols === 1;
 
-  // Get the anchor cell (first selected cell)
-  const firstCellKey = Array.from(selectedCells)[0];
-  const [anchorRowId, anchorColumnId] = firstCellKey.split('|');
+  // Selection bounds — the paste anchors at the TOP-LEFT of the selection,
+  // not whichever cell happened to be selected first.
+  const cells = Array.from(selectedCells)
+    .map(key => {
+      const [rowId, columnId] = key.split('|');
+      return { rowIndex: data.findIndex(r => r.id === rowId), colIndex: allColumnIds.indexOf(columnId) };
+    })
+    .filter(c => c.rowIndex !== -1 && c.colIndex !== -1);
+  if (cells.length === 0) return null;
+  const minRow = Math.min(...cells.map(c => c.rowIndex));
+  const maxRow = Math.max(...cells.map(c => c.rowIndex));
+  const minCol = Math.min(...cells.map(c => c.colIndex));
+  const maxCol = Math.max(...cells.map(c => c.colIndex));
+  const anchorRowIndex = minRow;
+  const anchorColIndex = minCol;
 
-  if (anchorColumnId === 'rowNum') return null; // Don't paste into row number column
+  if (allColumnIds[anchorColIndex] === 'rowNum') return null; // Don't paste into row number column
 
-  // SINGLE CELL SELECTED: Always paste as a single value, collapsing newlines to spaces
-  if (selectedCells.size === 1) {
+  // SINGLE VALUE → fill every selected cell with it (single or multi select).
+  if (isSingleCell) {
     const flattenedText = pastedText.replace(/[\r\n]+/g, ' ').trim();
     const copiedFromTimeValue = lastCopiedColumns.length === 1 &&
                                  lastCopiedColumns[0] === 'timeValue';
-
     return createCellFillCommand({ pastedText: flattenedText, selectedCells, data, copiedFromTimeValue, setData });
   }
 
-  // FILL MODE: Copy one value to all selected cells
-  if (isSingleCell && selectedCells.size > 1) {
-    // Check if the copied data came from timeValue column
-    const copiedFromTimeValue = lastCopiedColumns.length === 1 &&
-                                 lastCopiedColumns[0] === 'timeValue';
-
-    return createCellFillCommand({ pastedText, selectedCells, data, copiedFromTimeValue, setData });
-  }
-
-  // RANGE MODE: Paste TSV grid starting from anchor cell
-  // Parse TSV data
-  const rows = pastedText.split('\n').map(row => row.split('\t'));
-
-  // Find the anchor row index and column index
-  const anchorRowIndex = data.findIndex(r => r.id === anchorRowId);
-
-  // Get column index from allColumnIds
-  const anchorColIndex = allColumnIds.indexOf(anchorColumnId);
-
-  if (anchorRowIndex === -1 || anchorColIndex === -1) return null;
+  // GRID PASTE (Google Sheets rules):
+  //  - one cell selected → the grid spreads out from that cell
+  //  - a selection whose height and width are whole multiples of the grid →
+  //    the grid is tiled to fill the whole selection (e.g. a copied
+  //    Estimate+Value pair pasted into 6 selected rows fills all 6)
+  //  - any other selection → pasted once from the selection's top-left
+  const selRows = maxRow - minRow + 1;
+  const selCols = maxCol - minCol + 1;
+  const shouldTile = selectedCells.size > 1
+    && selRows % gridRows === 0
+    && selCols % gridCols === 0;
+  const rows: string[][] = shouldTile
+    ? Array.from({ length: selRows }, (_, r) =>
+        Array.from({ length: selCols }, (_, c) => grid[r % gridRows][c % gridCols] ?? ''))
+    : grid;
 
   // Check if we're pasting from timeValue column(s)
   const copiedFromTimeValue = lastCopiedColumns.includes('timeValue');
