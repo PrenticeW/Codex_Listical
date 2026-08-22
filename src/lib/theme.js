@@ -13,8 +13,41 @@
  */
 
 import { PALETTE } from '../utils/staging/projectColour';
+import { JUNE_GROUPS } from '../constants/palettePickerGroups';
 
 export const DEFAULT_THEME_FAMILY = 'blue';
+
+// ── Theme keys ──────────────────────────────────────────────────────────
+// A theme key is either a legacy PALETTE family name ('blue') or any
+// picked main colour as a normalised `hsl(h, s%, l%)` string. For a colour
+// key the four steps are extrapolated from the picked colour (see
+// stepsForColour), so every swatch in the picker is its own theme.
+
+const HSL_RE = /^hsl\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)%\s*,\s*(\d+(?:\.\d+)?)%\s*\)$/i;
+
+export function parseThemeColour(key) {
+  if (typeof key !== 'string') return null;
+  const m = key.trim().match(HSL_RE);
+  if (!m) return null;
+  const h = ((Math.round(Number(m[1])) % 360) + 360) % 360;
+  return { h, s: Math.round(Number(m[2])), l: Math.round(Number(m[3])) };
+}
+
+export const isThemeColour = (key) => parseThemeColour(key) !== null;
+
+/** True for any value the theme engine can apply and persist. */
+export function isValidThemeKey(key) {
+  return THEME_FAMILIES.includes(key) || isThemeColour(key);
+}
+
+const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+
+// The picked colour is the main (L60-role) step; the other three are
+// lightness offsets from it, matching the palette's 8-point spacing.
+function stepsForColour({ h, s, l }) {
+  const at = (dl) => ({ h, s, l: clamp(l + dl, 6, 94) });
+  return { 68: at(8), 60: at(0), 52: at(-8), 44: at(-16) };
+}
 
 // The 30 family names, in palette order. PALETTE stores 'chartr.' with a
 // trailing dot; that raw name is what we persist and match on.
@@ -39,13 +72,48 @@ const SEL_FAMILY = {
 const hslStr = ({ h, s, l }) => `hsl(${h}, ${s}%, ${l}%)`;
 
 function familyStep(family, l) {
+  const colour = parseThemeColour(family);
+  if (colour) return stepsForColour(colour)[l] || null;
   return PALETTE.find((p) => p.name === family && p.l === l) || null;
 }
 
-/** Human-readable family name for display ("chartr." → "Chartreuse"). */
+// Nearest PALETTE family by hue — used to pick an approved selection
+// colour and a display name for an arbitrary picked colour.
+function nearestFamilyByHue(h, s) {
+  if (s < 8) return DEFAULT_THEME_FAMILY;
+  let best = DEFAULT_THEME_FAMILY;
+  let bestDist = Infinity;
+  for (const entry of PALETTE) {
+    if (entry.l !== 52) continue;
+    const d = Math.min(Math.abs(entry.h - h), 360 - Math.abs(entry.h - h));
+    if (d < bestDist) { bestDist = d; best = entry.name; }
+  }
+  return best;
+}
+
+// The June picker family name a colour key came from, or null if it is
+// not a picker swatch.
+function juneFamilyFor({ h, s, l }) {
+  for (const { families } of JUNE_GROUPS) {
+    for (const { name, shades } of families) {
+      if (shades.some(([sh, ss, sl]) => sh === h && ss === s && sl === l)) return name;
+    }
+  }
+  return null;
+}
+
+const capitalise = (w) => w.charAt(0).toUpperCase() + w.slice(1);
+
+/** Human-readable name for display ("chartr." → "Chartreuse"; colour keys use their picker family name). */
 export function familyDisplayName(family) {
+  const colour = parseThemeColour(family);
+  if (colour) {
+    const june = juneFamilyFor(colour);
+    if (june) return capitalise(june);
+    return familyDisplayName(nearestFamilyByHue(colour.h, colour.s));
+  }
   if (family === 'chartr.') return 'Chartreuse';
-  return family.charAt(0).toUpperCase() + family.slice(1);
+  return capitalise(family);
 }
 
 /** CSS colour for a family step, e.g. themeSwatch('blue', 60). */
@@ -63,7 +131,9 @@ export function themeSwatch(family, l = 60) {
 export function themeVarsForFamily(family) {
   const steps = [68, 60, 52, 44].map((l) => familyStep(family, l));
   if (steps.some((s) => !s)) return null;
-  const sel = SEL_FAMILY[family] || 'orange';
+  const colour = parseThemeColour(family);
+  const selKey = colour ? nearestFamilyByHue(colour.h, colour.s) : family;
+  const sel = SEL_FAMILY[selKey] || 'orange';
   const selRing = sel.startsWith('#') ? sel : hslStr(familyStep(sel, 52));
   const selBase = sel.startsWith('#') ? sel : hslStr(familyStep(sel, 60));
   const [s68, s60, , s44] = steps.map(hslStr);
@@ -125,6 +195,31 @@ function cssToRgb(colour) {
   const hex = ctx.fillStyle; // normalised #rrggbb
   if (typeof hex !== 'string' || hex[0] !== '#') return null;
   return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+}
+
+/**
+ * Normalise any CSS colour (hex, rgb, hsl) to a theme key — an
+ * `hsl(h, s%, l%)` string — so it can be applied and persisted as a
+ * main colour. Returns the default family if the colour cannot be parsed.
+ */
+export function colourToThemeKey(colour) {
+  const direct = parseThemeColour(colour);
+  if (direct) return hslStr(direct);
+  const rgb = cssToRgb(colour);
+  if (!rgb) return DEFAULT_THEME_FAMILY;
+  const [r, g, b] = rgb.map((v) => v / 255);
+  const max = Math.max(r, g, b); const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0; let sat = 0;
+  if (max !== min) {
+    const d = max - min;
+    sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0));
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+  }
+  return hslStr({ h: Math.round(h), s: Math.round(sat * 100), l: Math.round(l * 100) });
 }
 
 /**

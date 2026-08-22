@@ -39,7 +39,7 @@ import {
 } from '../lib/tacticsStorage';
 import { JUNE_GROUPS } from '../constants/palettePickerGroups';
 import { ColourPicker as ColourMixer } from './GoalPanel';
-import { applyThemeFamily, colourToFamily, familyDisplayName, themeSwatch, DEFAULT_THEME_FAMILY } from '../lib/theme';
+import { applyThemeFamily, colourToThemeKey, familyDisplayName, themeSwatch, DEFAULT_THEME_FAMILY } from '../lib/theme';
 import { loadThemeFamily, saveThemeFamily } from '../lib/themeStorage';
 import { downloadDataExport } from '../lib/api/dataExport';
 
@@ -997,12 +997,12 @@ function AppearanceSection({ themeFamily, onShowTheme }) {
 
 // Theme picker sub-view — the Goal page colour picker panel (ColourView
 // in GoalPanel.jsx), reusing its exact palette (JUNE_GROUPS) and bento
-// treatment. A picked shade resolves to one of the 30 theme families on
-// Confirm — exact swatch match first, else nearest by RGB distance to
-// each family's L52 step (colourToFamily). Clicking a shade previews the
-// resolved theme live across the app; Confirm persists it, and leaving
+// treatment. Any picked shade becomes the theme's main colour and the
+// remaining steps are extrapolated from it (see theme.js). Saved family
+// names from before this change still apply as before. Clicking a shade
+// previews the theme live across the app; Confirm persists it, and leaving
 // the view (Back or panel close) without confirming reverts to the saved
-// family. No Neutrals card (a theme must be a hue family).
+// theme. No Neutrals card (a theme must be a hue).
 
 const hslStr = ([h, s, l]) => `hsl(${h}, ${s}%, ${l}%)`;
 
@@ -1074,10 +1074,12 @@ function ThemeView({ themeFamily, isActive, onBack, onCommit }) {
   // Reset staged colour whenever the committed family changes
   useEffect(() => { setPending(null); }, [themeFamily]);
 
-  // Stage a colour and preview its resolved theme live
+  // Stage a colour as the main theme colour and preview it live. The
+  // picked colour IS the theme key; the other steps are extrapolated.
   const stage = (colour) => {
-    setPending(colour);
-    applyThemeFamily(colourToFamily(colour));
+    const key = colourToThemeKey(colour);
+    setPending(key);
+    applyThemeFamily(key);
   };
 
   // Leaving the view (Back or panel close) without confirming reverts
@@ -1093,7 +1095,7 @@ function ThemeView({ themeFamily, isActive, onBack, onCommit }) {
 
   const currentSwatch = themeSwatch(themeFamily, 60);
   const selectedColour = pending ?? currentSwatch;
-  const pendingFamily = pending ? colourToFamily(pending) : themeFamily;
+  const pendingFamily = pending ?? themeFamily;
 
   const handleEyedropper = async () => {
     if (!('EyeDropper' in window)) return;

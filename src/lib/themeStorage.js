@@ -22,7 +22,7 @@
  */
 
 import { supabase } from './supabase';
-import { DEFAULT_THEME_FAMILY, THEME_FAMILIES } from './theme';
+import { DEFAULT_THEME_FAMILY, isValidThemeKey } from './theme';
 
 export const THEME_UPDATE_EVENT = 'theme-state-update';
 
@@ -45,7 +45,7 @@ function cacheThemeFamily(family) {
 export function peekThemeFamily() {
   try {
     const family = localStorage.getItem(THEME_CACHE_KEY);
-    return THEME_FAMILIES.includes(family) ? family : null;
+    return isValidThemeKey(family) ? family : null;
   } catch {
     return null;
   }
@@ -74,7 +74,7 @@ export async function loadThemeFamily() {
       .single();
     if (error) throw error;
     const family = data?.theme_family;
-    const resolved = THEME_FAMILIES.includes(family) ? family : DEFAULT_THEME_FAMILY;
+    const resolved = isValidThemeKey(family) ? family : DEFAULT_THEME_FAMILY;
     cacheThemeFamily(resolved);
     return resolved;
   } catch {
@@ -85,11 +85,11 @@ export async function loadThemeFamily() {
 /**
  * Save the theme family for the signed-in user and broadcast
  * `theme-state-update`.
- * @param {string} family — one of THEME_FAMILIES
+ * @param {string} family — a theme key (family name or hsl colour string)
  * @returns {Promise<void>}
  */
 export async function saveThemeFamily(family) {
-  if (!THEME_FAMILIES.includes(family)) {
+  if (!isValidThemeKey(family)) {
     throw new Error(`Unknown theme family: ${family}`);
   }
   const userId = await requireUserId();
