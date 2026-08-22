@@ -25,7 +25,7 @@ import { loadStagingState, saveSystemOrder } from '../lib/stagingStorage';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import { revertArchive } from '../utils/planner/revertArchive';
-import { importTasksForDraftYear } from '../utils/planner/importTasksFromYear';
+import { importTasksForDraftYear, hasImportedTasks } from '../utils/planner/importTasksFromYear';
 import { placeImportedTasks } from '../utils/planner/placeImportedTasks';
 import { isEditableRow } from '../utils/planner/rowTypeChecks';
 import { groupChips, chipGroupKey, chipDisplayName } from '../utils/planner/chipGroups';
@@ -716,17 +716,31 @@ export default function ProjectTimePlannerV2() {
   const { projects, subprojects, projectSubprojectsMap, projectNamesMap, projectTaglinesMap, projectIdByNickname, projectInfoById, isProjectsLoaded, hasSystemOrder } = useProjectsData();
 
   // Import tasks from active year into draft (single action, no wizard)
+  //
+  // Placement has to happen AFTER the project structure rows exist, but the
+  // header-injection effect below is gated on the draft already having tasks.
+  // So the handler parks the prepared tasks in pendingImportRef and bumps
+  // importTick; the header effect re-runs, opens its gate because a pending
+  // import exists, injects headers, then places the pending tasks in the same
+  // state update so matched tasks land under their project's Unscheduled row.
+  const pendingImportRef = useRef(null);
+  // Set by the header effect once it has consumed a pending import, so the
+  // chip effect (which runs next in the same pass, before latestDataRef can
+  // reflect the queued update) knows to open its gate too.
+  const importInFlightRef = useRef(false);
+  const [importTick, setImportTick] = useState(0);
   const handleImportTasks = useCallback(async () => {
     if (!activeYear) return;
     try {
-      const sourceRows = await readTaskRows('project-1', activeYear.yearNumber);
+      const sourceRows = await readTaskRows(DEFAULT_PROJECT_ID, activeYear.yearNumber);
       const draftNicknames = projects.filter((p) => p !== '-');
-      const imported = importTasksForDraftYear(sourceRows, draftNicknames, projectSubprojectsMap);
-      setData((prev) => placeImportedTasks(prev, imported));
+      const imported = importTasksForDraftYear(sourceRows, draftNicknames, projectSubprojectsMap, projectIdByNickname);
+      pendingImportRef.current = imported;
+      setImportTick((t) => t + 1);
     } catch (err) {
       console.error('Failed to import tasks from active year', err);
     }
-  }, [activeYear, projects, projectSubprojectsMap, setData]);
+  }, [activeYear, projects, projectSubprojectsMap, projectIdByNickname]);
 
   // Load tactics data on mount — Layout's <Outlet key={currentYear}> remounts
   // this page on every year change, so the useState initialisers above (and the
@@ -1029,7 +1043,7 @@ export default function ProjectTimePlannerV2() {
 
   // Map daily bounds to timeline dates
   // Draft year with no imported tasks: show 0.00 instead of Plan page values
-  const draftHasNoImportedTasks = isCurrentYearDraft && !sentToSystem && !data.some(r => r._rowType === 'projectTask' && !r._chipId);
+  const draftHasNoImportedTasks = isCurrentYearDraft && !sentToSystem && !hasImportedTasks(data);
   const { dailyMinValues, dailyMaxValues } = useMemo(() => {
     return mapDailyBoundsToTimeline(draftHasNoImportedTasks ? null : dailyBounds, dates);
   }, [dailyBounds, dates, draftHasNoImportedTasks]);
@@ -1293,13 +1307,16 @@ export default function ProjectTimePlannerV2() {
     // Early exit conditions - don't modify state if not needed
     if (!projects) return;
     // Draft year starts blank — don't inject project headers until the user imports tasks or presses "Send to System"
-    if (isCurrentYearDraft && !sentToSystem && !latestDataRef.current.some(r => r._rowType === 'projectTask' && !r._chipId)) return;
+    if (isCurrentYearDraft && !sentToSystem && !pendingImportRef.current && !hasImportedTasks(latestDataRef.current)) return;
 
     // setData uses the functional updater form, so React applies updates in queue order.
     // No setTimeout needed: useEffect already fires after commit, and functional updaters
     // applied in the same flush are sequenced — chip sync's updater sees this effect's
     // inserted headers even when both effects fire in the same passive-effects phase.
-    setData(prevData => {
+    const pendingImport = pendingImportRef.current;
+    pendingImportRef.current = null;
+    if (pendingImport) importInFlightRef.current = true;
+    const injectProjectStructure = (prevData) => {
         // Find the filter row index to insert projects after it
         const filterRowIndex = prevData.findIndex(row => row._isFilterRow);
         if (filterRowIndex === -1) return prevData;
@@ -1441,8 +1458,12 @@ export default function ProjectTimePlannerV2() {
           });
 
         return newData;
-      });
-  }, [projects, projectNamesMap, projectTaglinesMap, totalDays, isCurrentYearDraft, sentToSystem, isProjectsLoaded]);
+      };
+    setData(prevData => {
+      const withStructure = injectProjectStructure(prevData);
+      return pendingImport ? placeImportedTasks(withStructure, pendingImport) : withStructure;
+    });
+  }, [projects, projectNamesMap, projectTaglinesMap, totalDays, isCurrentYearDraft, sentToSystem, isProjectsLoaded, importTick, setData]);
 
   // Keep project blocks in the order given by projects.system_order
   // (`projects` from useProjectsData is already sorted by it). Covers reorders
@@ -1490,7 +1511,8 @@ export default function ProjectTimePlannerV2() {
   useEffect(() => {
     if (!tacticsChips || tacticsChips.length === 0) return;
     // Draft year starts blank — don't inject chip rows until the user imports tasks or presses "Send to System"
-    if (isCurrentYearDraft && !sentToSystem && !latestDataRef.current.some(r => r._rowType === 'projectTask' && !r._chipId)) return;
+    if (isCurrentYearDraft && !sentToSystem && !importInFlightRef.current && !hasImportedTasks(latestDataRef.current)) return;
+    importInFlightRef.current = false;
 
     // No setTimeout: functional updater form means React applies this after project injection's
     // updater in the same flush, so chip rows see project headers already inserted.
@@ -1737,7 +1759,7 @@ export default function ProjectTimePlannerV2() {
   // findIndex(projectHeader) lookup to fail silently. Removing only with a replacement signal.
   // (Previously guarded by a 50 ms setTimeout; no longer needed because the functional updater
   // form guarantees project injection's setData is applied before this one in the same flush.)
-  }, [tacticsChips, totalDays, isCurrentYearDraft, sentToSystem, projects]);
+  }, [tacticsChips, totalDays, isCurrentYearDraft, sentToSystem, projects, importTick]);
 
   // Reconcile task-row subproject values against the current Goal page subproject
   // lists. When a subproject is deleted on the Goal page, live task rows that still
@@ -3354,7 +3376,7 @@ export default function ProjectTimePlannerV2() {
       </div>
 
       {/* Task import panel — draft year only, disappears once non-chip tasks exist */}
-      {isCurrentYearDraft && activeYear && !data.some((r) => r._rowType === 'projectTask' && !r._chipId) && (
+      {isCurrentYearDraft && activeYear && !hasImportedTasks(data) && (
         <div className="mx-4 mb-2 shrink-0 rounded-lg border border-violet-200 bg-violet-50 px-5 py-4 flex items-center justify-between gap-6">
           <div>
             <p className="text-sm font-semibold text-violet-900">Import tasks from Year {activeYear.yearNumber}</p>

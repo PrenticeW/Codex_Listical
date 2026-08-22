@@ -23,6 +23,8 @@ import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import PanelShell from './PanelShell';
 import { usePlanPanel } from '../contexts/PlanPanelContext';
+import { usePanelLock } from '../contexts/PagePanelContext';
+import PanelLockButton from './PanelLockButton';
 import usePageSize from '../hooks/usePageSize';
 import usePanelWidth from '../hooks/usePanelWidth';
 import { parseEstimateLabelToMinutes } from '../utils/staging/planTableHelpers';
@@ -153,9 +155,10 @@ function FitText({ text, maxFontSize = 14, minFontSize = 7 }) {
   );
 }
 
-function SectionLabel({ children, style }) {
+function SectionLabel({ children, style, action }) {
   return (
     <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
       fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
       fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
       textTransform: 'uppercase', color: 'var(--brand-ink)',
@@ -164,7 +167,8 @@ function SectionLabel({ children, style }) {
       paddingBottom: 6,
       ...style,
     }}>
-      {children}
+      <span>{children}</span>
+      {action}
     </div>
   );
 }
@@ -708,6 +712,7 @@ function ColourView({ chipName, chipColour, onBack, onConfirm, viewWidth = DEFAU
         >
           {ICON.check}
         </button>
+        <PanelLockButton />
       </div>
 
       {/* Preview chip */}
@@ -1012,6 +1017,7 @@ function TimePickerView({ label, initialMinutes, incrementMinutes, onBack, onCon
         >
           {ICON.check}
         </button>
+        <PanelLockButton />
       </div>
       <div style={{
         flex: 1, display: 'flex', flexDirection: 'column',
@@ -1114,8 +1120,9 @@ function ScheduleView({ scheduleData, onDragStartRef, onAddChipRef, onBack, view
     <div style={{ display: 'flex', flexDirection: 'column', width: viewWidth, flexShrink: 0, minHeight: 0 }}>
       {/* Header — just the back button, no title bar (matches the design's
           bare BackBtn treatment for this sub-view). */}
-      <div style={{ padding: '16px 18px 8px', flexShrink: 0 }}>
+      <div style={{ padding: '16px 18px 8px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <BackBtn onClick={onBack} />
+        <PanelLockButton />
       </div>
 
       {/* Scrollable body — no horizontal padding here; BENTO_CARD's own
@@ -1228,10 +1235,10 @@ function ScheduleView({ scheduleData, onDragStartRef, onAddChipRef, onBack, view
 
 // ─── Update section (always visible in main view) ─────────────────────────────
 
-function UpdateSection({ isUpToDate, onSendToSystem }) {
+function UpdateSection({ isUpToDate, onSendToSystem, showLock = false }) {
   return (
     <div style={BENTO_CARD}>
-      <SectionLabel>Update</SectionLabel>
+      <SectionLabel action={showLock ? <PanelLockButton size="sm" /> : null}>Update</SectionLabel>
       {isUpToDate ? (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
@@ -1567,13 +1574,14 @@ function MainView({
       {/* Selected-chip view gets the standard back button; it deselects the
           chip and returns the panel to its default (no chip) content. */}
       {hasChip && (
-        <div style={{ padding: '16px 18px 0', flexShrink: 0 }}>
+        <div style={{ padding: '16px 18px 0', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <BackBtn onClick={onDeselectChip} />
+          <PanelLockButton />
         </div>
       )}
       {/* Scrollable body */}
       <div style={{ flex: 1, overflowY: 'auto', paddingTop: hasChip ? 8 : 20, paddingBottom: 8 }}>
-        <UpdateSection isUpToDate={isUpToDate} onSendToSystem={onSendToSystem} />
+        <UpdateSection isUpToDate={isUpToDate} onSendToSystem={onSendToSystem} showLock={!hasChip} />
         {!hasChip ? (
           <>
             <ScheduleLinkSection onViewSchedule={onViewSchedule} onAddChip={onAddChip} />
@@ -1710,6 +1718,7 @@ function ChipEditorView({ editor, onBack, onConfirm, viewWidth = DEFAULT_VIEW_WI
         flexShrink: 0, background: C.bg,
       }}>
         <BackBtn onClick={onBack} />
+        <PanelLockButton style={{ marginLeft: 'auto' }} />
       </div>
 
       {/* Scrollable body */}
@@ -1865,6 +1874,7 @@ function ChipEditorView({ editor, onBack, onConfirm, viewWidth = DEFAULT_VIEW_WI
 
 export default function PlanPanel() {
   const { isOpen, open, close } = usePlanPanel();
+  const { lockedRef } = usePanelLock();
   const [navBottom, setNavBottom] = useState(0);
   const { pathname } = useLocation();
   const { width: panelWidth, setWidth: setPanelWidth, minWidth, maxWidth } = usePanelWidth();
@@ -1947,8 +1957,14 @@ export default function PlanPanel() {
   // nav panel button); slides back to main on deselect.
   useEffect(() => {
     const handler = (e) => {
-      const chip = e.detail?.chip ?? null;
       const chips = e.detail?.allChips ?? null;
+      if (lockedRef.current) {
+        // Panel locked — keep showing the current chip, but still absorb the
+        // latest chip catalogue so the goal pickers stay current.
+        if (chips) setAllChips(chips);
+        return;
+      }
+      const chip = e.detail?.chip ?? null;
       setSelectedChip(chip);
       if (chips) setAllChips(chips);
       setAddChipAnchorRect(null);
@@ -2043,13 +2059,15 @@ export default function PlanPanel() {
   // Chip field actions — dispatch events for TacticsPage to handle
   const handleNameChange     = useCallback((value) => dispatchPlanAction('setChipName', { chipId: selectedChip?.id, value }), [selectedChip]);
   const handleGoalChange     = useCallback((rect) => openGoalDropdown(rect), [openGoalDropdown]);
-  const handleDeselectChip   = useCallback(() => dispatchPlanAction('deselectChip'), []);
+  // Back / Remove are explicit panel actions, so they clear the panel's chip
+  // locally too — the page's resulting chip event is ignored while locked.
+  const handleDeselectChip   = useCallback(() => { setSelectedChip(null); dispatchPlanAction('deselectChip'); }, []);
   const handleStartMinutes   = useCallback((minutes) => dispatchPlanAction('setChipStartMinutes', { chipId: selectedChip?.id, minutes }), [selectedChip]);
   const handleEndMinutes     = useCallback((minutes) => dispatchPlanAction('setChipEndMinutes', { chipId: selectedChip?.id, minutes }), [selectedChip]);
   const handleDurationChange = useCallback((value) => dispatchPlanAction('setChipDuration', { chipId: selectedChip?.id, value }), [selectedChip]);
   const handleToggleChipClock    = useCallback(() => dispatchPlanAction('toggleChipClock', { chipId: selectedChip?.id }), [selectedChip]);
   const handleToggleChipDuration = useCallback(() => dispatchPlanAction('toggleChipDuration', { chipId: selectedChip?.id }), [selectedChip]);
-  const handleRemoveChip    = useCallback(() => dispatchPlanAction('removeChip', { chipId: selectedChip?.id }), [selectedChip]);
+  const handleRemoveChip    = useCallback(() => { dispatchPlanAction('removeChip', { chipId: selectedChip?.id }); setSelectedChip(null); }, [selectedChip]);
   const handleSendToSystem   = useCallback(() => dispatchPlanAction('sendToSystem'), []);
 
   // "Add new chip" — opens goal picker anchored to the button rect

@@ -14,6 +14,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import PanelLockButton from '../PanelLockButton';
 import { PILLBOX_COLORS } from './DropdownCell';
 import { saveTaskNote, readTaskEvents } from '../../utils/planner/storage';
 import { TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
@@ -138,7 +139,7 @@ const HistoryIcon = () => (
 function BackBtn({ onClick }) {
   const [hovered, setHovered] = useState(false);
   return (
-    <div style={{ padding: '16px 18px 8px', flexShrink: 0 }}>
+    <div style={{ padding: '16px 18px 8px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
       <button
         onClick={onClick}
         onMouseEnter={() => setHovered(true)}
@@ -160,6 +161,7 @@ function BackBtn({ onClick }) {
         </svg>
         Back
       </button>
+      <PanelLockButton />
     </div>
   );
 }

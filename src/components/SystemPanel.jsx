@@ -18,6 +18,7 @@ import { createPortal } from 'react-dom';
 import PanelShell from './PanelShell';
 import { useLocation } from 'react-router-dom';
 import { useSystemPanel } from '../contexts/SystemPanelContext';
+import PanelLockButton from './PanelLockButton';
 import usePanelWidth from '../hooks/usePanelWidth';
 import { useTaskRowPanel } from '../contexts/TaskRowPanelContext';
 import { TaskDetailContent } from './planner/TaskRowPanel';
@@ -76,16 +77,18 @@ const BENTO_CARD = {
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
 
-function SectionLabel({ children }) {
+function SectionLabel({ children, action }) {
   return (
     <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
       fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
       textTransform: 'uppercase', color: 'var(--brand-ink)',
       paddingBottom: 9, borderBottom: '1px solid var(--brand-bd)',
       marginBottom: 11,
       fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
     }}>
-      {children}
+      <span>{children}</span>
+      {action}
     </div>
   );
 }
@@ -345,7 +348,7 @@ function InsertSection() {
 
   return (
     <div style={BENTO_CARD}>
-      <SectionLabel>Insert</SectionLabel>
+      <SectionLabel action={<PanelLockButton size="sm" />}>Insert</SectionLabel>
 
       {/* Insert task rows — row-dependent */}
       <div style={{

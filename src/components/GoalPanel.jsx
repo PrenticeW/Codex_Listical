@@ -15,6 +15,8 @@ import { JUNE_GROUPS } from '../constants/palettePickerGroups';
 import { useLocation } from 'react-router-dom';
 import PanelShell from './PanelShell';
 import { useGoalPanel } from '../contexts/GoalPanelContext';
+import { usePanelLock } from '../contexts/PagePanelContext';
+import PanelLockButton from './PanelLockButton';
 import { useYear } from '../contexts/YearContext';
 import usePageSize from '../hooks/usePageSize';
 import usePanelWidth from '../hooks/usePanelWidth';
@@ -62,9 +64,10 @@ const BENTO_CARD = {
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
 
-function SectionLabel({ children }) {
+function SectionLabel({ children, action }) {
   return (
     <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
       fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
       fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
       textTransform: 'uppercase', color: 'var(--brand-ink)',
@@ -72,7 +75,8 @@ function SectionLabel({ children }) {
       borderBottom: '1px solid var(--brand-bd)',
       paddingBottom: 6,
     }}>
-      {children}
+      <span>{children}</span>
+      {action}
     </div>
   );
 }
@@ -687,8 +691,9 @@ function ColourView({ currentColor, onSelect, onBack, customColors = [], onAddCu
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       {/* Back button — bento card style */}
-      <div style={{ padding: '16px 12px 8px', flexShrink: 0 }}>
+      <div style={{ padding: '16px 12px 8px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <BackButton onClick={onBack} />
+        <PanelLockButton />
       </div>
 
       {/* Palette sections — one card per JUNE_GROUPS entry */}
@@ -865,7 +870,7 @@ function GoalSection({ goal, onOpenColour }) {
   if (!goal) {
     return (
       <div style={BENTO_CARD}>
-        <SectionLabel>Goal Info</SectionLabel>
+        <SectionLabel action={<PanelLockButton size="sm" />}>Goal Info</SectionLabel>
         <p style={{ fontFamily: FONT, fontSize: 13, color: C.textFaint, fontStyle: 'italic' }}>
           Click a goal to select it
         </p>
@@ -913,7 +918,7 @@ function GoalSection({ goal, onOpenColour }) {
   return (
     <div>
     <div style={BENTO_CARD}>
-      <SectionLabel>Goal Info</SectionLabel>
+      <SectionLabel action={<PanelLockButton size="sm" />}>Goal Info</SectionLabel>
 
       {/* Colour */}
       <FieldRow label="Colour">
@@ -1180,6 +1185,7 @@ function PageSection() {
 
 export default function GoalPanel() {
   const { isOpen, close } = useGoalPanel();
+  const { lockedRef } = usePanelLock();
   const [navBottom, setNavBottom] = useState(0);
   const { pathname } = useLocation();
   const { width: panelWidth, setWidth: setPanelWidth, minWidth, maxWidth } = usePanelWidth();
@@ -1201,6 +1207,7 @@ export default function GoalPanel() {
   // Listen for goal selection from StagingPageV2
   useEffect(() => {
     const handler = (e) => {
+      if (lockedRef.current) return; // panel locked — keep current goal
       const incoming = e.detail?.goal ?? null;
       setSelectedGoal(prev => {
         // Only close the colour view when switching to a different goal
@@ -1214,7 +1221,10 @@ export default function GoalPanel() {
 
   // Listen for row selection from StagingPageV2 — switches Goal section to Row section
   useEffect(() => {
-    const handler = (e) => setSelectedRow(e.detail?.row ?? null);
+    const handler = (e) => {
+      if (lockedRef.current) return; // panel locked — keep current row
+      setSelectedRow(e.detail?.row ?? null);
+    };
     window.addEventListener(GOAL_PANEL_ROW_SELECTION_EVENT, handler);
     return () => window.removeEventListener(GOAL_PANEL_ROW_SELECTION_EVENT, handler);
   }, []);

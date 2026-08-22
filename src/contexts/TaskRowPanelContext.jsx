@@ -7,6 +7,7 @@
  */
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { usePanelLock } from './PagePanelContext';
 
 const TaskRowPanelContext = createContext(null);
 
@@ -47,6 +48,7 @@ const STRUCTURAL_ROW_TYPES = new Set([
 
 export function TaskRowPanelProvider({ children }) {
   const [selectedTask, setSelectedTask] = useState(null);
+  const { lockedRef } = usePanelLock();
 
   const openPanel = useCallback((taskData) => {
     setSelectedTask(taskData);
@@ -60,6 +62,9 @@ export function TaskRowPanelProvider({ children }) {
   useEffect(() => {
     const handler = (e) => {
       if (!e.detail?.task) return;
+      // Panel locked — keep showing the current task regardless of table
+      // selection. Explicit in-panel navigation passes `force: true`.
+      if (lockedRef.current && !e.detail.force) return;
       // Structural rows (project headers, section rows, archive rows) have no
       // detail view — return to the top panel instead of showing a blank one.
       if (STRUCTURAL_ROW_TYPES.has(e.detail.task._rowType)) {
@@ -70,13 +75,15 @@ export function TaskRowPanelProvider({ children }) {
     };
     window.addEventListener(TASK_ROW_DETAIL_EVENT, handler);
     return () => window.removeEventListener(TASK_ROW_DETAIL_EVENT, handler);
-  }, [openPanel, closePanel]);
+  }, [openPanel, closePanel, lockedRef]);
 
   // Listen for close events dispatched from anywhere (e.g. row number cell click)
+  // Ignored while the panel is locked (it's a table-selection side effect).
   useEffect(() => {
-    window.addEventListener(TASK_ROW_PANEL_CLOSE_EVENT, closePanel);
-    return () => window.removeEventListener(TASK_ROW_PANEL_CLOSE_EVENT, closePanel);
-  }, [closePanel]);
+    const handler = () => { if (!lockedRef.current) closePanel(); };
+    window.addEventListener(TASK_ROW_PANEL_CLOSE_EVENT, handler);
+    return () => window.removeEventListener(TASK_ROW_PANEL_CLOSE_EVENT, handler);
+  }, [closePanel, lockedRef]);
 
   // Listen for live updates to the currently-open task (e.g. status change from the table)
   useEffect(() => {

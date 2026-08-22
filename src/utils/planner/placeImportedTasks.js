@@ -16,11 +16,17 @@
  * @returns {Object[]} new data array with tasks inserted at correct positions
  */
 export function placeImportedTasks(existingData, importedTasks) {
+  // Idempotent: skip tasks already present (guards against a double-applied
+  // state updater, e.g. React StrictMode).
+  const existingIds = new Set(existingData.map((r) => r.id));
+  const fresh = importedTasks.filter((t) => !existingIds.has(t.id));
+  if (fresh.length === 0) return existingData;
+
   // Group tasks by target project
   const byProject = {};   // nickname → tasks[]
   const inboxTasks = [];
 
-  for (const task of importedTasks) {
+  for (const task of fresh) {
     const nickname = task.projectNickname;
     if (!nickname || nickname === '-') {
       inboxTasks.push(task);
@@ -54,10 +60,20 @@ export function placeImportedTasks(existingData, importedTasks) {
   }
 
   // Any remaining project tasks that didn't find their header go to inbox
-  const leftover = Object.values(byProject).flat();
+  const leftover = Object.values(byProject).flat().map((t) => ({
+    ...t, project: '', projectNickname: '', projectId: null, subproject: '',
+  }));
   if (leftover.length > 0 || inboxTasks.length > 0) {
     const inboxIndex = result.findIndex((r) => r._isInboxRow);
-    const insertAt = inboxIndex >= 0 ? inboxIndex + 1 : result.length;
+    const archiveIndex = result.findIndex((r) => r._rowType === 'archiveHeader');
+    let insertAt;
+    if (inboxIndex >= 0) {
+      // After the inbox divider and any inbox tasks already placed above
+      insertAt = archiveIndex > inboxIndex ? archiveIndex : result.length;
+    } else {
+      // No inbox divider yet: never strand rows under the Archive header
+      insertAt = archiveIndex >= 0 ? archiveIndex : result.length;
+    }
     result.splice(insertAt, 0, ...leftover, ...inboxTasks);
   }
 

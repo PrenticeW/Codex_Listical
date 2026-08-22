@@ -17,6 +17,7 @@
  */
 
 import React, { useState } from 'react';
+import PanelLockButton from '../PanelLockButton';
 import { TASK_ROW_DETAIL_EVENT } from '../../contexts/TaskRowPanelContext';
 
 // ─── Design tokens (match GearPanel/SystemPanel/TaskRowPanel) ────────────────
@@ -71,7 +72,7 @@ function fmtH(v) {
 function BackBtn({ onClick }) {
   const [hovered, setHovered] = useState(false);
   return (
-    <div style={{ padding: '16px 18px 8px', flexShrink: 0 }}>
+    <div style={{ padding: '16px 18px 8px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
       <button
         onClick={onClick}
         onMouseEnter={() => setHovered(true)}
@@ -93,6 +94,7 @@ function BackBtn({ onClick }) {
         </svg>
         Back
       </button>
+      <PanelLockButton />
     </div>
   );
 }
@@ -324,7 +326,8 @@ export function ArchiveWeekContent({ week, onBack }) {
 
   const selectWeek = (row) => {
     if (!row) return;
-    window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_EVENT, { detail: { task: row } }));
+    // `force`: the pager is an explicit panel action, so it bypasses the panel lock
+    window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_EVENT, { detail: { task: row, force: true } }));
   };
 
   if (!week) {
