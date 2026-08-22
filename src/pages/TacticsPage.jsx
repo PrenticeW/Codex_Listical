@@ -562,6 +562,8 @@ export default function TacticsPage() {
     });
   }, []);
   const [resizingBlockId, setResizingBlockId] = useState(null);
+  // Which edge of the chip is being dragged: 'start' (top) or 'end' (bottom).
+  const resizingEdgeRef = useRef('end');
   const [rowMetrics, setRowMetrics] = useState({});
   const [dragPreview, setDragPreview] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -1337,15 +1339,22 @@ export default function TacticsPage() {
           const next = prev.map((entry) => {
             if (entry.id !== resizingBlockId) return entry;
             const startIdx = rowIndexMap.get(entry.startRowId);
+            const endIdx = rowIndexMap.get(entry.endRowId ?? entry.startRowId);
             const targetIdx = rowIndexMap.get(targetRowId);
-            if (startIdx == null || targetIdx == null) return entry;
+            if (startIdx == null || endIdx == null || targetIdx == null) return entry;
             updated = true;
+            const sleepFlag = entry.projectId === 'sleep' ? { userModified: true } : {};
+            if (resizingEdgeRef.current === 'start') {
+              // Dragging the top edge: move the start row, never past the end row.
+              const clampedIdx = Math.min(targetIdx, endIdx);
+              const newStartRowId = timelineRowIds[clampedIdx] ?? entry.startRowId;
+              if (newStartRowId === entry.startRowId) return entry;
+              return { ...entry, startRowId: newStartRowId, ...sleepFlag };
+            }
             const clampedIdx = Math.max(targetIdx, startIdx);
-            return {
-              ...entry,
-              endRowId: timelineRowIds[clampedIdx] ?? entry.startRowId,
-              ...(entry.projectId === 'sleep' ? { userModified: true } : {}),
-            };
+            const newEndRowId = timelineRowIds[clampedIdx] ?? entry.startRowId;
+            if (newEndRowId === (entry.endRowId ?? entry.startRowId)) return entry;
+            return { ...entry, endRowId: newEndRowId, ...sleepFlag };
           });
           if (!updated) {
             setResizingBlockId(null);
@@ -1833,12 +1842,13 @@ export default function TacticsPage() {
     [columnRects, displayedWeekDays, findRowIdByPointerY, totalColumnCount, updateDragPreview]
   );
   const handleResizeMouseDown = useCallback(
-    (event, chipId) => {
+    (event, chipId, edge = 'end') => {
       event.stopPropagation();
       event.preventDefault();
       if (!chipId) return;
       const block = getProjectChipById(chipId);
       if (!block) return;
+      resizingEdgeRef.current = edge === 'start' ? 'start' : 'end';
       setSelectedBlockId(chipId);
       setResizingBlockId(chipId);
     },
@@ -4535,25 +4545,56 @@ export default function TacticsPage() {
               );
             })() : null}
             {isActive ? (
-              <button
-                type="button"
-                aria-label="Stretch project block"
-                onMouseDown={(event) => handleResizeMouseDown(event, chipId)}
-                className="cursor-se-resize"
-                style={{
-                  position: 'absolute',
-                  bottom: '-4px',
-                  right: '-4px',
-                  height: '8px',
-                  width: '8px',
-                  borderRadius: '9999px',
-                  border: '1px solid #000',
-                  backgroundColor: '#000',
-                  padding: 0,
-                  boxShadow: '0 0 0 1px #000',
-                  pointerEvents: 'auto',
-                }}
-              />
+              <>
+                {/* Top-edge resize grip (triangle pointing up) */}
+                <button
+                  type="button"
+                  aria-label="Resize project block from the top"
+                  title="Drag to change start time"
+                  onMouseDown={(event) => handleResizeMouseDown(event, chipId, 'start')}
+                  className="cursor-ns-resize"
+                  style={{
+                    position: 'absolute',
+                    top: '-5px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: 0,
+                    height: 0,
+                    padding: 0,
+                    border: '0 solid transparent',
+                    borderLeftWidth: '6px',
+                    borderRightWidth: '6px',
+                    borderBottomWidth: '8px',
+                    borderBottomColor: '#000',
+                    background: 'transparent',
+                    pointerEvents: 'auto',
+                  }}
+                />
+                {/* Bottom-edge resize grip (triangle pointing down) */}
+                <button
+                  type="button"
+                  aria-label="Resize project block from the bottom"
+                  title="Drag to change end time"
+                  onMouseDown={(event) => handleResizeMouseDown(event, chipId, 'end')}
+                  className="cursor-ns-resize"
+                  style={{
+                    position: 'absolute',
+                    bottom: '-5px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: 0,
+                    height: 0,
+                    padding: 0,
+                    border: '0 solid transparent',
+                    borderLeftWidth: '6px',
+                    borderRightWidth: '6px',
+                    borderTopWidth: '8px',
+                    borderTopColor: '#000',
+                    background: 'transparent',
+                    pointerEvents: 'auto',
+                  }}
+                />
+              </>
             ) : null}
           </div>
         </div>
