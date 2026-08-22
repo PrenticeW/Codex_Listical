@@ -1634,7 +1634,9 @@ export default function TacticsPage() {
         undo: () => setProjectChips(prevChips),
       });
       setSelectedCell(null);
-      setSelectedBlockId(sourceChipId);
+      // Deliberately not selecting the placed chip: selecting it would push it
+      // to PlanPanel and slide the panel away from the schedule view the user
+      // just dragged from.
       setDragPreview(null);
       draggingSleepChipIdRef.current = null;
       setIsDragging(false);
@@ -3323,15 +3325,7 @@ export default function TacticsPage() {
       const durationMinutes = Math.max(1, totalMinutes - alreadyPlaced);
       const span = Math.max(1, Math.ceil(remainingMinutes / Math.max(1, incrementMinutes)));
 
-      const existingInCol = projectChips.filter(
-        (c) => c.columnIndex === columnIndex && c.id.startsWith('schedule-chip-')
-      );
-      let startRowIdx = 2;
-      existingInCol.forEach((c) => {
-        const endIdx = rowIndexMap.get(c.endRowId);
-        if (endIdx != null && endIdx + 1 > startRowIdx) startRowIdx = endIdx + 1;
-      });
-      startRowIdx = Math.min(startRowIdx, timelineRowIds.length - 1);
+      const startRowIdx = Math.min(2, timelineRowIds.length - 1);
       const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
       const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
       const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
@@ -3468,12 +3462,10 @@ export default function TacticsPage() {
       // pendingPanelChipRef until the user drops onto a valid cell, at which point
       // applyDragPreview writes it to projectChips in a single undoable command.
       // This prevents the chip from appearing prematurely in the project column.
-      const colConfig = stagingColumnConfigs.find(
-        (c) => c.type === 'project' && c.project?.id === projectId
-      );
-      if (!colConfig) return;
-      const stagingIdx = stagingColumnConfigs.indexOf(colConfig);
-      const columnIndex = DAY_COLUMN_COUNT + stagingIdx;
+      // Project columns no longer exist in the grid (stagingColumnConfigs is
+      // always empty), so there is no source column for the chip. Use a
+      // placeholder column index; the real column/row is set on drop.
+      const columnIndex = DAY_COLUMN_COUNT;
 
       const schedItems = scheduleLayout?.scheduleItemsByProject?.get(projectId) ?? [];
       const scheduleItem = schedItems[itemIdx];
@@ -3499,15 +3491,7 @@ export default function TacticsPage() {
       const durationMinutes = Math.max(1, totalMinutes - alreadyPlaced);
       const span = Math.max(1, Math.ceil(remainingMinutes / Math.max(1, incrementMinutes)));
 
-      const existingInCol = projectChips.filter(
-        (c) => c.columnIndex === columnIndex && c.id.startsWith('schedule-chip-')
-      );
-      let startRowIdx = 2;
-      existingInCol.forEach((c) => {
-        const endIdx = rowIndexMap.get(c.endRowId);
-        if (endIdx != null && endIdx + 1 > startRowIdx) startRowIdx = endIdx + 1;
-      });
-      startRowIdx = Math.min(startRowIdx, timelineRowIds.length - 1);
+      const startRowIdx = Math.min(2, timelineRowIds.length - 1);
       const endRowIdx = Math.min(startRowIdx + span - 1, timelineRowIds.length - 1);
       const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
       const endRowId = timelineRowIds[endRowIdx] ?? startRowId;
@@ -3537,14 +3521,43 @@ export default function TacticsPage() {
       dragEvent.dataTransfer.setData(SLEEP_DRAG_TYPE, newChip.id);
       dragEvent.dataTransfer.setData('text/plain', newChip.id);
       dragEvent.dataTransfer.effectAllowed = 'move';
-      if (dragEvent.dataTransfer.setDragImage && transparentDragImageRef.current) {
-        dragEvent.dataTransfer.setDragImage(transparentDragImageRef.current, 0, 0);
+      // A panel drag has no cell preview until the pointer reaches the table,
+      // so show a ghost — but sized to the table chip it will become (one day
+      // column wide, `span` rows tall), not to the panel item being dragged.
+      if (dragEvent.dataTransfer.setDragImage) {
+        const src = dragEvent.currentTarget;
+        const dayRect = columnRects.find(Boolean);
+        const rowHeight = rowMetrics[startRowId]?.height || DEFAULT_SLEEP_CELL_HEIGHT;
+        const ghostW = Math.max(24, Math.round(dayRect ? dayRect.right - dayRect.left : 80));
+        const ghostH = Math.max(rowHeight, Math.round(rowHeight * span));
+        const ghost = document.createElement('div');
+        const srcStyle = window.getComputedStyle(src);
+        Object.assign(ghost.style, {
+          position: 'fixed', top: '-1000px', left: '-1000px',
+          width: `${ghostW}px`, height: `${ghostH}px`,
+          boxSizing: 'border-box', borderRadius: '4px',
+          border: '1px solid white', overflow: 'hidden',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 4px', fontSize: '10px', lineHeight: '1',
+          fontFamily: srcStyle.fontFamily, fontWeight: '700',
+          textTransform: 'uppercase', whiteSpace: 'nowrap',
+          backgroundColor: srcStyle.backgroundColor, color: srcStyle.color,
+          pointerEvents: 'none', zIndex: '-1',
+        });
+        ghost.textContent = src.textContent ?? '';
+        document.body.appendChild(ghost);
+        dragEvent.dataTransfer.setDragImage(ghost, Math.round(ghostW / 2), Math.min(rowHeight / 2, ghostH / 2));
+        // The browser snapshots the drag image synchronously; remove after this tick.
+        setTimeout(() => ghost.remove(), 0);
       }
 
       draggingSleepChipIdRef.current = newChip.id;
       dragAnchorOffsetRef.current = 0;
       setIsDragging(true);
-      setSelectedBlockId(newChip.id);
+      // Do NOT select the pending chip here: selecting it pushes a chip to
+      // PlanPanel (PLAN_PANEL_CHIP_EVENT), which slides the panel back to its
+      // main view and unmounts the element being dragged, cancelling the drag.
+      // applyDragPreview selects it once it has actually been dropped.
       setDragPreview({
         sourceChipId: newChip.id,
         targetColumnIndex: newChip.columnIndex,
@@ -3555,12 +3568,11 @@ export default function TacticsPage() {
     [
       buildAndAddScheduleItemChip,
       chipTimeOverrides,
+      columnRects,
       incrementMinutes,
       projectChips,
-      rowIndexMap,
+      rowMetrics,
       scheduleLayout,
-      setSelectedBlockId,
-      stagingColumnConfigs,
       timelineRowIds,
       trailingMinuteRows,
     ]
