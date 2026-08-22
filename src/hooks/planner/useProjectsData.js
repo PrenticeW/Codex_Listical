@@ -73,6 +73,7 @@ export function extractProjectsData(shortlist) {
       projectTaglinesMap: {},
       projectIdByNickname: new Map(),
       projectInfoById: new Map(),
+      hasSystemOrder: false,
     };
   }
 
@@ -84,7 +85,21 @@ export function extractProjectsData(shortlist) {
   const projectIdByNickname = new Map(); // Nickname/key -> stable project id (join key for quotas)
   const projectInfoById = new Map(); // Project id -> { area, color } (live staging metadata)
 
-  shortlist.forEach(item => {
+  // System page block order: projects.system_order ascending, unplaced
+  // (NULL) projects after all placed ones, Goal order as the tie-break.
+  // Stable sort over the shortlist, which loadStagingState already returns
+  // in display_order.
+  const ordered = shortlist
+    .map((item, idx) => ({ item, idx }))
+    .sort((a, b) => {
+      const ao = a.item.systemOrder ?? Number.POSITIVE_INFINITY;
+      const bo = b.item.systemOrder ?? Number.POSITIVE_INFINITY;
+      if (ao !== bo) return ao - bo;
+      return a.idx - b.idx;
+    })
+    .map(({ item }) => item);
+
+  ordered.forEach(item => {
     const fullProjectName = (item.projectName || item.text || '').trim();
     const nickname = (item.projectNickname || '').trim();
 
@@ -155,5 +170,7 @@ export function extractProjectsData(shortlist) {
     projectTaglinesMap,
     projectIdByNickname,
     projectInfoById,
+    // True once any project has a saved System order (projects.system_order).
+    hasSystemOrder: shortlist.some(item => item.systemOrder != null),
   };
 }

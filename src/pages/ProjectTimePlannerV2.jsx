@@ -21,7 +21,7 @@ import { useTaskRowPanel, TASK_ROW_DETAIL_UPDATE_EVENT } from '../contexts/TaskR
 import { loadSentMetricsSnapshot, peekTacticsMetricsCache } from '../lib/tacticsMetricsStorage';
 import { peekTacticsCache } from '../lib/tacticsStorage';
 import { peekStagingCache } from '../lib/stagingStorage';
-import { loadStagingState } from '../lib/stagingStorage';
+import { loadStagingState, saveSystemOrder } from '../lib/stagingStorage';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import { revertArchive } from '../utils/planner/revertArchive';
@@ -35,7 +35,7 @@ import { useProjectTotals, useDailyTotals } from '../hooks/planner/useTotalsCalc
 import useSpreadsheetSelection from '../hooks/planner/useSpreadsheetSelection';
 import useKeyboardHandlers from '../hooks/planner/useKeyboardHandlers';
 import useEditState from '../hooks/planner/useEditState';
-import useDragAndDropRows from '../hooks/planner/useDragAndDropRows';
+import useDragAndDropRows, { getProjectBlockRange } from '../hooks/planner/useDragAndDropRows';
 import useDragAndDropCells from '../hooks/planner/useDragAndDropCells';
 import useComputedDataV2 from '../hooks/planner/useComputedDataV2';
 import useCollapsibleGroups from '../hooks/planner/useCollapsibleGroups';
@@ -400,7 +400,7 @@ export default function ProjectTimePlannerV2() {
   // below swaps in the loaded rows once the async load resolves.
   const [data, setDataRaw] = useState(() => {
     if (Array.isArray(taskRows) && taskRows.length > 0) return ensureDailyTotalRow(taskRows);
-    return createInitialData(20, totalDays, startDate);
+    return createInitialData(0, totalDays, startDate);
   });
 
   // Keep a ref to the latest committed data value, updated synchronously alongside setData.
@@ -713,7 +713,7 @@ export default function ProjectTimePlannerV2() {
   const [multiPastePrompt, setMultiPastePrompt] = useState(null);
 
   // Load projects and subprojects from Staging
-  const { projects, subprojects, projectSubprojectsMap, projectNamesMap, projectTaglinesMap, projectIdByNickname, projectInfoById, isProjectsLoaded } = useProjectsData();
+  const { projects, subprojects, projectSubprojectsMap, projectNamesMap, projectTaglinesMap, projectIdByNickname, projectInfoById, isProjectsLoaded, hasSystemOrder } = useProjectsData();
 
   // Import tasks from active year into draft (single action, no wizard)
   const handleImportTasks = useCallback(async () => {
@@ -1277,9 +1277,10 @@ export default function ProjectTimePlannerV2() {
             timeValue: '',
             ...createEmptyDayColumns(totalDays),
           };
-          // Insert 20 rows after inbox
-          const archiveInsertIndex = Math.min(inboxIndex + 21, newData.length);
-          newData.splice(archiveInsertIndex, 0, archiveHeaderRow);
+          // Archive is always the final section: append after everything
+          // (inbox tasks included) rather than a fixed offset below inbox,
+          // which could split the inbox or strand rows under Archive.
+          newData.push(archiveHeaderRow);
         }
       }
 
@@ -1442,6 +1443,48 @@ export default function ProjectTimePlannerV2() {
         return newData;
       });
   }, [projects, projectNamesMap, projectTaglinesMap, totalDays, isCurrentYearDraft, sentToSystem, isProjectsLoaded]);
+
+  // Keep project blocks in the order given by projects.system_order
+  // (`projects` from useProjectsData is already sorted by it). Covers reorders
+  // made elsewhere: another tab, the Tacular app, or undo. A local header drag
+  // saves the same order first, so this is a no-op for it. Blocks not in
+  // `projects` (e.g. projects pending removal) keep their relative position.
+  // Until a first reorder has been saved (no system_order anywhere) the
+  // persisted row order is left alone, so existing layouts are not reshuffled
+  // into Goal order.
+  useEffect(() => {
+    if (!projects || !isProjectsLoaded || !hasSystemOrder) return;
+    setData(prevData => {
+      const headerIdxs = [];
+      prevData.forEach((row, i) => { if (row._rowType === 'projectHeader') headerIdxs.push(i); });
+      if (headerIdxs.length < 2) return prevData;
+
+      const rank = new Map();
+      projects.forEach((key, i) => { if (key !== '-') rank.set(key, i); });
+
+      const blocks = headerIdxs.map((hi, bi) => {
+        const [start, end] = getProjectBlockRange(prevData, hi);
+        const r = rank.get(prevData[hi].projectNickname);
+        return { start, end, rank: r ?? Number.POSITIVE_INFINITY, bi };
+      });
+
+      // Blocks must be contiguous for a pure reorder; bail out otherwise.
+      for (let i = 1; i < blocks.length; i++) {
+        if (blocks[i].start !== blocks[i - 1].end) return prevData;
+      }
+
+      const sorted = [...blocks].sort((a, b) => (a.rank - b.rank) || (a.bi - b.bi));
+      if (sorted.every((b, i) => b.bi === i)) return prevData;
+
+      const regionStart = blocks[0].start;
+      const regionEnd = blocks[blocks.length - 1].end;
+      return [
+        ...prevData.slice(0, regionStart),
+        ...sorted.flatMap(b => prevData.slice(b.start, b.end)),
+        ...prevData.slice(regionEnd),
+      ];
+    });
+  }, [projects, isProjectsLoaded, hasSystemOrder]);
 
   // Create subprojectHeader rows from Tactics chips
   useEffect(() => {
@@ -2105,6 +2148,13 @@ export default function ProjectTimePlannerV2() {
     ? contextMenu.rowId
     : null;
 
+  // Persist System project block order (projects.system_order) after a
+  // project header drag or its undo. Shared with Tacular; see stagingStorage.
+  const handleProjectOrderChange = useCallback((orderedProjectIds) => {
+    if (isCurrentYearArchived) return;
+    saveSystemOrder(orderedProjectIds, currentYear);
+  }, [currentYear, isCurrentYearArchived]);
+
   // Drag and drop hook
   const {
     draggedRowId,
@@ -2120,6 +2170,7 @@ export default function ProjectTimePlannerV2() {
     setData,
     selectedRows,
     executeCommand,
+    onProjectOrderChange: handleProjectOrderChange,
   });
 
   // Note: Old drag and drop handlers removed - now using useDragAndDropRows hook

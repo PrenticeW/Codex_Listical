@@ -140,6 +140,11 @@ function dbRowToItem(row) {
     planSubprojectRowCount: row.plan_schedule_row_count ?? 1,
     planXxxRowCount: row.plan_subproject_row_count ?? 1,
     planTableEntries: entries,
+    // System page block order (projects.system_order). NULL = not yet placed
+    // (sorts after placed projects, i.e. "append"). Read-only here: the Goal
+    // page save path deliberately does NOT write this column — see
+    // saveSystemOrder below.
+    systemOrder: row.system_order ?? null,
   };
 }
 
@@ -235,6 +240,28 @@ function isCachedFormatValid(cached) {
 // unknown id means another client inserted it after this tab's last load,
 // and deleting it would erase that write.
 const _knownProjectIds = new Map(); // yearNumber -> Set<id>
+
+// _systemOrders: yearNumber -> Map<projectId, system_order>. The latest
+// System block order this client knows about. Populated on every DB load and
+// by saveSystemOrder; overlaid onto items before they are cached/dispatched so
+// a Goal page save (whose in-memory shortlist may predate a System reorder)
+// never broadcasts a stale order.
+const _systemOrders = new Map();
+
+function recordSystemOrders(yearNumber, rows) {
+  if (yearNumber == null) return;
+  const m = new Map();
+  for (const r of rows) m.set(r.id, r.system_order ?? null);
+  _systemOrders.set(yearNumber, m);
+}
+
+function overlaySystemOrder(items, yearNumber) {
+  const m = _systemOrders.get(yearNumber);
+  if (!m) return items;
+  return items.map((item) => (
+    m.has(item.id) ? { ...item, systemOrder: m.get(item.id) } : item
+  ));
+}
 
 function recordKnownIds(yearNumber, ids) {
   if (yearNumber == null) return;
@@ -358,6 +385,7 @@ export async function loadStagingState(yearNumber) {
     const result = { shortlist, archived };
     setCached(CACHE_NS, cacheKey, result);
     recordKnownIds(yearNumber, rows.map((r) => r.id));
+    recordSystemOrders(yearNumber, rows);
     return result;
   } catch (error) {
     console.error('Failed to read staging shortlist', error);
@@ -504,13 +532,73 @@ async function _saveStagingStateImpl(payload, yearNumber) {
     // setCached call). Storing live JS objects with non-enumerable metadata
     // looks fine in-memory but silently loses __rowType / __pairId / etc. the
     // moment the cache is persisted and then JSON.parse'd back on page refresh.
+    const cachedShortlist = overlaySystemOrder(shortlist, yearNumber);
     setCached(CACHE_NS, stagingKey(yearNumber), {
-      shortlist: shortlist.map(serializeItemForCache),
+      shortlist: cachedShortlist.map(serializeItemForCache),
       archived: archived.map(serializeItemForCache),
     });
 
-    dispatchStagingEvent(payload, yearNumber);
+    dispatchStagingEvent({ ...payload, shortlist: cachedShortlist }, yearNumber);
   } catch (error) {
     console.error('Failed to save staging shortlist', error);
+  }
+}
+
+/**
+ * Persist the System page's project block order.
+ *
+ * `orderedProjectIds` is the full list of project ids in the order their
+ * blocks appear on the System page (top to bottom). Each gets
+ * `system_order = index`. Projects not in the list are left untouched (they
+ * keep NULL and therefore sort last — "append" semantics for new projects).
+ *
+ * Deliberately separate from saveStagingState: that path owns the Goal page's
+ * columns and must never clobber this one, and Tacular reads the same column
+ * so the two apps agree on System order.
+ *
+ * Optimistic: the in-memory overlay, the cache, and the
+ * `staging-state-update` event are updated before the network write so the
+ * System page (and any other listener) re-sorts immediately.
+ *
+ * @param {string[]} orderedProjectIds
+ * @param {number} yearNumber
+ */
+export async function saveSystemOrder(orderedProjectIds, yearNumber) {
+  if (!Array.isArray(orderedProjectIds) || yearNumber == null) return;
+  const ids = orderedProjectIds.filter(Boolean);
+
+  const m = new Map(_systemOrders.get(yearNumber) || []);
+  ids.forEach((id, idx) => m.set(id, idx));
+  _systemOrders.set(yearNumber, m);
+
+  const cached = getCached(CACHE_NS, stagingKey(yearNumber));
+  if (cached) {
+    const next = {
+      shortlist: overlaySystemOrder(cached.shortlist ?? [], yearNumber),
+      archived: cached.archived ?? [],
+    };
+    setCached(CACHE_NS, stagingKey(yearNumber), next);
+    dispatchStagingEvent({
+      shortlist: next.shortlist.map(deserializeItemFromCache),
+      archived: next.archived.map(deserializeItemFromCache),
+    }, yearNumber);
+  }
+
+  try {
+    const userId = await requireUserId();
+    const yearId = await findYearId(userId, yearNumber);
+    if (!yearId) return;
+    const results = await Promise.all(ids.map((id, idx) => (
+      supabase
+        .from('projects')
+        .update({ system_order: idx })
+        .eq('user_id', userId)
+        .eq('year_id', yearId)
+        .eq('id', id)
+    )));
+    const failed = results.find((r) => r.error);
+    if (failed) throw failed.error;
+  } catch (error) {
+    console.error('Failed to save System project order', error);
   }
 }

@@ -1107,9 +1107,12 @@ export const readTaskRows = async (
 
     let result;
     if (taskCount === 0 && archiveRows.length === 0) {
-      // If there are no task rows and no archive rows we still return at least
-      // some blank rows so the table renders the empty grid the user expects.
-      result = [...headers, ...createInitialData(100, totalDays, startDate).slice(8)];
+      // No task rows and no archive rows: return just the calendar headers.
+      // Padding with blank rows here (previously 92 of them) left a wall of
+      // empty task rows on every new draft year, most of them stranded under
+      // the Archive header. The inbox/archive structural rows are injected by
+      // the page's structure effect, and users add rows via the Listical menu.
+      result = [...headers];
     } else {
       // Archive week rows live in a separate table (archived_weeks), so their
       // position in the row list must be reconstructed on read. Each archived

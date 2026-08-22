@@ -98,5 +98,6 @@ Migrations written but not yet applied to the database. Apply as a batch.
 | `src/utils/plannerFormatters.js` | Likely legacy |
 | `src/timeline/useTimelineRows.js` | Leftover from earlier architecture |
 | `src/constants/plannerConstants.js` | Only referenced by legacy `plannerStorage.js` |
+| `ProjectTimePlannerV2.jsx` Listical menu leftovers | `isListicalMenuOpen` / `addTasksCount` state and the `handleAddTasks`-style callback (~line 2436) are remnants of the removed Listical menu. Rows are now added via the right-click context menu (`addTasksWithCount`) and multi-line paste. `taskRowGenerator.js` header comment still references the Listical menu. Safe to remove |
 | `src/utils/yearMigration.js` | Not imported anywhere; was a one-time localStorage-to-Supabase migration helper, now dead |
 | No-draft else branch in `src/utils/planner/archiveYear.js` | The Archive button only renders when a draft year exists, making the `else` branch (lines ~290–320, "Legacy path: no draft year, create fresh next year") unreachable. Safe to delete along with the unused `loadStagingState` and `loadTacticsMetrics` reads it depends on. |

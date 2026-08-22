@@ -376,7 +376,7 @@ const TableRow = React.memo(function TableRow({
             left: 0,
             width: '100%',
             height: '2px',
-            backgroundColor: '#000000',
+            backgroundColor: 'var(--th-sel)',
             zIndex: 1000,
             pointerEvents: 'none',
             display: 'block',

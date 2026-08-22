@@ -270,8 +270,8 @@ tr[data-dragging="true"] td {
 }
 
 tr[data-drop-target="true"] {
-  border-top: 4px solid #000000 !important;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.4) !important;
+  border-top: 4px solid var(--th-sel) !important;
+  box-shadow: 0 -2px 8px color-mix(in srgb, var(--th-sel) 40%, transparent) !important;
 }
 
 /* Google Sheets-style drag badge */
