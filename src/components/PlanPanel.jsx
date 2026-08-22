@@ -18,6 +18,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect } from 'react';
+import useConfirmKeys from '../hooks/useConfirmKeys';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import PanelShell from './PanelShell';
@@ -678,6 +679,7 @@ function ColourView({ chipName, chipColour, onBack, onConfirm, viewWidth = DEFAU
   const handleConfirm = useCallback(() => {
     onConfirm(pendingColour);
   }, [pendingColour, onConfirm]);
+  useConfirmKeys(true, { onConfirm: handleConfirm, onCancel: onBack });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: viewWidth, flexShrink: 0, minHeight: 0 }}>
@@ -1688,6 +1690,8 @@ function ChipEditorView({ editor, onBack, onConfirm, viewWidth = DEFAULT_VIEW_WI
     if (!editor) { onBack(); return; }
     onConfirm({ kind: editor.kind, id: editor.id ?? null, chipId: editor.chipId ?? null, name, colour, isNew: editor.isNew ?? false, targetCell: editor.targetCell ?? null });
   }, [editor, name, colour, onConfirm, onBack]);
+  // The name input handles its own Enter/Escape; this covers focus anywhere else in the editor.
+  useConfirmKeys(true, { onConfirm: handleConfirm, onCancel: onBack, skipInputs: true });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: viewWidth, flexShrink: 0, minHeight: 0 }}>

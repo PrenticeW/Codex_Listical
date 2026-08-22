@@ -673,7 +673,7 @@ const TaskRow = React.memo(function TaskRow({
                         )}
                         <ChevronDown
                           size={12}
-                          style={{ color: '#9ca3af', cursor: 'pointer' }}
+                          style={{ color: 'currentColor', cursor: 'pointer' }}
                           onClick={(e) => {
                             e.stopPropagation();
                             handleCellDoubleClick(rowId, columnId, value);

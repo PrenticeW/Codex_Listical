@@ -181,6 +181,13 @@ function EstimateDropdownCell({
   // Extra attributes spread onto the trigger button (e.g. the Goal table's
   // data-plan-* focus-targeting attributes).
   triggerProps = null,
+  // Goal-page reuse: only the chevron opens the panel. Clicking the cell
+  // body no longer toggles it and mousedown is allowed to reach the host
+  // <td>, so the cell can be selected (and copied / pasted) like any other.
+  chevronOnlyTrigger = false,
+  // Chevron tint — defaults to the trigger's text colour so it reads as part
+  // of the cell rather than a faint grey afterthought.
+  chevronColor = null,
 }) {
   // A value outside ESTIMATE_VALUES (the Goal table's saved 'Custom') has no
   // list row — show it verbatim on the trigger and re-commit it unchanged on
@@ -305,7 +312,8 @@ function EstimateDropdownCell({
 
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (multiMode) {
+      if (multiMode || hasCombo) {
+        // A staged Hour / Minute pick commits exactly as the Confirm button would.
         handleConfirmCombo(e);
       } else {
         handleComplete(initialInList ? ESTIMATE_VALUES[selectedIndex] : initialKey);
@@ -464,7 +472,9 @@ function EstimateDropdownCell({
       className="relative w-full h-full flex items-center"
       style={{ paddingLeft: '3px', paddingRight: '3px' }}
       onKeyDown={handleKeyDown}
-      onMouseDown={(e) => e.stopPropagation()} // Prevent parent cell handlers from interfering
+      // Prevent parent cell handlers from interfering — except in chevron-only
+      // mode, where the host cell must still receive mousedown to select.
+      onMouseDown={(e) => { if (!chevronOnlyTrigger) e.stopPropagation(); }}
       tabIndex={0}
     >
       <button
@@ -476,7 +486,7 @@ function EstimateDropdownCell({
           border: '2px solid var(--sel-ring)',
           ...(triggerStyle || {}),
         }}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => { if (!chevronOnlyTrigger) setIsOpen(!isOpen); }}
         {...(triggerProps || {})}
       >
         <span className="flex-1 text-left">
@@ -494,7 +504,21 @@ function EstimateDropdownCell({
             {safeShownIdx + 1}/{instances.length}
           </span>
         )}
-        <ChevronDown size={12} className="flex-shrink-0" style={{ color: '#9ca3af' }} />
+        <ChevronDown
+          size={12}
+          className="flex-shrink-0"
+          style={{ color: chevronColor || triggerStyle?.color || 'currentColor', cursor: 'pointer' }}
+          onMouseDown={(e) => { if (chevronOnlyTrigger) { e.preventDefault(); e.stopPropagation(); } }}
+          onClick={(e) => {
+            if (!chevronOnlyTrigger) return;
+            e.stopPropagation();
+            // mousedown was prevented (to keep the host cell's selection), so
+            // move focus here explicitly — Enter / Escape are handled by the
+            // wrapper's onKeyDown and need the panel to own keyboard focus.
+            buttonRef.current?.focus();
+            setIsOpen((o) => !o);
+          }}
+        />
       </button>
 
       {isOpen && createPortal(

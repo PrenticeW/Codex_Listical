@@ -156,14 +156,14 @@ function MultiStatusDropdownCell({
   }, [open, shown?.dayIndex]);
   useEffect(() => () => shownChangeRef.current?.(null), []);
 
-  // Outside click / Escape close
+  // Outside click / Escape / Enter close (per-date edits are already committed)
   useEffect(() => {
     if (!open) return;
     const onMouseDown = (e) => {
       if (anchorRef.current && !anchorRef.current.contains(e.target)) closeRef.current();
     };
     const onKey = (e) => {
-      if (e.key === 'Escape') closeRef.current();
+      if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); closeRef.current(); }
     };
     document.addEventListener('mousedown', onMouseDown);
     document.addEventListener('keydown', onKey);

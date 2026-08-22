@@ -9,7 +9,13 @@
  * - Range Mode: Grid of values
  */
 
-import { cloneRowWithMetadata, cloneStagingState } from './planTableHelpers';
+import {
+  cloneRowWithMetadata,
+  cloneStagingState,
+  COL,
+  formatMinutesToHHmm,
+  parseEstimateLabelToMinutes,
+} from './planTableHelpers';
 
 /**
  * Parse a cell key into its components
@@ -84,90 +90,71 @@ export const handleCopyOperation = ({
 };
 
 /**
+ * Write one value into a row, keeping the Estimate / Time Value pair
+ * consistent the same way handlePlanEstimateChange does: a pasted preset
+ * estimate derives its time value; pasting 'Custom' leaves the time value
+ * for the accompanying column (or a later edit) to fill.
+ */
+const writeCell = (row, colIdx, value) => {
+  if (!row || colIdx < 0 || colIdx >= row.length) return;
+  row[colIdx] = value;
+  if (colIdx === COL.ESTIMATE) {
+    const minutes = parseEstimateLabelToMinutes(value);
+    if (minutes != null) row[COL.TIME_VALUE] = formatMinutesToHHmm(minutes);
+    else if (value !== 'Custom') row[COL.TIME_VALUE] = '0.00';
+  }
+};
+
+/**
  * Handle paste operation
+ *
+ * Three shapes, mirroring the System page:
+ * - single clipboard value + several selected cells → fill every selected cell
+ * - single selected cell + grid clipboard → spread the grid from that anchor
+ *   (rows beyond the table or header rows are skipped, never created)
+ * - several selected cells + grid clipboard → tile the grid across the selection
+ *
  * @param {Object} params Configuration object
  * @returns {Object|null} Command object for undo/redo, or null if nothing to paste
  */
 export const handlePasteOperation = ({
   clipboardText,
   selectedCells,
-  shortlist,
   setState,
 }) => {
   if (!clipboardText || !selectedCells || selectedCells.size === 0) return null;
 
-  // Parse TSV data
-  const rows = clipboardText.split('\n').map((row) => row.split('\t'));
+  // Parse TSV data (drop a trailing newline, keep CRLF-safe)
+  const rows = clipboardText
+    .replace(/\r/g, '')
+    .replace(/\n$/, '')
+    .split('\n')
+    .map((row) => row.split('\t'));
   if (rows.length === 0 || (rows.length === 1 && rows[0].length === 0)) return null;
 
-  // Check if this is a single value paste (fill mode) vs grid paste
   const isSingleValue = rows.length === 1 && rows[0].length === 1;
   const singleValue = isSingleValue ? rows[0][0] : null;
 
-  // Find the anchor cell (first selected cell)
-  const firstCellKey = Array.from(selectedCells)[0];
-  const anchor = parseCellKey(firstCellKey);
+  // Group selected cells by item
+  const cellsByItem = new Map();
+  selectedCells.forEach((cellKey) => {
+    const parsed = parseCellKey(cellKey);
+    if (!parsed) return;
+    if (!cellsByItem.has(parsed.itemId)) cellsByItem.set(parsed.itemId, []);
+    cellsByItem.get(parsed.itemId).push({ rowIdx: parsed.rowIdx, colIdx: parsed.colIdx });
+  });
+
+  // Anchor = top-left of the selection
+  const anchor = parseCellKey(Array.from(selectedCells)[0]);
   if (!anchor) return null;
+  const spreadFromAnchor = !isSingleValue && selectedCells.size === 1;
 
-  // Calculate target cells based on paste size and anchor
-  const pasteRowCount = rows.length;
-
-  // Capture old state for undo
   let capturedState = null;
 
   const command = {
     execute: () => {
       setState((prev) => {
-        // Capture state on first execute
-        if (capturedState === null) {
-          capturedState = cloneStagingState(prev);
-        }
-
-        // If single value and multiple cells selected, fill all selected cells
-        if (isSingleValue && selectedCells.size > 1) {
-          // Group cells by item
-          const cellsByItem = new Map();
-          selectedCells.forEach((cellKey) => {
-            const parsed = parseCellKey(cellKey);
-            if (!parsed) return;
-            if (!cellsByItem.has(parsed.itemId)) {
-              cellsByItem.set(parsed.itemId, []);
-            }
-            cellsByItem.get(parsed.itemId).push({ rowIdx: parsed.rowIdx, colIdx: parsed.colIdx });
-          });
-
-          return {
-            ...prev,
-            shortlist: prev.shortlist.map((item) => {
-              const cells = cellsByItem.get(item.id);
-              if (!cells) return item;
-
-              const nextEntries = item.planTableEntries.map(cloneRowWithMetadata);
-              cells.forEach(({ rowIdx, colIdx }) => {
-                if (nextEntries[rowIdx] && colIdx < nextEntries[rowIdx].length) {
-                  nextEntries[rowIdx][colIdx] = singleValue;
-                }
-              });
-
-              return { ...item, planTableEntries: nextEntries };
-            }),
-          };
-        }
-
-        // Grid paste: paste values to selected cells
-        // If multiple cells are selected, paste to all selected cells (repeating/tiling as needed)
-        // If only anchor is selected, paste grid starting from anchor
-
-        // Group selected cells by item
-        const cellsByItem = new Map();
-        selectedCells.forEach((cellKey) => {
-          const parsed = parseCellKey(cellKey);
-          if (!parsed) return;
-          if (!cellsByItem.has(parsed.itemId)) {
-            cellsByItem.set(parsed.itemId, []);
-          }
-          cellsByItem.get(parsed.itemId).push({ rowIdx: parsed.rowIdx, colIdx: parsed.colIdx });
-        });
+        if (capturedState === null) capturedState = cloneStagingState(prev);
 
         return {
           ...prev,
@@ -176,39 +163,43 @@ export const handlePasteOperation = ({
             if (!cells) return item;
 
             const nextEntries = item.planTableEntries.map(cloneRowWithMetadata);
+            const isWritableRow = (r) => r && r.__rowType !== 'header';
 
-            // Find the bounds of the selection for this item
-            const selectedRowIdxs = [...new Set(cells.map(c => c.rowIdx))].sort((a, b) => a - b);
-            const selectedColIdxs = [...new Set(cells.map(c => c.colIdx))].sort((a, b) => a - b);
+            if (spreadFromAnchor) {
+              rows.forEach((clipRow, rOff) => {
+                const target = nextEntries[anchor.rowIdx + rOff];
+                if (!isWritableRow(target)) return;
+                clipRow.forEach((val, cOff) => writeCell(target, anchor.colIdx + cOff, val));
+              });
+              return { ...item, planTableEntries: nextEntries };
+            }
 
-            // Create a set for quick lookup of selected cells
-            const selectedSet = new Set(cells.map(c => `${c.rowIdx}|${c.colIdx}`));
+            if (isSingleValue) {
+              cells.forEach(({ rowIdx, colIdx }) => {
+                if (isWritableRow(nextEntries[rowIdx])) writeCell(nextEntries[rowIdx], colIdx, singleValue);
+              });
+              return { ...item, planTableEntries: nextEntries };
+            }
 
-            // Paste values - tile/repeat clipboard data across selected cells
-            selectedRowIdxs.forEach((targetRowIdx, selRowOffset) => {
-              selectedColIdxs.forEach((targetColIdx, selColOffset) => {
-                // Only paste to cells that are actually selected
+            // Tile the clipboard grid across the selection
+            const selectedRowIdxs = [...new Set(cells.map((c) => c.rowIdx))].sort((a, b) => a - b);
+            const selectedColIdxs = [...new Set(cells.map((c) => c.colIdx))].sort((a, b) => a - b);
+            const selectedSet = new Set(cells.map((c) => `${c.rowIdx}|${c.colIdx}`));
+            selectedRowIdxs.forEach((targetRowIdx, rOff) => {
+              if (!isWritableRow(nextEntries[targetRowIdx])) return;
+              selectedColIdxs.forEach((targetColIdx, cOff) => {
                 if (!selectedSet.has(`${targetRowIdx}|${targetColIdx}`)) return;
-
-                // Map selection offset to clipboard data (with wrapping/tiling)
-                const clipboardRowIdx = selRowOffset % rows.length;
-                const clipboardColIdx = selColOffset % rows[clipboardRowIdx].length;
-
-                if (nextEntries[targetRowIdx] && targetColIdx < nextEntries[targetRowIdx].length) {
-                  nextEntries[targetRowIdx][targetColIdx] = rows[clipboardRowIdx][clipboardColIdx];
-                }
+                const clipRow = rows[rOff % rows.length];
+                writeCell(nextEntries[targetRowIdx], targetColIdx, clipRow[cOff % clipRow.length]);
               });
             });
-
             return { ...item, planTableEntries: nextEntries };
           }),
         };
       });
     },
     undo: () => {
-      if (capturedState !== null) {
-        setState(capturedState);
-      }
+      if (capturedState !== null) setState(capturedState);
     },
   };
 

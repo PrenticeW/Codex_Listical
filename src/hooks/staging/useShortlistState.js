@@ -72,10 +72,8 @@ const createSimpleTable = () => {
     createRow(SECTION_CONFIG.Reasons.header, ROW_TYPE.HEADER, 'Reasons'),
     createPromptRow(''),
     createRow('', ROW_TYPE.DATA), // inert spacer before next section
-    // 02 Outcomes — two prompt+response pairs
+    // 02 Outcomes — one prompt+response pair (more are added per goal)
     createRow(SECTION_CONFIG.Outcomes.header, ROW_TYPE.HEADER, 'Outcomes'),
-    createPromptRow(''),
-    createResponseRow(''),
     createPromptRow(''),
     createResponseRow(''),
     createRow('', ROW_TYPE.DATA), // inert spacer before next section

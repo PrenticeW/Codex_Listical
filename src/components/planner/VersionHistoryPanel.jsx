@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import useConfirmKeys from '../../hooks/useConfirmKeys';
 import { createPortal } from 'react-dom';
 import { Loader } from 'lucide-react';
 import { loadSiteSnapshots, restoreSiteSnapshot } from '../../lib/snapshotStorage';
@@ -77,6 +78,7 @@ function RestoreBtn({ onClick, disabled }) {
 // ---------------------------------------------------------------------------
 
 function ConfirmRestoreModal({ snapshot, onConfirm, onCancel, isRestoring }) {
+  useConfirmKeys(!isRestoring, { onConfirm, onCancel });
   return createPortal(
     <div
       style={{ position:'fixed', inset:0, zIndex:1000001, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(31,31,31,0.32)' }}

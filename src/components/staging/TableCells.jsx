@@ -353,6 +353,7 @@ export function EstimateSelectCell({
           color: value && value !== '-' ? '#1A1A1A' : '#616161',
         }}
         triggerProps={dataAttributes}
+        chevronOnlyTrigger
       />
     </td>
   );
