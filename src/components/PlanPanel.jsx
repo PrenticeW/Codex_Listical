@@ -1557,14 +1557,22 @@ function MainView({
   onDurationChange,
   onToggleChipDuration,
   onRemoveChip,
+  onDeselectChip,
   viewWidth = DEFAULT_VIEW_WIDTH,
 }) {
   const hasChip = selectedChip != null;
 
   return (
     <div style={{ width: viewWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      {/* Selected-chip view gets the standard back button; it deselects the
+          chip and returns the panel to its default (no chip) content. */}
+      {hasChip && (
+        <div style={{ padding: '16px 18px 0', flexShrink: 0 }}>
+          <BackBtn onClick={onDeselectChip} />
+        </div>
+      )}
       {/* Scrollable body */}
-      <div style={{ flex: 1, overflowY: 'auto', paddingTop: 20, paddingBottom: 8 }}>
+      <div style={{ flex: 1, overflowY: 'auto', paddingTop: hasChip ? 8 : 20, paddingBottom: 8 }}>
         <UpdateSection isUpToDate={isUpToDate} onSendToSystem={onSendToSystem} />
         {!hasChip ? (
           <>
@@ -2035,6 +2043,7 @@ export default function PlanPanel() {
   // Chip field actions — dispatch events for TacticsPage to handle
   const handleNameChange     = useCallback((value) => dispatchPlanAction('setChipName', { chipId: selectedChip?.id, value }), [selectedChip]);
   const handleGoalChange     = useCallback((rect) => openGoalDropdown(rect), [openGoalDropdown]);
+  const handleDeselectChip   = useCallback(() => dispatchPlanAction('deselectChip'), []);
   const handleStartMinutes   = useCallback((minutes) => dispatchPlanAction('setChipStartMinutes', { chipId: selectedChip?.id, minutes }), [selectedChip]);
   const handleEndMinutes     = useCallback((minutes) => dispatchPlanAction('setChipEndMinutes', { chipId: selectedChip?.id, minutes }), [selectedChip]);
   const handleDurationChange = useCallback((value) => dispatchPlanAction('setChipDuration', { chipId: selectedChip?.id, value }), [selectedChip]);
@@ -2143,6 +2152,7 @@ export default function PlanPanel() {
               onDurationChange={handleDurationChange}
               onToggleChipDuration={handleToggleChipDuration}
               onRemoveChip={handleRemoveChip}
+              onDeselectChip={handleDeselectChip}
               viewWidth={viewWidth}
             />
 

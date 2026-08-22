@@ -167,6 +167,14 @@ const getBlockDuration = (block, rowIndexMap, timelineRowIds, incrementMinutes) 
   return totalMinutes;
 };
 
+// Mix any CSS colour (hex, rgb(), hsl(), var(--x)) with white.
+// amount 0 = colour, 1 = white.
+const tintTowardWhite = (color, amount = 0.75) => {
+  if (typeof color !== 'string' || !color.trim()) return '#f5f5f5';
+  const pct = Math.round((1 - amount) * 100);
+  return `color-mix(in srgb, ${color.trim()} ${pct}%, white)`;
+};
+
 const formatDuration = (minutes) => {
   if (!Number.isFinite(minutes) || minutes <= 0) {
     return '0:00';
@@ -174,6 +182,28 @@ const formatDuration = (minutes) => {
   const hours = Math.floor(minutes / 60);
   const remaining = Math.abs(minutes % 60);
   return `${hours}:${remaining.toString().padStart(2, '0')}`;
+};
+
+// Storage only persists an explicit override_minutes per chip; intrinsic
+// duration is re-derived from the row span on read (see migration
+// 20260516000003). A chip whose in-memory durationMinutes differs from its
+// row span (e.g. a 15-minute chip on a 30-minute grid, or a chip just resized)
+// would therefore come back with the wrong duration on System. Promote such
+// durations to overrides before every save so the round trip is lossless.
+const withDurationOverrides = (chips, overrides, rowIndexMap, timelineRowIds, incrementMinutes) => {
+  const next = { ...(overrides ?? {}) };
+  let changed = false;
+  (chips ?? []).forEach((chip) => {
+    if (!chip || next[chip.id] != null) return;
+    const d = chip.durationMinutes;
+    if (!Number.isFinite(d) || d <= 0) return;
+    const span = getBlockDuration(chip, rowIndexMap, timelineRowIds, incrementMinutes);
+    if (span > 0 && d !== span) {
+      next[chip.id] = d;
+      changed = true;
+    }
+  });
+  return changed ? next : (overrides ?? next);
 };
 
 const minutesToHourMinuteDecimal = (minutes) => {
@@ -518,6 +548,8 @@ export default function TacticsPage() {
     () => (Array.isArray(cachedLiveChips?.projectChips) ? cachedLiveChips.projectChips : []),
   );
   const [selectedBlockIds, setSelectedBlockIds] = useState(() => new Set());
+  const selectedBlockIdsRef = useRef(selectedBlockIds);
+  selectedBlockIdsRef.current = selectedBlockIds;
   // Derived: last/primary selected ID (for drag, resize, highlight, paste target)
   const selectedBlockId = useMemo(() => {
     const arr = [...selectedBlockIds];
@@ -550,6 +582,24 @@ export default function TacticsPage() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
   const [selectedCell, setSelectedCell] = useState(null);
+  // Clicking anywhere outside the table clears chip selection. The side panel
+  // (data-selection-safe) and the cell popover menu are exempt so the user can
+  // interact with the selected chip from there.
+  useEffect(() => {
+    const handler = (e) => {
+      const t = e.target;
+      if (!(t instanceof Element)) return;
+      if (selectedBlockIdsRef.current.size === 0) return;
+      if (tableContainerRef.current?.contains(t)) return;
+      if (t.closest('[data-selection-safe]')) return;
+      if (cellMenuRef.current?.contains(t)) return;
+      setSelectedBlockId(null);
+      setSelectedBlockIds(new Set());
+      setSelectedCell(null);
+    };
+    document.addEventListener('pointerdown', handler, true);
+    return () => document.removeEventListener('pointerdown', handler, true);
+  }, [setSelectedBlockId]);
   const [cellMenu, setCellMenu] = useState(null);
 
   // Column widths for resizing (index 0 is the time column, rest are day/project columns).
@@ -1309,34 +1359,28 @@ export default function TacticsPage() {
       // hit the grid cell's toggleCellSelection handler and deselect the chip.
       window.addEventListener('click', (e) => e.stopPropagation(), { capture: true, once: true });
 
+      // After a resize the chip's row span is the source of truth for its
+      // duration — for every chip type. Write it to durationMinutes and drop
+      // any manual time override so the chip label, side panel, summary table
+      // and send-to-system totals all agree.
       setProjectChips((prev) => {
         const chip = prev.find((c) => c.id === resizingBlockId);
-        if (
-          chip &&
-          chip.id.startsWith('schedule-chip-') &&
-          chip.id.includes('-extra-chip-') &&
-          chip.columnIndex < 8
-        ) {
-          const startIdx = rowIndexMap.get(chip.startRowId);
-          const endIdx = rowIndexMap.get(chip.endRowId);
-          if (startIdx != null && endIdx != null) {
-            const rowCount = Math.abs(endIdx - startIdx) + 1;
-            const newDuration = rowCount * incrementMinutes;
-            if (newDuration !== chip.durationMinutes) {
-              // Clear any time override so durationMinutes is the source of truth
-              setChipTimeOverrides((prev) => {
-                if (prev[resizingBlockId] == null) return prev;
-                const next = { ...prev };
-                delete next[resizingBlockId];
-                return next;
-              });
-              return prev.map((c) =>
-                c.id === resizingBlockId ? { ...c, durationMinutes: newDuration } : c
-              );
-            }
-          }
-        }
-        return prev;
+        if (!chip) return prev;
+        const startIdx = rowIndexMap.get(chip.startRowId);
+        const endIdx = rowIndexMap.get(chip.endRowId ?? chip.startRowId);
+        if (startIdx == null || endIdx == null) return prev;
+        const rowCount = Math.abs(endIdx - startIdx) + 1;
+        const newDuration = rowCount * incrementMinutes;
+        setChipTimeOverrides((prevOverrides) => {
+          if (prevOverrides[resizingBlockId] == null) return prevOverrides;
+          const next = { ...prevOverrides };
+          delete next[resizingBlockId];
+          return next;
+        });
+        if (newDuration === chip.durationMinutes) return prev;
+        return prev.map((c) =>
+          c.id === resizingBlockId ? { ...c, durationMinutes: newDuration } : c
+        );
       });
       setResizingBlockId(null);
     };
@@ -2180,12 +2224,17 @@ export default function TacticsPage() {
     // final resting state after 600ms of no further updates is written.
     // The mouseup handler also issues two quick setState calls (chipTimeOverrides
     // then projectChips) — the debounce collapses those into one save too.
-    const payload = { projectChips, customProjects, chipTimeOverrides };
+    const payload = {
+      projectChips,
+      customProjects,
+      chipTimeOverrides: withDurationOverrides(projectChips, chipTimeOverrides, rowIndexMap, timelineRowIds, incrementMinutes),
+    };
     const yearToSave = currentYear;
     const timer = setTimeout(() => {
       saveTacticsChipsState(payload, yearToSave);
     }, 600);
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectChips, customProjects, chipTimeOverrides, currentYear]);
   // HIGH-2 conflict listener: when a chip autosave is dropped because another
   // client saved the live layer first, tacticsStorage broadcasts the fresh
@@ -3239,9 +3288,10 @@ export default function TacticsPage() {
     // the System page's event handler races the Supabase writes and reads
     // stale data ("subsequent changes ignored" symptom from the previous
     // session's debugging marathon).
+    const persistedOverrides = withDurationOverrides(projectChips, chipTimeOverrides, rowIndexMap, timelineRowIds, incrementMinutes);
     await Promise.all([
-      saveTacticsChipsState({ projectChips, customProjects, chipTimeOverrides }, currentYear),
-      saveSentChipsSnapshot({ projectChips, customProjects, chipTimeOverrides }, currentYear),
+      saveTacticsChipsState({ projectChips, customProjects, chipTimeOverrides: persistedOverrides }, currentYear),
+      saveSentChipsSnapshot({ projectChips, customProjects, chipTimeOverrides: persistedOverrides }, currentYear),
       setSendToSystemTimestamp(currentYear),
       saveTacticsMetrics(liveMetricsPayload, currentYear),
       saveSentMetricsSnapshot(sentMetricsPayload, currentYear),
@@ -3262,6 +3312,9 @@ export default function TacticsPage() {
     setTimeout(() => setSendToSystemDone(false), 2000);
   }, [
     currentYear,
+    incrementMinutes,
+    rowIndexMap,
+    timelineRowIds,
     projectSummaries,
     displayedWeekDays,
     availableColumnTotals,
@@ -3657,6 +3710,11 @@ export default function TacticsPage() {
       if (action === 'undo') { undo(); return; }
       if (action === 'redo') { redo(); return; }
       if (action === 'sendToSystem') { handleSendToSystem(); return; }
+      if (action === 'deselectChip') {
+        setSelectedBlockIds(new Set());
+        setSelectedCell(null);
+        return;
+      }
       if (action === 'commitChipEditor') { applyChipEditorCommit(e.detail); return; }
 
       // ── Chip-specific actions ──────────────────────────────────────────────
@@ -3833,7 +3891,13 @@ export default function TacticsPage() {
 
         // Duration (computed first so we can adjust end time for sub-increment chips)
         const overrideMins = chipTimeOverrides[selectedBlockId];
-        const durationMinutes = overrideMins ?? block.durationMinutes ?? null;
+        // Multi-row chips derive duration from their row span (matches the
+        // chip label and totals); single-cell chips use their stored minutes.
+        const spanIsMultiRow = block.endRowId && block.endRowId !== block.startRowId;
+        const spanMinutes = spanIsMultiRow
+          ? getBlockDuration(block, rowIndexMap, timelineRowIds, incrementMinutes)
+          : null;
+        const durationMinutes = overrideMins ?? (spanIsMultiRow ? spanMinutes : null) ?? block.durationMinutes ?? null;
 
         // Clock times from row IDs.
         // sleep-start = configured bed-time hour; sleep-end = configured wake time.
@@ -3904,6 +3968,8 @@ export default function TacticsPage() {
     chipDisplayModes,
     highlightedProjects,
     customProjects,
+    rowIndexMap,
+    timelineRowIds,
   ]);
 
   // Broadcast schedule data to PlanPanel's ScheduleView whenever relevant data changes
@@ -4317,7 +4383,7 @@ export default function TacticsPage() {
           className="absolute left-0 top-0 flex w-full justify-center"
           style={{
             height: `${blockHeight}px`,
-            padding: '2px 3px',
+            padding: '2px 0',
             zIndex: isActive || isEditing ? 11 : 10,
             pointerEvents: 'auto',
           }}
@@ -4353,7 +4419,7 @@ export default function TacticsPage() {
               backgroundColor,
               color: textColor,
               fontWeight,
-              border: isCovering ? '2px dashed #f97316' : 'none',
+              border: isCovering ? '2px dashed #f97316' : '1px solid #fff',
               borderRadius: 6,
               boxShadow: 'var(--sh-1)',
               fontSize: `${14 * textSizeScale}px`,
@@ -5033,7 +5099,7 @@ export default function TacticsPage() {
                   }
                   if (index === 1) {
                     return (
-                      <td key="selector" className="border border-[var(--n-lt-slate)] px-3 py-px text-center font-semibold" style={{ position: 'relative' }}>
+                      <td key="selector" className="border border-[var(--n-lt-slate)] px-3 py-px text-center font-semibold" style={{ position: 'relative', fontSize: `${14 * textSizeScale}px` }}>
                         {startDay}
                         {/* Add resize handle */}
                         <div
@@ -5066,7 +5132,7 @@ export default function TacticsPage() {
                   }
                   const dayIndex = index - 2;
                       return (
-                        <td key={`day-${index}`} className="border border-[var(--n-lt-slate)] px-3 py-px text-center font-semibold" style={{ position: 'relative' }}>
+                        <td key={`day-${index}`} className="border border-[var(--n-lt-slate)] px-3 py-px text-center font-semibold" style={{ position: 'relative', fontSize: `${14 * textSizeScale}px` }}>
                           {sequence[dayIndex] ?? ''}
                           {/* Add resize handle */}
                           <div
@@ -5521,8 +5587,9 @@ export default function TacticsPage() {
                   totalCellColor = '#1A1A1A';
                   totalCellFontWeight = 700;
                 } else {
-                  labelBg = row.color || '#0f172a';
-                  labelColor = '#ffffff';
+                  const meta = projectMetadata.get(row.id);
+                  labelBg = meta?.color || row.color || '#0f172a';
+                  labelColor = meta?.textColor ?? getContrastTextColor(labelBg);
                 }
                 return (
                   <tr
@@ -5576,18 +5643,24 @@ export default function TacticsPage() {
                     {displayedWeekDays.map((day, idx) => {
                       const val = row.columnTotals[idx] ?? 0;
                       let cellStyle = { fontSize: `${14 * textSizeScale}px` };
-                      if (row.kind === 'project') {
-                        const hasValue = val > 0;
+                      const hasValue = val > 0;
+                      if (row.kind === 'rest') {
+                        cellStyle = { ...cellStyle, backgroundColor: labelBg, color: labelColor, fontWeight: 700 };
+                      } else if (row.kind === 'sleep') {
+                        // Sleep row takes a light tint of its colour across the row.
                         cellStyle = {
                           ...cellStyle,
-                          backgroundColor: hasValue ? '#f5f5f5' : '#ffffff',
+                          backgroundColor: tintTowardWhite(labelBg, 0.75),
+                          fontWeight: 700,
+                          color: '#111111',
+                        };
+                      } else {
+                        cellStyle = {
+                          ...cellStyle,
+                          backgroundColor: '#ffffff',
                           fontWeight: hasValue ? 700 : 400,
                           color: hasValue ? '#111111' : '#9ca3af',
                         };
-                      } else if (row.kind === 'rest') {
-                        cellStyle = { ...cellStyle, backgroundColor: labelBg, color: labelColor, fontWeight: 700 };
-                      } else {
-                        cellStyle = { ...cellStyle, backgroundColor: '#ffffff' };
                       }
                       if (isDragOver) cellStyle.borderTop = '2px solid #111111';
                       return (
@@ -5596,7 +5669,7 @@ export default function TacticsPage() {
                           className="border border-[#D4D4D8] px-3 py-px text-center"
                           style={cellStyle}
                         >
-                          {formatDuration(val)}
+                          {val > 0 ? formatDuration(val) : ''}
                         </td>
                       );
                     })}
