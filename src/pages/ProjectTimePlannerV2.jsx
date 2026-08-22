@@ -28,6 +28,7 @@ import { revertArchive } from '../utils/planner/revertArchive';
 import { importTasksForDraftYear } from '../utils/planner/importTasksFromYear';
 import { placeImportedTasks } from '../utils/planner/placeImportedTasks';
 import { isEditableRow } from '../utils/planner/rowTypeChecks';
+import { groupChips, chipGroupKey, chipDisplayName } from '../utils/planner/chipGroups';
 import usePlannerFilters from '../hooks/planner/usePlannerFilters';
 import { useFilteredData, useFilterValues } from '../hooks/planner/useFilteredData';
 import { useProjectTotals, useDailyTotals } from '../hooks/planner/useTotalsCalculation';
@@ -1452,128 +1453,145 @@ export default function ProjectTimePlannerV2() {
     // updater in the same flush, so chip rows see project headers already inserted.
     setData(prevData => {
         const currentChipIds = new Set(tacticsChips.map(c => c.id));
+        // One header row per group (project + chip name); one task row per chip.
+        const groups = groupChips(tacticsChips);
+        const groupKeyOfChipId = new Map(tacticsChips.map(c => [c.id, chipGroupKey(c)]));
+        const chipShortLabelMap = new Map(tacticsChips.map(chip => [chip.id, chipDisplayName(chip)]));
 
-        // Build label lookup for all current chips
-        const toTitleCase = (str) => str ? str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase()) : str;
-        const chipLabelMap = new Map(
-          tacticsChips.map(chip => {
-            const name = toTitleCase(chip.displayLabel || chip.projectNickname);
-            const day = toTitleCase(chip.dayName);
-            const duration = chip.formattedDuration ? chip.formattedDuration.toLowerCase() : null;
-            const durationLabel = duration
-              ? `${duration} of ${name} on ${day}`
-              : `${name} on ${day}`;
-            return [chip.id, durationLabel];
-          })
-        );
-        // Short label: just the chip display text (what's shown on the chip itself)
-        const chipShortLabelMap = new Map(
-          tacticsChips.map(chip => [chip.id, toTitleCase(chip.displayLabel || chip.projectNickname)])
-        );
-
-        // Remove rows for chips that no longer exist.
-        // Update subprojectName on existing rows only when the user hasn't edited it
-        // (detected by comparing against the last chip-derived label stored in _chipLabel).
         let changed = false;
-        const filteredData = prevData
-          .filter(row => {
-            if (row._chipId && !currentChipIds.has(row._chipId)) {
-              if (row._rowType === 'subprojectHeader' || row._rowType === 'projectTask') {
-                changed = true;
-                return false;
-              }
+
+        // --- Step 1: remove rows for chips that no longer exist ---
+        let working = prevData.filter(row => {
+          if (row._chipId && !currentChipIds.has(row._chipId)) {
+            if (row._rowType === 'projectTask') { changed = true; return false; }
+            // A header survives as long as any chip in its group still exists
+            if (row._rowType === 'subprojectHeader') {
+              const key = row._chipGroupKey;
+              if (!key || !groups.has(key)) { changed = true; return false; }
+            }
+          }
+          return true;
+        });
+
+        // --- Step 2: migrate legacy one-header-per-chip rows into group headers ---
+        // The first header seen for a group becomes the group header; later
+        // duplicates are dropped and their task rows re-parented under the survivor.
+        const headerByKey = new Map();
+        const dropHeaderGroupIds = new Map(); // old groupId -> surviving groupId
+        working = working.filter(row => {
+          if (row._rowType !== 'subprojectHeader' || !row._chipId) return true;
+          const key = row._chipGroupKey ?? groupKeyOfChipId.get(row._chipId);
+          if (!key) return true;
+          if (headerByKey.has(key)) {
+            dropHeaderGroupIds.set(row.groupId, headerByKey.get(key).groupId);
+            changed = true;
+            return false;
+          }
+          headerByKey.set(key, row);
+          return true;
+        });
+        if (dropHeaderGroupIds.size > 0) {
+          // Re-parent orphaned task rows, then move them directly after their new header
+          const moved = [];
+          working = working.filter(row => {
+            if (row._rowType === 'projectTask' && dropHeaderGroupIds.has(row.parentGroupId)) {
+              moved.push({ ...row, parentGroupId: dropHeaderGroupIds.get(row.parentGroupId) });
+              return false;
             }
             return true;
-          })
-          .map(row => {
-            if (row._rowType !== 'subprojectHeader' || !row._chipId) return row;
-            const newLabel = chipLabelMap.get(row._chipId);
-            if (newLabel === undefined) return row;
-            // Only update subprojectName if the user hasn't edited it from the chip-derived value
-            const userEdited = row._chipLabel !== undefined && row.subprojectName !== row._chipLabel;
-            if (userEdited) {
-              // Keep user's edit but track new chip label for future comparisons
-              if (row._chipLabel === newLabel) return row;
-              changed = true;
-              return { ...row, _chipLabel: newLabel };
-            }
-            if (row.subprojectName === newLabel && row._chipLabel === newLabel) return row;
-            changed = true;
-            return { ...row, subprojectName: newLabel, _chipLabel: newLabel };
           });
+          moved.forEach(taskRow => {
+            let idx = working.findIndex(r => r._rowType === 'subprojectHeader' && r.groupId === taskRow.parentGroupId);
+            if (idx === -1) { working.push(taskRow); return; }
+            // insert after the header and any task rows already under it
+            let insertAt = idx + 1;
+            while (insertAt < working.length && working[insertAt]._rowType === 'projectTask' && working[insertAt].parentGroupId === taskRow.parentGroupId) insertAt++;
+            working.splice(insertAt, 0, taskRow);
+          });
+        }
 
-        // Reorder: ensure subprojectHeader rows appear before General/Unscheduled section rows
-        // within each project group (fixes rows loaded from storage in wrong order).
+        // --- Step 3: refresh header labels (respecting user edits) ---
+        working = working.map(row => {
+          if (row._rowType !== 'subprojectHeader' || !row._chipId) return row;
+          const key = row._chipGroupKey ?? groupKeyOfChipId.get(row._chipId);
+          const group = key ? groups.get(key) : null;
+          if (!group) return row;
+          const newLabel = group.label;
+          const userEdited = row._chipLabel !== undefined && row.subprojectName !== row._chipLabel;
+          const next = { ...row, _chipGroupKey: key, _chipLabel: newLabel, estimate: '' };
+          if (!userEdited) next.subprojectName = newLabel;
+          if (
+            next._chipGroupKey === row._chipGroupKey &&
+            next._chipLabel === row._chipLabel &&
+            next.subprojectName === row.subprojectName &&
+            next.estimate === row.estimate
+          ) return row;
+          changed = true;
+          return next;
+        });
+
+        // --- Step 4: reorder so subprojectHeader rows (with their task rows) precede
+        // General/Unscheduled section rows within each project group ---
         const sectionRowTypes = new Set(['projectGeneral', 'projectUnscheduled', 'subprojectGeneral', 'subprojectUnscheduled']);
-        const reordered = [...filteredData];
-        let reorderChanged = false;
+        const reordered = [...working];
         let i = 0;
         while (i < reordered.length) {
           if (reordered[i]._rowType === 'projectHeader') {
             const projectGroupId = reordered[i].groupId;
-            // Collect indices of subprojectHeader and section rows for this project
-            const subHeaderIndices = [];
+            const blockIndices = []; // header + its task rows
             const sectionIndices = [];
             let j = i + 1;
             while (j < reordered.length && reordered[j]._rowType !== 'projectHeader') {
-              if (reordered[j]._rowType === 'subprojectHeader' && reordered[j].parentGroupId === projectGroupId) {
-                subHeaderIndices.push(j);
-              } else if (sectionRowTypes.has(reordered[j]._rowType)) {
+              const r = reordered[j];
+              if (r._rowType === 'subprojectHeader' && r.parentGroupId === projectGroupId) {
+                blockIndices.push(j);
+              } else if (r._rowType === 'projectTask' && r._chipId && r.parentGroupId?.startsWith('chip')) {
+                blockIndices.push(j);
+              } else if (sectionRowTypes.has(r._rowType)) {
                 sectionIndices.push(j);
               }
               j++;
             }
-            // Check if any subprojectHeader appears after any section row
             const firstSection = sectionIndices.length ? sectionIndices[0] : Infinity;
-            const misplacedSubs = subHeaderIndices.filter(idx => idx > firstSection);
-            if (misplacedSubs.length > 0) {
-              reorderChanged = true;
-              // Extract the misplaced subprojectHeader rows
-              const subRows = misplacedSubs.map(idx => reordered[idx]);
-              // Remove them (highest index first to avoid shifting)
-              for (let k = misplacedSubs.length - 1; k >= 0; k--) {
-                reordered.splice(misplacedSubs[k], 1);
-              }
-              // Re-find the first section row index (indices shifted after removal)
-              const newFirstSectionIdx = reordered.findIndex(
-                (r, idx) => idx > i && sectionRowTypes.has(r._rowType)
-              );
-              const insertAt = newFirstSectionIdx !== -1 ? newFirstSectionIdx : i + 1;
-              reordered.splice(insertAt, 0, ...subRows);
+            const misplaced = blockIndices.filter(idx => idx > firstSection);
+            if (misplaced.length > 0) {
+              changed = true;
+              const rows = misplaced.map(idx => reordered[idx]);
+              for (let k = misplaced.length - 1; k >= 0; k--) reordered.splice(misplaced[k], 1);
+              const newFirstSectionIdx = reordered.findIndex((r, idx) => idx > i && sectionRowTypes.has(r._rowType));
+              reordered.splice(newFirstSectionIdx !== -1 ? newFirstSectionIdx : i + 1, 0, ...rows);
             }
           }
           i++;
         }
-        if (reorderChanged) changed = true;
 
-        // Find chips that don't already have a header row (or were intentionally deleted)
+        // --- Step 5: work out which groups / chips still need rows ---
+        const deletedGroupKeys = new Set(
+          reordered.filter(r => r._rowType === 'deletedChip' && r._chipGroupKey).map(r => r._chipGroupKey)
+        );
         const deletedChipIds = new Set(
-          reordered
-            .filter(row => row._rowType === 'deletedChip' && row._chipId)
-            .map(row => row._chipId)
+          reordered.filter(r => r._rowType === 'deletedChip' && r._chipId && !r._chipGroupKey).map(r => r._chipId)
         );
-        const existingChipHeaderIds = new Set(
-          reordered
-            .filter(row => row._rowType === 'subprojectHeader' && row._chipId)
-            .map(row => row._chipId)
+        const isGroupDeleted = (group) =>
+          deletedGroupKeys.has(group.key) || group.chips.every(c => deletedChipIds.has(c.id));
+        const existingHeaderByKey = new Map(
+          reordered.filter(r => r._rowType === 'subprojectHeader' && r._chipGroupKey).map(r => [r._chipGroupKey, r])
         );
-        // Find chips that don't already have a task row
         const existingChipTaskIds = new Set(
-          reordered
-            .filter(row => row._rowType === 'projectTask' && row._chipId)
-            .map(row => row._chipId)
-        );
-        const newChips = tacticsChips.filter(chip => !existingChipHeaderIds.has(chip.id) && !deletedChipIds.has(chip.id));
-        // Chips that have a header but are missing a task row (e.g. pre-existing sessions)
-        const chipsNeedingTaskRow = tacticsChips.filter(
-          chip => existingChipHeaderIds.has(chip.id) && !existingChipTaskIds.has(chip.id) && !deletedChipIds.has(chip.id)
+          reordered.filter(r => r._rowType === 'projectTask' && r._chipId).map(r => r._chipId)
         );
 
-        if (newChips.length === 0 && chipsNeedingTaskRow.length === 0 && !changed) return prevData;
+        const groupsNeedingHeader = [...groups.values()].filter(g => !existingHeaderByKey.has(g.key) && !isGroupDeleted(g));
+        const chipsNeedingTaskRow = tacticsChips.filter(chip => {
+          if (existingChipTaskIds.has(chip.id) || deletedChipIds.has(chip.id)) return false;
+          const group = groups.get(groupKeyOfChipId.get(chip.id));
+          return group && !isGroupDeleted(group);
+        });
+
+        if (groupsNeedingHeader.length === 0 && chipsNeedingTaskRow.length === 0 && !changed) return prevData;
 
         const newData = [...reordered];
 
-        // Helper to build a task row for a chip
         const buildChipTaskRow = (chip, chipGroupId, taskLabel) => {
           const estimateLabel = minutesToEstimateLabel(chip.durationMinutes);
           const timeVal = chip.durationMinutes ? formatMinutesToHHmm(chip.durationMinutes) : '';
@@ -1605,49 +1623,38 @@ export default function ProjectTimePlannerV2() {
           };
         };
 
-        newChips.forEach(chip => {
-          if (!chip.projectNickname) return;
-
-          const projectGroupId = `project-${chip.projectNickname}`;
-          // Find the index of the project header for this chip's project
+        // Insert new group headers (without task rows — Step 6 adds those)
+        groupsNeedingHeader.forEach(group => {
+          const projectGroupId = `project-${group.projectNickname}`;
           const projectHeaderIndex = newData.findIndex(
-            row => row._rowType === 'projectHeader' && row.projectNickname === chip.projectNickname
+            row => row._rowType === 'projectHeader' && row.projectNickname === group.projectNickname
           );
           if (projectHeaderIndex === -1) return;
 
-          // Insert after the last existing subprojectHeader (and its task row) for this project,
+          // Insert after the last existing chip header block for this project,
           // but before General/Unscheduled section rows.
           let insertAfterIndex = projectHeaderIndex;
-          for (let i = projectHeaderIndex + 1; i < newData.length; i++) {
-            const row = newData[i];
+          for (let k = projectHeaderIndex + 1; k < newData.length; k++) {
+            const row = newData[k];
             if (row._rowType === 'projectHeader') break;
-            if (
-              row._rowType === 'subprojectHeader' &&
-              (row.parentGroupId === projectGroupId || row.projectNickname === chip.projectNickname)
-            ) {
-              // Advance past this header and any immediately following task row for the same chip group
-              insertAfterIndex = i;
-              const nextRow = newData[i + 1];
-              if (nextRow && nextRow._rowType === 'projectTask' && nextRow.parentGroupId === row.groupId) {
-                insertAfterIndex = i + 1;
-                i++; // skip the task row in the outer loop too
-              }
-            }
+            if (sectionRowTypes.has(row._rowType)) break;
+            if (row._rowType === 'subprojectHeader' && row.parentGroupId === projectGroupId) insertAfterIndex = k;
+            if (row._rowType === 'projectTask' && row._chipId) insertAfterIndex = k;
           }
 
-          const chipGroupId = `chip-${chip.id}`;
-          const durationLabel = chipLabelMap.get(chip.id);
-
-          const subprojectHeaderRow = {
-            id: `chip-header-${chip.id}`,
+          const firstChip = group.chips[0];
+          const chipGroupId = `chip-${firstChip.id}`;
+          newData.splice(insertAfterIndex + 1, 0, {
+            id: `chip-header-${firstChip.id}`,
             _rowType: 'subprojectHeader',
-            _chipId: chip.id,
-            _chipLabel: durationLabel,
+            _chipId: firstChip.id,
+            _chipGroupKey: group.key,
+            _chipLabel: group.label,
             groupId: chipGroupId,
             parentGroupId: projectGroupId,
-            projectNickname: chip.projectNickname,
+            projectNickname: group.projectNickname,
             projectName: '',
-            subprojectName: durationLabel,
+            subprojectName: group.label,
             rowNum: '',
             checkbox: '',
             project: '',
@@ -1655,25 +1662,29 @@ export default function ProjectTimePlannerV2() {
             status: '',
             task: '',
             recurring: '',
-            estimate: chip.formattedDuration || '',
+            estimate: '',
             timeValue: '',
             ...createEmptyDayColumns(totalDays),
-          };
-
-          newData.splice(insertAfterIndex + 1, 0, subprojectHeaderRow);
-          newData.splice(insertAfterIndex + 2, 0, buildChipTaskRow(chip, chipGroupId, chipShortLabelMap.get(chip.id)));
+          });
         });
 
-        // For chips that already have a header but were missing a task row, insert one after the header
+        // Step 6: task rows for chips missing one, placed under their group header in day order
         chipsNeedingTaskRow.forEach(chip => {
-          if (!chip.projectNickname) return;
-          const chipGroupId = `chip-${chip.id}`;
-          const durationLabel = chipLabelMap.get(chip.id);
-          const headerIndex = newData.findIndex(
-            row => row._rowType === 'subprojectHeader' && row._chipId === chip.id
-          );
+          const key = groupKeyOfChipId.get(chip.id);
+          const headerIndex = newData.findIndex(r => r._rowType === 'subprojectHeader' && r._chipGroupKey === key);
           if (headerIndex === -1) return;
-          newData.splice(headerIndex + 1, 0, buildChipTaskRow(chip, chipGroupId, chipShortLabelMap.get(chip.id)));
+          const header = newData[headerIndex];
+          const group = groups.get(key);
+          const order = group.chips.findIndex(c => c.id === chip.id);
+          let insertAt = headerIndex + 1;
+          while (insertAt < newData.length) {
+            const r = newData[insertAt];
+            if (r._rowType !== 'projectTask' || r.parentGroupId !== header.groupId) break;
+            const existingOrder = group.chips.findIndex(c => c.id === r._chipId);
+            if (existingOrder > order) break;
+            insertAt++;
+          }
+          newData.splice(insertAt, 0, buildChipTaskRow(chip, header.groupId, chipShortLabelMap.get(chip.id)));
         });
 
         return newData;
@@ -1725,27 +1736,22 @@ export default function ProjectTimePlannerV2() {
   // Called both on mount (timestamp check) and when the live event fires.
   const resetSubprojectLabels = useCallback((chips) => {
     if (!chips || chips.length === 0) return;
-    const toTitleCase = (str) => str ? str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase()) : str;
+    // Header labels are per chip GROUP (project + chip name), see utils/planner/chipGroups.
+    const groups = groupChips(chips);
     const chipLabelMap = new Map(
-      chips.map(chip => {
-        const name = toTitleCase(chip.displayLabel || chip.projectNickname);
-        const day = toTitleCase(chip.dayName);
-        const duration = chip.formattedDuration ? chip.formattedDuration.toLowerCase() : null;
-        const durationLabel = duration
-          ? `${duration} of ${name} on ${day}`
-          : `${name} on ${day}`;
-        return [chip.id, durationLabel];
-      })
+      chips.map(chip => [chip.id, groups.get(chipGroupKey(chip))?.label])
     );
     const chipShortLabelMap = new Map(
-      chips.map(chip => [chip.id, toTitleCase(chip.displayLabel || chip.projectNickname)])
+      chips.map(chip => [chip.id, chipDisplayName(chip)])
     );
     setData(prevData => {
       let changed = false;
       // Update existing subprojectHeader and chip task rows
       const newData = prevData.map(row => {
         if (row._rowType === 'subprojectHeader' && row._chipId) {
-          const canonicalLabel = chipLabelMap.get(row._chipId);
+          const canonicalLabel = row._chipGroupKey
+            ? groups.get(row._chipGroupKey)?.label
+            : chipLabelMap.get(row._chipId);
           if (canonicalLabel !== undefined) {
             // Respect user edits: only reset if the user hasn't changed the label
             const userEdited = row._chipLabel !== undefined && row.subprojectName !== row._chipLabel;
@@ -1828,9 +1834,10 @@ export default function ProjectTimePlannerV2() {
       );
       chips.forEach(chip => {
         if (!chip.projectNickname || existingChipTaskIds.has(chip.id)) return;
-        const headerIndex = newData.findIndex(r => r._rowType === 'subprojectHeader' && r._chipId === chip.id);
+        const key = chipGroupKey(chip);
+        const headerIndex = newData.findIndex(r => r._rowType === 'subprojectHeader' && (r._chipGroupKey === key || r._chipId === chip.id));
         if (headerIndex === -1) return;
-        const chipGroupId = `chip-${chip.id}`;
+        const chipGroupId = newData[headerIndex].groupId;
         const shortLabel = chipShortLabelMap.get(chip.id);
         const estimateLabel = minutesToEstimateLabel(chip.durationMinutes);
         const timeVal = chip.durationMinutes ? formatMinutesToHHmm(chip.durationMinutes) : '';
@@ -2289,6 +2296,8 @@ export default function ProjectTimePlannerV2() {
         id: `deleted-chip-${row._chipId}`,
         _rowType: 'deletedChip',
         _chipId: row._chipId,
+        // Group key suppresses every chip in the group (one header per group)
+        _chipGroupKey: row._chipGroupKey,
       }));
 
     // Create command for row deletion
