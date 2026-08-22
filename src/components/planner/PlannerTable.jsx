@@ -80,7 +80,32 @@ function PlannerTable({
         // it at the available space (still scrolls when content is taller)
         // but lets it shrink to the actual content height otherwise.
         style={{ position: 'relative', maxHeight: '100%' }}
-        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          // Edge auto-scroll while dragging (rows from the inbox into a
+          // project, cells, etc.). The browser's native drag auto-scroll
+          // doesn't kick in for this container, so the drop target stayed
+          // offscreen. dragover keeps firing (~every 50ms) while the pointer
+          // is held still, so scrolling here is enough to keep it moving.
+          const el = e.currentTarget;
+          const rect = el.getBoundingClientRect();
+          const EDGE = 60; // px from the edge where scrolling starts
+          const MAX_STEP = 24; // px per dragover event at the very edge
+          const ramp = (dist) => Math.ceil(((EDGE - dist) / EDGE) * MAX_STEP);
+          // The month / week / date / daily / filter rows are a sticky tbody
+          // pinned to the top of the container, so the usable top edge is
+          // just below them — scrolling should start as soon as the drag
+          // indicator reaches the first data row, not the top of the page.
+          const stickyTop = [...el.querySelectorAll(':scope > table > tbody')]
+            .filter((tb) => getComputedStyle(tb).position === 'sticky')
+            .reduce((h, tb) => h + tb.getBoundingClientRect().height, 0);
+          const top = rect.top + stickyTop;
+          if (e.clientY < top + EDGE) el.scrollTop -= ramp(Math.max(0, e.clientY - top));
+          else if (e.clientY > rect.bottom - EDGE) el.scrollTop += ramp(Math.max(0, rect.bottom - e.clientY));
+          if (e.clientX < rect.left + EDGE) el.scrollLeft -= ramp(Math.max(0, e.clientX - rect.left));
+          else if (e.clientX > rect.right - EDGE) el.scrollLeft += ramp(Math.max(0, rect.right - e.clientX));
+        }}
       >
         <table
           className="border-collapse"
