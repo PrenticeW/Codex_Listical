@@ -54,7 +54,7 @@ export function DragHandleCell({
       className="drag-handle"
       style={{
         width: 24, minWidth: 24,
-        height: isHeader ? 44 : CELL_HEIGHT,
+        height: isHeader ? 28 : CELL_HEIGHT,
         backgroundColor: bg,
         borderRight: isHeader ? '1px solid rgba(255,255,255,.06)' : `1px solid ${GUT_LINE}`,
         borderBottom: isHeader ? 'none' : `1px solid ${BENTO_LINE}`,
@@ -119,7 +119,7 @@ export function TextInputCell({
 
   const style = {
     backgroundColor: bg,
-    height: isHeader ? 44 : CELL_HEIGHT,
+    height: isHeader ? 28 : CELL_HEIGHT,
     borderBottom: `1px solid ${BENTO_LINE}`,
     borderRight: `1px solid ${BENTO_LINE}`,
     borderTop: isDropTarget ? '2px solid #1A1A1A' : 'none',

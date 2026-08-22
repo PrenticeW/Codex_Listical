@@ -242,7 +242,7 @@ export default function TableRow({
 
     const SECTION_NUMBERS = { Reasons: '01', Outcomes: '02', Actions: '03', Schedule: '04' };
     const sectionNum = SECTION_NUMBERS[sectionType] ?? '';
-    const sectionLabel = sectionType?.toUpperCase() ?? '';
+    const sectionLabel = sectionType ?? '';
     const questionText = rowValues[0] || '';
 
     return (
@@ -250,7 +250,7 @@ export default function TableRow({
         {/* Section number */}
         <td
           style={{
-            width: 36, minWidth: 36, height: 44,
+            width: 36, minWidth: 36, height: 28,
             background: '#24252B',
             borderRight: '1px solid rgba(255,255,255,.06)',
             verticalAlign: 'middle',
@@ -260,8 +260,8 @@ export default function TableRow({
         >
           <span style={{
             fontFamily: 'var(--font-sans)',
-            fontSize: 'calc(22px * var(--pz))', fontWeight: 700,
-            color: 'rgba(255,255,255,.18)',
+            fontSize: `${Math.round(12.5 * textSizeScale)}px`, fontWeight: 600,
+            color: 'rgba(255,255,255,.45)',
             lineHeight: 1,
           }}>{sectionNum}</span>
         </td>
@@ -269,37 +269,31 @@ export default function TableRow({
         <td
           colSpan={showSectionTotal ? PLAN_TABLE_COLS - 1 : PLAN_TABLE_COLS}
           style={{
-            height: 44,
+            height: 28,
             background: '#24252B',
-            padding: '10px 14px 0',
-            verticalAlign: 'top',
+            padding: '0 14px',
+            verticalAlign: 'middle',
             borderRight: isDropTarget ? '2px solid #fff' : undefined,
           }}
           onMouseDown={(e) => cellMouseDown(e, 0)}
           onMouseEnter={() => cellMouseEnter(0)}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <span style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 'calc(8.5px * var(--pz))',
-              letterSpacing: '.12em',
-              textTransform: 'uppercase',
-              color: 'rgba(255,255,255,.55)',
-              lineHeight: 1,
-            }}>{sectionLabel}</span>
-            <span style={{
-              fontFamily: 'var(--font-sans)',
-              fontSize: 'calc(12.5px * var(--pz))',
-              fontWeight: 600,
-              color: 'rgba(255,255,255,.95)',
-              lineHeight: 1.15,
-            }}>{questionText}</span>
+          <div style={{
+            display: 'flex', alignItems: 'baseline', gap: 8,
+            fontFamily: 'var(--font-sans)',
+            fontSize: `${Math.round(12.5 * textSizeScale)}px`,
+            lineHeight: 1.2,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            <span style={{ fontWeight: 600, color: 'rgba(255,255,255,.95)' }}>{sectionLabel}</span>
+            <span aria-hidden="true" style={{ color: 'rgba(255,255,255,.35)' }}>·</span>
+            <span style={{ fontWeight: 400, color: 'rgba(255,255,255,.7)' }}>{questionText}</span>
           </div>
         </td>
         {showSectionTotal && (
           <td
             style={{
-              height: 44,
+              height: 28,
               background: '#24252B',
               width: 70, minWidth: 60,
               textAlign: 'right',

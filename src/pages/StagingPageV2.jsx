@@ -1415,12 +1415,12 @@ export default function StagingPageV2() {
                             // All fixed dimensions scale with the page zoom.
                             // fontSize here also sizes the project name and
                             // tagline (InlineEditableText inherits font).
-                            fontSize: 'calc(16px * var(--pz))',
-                            height: 'calc(40px * var(--pz))',
+                            fontSize: `${Math.round(12.5 * textSizeScale)}px`,
+                            height: 'calc(30px * var(--pz))',
                             paddingLeft: 'calc(12px * var(--pz))',
                             paddingRight: 'calc(12px * var(--pz))',
                             fontWeight: 600,
-                            gridTemplateColumns: '1fr auto calc(140px * var(--pz)) calc(24px * var(--pz)) calc(80px * var(--pz))',
+                            gridTemplateColumns: 'minmax(0, 1fr) auto auto calc(76px * var(--pz)) calc(80px * var(--pz))',
                             alignItems: 'center',
                             gap: 'calc(12px * var(--pz))',
                             cursor: 'pointer',
@@ -1455,15 +1455,30 @@ export default function StagingPageV2() {
                             </span>
                           </div>
                           <div></div>
-                          <div style={{ width: 'calc(140px * var(--pz))', minWidth: 'calc(140px * var(--pz))' }}></div>
-                          <div
-                            // Both tags live in this one right-anchored flex
-                            // container so they share a fixed gap and can
-                            // never overlap; extra width overflows leftward
-                            // into the empty 140px column beside it.
-                            style={{ width: 'calc(24px * var(--pz))', minWidth: 'calc(24px * var(--pz))', gap: 'calc(8px * var(--pz))' }}
-                            className="flex items-center justify-end"
-                          >
+                          {/* On Plan comes first in its own auto column, then
+                              Area in a fixed-width column so all Area chips share
+                              a left edge. The On Plan chip is always rendered
+                              (hidden when not on plan) so its column never
+                              collapses and Area stays anchored to its left.
+                              The name column (minmax(0,1fr)) absorbs width changes. */}
+                          <div className="flex items-center justify-end">
+                            <span style={{
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: 'calc(9px * var(--pz))',
+                                color: '#1A1A1A',
+                                background: 'rgba(255,255,255,0.88)',
+                                borderRadius: 999,
+                                padding: 'calc(2px * var(--pz)) calc(8px * var(--pz))',
+                                textTransform: 'uppercase',
+                                letterSpacing: '.05em',
+                                flexShrink: 0,
+                                whiteSpace: 'nowrap',
+                                // Always rendered so the column keeps a constant
+                                // width; hidden (not removed) when not on plan.
+                                visibility: item.addedToPlan ? 'visible' : 'hidden',
+                              }}>On Plan</span>
+                          </div>
+                          <div className="flex items-center justify-start min-w-0 overflow-hidden">
                             {item.area && (
                               <span style={{
                                 fontFamily: 'var(--font-mono)',
@@ -1477,20 +1492,6 @@ export default function StagingPageV2() {
                                 flexShrink: 0,
                                 whiteSpace: 'nowrap',
                               }}>{item.area}</span>
-                            )}
-                            {item.addedToPlan && (
-                              <span style={{
-                                fontFamily: 'var(--font-mono)',
-                                fontSize: 'calc(9px * var(--pz))',
-                                color: '#1A1A1A',
-                                background: 'rgba(255,255,255,0.88)',
-                                borderRadius: 999,
-                                padding: 'calc(2px * var(--pz)) calc(8px * var(--pz))',
-                                textTransform: 'uppercase',
-                                letterSpacing: '.05em',
-                                flexShrink: 0,
-                                whiteSpace: 'nowrap',
-                              }}>On Plan</span>
                             )}
                           </div>
                           <div
