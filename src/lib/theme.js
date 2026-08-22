@@ -91,12 +91,13 @@ function nearestFamilyByHue(h, s) {
   return best;
 }
 
-// The June picker family name a colour key came from, or null if it is
-// not a picker swatch.
-function juneFamilyFor({ h, s, l }) {
+// The June picker family + 1-based shade index (light -> dark) a colour
+// key came from, or null if it is not a picker swatch.
+function juneSwatchFor({ h, s, l }) {
   for (const { families } of JUNE_GROUPS) {
     for (const { name, shades } of families) {
-      if (shades.some(([sh, ss, sl]) => sh === h && ss === s && sl === l)) return name;
+      const idx = shades.findIndex(([sh, ss, sl]) => sh === h && ss === s && sl === l);
+      if (idx >= 0) return { name, shade: idx + 1 };
     }
   }
   return null;
@@ -104,12 +105,12 @@ function juneFamilyFor({ h, s, l }) {
 
 const capitalise = (w) => w.charAt(0).toUpperCase() + w.slice(1);
 
-/** Human-readable name for display ("chartr." → "Chartreuse"; colour keys use their picker family name). */
+/** Human-readable name for display ("chartr." → "Chartreuse"; picker swatches → "Pink 3", numbered light to dark). */
 export function familyDisplayName(family) {
   const colour = parseThemeColour(family);
   if (colour) {
-    const june = juneFamilyFor(colour);
-    if (june) return capitalise(june);
+    const june = juneSwatchFor(colour);
+    if (june) return `${capitalise(june.name)} ${june.shade}`;
     return familyDisplayName(nearestFamilyByHue(colour.h, colour.s));
   }
   if (family === 'chartr.') return 'Chartreuse';
