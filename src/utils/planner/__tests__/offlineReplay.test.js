@@ -275,4 +275,49 @@ describe('offline pending-save replay', () => {
     expect(server.planner_rows.get(A).task).toBe('alpha renamed on mobile');
     expect(server.planner_rows.get(REMOTE).task).toBe('mobile row');
   });
+  // ------------------------------------------------------------------------
+  // Duplicate structural rows (2026-08-27, second incident): a cache-hit
+  // page load with no server basis re-minted UUIDs for every row still
+  // carrying a synthetic id and inserted them beside the server's copies.
+  // ------------------------------------------------------------------------
+
+  it('restricted mode never inserts a second Inbox/Archive header or project header', async () => {
+    const Y = 6;
+    server.years.set('y6', { id: 'y6', user_id: 'u1', year_number: Y, start_date: '2026-06-01', total_days: 84 });
+    const hdr = (id, extra, order) => ({ ...row(id, '', order), ...extra });
+    server.planner_rows.set(A, { id: A, user_id: 'u1', year_id: 'y6', row_kind: 'task', display_order: 0, project_id: null, day_entries: { __cells: {}, __project: '', __extra: { _isInboxRow: true } }, updated_at: '2026-08-27T10:00:00Z' });
+    server.planner_rows.set(B, { id: B, user_id: 'u1', year_id: 'y6', row_kind: 'task', display_order: 1, project_id: null, day_entries: { __cells: {}, __project: '', __extra: { _rowType: 'archiveHeader' } }, updated_at: '2026-08-27T10:00:00Z' });
+    server.planner_rows.set(REMOTE, { id: REMOTE, user_id: 'u1', year_id: 'y6', row_kind: 'task', display_order: 2, project_id: 'p1', day_entries: { __cells: {}, __project: '', __extra: { _rowType: 'projectHeader', projectNickname: 'Alpha' } }, updated_at: '2026-08-27T10:00:00Z' });
+    // Rehydrated mirror whose structural rows lost their UUIDs (synthetic ids).
+    cache.set(`plannerStorage|task_rows:${Y}`, []);
+    await saveTaskRows([
+      hdr('inbox-divider', { _isInboxRow: true }, 0),
+      hdr('archive-header', { _rowType: 'archiveHeader' }, 1),
+      hdr('Alpha-header', { _rowType: 'projectHeader', projectNickname: 'Alpha', projectId: 'p1' }, 2),
+      row('row-9', 'typed just now', 3),
+    ], 'project-1', Y);
+    await sleep(10);
+
+    const rows = [...server.planner_rows.values()].filter((r) => r.year_id === 'y6');
+    expect(rows.filter((r) => r.day_entries?.__extra?._isInboxRow).length).toBe(1);
+    expect(rows.filter((r) => r.day_entries?.__extra?._rowType === 'archiveHeader').length).toBe(1);
+    expect(rows.filter((r) => r.day_entries?.__extra?._rowType === 'projectHeader').length).toBe(1);
+    expect(rows.find((r) => r.task === 'typed just now')).toBeTruthy(); // genuine new row still lands
+  });
+
+  it('cached rows carry their server UUIDs so a reload cannot re-mint them', async () => {
+    const Y = 7;
+    server.years.set('y7', { id: 'y7', user_id: 'u1', year_number: Y, start_date: '2026-06-01', total_days: 84 });
+    await saveTaskRows([row('row-0', 'new task', 0)], 'project-1', Y);
+    await sleep(10);
+    const cached = cache.get(`plannerStorage|task_rows:${Y}`);
+    expect(cached[0].id).toMatch(/^[0-9a-f-]{36}$/i);
+    const snap = idb.get(`snapshot:u1:${Y}`);
+    expect(snap.rows[0].id).toBe(cached[0].id);
+    expect(snap.synIds.map(([k]) => k)).toContain('row-0');
+    // Second save of the same in-memory rows (still synthetic) → same UUID, still one row.
+    await saveTaskRows([row('row-0', 'new task edited', 0)], 'project-1', Y);
+    await sleep(10);
+    expect([...server.planner_rows.values()].filter((r) => r.year_id === 'y7').length).toBe(1);
+  });
 });

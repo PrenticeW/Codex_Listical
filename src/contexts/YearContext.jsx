@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   readYearMetadata,
+  readYearMetadataStrict,
   initializeYearMetadata,
   setCurrentYear as setCurrentYearStorage,
 } from '../lib/yearMetadataStorage';
@@ -41,12 +42,15 @@ export function YearProvider({ children }) {
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
-      let next = await readYearMetadata();
+      // Strict read: a failed read throws (caught below → keep whatever we
+      // had, or the Loading screen) and is never mistaken for a brand-new
+      // account. Only a genuine "no years rows" null runs first-time setup.
+      let next = await readYearMetadataStrict();
       if (!next) {
         const today = new Date().toISOString().split('T')[0];
         next = await initializeYearMetadata(today);
       }
-      setMetadata(next);
+      if (next) setMetadata(next);
       // Fire a session-start snapshot (if 4+ hours have passed) once we know
       // the current year. Best-effort — a failure here must never block the load.
       const activeYearNumber = next?.currentYear ?? null;
@@ -56,8 +60,11 @@ export function YearProvider({ children }) {
         });
       }
     } catch (error) {
+      // Keep the last good metadata (mid-session refresh) rather than
+      // dropping to the Loading screen; a first load stays on Loading until
+      // the retry below succeeds.
       console.error('Failed to load year metadata', error);
-      setMetadata(null);
+      setTimeout(() => { load(); }, 3000);
     } finally {
       setIsLoading(false);
     }

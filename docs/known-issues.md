@@ -64,6 +64,15 @@ The snapshot system (`snapshotStorage.js`) captures planner rows, archived weeks
 | Service worker checks for a new build on every tab wake and hourly, so a long-lived tab cannot keep running old save logic. | `main.jsx` |
 | `readYearMetadata` falls back to the active year (then newest) and repairs `current_year_id`. | `yearMetadataStorage.js` |
 
+**Second incident, same day (2026-08-27 afternoon, one browser open).** Two holes in the guards above, fixed the same day (`offlineReplay.test.js` covers the row side):
+
+| Hole | Fix |
+|---|---|
+| `readYearMetadata` returned `null` on ANY error, and `YearContext` treated `null` as "new account" → `initializeYearMetadata` repointed `profiles.current_year_id` at year 1 for every device. A transient failure on a page reload (auth session not ready, network blip — the new service-worker auto-reload makes these more likely) was enough. | `readYearMetadataStrict` throws on failure and returns `null` only for a genuine "no years rows"; `YearContext.load` uses it and retries on failure instead of initialising. `initializeYearMetadata` only sets the pointer when it is NULL. |
+| Restricted mode allowed inserts for "rows minted this session", but `mintedHere` included every synthetic id mapped this session — including ids re-minted from the row cache / snapshot, which persisted rows under synthetic ids and never persisted the synthetic→UUID map. The System page also rewrote the Archive header's UUID to `'archive-header'` on every mount. Result: Inbox/Archive/project headers and recently created tasks inserted a second time beside the server's copies, with clashing `display_order`. | Cache and IndexedDB snapshot now store rows under their UUIDs and the snapshot carries `synIds` (adopted on restore). `mintedHere` is only UUIDs minted in the current save. Restricted mode never inserts a structural row (inbox, archive header, project header) whose kind already exists on the server. The Archive header keeps its id. `isPlannerYearServerFresh` is now a per-session server-read set, not the snapshot-restored high-water mark, so a cache-hit load always revalidates on mount. |
+
+**Cleanup still needed:** the duplicate rows this produced are still in `planner_rows` — the client's mount effect hides extra Archive headers but does not delete them. Remove the later-created duplicates of each Inbox/Archive/project header (and any task rows duplicated with a newer `created_at`) by hand in Supabase, then re-check row order.
+
 **Not covered:** draft and archived years skip the realtime effect, so they get no wake revalidation (mobile does not write them). The mobile app's own stale-write behaviour lives in tacular-mobile and is out of scope here.
 
 ---

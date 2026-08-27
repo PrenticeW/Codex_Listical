@@ -1106,6 +1106,7 @@ export const readTaskRows = async (
     // sides are server timestamps). Also marks the year as server-read this
     // session (see isPlannerYearServerFresh).
     _readHighWater.set(yearNumber, maxUpdatedAt(tasksRes.data || []));
+    _serverReadYears.add(yearNumber);
 
     const totalDays = yearRow.total_days || DEFAULT_TOTAL_DAYS;
     const startDate = yearRow.start_date || todayIso();
@@ -1355,6 +1356,11 @@ function snapshotPayload(yearNumber, rows) {
     knownIds: [...(_knownRowIds.get(yearNumber) || [])],
     baseline: [...(_baselineRows.get(yearNumber) || new Map())],
     highWater: _readHighWater.get(yearNumber) ?? null,
+    // Synthetic-id → UUID mapping. Without it a cache-hit page load re-mints
+    // a fresh UUID for every row still carrying a synthetic id, and the save
+    // inserts it beside the copy already on the server (2026-08-27 duplicate
+    // Inbox/Archive header incident).
+    synIds: [...(_syntheticRowIds.get(yearNumber) || new Map())],
     savedAt: Date.now(),
   };
 }
@@ -1372,6 +1378,13 @@ function adoptSnapshotBookkeeping(yearNumber, snap) {
   if (!_readHighWater.has(yearNumber) && typeof snap.highWater === 'string') {
     _readHighWater.set(yearNumber, snap.highWater);
   }
+  if (Array.isArray(snap.synIds)) {
+    let synMap = _syntheticRowIds.get(yearNumber);
+    if (!synMap) { synMap = new Map(); _syntheticRowIds.set(yearNumber, synMap); }
+    for (const [synthetic, uuid] of snap.synIds) {
+      if (!synMap.has(synthetic)) synMap.set(synthetic, uuid);
+    }
+  }
 }
 
 async function restoreBookkeepingFromSnapshot(userId, yearNumber) {
@@ -1383,9 +1396,16 @@ async function restoreBookkeepingFromSnapshot(userId, yearNumber) {
   }
 }
 
+// Years this SESSION has actually read from the server. Deliberately
+// separate from _readHighWater: a snapshot-restored high-water mark is a
+// valid save basis but must not count as "fresh" — that suppressed the
+// System page's mount revalidation on every cache-hit load, so a stale
+// cache could serve a whole session.
+const _serverReadYears = new Set();
+
 /** True once this session has read the server for `yearNumber`. */
 export function isPlannerYearServerFresh(yearNumber) {
-  return _readHighWater.has(yearNumber);
+  return _serverReadYears.has(yearNumber);
 }
 
 // Forget everything this session believes about the server for every year
@@ -1399,6 +1419,7 @@ export function markPlannerRowsStale(reason = 'unknown') {
     invalidate(CACHE_NS, taskRowsKey(yearNumber));
   }
   _readHighWater.clear();
+  _serverReadYears.clear();
   _baselineRows.clear();
   _knownRowIds.clear();
   if (typeof window !== 'undefined' && typeof CustomEvent === 'function') {
@@ -1543,10 +1564,19 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
         if (!synMap.has(synthetic)) synMap.set(synthetic, uuid);
       }
     }
+    // UUIDs minted in THIS save (synthetic ids nobody mapped before — not
+    // this session, not the snapshot, not the pending record). Only these
+    // are provably rows web just created; a mapping adopted from persisted
+    // state describes a row that may already be on the server.
+    const mintedHere = new Set();
     const desiredRows = persistedTaskRows.map((row, idx) => {
       let id = row.id;
       if (!(typeof id === 'string' && UUID_RE.test(id))) {
-        if (!synMap.has(id)) synMap.set(id, crypto.randomUUID());
+        if (!synMap.has(id)) {
+          const uuid = crypto.randomUUID();
+          synMap.set(id, uuid);
+          mintedHere.add(uuid);
+        }
         id = synMap.get(id);
       }
       return plannerRowPayloadToDb({ row: { ...row, id }, userId, yearId, displayOrder: idx });
@@ -1585,8 +1615,25 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       ? (typeof bookkeeping.basedOnAt === 'string' ? bookkeeping.basedOnAt : null)
       : (_readHighWater.has(yearNumber) ? _readHighWater.get(yearNumber) : null);
     const hasBasis = basedOnAt !== null;
-    // Rows minted from synthetic ids in THIS save are provably web-created.
-    const mintedHere = new Set(synMap.values());
+    // Structural rows (Inbox divider, Archive header, project headers) exist
+    // once per year / per project. With no server basis we cannot tell "web
+    // just created this one" from "the cache lost the id of the one the
+    // server already has" — both get a freshly minted UUID — so never insert
+    // a structural row whose kind is already on the server.
+    const structuralKey = (dbRow) => {
+      const extra = dbRow?.day_entries?.__extra || {};
+      if (extra._isInboxRow) return 'inbox';
+      if (extra._rowType === 'archiveHeader') return 'archive';
+      if (extra._rowType === 'projectHeader' || extra._rowType === 'projectUnscheduled' || extra._rowType === 'projectGeneral') {
+        return `${extra._rowType}:${dbRow.project_id ?? extra.projectNickname ?? ''}`;
+      }
+      return null;
+    };
+    const serverStructural = new Set();
+    for (const r of currentById.values()) {
+      const k = structuralKey(r);
+      if (k) serverStructural.add(k);
+    }
     let guarded = 0; // rows the guard refused to overwrite/delete/insert
 
     const toUpsert = [];
@@ -1599,7 +1646,10 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
         // deleted it since this stale copy was taken", so only rows minted
         // here (or a save into a still-empty year) may insert.
         if (known.has(d.id)) continue;
-        if (!hasBasis && currentById.size > 0 && !mintedHere.has(d.id)) { guarded += 1; continue; }
+        if (!hasBasis && currentById.size > 0) {
+          const k = structuralKey(d);
+          if (!mintedHere.has(d.id) || (k && serverStructural.has(k))) { guarded += 1; continue; }
+        }
         toUpsert.push(d);
         nextBaseline.set(d.id, baselineSnap(d));
         continue;
@@ -1710,9 +1760,15 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     // active user. Without this, an in-flight save from a just-logged-out
     // session calls setCached *after* clearAll(), repopulating the cache with
     // the old user's data and causing the next login to skip its fresh load.
+    // Persist rows under their server UUIDs: a cached synthetic id would be
+    // re-minted as a brand-new row on the next page load.
+    const rowsForCache = allRows.map((row) => {
+      const mapped = synMap.get(row.id);
+      return mapped ? { ...row, id: mapped } : row;
+    });
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (currentUser?.id === userId) {
-      setCached(CACHE_NS, taskRowsKey(yearNumber), allRows);
+      setCached(CACHE_NS, taskRowsKey(yearNumber), rowsForCache);
     }
 
     // Save confirmed: clear the pending record — unless a newer desired
@@ -1722,7 +1778,7 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     if (seq === _pendingSaveSeq) {
       clearPendingState(userId, yearNumber);
     }
-    savePlannerSnapshot(userId, yearNumber, snapshotPayload(yearNumber, allRows));
+    savePlannerSnapshot(userId, yearNumber, snapshotPayload(yearNumber, rowsForCache));
 
     // Schedule a snapshot after 30s of inactivity so the captured state
     // includes this edit but rapid/mid-thought edits don't produce partials.

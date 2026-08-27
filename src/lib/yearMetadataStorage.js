@@ -103,6 +103,27 @@ async function findYearIdByNumber(userId, yearNumber) {
  */
 export async function readYearMetadata() {
   try {
+    return await readYearMetadataStrict();
+  } catch (error) {
+    console.error('Failed to read year metadata:', error);
+    return null;
+  }
+}
+
+/**
+ * Like readYearMetadata, but a failed read THROWS instead of returning null.
+ * null here means exactly one thing: this user has no `years` rows yet.
+ *
+ * YearContext must use this variant. readYearMetadata's null-on-error
+ * contract made any transient failure (auth session not ready on a reload,
+ * a network blip) indistinguishable from a brand-new account, so the
+ * provider ran initializeYearMetadata — which repointed
+ * profiles.current_year_id at year 1 for every device (2026-08-27, second
+ * "defaulted to year one" incident).
+ * @returns {Promise<YearMetadata|null>}
+ */
+export async function readYearMetadataStrict() {
+  {
     const userId = await requireUserId();
 
     const [yearsResult, profileResult] = await Promise.all([
@@ -150,9 +171,6 @@ export async function readYearMetadata() {
       currentYear,
       years: rows.map(dbRowToYearInfo),
     };
-  } catch (error) {
-    console.error('Failed to read year metadata:', error);
-    return null;
   }
 }
 
@@ -342,11 +360,15 @@ export async function initializeYearMetadata(startDate) {
       }
     }
 
-    // Idempotent: set the profile pointer regardless of whether we inserted.
+    // Idempotent, but never repoint an account that already has a current
+    // year: if this initialiser is ever reached for an established account
+    // (it should not be — see readYearMetadataStrict), overwriting the
+    // pointer would land every device on year 1.
     const { error: profileErr } = await supabase
       .from('profiles')
       .update({ current_year_id: yearRow.id })
-      .eq('id', userId);
+      .eq('id', userId)
+      .is('current_year_id', null);
     if (profileErr) throw profileErr;
 
     await dispatchMetadataEvent();

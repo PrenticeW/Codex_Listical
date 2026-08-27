@@ -1242,9 +1242,14 @@ export default function ProjectTimePlannerV2() {
       newData = newData.filter(row => {
         if (row._rowType === 'archiveHeader') {
           archiveHeadersFound++;
-          // Keep only the first one AND ensure it has the correct ID
+          // Keep only the first one. Do NOT rewrite its id: a row read from
+          // the server carries its UUID, and replacing that with the
+          // synthetic 'archive-header' made every page load mint a new row
+          // (delete + re-insert at best, a duplicate header in the save's
+          // restricted mode — 2026-08-27). Only a header that never had a
+          // real id gets the synthetic one.
           if (archiveHeadersFound === 1) {
-            row.id = 'archive-header'; // Ensure correct ID
+            if (!row.id) row.id = 'archive-header';
             return true;
           }
           return false; // Remove all other archive headers
