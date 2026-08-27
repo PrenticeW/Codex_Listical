@@ -16,7 +16,8 @@
 | Phase 3: `planner_rows.updated_at` migration | Applied. Column is recording; no client reads it yet. |
 | Sync indicators (mobile pill, web `OfflineSyncBadge`) | Built. Debounced ~1s so normal online saves never flicker; transient "Synced" on drain. |
 | Phase 3: extend to staging/tactics/settings modules | Not started (deliberately parked until Phases 1 and 2 pass real-device testing). |
-| Phase 3: `updated_at <= queued_at` replay guard + queued-op max age | Not started. Needs a product decision on surfacing rejected ops. |
+| Phase 3: `updated_at` staleness guard + pending max age | Built 27 Aug 2026 (web) after the stale-tab overwrite incident — see `docs/known-issues.md` "Stale-client overwrite". Client-side: the diff save compares `planner_rows.updated_at` against the read high-water mark for rows without a baseline; pending records older than 3 days are discarded. Rejected ops are logged (`console.warn`), not surfaced in UI. |
+| Phase 3: DB-level history for `planner_rows` | Migration `20260827000001_planner_rows_history_trigger.sql` written, not yet applied. |
 | Known gap: System page task notes (`saveTaskNote`/`saveChipTaskNote`) | Still save directly; fail silently offline. Fold into the module-extension pass. |
 
 ---

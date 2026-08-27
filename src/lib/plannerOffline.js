@@ -36,6 +36,10 @@ const STORE = 'kv';
 const PENDING_EVENT = 'planner-offline-pending';
 const RETRY_BASE_MS = 5000;
 const RETRY_MAX_MS = 30000;
+// Pending saves older than this are dropped instead of replayed (see
+// replayPendingSaves). Three days covers a weekend offline; anything older
+// is more likely a forgotten tab than an unsynced edit.
+export const PENDING_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
 // --- tiny promise wrapper over IndexedDB (no dependency needed) ----------
 
@@ -203,6 +207,18 @@ export async function replayPendingSaves() {
     }
     _pendingFlag = true;
     for (const { yearNumber, payload } of pending) {
+      // A pending record older than PENDING_MAX_AGE_MS is discarded, not
+      // replayed: by then the user has almost certainly worked on the same
+      // rows from another device, and the stale desired state — even
+      // three-way merged — carries edits nobody remembers making. The
+      // 2026-08-27 incident replayed exactly such a record from a machine
+      // last used weeks earlier.
+      const queuedAt = typeof payload?.queuedAt === 'number' ? payload.queuedAt : null;
+      if (queuedAt === null || Date.now() - queuedAt > PENDING_MAX_AGE_MS) {
+        console.warn('[plannerOffline] discarding stale pending save', { yearNumber, queuedAt });
+        await clearPendingState(uid, yearNumber);
+        continue;
+      }
       // The handler ends in _saveTaskRowsImpl, which clears the pending
       // record on confirmed success and re-schedules a retry on failure.
       await _replayHandler(yearNumber, payload);

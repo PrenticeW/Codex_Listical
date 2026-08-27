@@ -75,7 +75,7 @@ import {
 } from '../utils/planner/clipboardOperations';
 import { createSortInboxCommand } from '../utils/planner/sortInbox';
 import { createSortPlannerCommand } from '../utils/planner/sortPlanner';
-import { saveTaskRows, readTaskRows, invalidateTaskRowsCache, loadChipTaskNote, preloadChipTaskNotes, isTaskRowsSaveInFlight, getLastTaskRowsSaveCompletedAt, writeTaskEvent } from '../utils/planner/storage';
+import { saveTaskRows, readTaskRows, invalidateTaskRowsCache, loadChipTaskNote, preloadChipTaskNotes, isTaskRowsSaveInFlight, getLastTaskRowsSaveCompletedAt, writeTaskEvent, isPlannerYearServerFresh, PLANNER_ROWS_STALE_EVENT } from '../utils/planner/storage';
 import { supabase } from '../lib/supabase';
 import { DEFAULT_PROJECT_ID } from '../constants/plannerStorageKeys';
 import {
@@ -588,6 +588,18 @@ export default function ProjectTimePlannerV2() {
         }
       }, delay);
     };
+    // Revalidate on mount whenever this session has not yet read the server
+    // for this year. A cache-hit page load (localStorage mirror) or a year
+    // switch back to a year cached earlier can be arbitrarily stale — the
+    // 2026-08-27 incident was a machine last used weeks earlier rendering,
+    // and then autosaving, its mirror. The refetch goes through the same
+    // guarded path as a realtime event (edit/save mute, skipNextAutoSave).
+    if (!isPlannerYearServerFresh(currentYear)) scheduleRefresh(0);
+    // A tab waking after a long sleep, or regaining connectivity, has its
+    // bookkeeping wiped by plannerStorage and must refetch before it can
+    // trust (or save) anything.
+    const onStale = () => scheduleRefresh(0);
+    window.addEventListener(PLANNER_ROWS_STALE_EVENT, onStale);
     (async () => {
       const { data: userData } = await supabase.auth.getUser();
       const uid = userData?.user?.id;
@@ -623,6 +635,7 @@ export default function ProjectTimePlannerV2() {
     })();
     return () => {
       cancelled = true;
+      window.removeEventListener(PLANNER_ROWS_STALE_EVENT, onStale);
       if (refreshTimer) clearTimeout(refreshTimer);
       if (channel) supabase.removeChannel(channel);
     };

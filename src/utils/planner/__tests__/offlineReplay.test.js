@@ -201,4 +201,78 @@ describe('offline pending-save replay', () => {
     expect(server.planner_rows.get(A).task).toBe('second offline edit');
     expect(idb.has('pending:u1:2')).toBe(false);
   });
+
+  // ------------------------------------------------------------------------
+  // Staleness guard (2026-08-27 incident): a client whose rows are older
+  // than the server's must never win on rows it has no baseline for, and
+  // must never delete on the strength of a stale known set.
+  // ------------------------------------------------------------------------
+
+  it('a save with no server basis cannot overwrite or delete newer server rows', async () => {
+    const Y = 3;
+    server.years.set('y3', { id: 'y3', user_id: 'u1', year_number: Y, start_date: '2026-06-01', total_days: 84 });
+    // Server already holds rows written by another client (mobile).
+    server.planner_rows.set(A, { id: A, user_id: 'u1', year_id: 'y3', task: 'mobile alpha', row_kind: 'task', updated_at: '2026-08-27T10:00:00Z' });
+    server.planner_rows.set(REMOTE, { id: REMOTE, user_id: 'u1', year_id: 'y3', task: 'mobile row', row_kind: 'task', updated_at: '2026-08-27T10:00:00Z' });
+    // Simulate a rehydrated localStorage mirror: rows are cached, but this
+    // session never read the server and there is no IndexedDB snapshot.
+    cache.set(`plannerStorage|task_rows:${Y}`, [row(A, 'stale alpha', 0)]);
+
+    // Stale autosave: desired = old alpha only (REMOTE unknown to this copy).
+    await saveTaskRows([row(A, 'stale alpha', 0), row('row-0', 'typed just now', 1)], 'project-1', Y);
+    await sleep(10);
+
+    expect(server.planner_rows.get(A).task).toBe('mobile alpha');   // not overwritten
+    expect(server.planner_rows.has(REMOTE)).toBe(true);              // not deleted
+    // ...but a row the user created in this session (synthetic id) still lands.
+    const typed = [...server.planner_rows.values()].find((r) => r.task === 'typed just now');
+    expect(typed).toBeTruthy();
+  });
+
+  it('a row without a baseline only wins when the server copy is not newer than the read', async () => {
+    const Y = 4;
+    const { readTaskRows } = await import('../storage');
+    server.years.set('y4', { id: 'y4', user_id: 'u1', year_number: Y, start_date: '2026-06-01', total_days: 84 });
+    server.planner_rows.set(A, { id: A, user_id: 'u1', year_id: 'y4', task: 'alpha', row_kind: 'task', updated_at: '2026-08-20T10:00:00Z' });
+    server.planner_rows.set(B, { id: B, user_id: 'u1', year_id: 'y4', task: 'beta', row_kind: 'task', updated_at: '2026-08-20T10:00:00Z' });
+    await readTaskRows('project-1', Y);
+
+    // Another client edits beta AFTER the read (newer updated_at).
+    server.planner_rows.set(B, { ...server.planner_rows.get(B), task: 'beta from mobile', updated_at: '2026-08-27T12:00:00Z' });
+
+    // A replay whose pending record carries no baseline (pre-baseline
+    // record) but a basedOnAt equal to the read high-water mark: alpha may
+    // be rewritten (server unchanged since read), beta may not.
+    await replayHandler(Y, {
+      taskRows: [row(A, 'alpha edited', 0), row(B, 'beta edited', 1)],
+      knownIds: [A, B],
+      synIds: [],
+      baseline: [],
+      basedOnAt: '2026-08-20T10:00:00Z',
+      queuedAt: Date.now(),
+    });
+    await sleep(10);
+
+    expect(server.planner_rows.get(A).task).toBe('alpha edited');
+    expect(server.planner_rows.get(B).task).toBe('beta from mobile');
+  });
+
+  it('a stale tab autosaving its old copy keeps every newer server value (three-way merge)', async () => {
+    const Y = 5;
+    const { readTaskRows } = await import('../storage');
+    server.years.set('y5', { id: 'y5', user_id: 'u1', year_number: Y, start_date: '2026-06-01', total_days: 84 });
+    server.planner_rows.set(A, { id: A, user_id: 'u1', year_id: 'y5', task: 'alpha', row_kind: 'task', display_order: 0, updated_at: '2026-08-01T10:00:00Z' });
+    const rows = await readTaskRows('project-1', Y);
+
+    // Days of mobile edits: rename, plus a new row.
+    server.planner_rows.set(A, { ...server.planner_rows.get(A), task: 'alpha renamed on mobile', updated_at: '2026-08-27T09:00:00Z' });
+    server.planner_rows.set(REMOTE, { id: REMOTE, user_id: 'u1', year_id: 'y5', task: 'mobile row', row_kind: 'task', display_order: 1, updated_at: '2026-08-27T09:00:00Z' });
+
+    // The stale tab wakes and autosaves exactly what it read weeks ago.
+    await saveTaskRows(rows, 'project-1', Y);
+    await sleep(10);
+
+    expect(server.planner_rows.get(A).task).toBe('alpha renamed on mobile');
+    expect(server.planner_rows.get(REMOTE).task).toBe('mobile row');
+  });
 });

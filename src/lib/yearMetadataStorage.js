@@ -127,7 +127,24 @@ export async function readYearMetadata() {
     const currentYearRow = profileResult.data?.current_year_id
       ? rows.find((row) => row.id === profileResult.data.current_year_id)
       : null;
-    const currentYear = currentYearRow?.year_number ?? rows[0].year_number;
+    // profiles.current_year_id is ON DELETE SET NULL, so it silently goes
+    // null whenever the year it pointed at is deleted (undo draft year,
+    // duplicate-row cleanup). Falling back to rows[0] then landed every
+    // device on year 1 (2026-08-27 incident). Prefer the active year, then
+    // the newest year, and repair the pointer so the next load is direct.
+    let currentYear = currentYearRow?.year_number ?? null;
+    if (currentYear == null) {
+      const fallback =
+        rows.find((row) => row.status === 'active') ?? rows[rows.length - 1];
+      currentYear = fallback.year_number;
+      supabase
+        .from('profiles')
+        .update({ current_year_id: fallback.id })
+        .eq('id', userId)
+        .then(({ error }) => {
+          if (error) console.error('Failed to repair current_year_id:', error);
+        });
+    }
 
     return {
       currentYear,

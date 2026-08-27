@@ -43,7 +43,28 @@
 
 ## Version history snapshot gaps
 
-The snapshot system (`snapshotStorage.js`) captures planner rows, archived weeks, Goal state, Plan chips/settings/metrics/custom projects/sent layers/chip notes, planner settings (incl. week names), `years.total_days`, and `task_events`. No known gaps remain.
+The snapshot system (`snapshotStorage.js`) captures planner rows, archived weeks, Goal state, Plan chips/settings/metrics/custom projects/sent layers/chip notes, planner settings (incl. week names), `years.total_days`, and `task_events`.
+
+**Gap: snapshots are web-only.** `debounceSiteSnapshot` and `maybeSnapshotOnSessionStart` run inside an open web tab. Days of edits made from the mobile app produce no restore point, which is why the 2026-08-27 overwrite (below) was unrecoverable. `20260827000001_planner_rows_history_trigger.sql` now captures the previous version of every `planner_rows` UPDATE/DELETE at the database into `planning_history` (30-day retention), regardless of client. Nothing reads `planning_history` yet — a restore helper (rebuild the row set as of a timestamp) is still to build.
+
+---
+
+## Stale-client overwrite — 2026-08-27 incident and guards
+
+**What happened.** A web tab on a machine last used weeks earlier was reopened. Its rows came from the `storageCache` localStorage mirror (`readTaskRows` short-circuits on `hasCached` with no revalidation), it had no `_baselineRows` / `_knownRowIds` for the year (those are only set by a real server read), and its autosave / unmount flush ran the diff save in the old fallback mode: row-level last-writer-wins for rows without a baseline, and deletes against `known = every server row`. Days of mobile edits were overwritten. Separately, `profiles.current_year_id` had gone NULL (`ON DELETE SET NULL`) and `readYearMetadata` fell back to `rows[0]`, so every device opened on year 1.
+
+**Guards now in place** (do not remove; `offlineReplay.test.js` covers them):
+
+| Guard | Where |
+|---|---|
+| `_readHighWater` per year: newest `planner_rows.updated_at` seen at the last real read. A row with no baseline is only overwritten if the server copy is not newer than it. No basis at all → restricted mode: no deletes, no overwrites, inserts only for rows minted this session. | `storage.js` `_saveTaskRowsImpl` |
+| Bookkeeping (known ids, baseline, high-water) is persisted with the IndexedDB snapshot and restored on cache-hit reads, and captured synchronously into every pending record / queued save. | `storage.js` `snapshotPayload`, `captureBookkeeping` |
+| `isPlannerYearServerFresh` + `planner-rows-stale` event: the System page refetches on mount when the year has not been server-read this session, and whenever the tab wakes after ≥60s hidden or regains connectivity (`markPlannerRowsStale`). | `storage.js`, `ProjectTimePlannerV2.jsx` realtime effect |
+| Pending offline saves older than 3 days are discarded, not replayed. | `plannerOffline.js` `PENDING_MAX_AGE_MS` |
+| Service worker checks for a new build on every tab wake and hourly, so a long-lived tab cannot keep running old save logic. | `main.jsx` |
+| `readYearMetadata` falls back to the active year (then newest) and repairs `current_year_id`. | `yearMetadataStorage.js` |
+
+**Not covered:** draft and archived years skip the realtime effect, so they get no wake revalidation (mobile does not write them). The mobile app's own stale-write behaviour lives in tacular-mobile and is out of scope here.
 
 ---
 
@@ -54,6 +75,7 @@ Migrations written but not yet applied to the database. Apply as a batch.
 | Migration file | What it does | Blocked features until applied |
 |---|---|---|
 | `supabase/migrations/20260612000001_add_show_action_times.sql` | Adds `projects.show_action_times` (boolean, default FALSE) | Goal page side-panel "Hide Times" toggle on action rows — saves will fail on the unknown column until applied |
+| `supabase/migrations/20260827000001_planner_rows_history_trigger.sql` | UPDATE/DELETE triggers on `planner_rows` writing the previous row to `planning_history`; 30-day per-user prune | Nothing in the client depends on it; without it, app-side edits still have no history |
 
 ---
 

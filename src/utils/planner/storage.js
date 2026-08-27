@@ -1049,7 +1049,22 @@ export const readTaskRows = async (
   try {
     const userId = await requireUserId();
     const cacheKey = taskRowsKey(yearNumber);
-    if (hasCached(CACHE_NS, cacheKey)) return getCached(CACHE_NS, cacheKey);
+    if (hasCached(CACHE_NS, cacheKey)) {
+      // Cache hit (in-memory or the localStorage mirror rehydrated on page
+      // load). The rows may be arbitrarily old — a machine last used weeks
+      // ago serves them as if fresh — so the diff save must NOT treat them
+      // as a server read. Restore the bookkeeping that was persisted with
+      // the IndexedDB snapshot (written at the last real read/save on this
+      // machine) so a save from this state diffs three-way against the
+      // server state those rows actually came from, and the page-level
+      // revalidation (planner-rows-stale / isPlannerYearServerFresh) fetches
+      // the real rows shortly after. See the 2026-08-27 stale-tab incident in
+      // docs/known-issues.md.
+      if (!_readHighWater.has(yearNumber)) {
+        await restoreBookkeepingFromSnapshot(userId, yearNumber);
+      }
+      return getCached(CACHE_NS, cacheKey);
+    }
 
     const yearRow = await findYearRow(userId, yearNumber);
     if (!yearRow) {
@@ -1085,6 +1100,12 @@ export const readTaskRows = async (
     // read as. Saves advance it only with web's own writes, so fields another
     // client changes after this read stay recognisable as remote.
     _baselineRows.set(yearNumber, new Map((tasksRes.data || []).map((r) => [r.id, baselineSnap(r)])));
+    // High-water mark of this read: the newest planner_rows.updated_at the
+    // server showed us. Any server row newer than this at save time was
+    // written by another client after this read (clock-skew free — both
+    // sides are server timestamps). Also marks the year as server-read this
+    // session (see isPlannerYearServerFresh).
+    _readHighWater.set(yearNumber, maxUpdatedAt(tasksRes.data || []));
 
     const totalDays = yearRow.total_days || DEFAULT_TOTAL_DAYS;
     const startDate = yearRow.start_date || todayIso();
@@ -1181,11 +1202,7 @@ export const readTaskRows = async (
     // Persist the freshly-read state (plus the known-id bookkeeping) so an
     // offline page load can hydrate from IndexedDB, and kick the replay loop
     // in case a pending save from a previous offline session is waiting.
-    savePlannerSnapshot(userId, yearNumber, {
-      rows: result,
-      knownIds: [...(_knownRowIds.get(yearNumber) || [])],
-      savedAt: Date.now(),
-    });
+    savePlannerSnapshot(userId, yearNumber, snapshotPayload(yearNumber, result));
     replayPendingSaves();
     return result;
   } catch (error) {
@@ -1199,9 +1216,7 @@ export const readTaskRows = async (
       if (uid) {
         const snap = await loadPlannerSnapshot(uid, yearNumber);
         if (Array.isArray(snap?.rows) && snap.rows.length > 0) {
-          if (!_knownRowIds.has(yearNumber)) {
-            _knownRowIds.set(yearNumber, new Set(snap.knownIds || []));
-          }
+          adoptSnapshotBookkeeping(yearNumber, snap);
           setCached(CACHE_NS, taskRowsKey(yearNumber), snap.rows);
           return snap.rows;
         }
@@ -1295,6 +1310,120 @@ function baselineSnap(dbRow) {
   return snap;
 }
 
+// --- staleness guard (2026-08-27 incident) --------------------------------
+// _readHighWater: per year, the newest planner_rows.updated_at this client
+// observed at its last real server read (ISO string; '' when the year had
+// no rows). Two jobs:
+//   1. isPlannerYearServerFresh(year) — has this SESSION read the server for
+//      this year? A cache-hit page load (localStorage mirror) has NOT, and
+//      the System page uses this to revalidate immediately on mount.
+//   2. The diff save's fallback for rows WITHOUT a baseline entry used to be
+//      row-level last-writer-wins, which is how a weeks-old tab overwrote
+//      days of mobile edits. Now such a row only wins if the server copy is
+//      not newer than the high-water mark; otherwise the server row stands.
+// Bookkeeping (known ids, baseline, high-water) is persisted with the
+// IndexedDB snapshot and restored on cache-hit reads so the guard has a
+// real basis even after a reload. When there is NO basis at all (fresh
+// machine, pre-fix snapshot, pre-fix pending record) the save runs in
+// restricted mode: no deletes, no overwrites of rows the server already
+// has, inserts only for rows minted this session.
+const _readHighWater = new Map(); // yearNumber -> ISO string
+
+function maxUpdatedAt(rows) {
+  let max = '';
+  for (const r of rows) {
+    const t = typeof r?.updated_at === 'string' ? r.updated_at : '';
+    if (t > max) max = t;
+  }
+  return max;
+}
+
+// ISO timestamptz strings from postgres compare lexically only when they
+// share a format; normalise through Date to be safe.
+function isNewerThan(isoA, isoB) {
+  if (!isoA) return false;
+  if (!isoB) return true;
+  const a = Date.parse(isoA);
+  const b = Date.parse(isoB);
+  if (Number.isNaN(a) || Number.isNaN(b)) return isoA > isoB;
+  return a > b;
+}
+
+function snapshotPayload(yearNumber, rows) {
+  return {
+    rows,
+    knownIds: [...(_knownRowIds.get(yearNumber) || [])],
+    baseline: [...(_baselineRows.get(yearNumber) || new Map())],
+    highWater: _readHighWater.get(yearNumber) ?? null,
+    savedAt: Date.now(),
+  };
+}
+
+// Adopt a snapshot's bookkeeping without clobbering anything this session
+// already learned from the server.
+function adoptSnapshotBookkeeping(yearNumber, snap) {
+  if (!snap) return;
+  if (!_knownRowIds.has(yearNumber) && Array.isArray(snap.knownIds)) {
+    _knownRowIds.set(yearNumber, new Set(snap.knownIds));
+  }
+  if (!_baselineRows.has(yearNumber) && Array.isArray(snap.baseline)) {
+    _baselineRows.set(yearNumber, new Map(snap.baseline));
+  }
+  if (!_readHighWater.has(yearNumber) && typeof snap.highWater === 'string') {
+    _readHighWater.set(yearNumber, snap.highWater);
+  }
+}
+
+async function restoreBookkeepingFromSnapshot(userId, yearNumber) {
+  try {
+    const snap = await loadPlannerSnapshot(userId, yearNumber);
+    adoptSnapshotBookkeeping(yearNumber, snap);
+  } catch {
+    // No snapshot → the save runs in restricted mode until a real read.
+  }
+}
+
+/** True once this session has read the server for `yearNumber`. */
+export function isPlannerYearServerFresh(yearNumber) {
+  return _readHighWater.has(yearNumber);
+}
+
+// Forget everything this session believes about the server for every year
+// and drop the row cache, so the next read hits the network and any save
+// before then cannot overwrite newer remote rows. Fired when a tab wakes
+// after a long sleep or regains connectivity; the System page listens for
+// PLANNER_ROWS_STALE_EVENT and refetches through its realtime refresh path.
+export const PLANNER_ROWS_STALE_EVENT = 'planner-rows-stale';
+export function markPlannerRowsStale(reason = 'unknown') {
+  for (const yearNumber of [..._readHighWater.keys()]) {
+    invalidate(CACHE_NS, taskRowsKey(yearNumber));
+  }
+  _readHighWater.clear();
+  _baselineRows.clear();
+  _knownRowIds.clear();
+  if (typeof window !== 'undefined' && typeof CustomEvent === 'function') {
+    window.dispatchEvent(new CustomEvent(PLANNER_ROWS_STALE_EVENT, { detail: { reason } }));
+  }
+}
+
+// A tab hidden for longer than this is treated as stale on wake: whatever it
+// holds may predate days of edits from another client.
+const STALE_AFTER_HIDDEN_MS = 60 * 1000;
+if (typeof document !== 'undefined' && typeof window !== 'undefined') {
+  let hiddenAt = null;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      hiddenAt = Date.now();
+      return;
+    }
+    if (hiddenAt != null && Date.now() - hiddenAt >= STALE_AFTER_HIDDEN_MS) {
+      markPlannerRowsStale('tab-wake');
+    }
+    hiddenAt = null;
+  });
+  window.addEventListener('online', () => markPlannerRowsStale('online'));
+}
+
 // Monotonic id for pending-state records. A save only clears the IndexedDB
 // pending record on success if no NEWER desired state has been persisted
 // since it was queued — otherwise a slow save's success would erase the
@@ -1314,19 +1443,34 @@ export const saveTaskRows = (
   // must diff under the same bookkeeping or it could resurrect rows another
   // client deleted (or re-mint UUIDs for synthetic rows and duplicate them).
   const seq = ++_pendingSaveSeq;
+  // Capture the bookkeeping NOW (synchronously) and hand the same object to
+  // both the durable pending record and the queued save, so the save diffs
+  // under the state the edit was made against even if markPlannerRowsStale
+  // wipes the live maps before the queue reaches it.
+  const bookkeeping = captureBookkeeping(yearNumber);
   localUserId().then((uid) => {
     if (!uid) return;
     savePendingState(uid, yearNumber, {
       taskRows,
-      knownIds: [...(_knownRowIds.get(yearNumber) || [])],
-      synIds: [...(_syntheticRowIds.get(yearNumber) || new Map())],
-      baseline: [...(_baselineRows.get(yearNumber) || new Map())],
+      ...bookkeeping,
       seq,
       queuedAt: Date.now(),
     });
   });
-  return _enqueueTaskRowsSave(taskRows, yearNumber, seq, null);
+  return _enqueueTaskRowsSave(taskRows, yearNumber, seq, bookkeeping);
 };
+
+// { knownIds, synIds, baseline, basedOnAt } — basedOnAt is the read
+// high-water mark (ISO string, '' for an empty year) or null when this
+// session has no server basis for the year at all.
+function captureBookkeeping(yearNumber) {
+  return {
+    knownIds: [...(_knownRowIds.get(yearNumber) || [])],
+    synIds: [...(_syntheticRowIds.get(yearNumber) || new Map())],
+    baseline: [...(_baselineRows.get(yearNumber) || new Map())],
+    basedOnAt: _readHighWater.has(yearNumber) ? _readHighWater.get(yearNumber) : null,
+  };
+}
 
 function _enqueueTaskRowsSave(taskRows, yearNumber, seq, bookkeeping) {
   // Always run the next save regardless of whether the previous one threw, so
@@ -1423,7 +1567,7 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     // (see the bookkeeping note above _saveTaskRowsImpl).
     const known = Array.isArray(bookkeeping?.knownIds)
       ? new Set(bookkeeping.knownIds)
-      : _knownRowIds.get(yearNumber) || new Set(currentById.keys());
+      : _knownRowIds.get(yearNumber) || new Set();
 
     // Baseline for the three-way merge. Replay: the baseline persisted WITH
     // the pending state wins, for the same reason as the known set — it is
@@ -1433,16 +1577,31 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       : _baselineRows.get(yearNumber) || new Map();
     const nextBaseline = new Map(baseline);
 
+    // Staleness guard (see _readHighWater). basedOnAt is the server
+    // high-water mark the desired state was built against; null means this
+    // save has NO server basis (fresh machine, pre-fix snapshot or pending
+    // record, or a save that beat the first read) → restricted mode.
+    const basedOnAt = bookkeeping
+      ? (typeof bookkeeping.basedOnAt === 'string' ? bookkeeping.basedOnAt : null)
+      : (_readHighWater.has(yearNumber) ? _readHighWater.get(yearNumber) : null);
+    const hasBasis = basedOnAt !== null;
+    // Rows minted from synthetic ids in THIS save are provably web-created.
+    const mintedHere = new Set(synMap.values());
+    let guarded = 0; // rows the guard refused to overwrite/delete/insert
+
     const toUpsert = [];
     for (const d of desiredRows) {
       const cur = currentById.get(d.id);
       if (!cur) {
         // Missing from the DB. Known id → another client deleted it since we
         // last looked; do NOT resurrect it. Unknown id → a row web created.
-        if (!known.has(d.id)) {
-          toUpsert.push(d);
-          nextBaseline.set(d.id, baselineSnap(d));
-        }
+        // No basis: we cannot tell "web created it" from "another client
+        // deleted it since this stale copy was taken", so only rows minted
+        // here (or a save into a still-empty year) may insert.
+        if (known.has(d.id)) continue;
+        if (!hasBasis && currentById.size > 0 && !mintedHere.has(d.id)) { guarded += 1; continue; }
+        toUpsert.push(d);
+        nextBaseline.set(d.id, baselineSnap(d));
         continue;
       }
       if (!plannerRowDiffers(d, cur)) {
@@ -1453,10 +1612,18 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       }
       const base = baseline.get(d.id);
       if (!base) {
-        // No baseline (pre-fix pending record, or a row that appeared
-        // without a read) — fall back to the old row-level last-writer-wins.
-        toUpsert.push(d);
-        nextBaseline.set(d.id, baselineSnap(d));
+        // No baseline for this row. Row-level last-writer-wins is only safe
+        // if the server copy has not moved since the state we based this on
+        // — otherwise the server row is the newer write (another client's)
+        // and this copy is stale: keep the server's and adopt it as baseline
+        // so the next save diffs properly.
+        if (hasBasis && !isNewerThan(cur.updated_at, basedOnAt)) {
+          toUpsert.push(d);
+          nextBaseline.set(d.id, baselineSnap(d));
+        } else {
+          guarded += 1;
+          nextBaseline.set(d.id, baselineSnap(cur));
+        }
         continue;
       }
       // Three-way merge per field: web's value wins only for fields web
@@ -1483,9 +1650,17 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       // In the DB but not in web's state. Unknown id → another client
       // inserted it since web's last refresh (e.g. an undo re-insert);
       // leave it — the realtime refresh will bring it into web's view.
-      if (!desiredIds.has(id) && known.has(id)) toDelete.push(id);
+      if (desiredIds.has(id) || !known.has(id)) continue;
+      // No basis → the known set is not trustworthy enough to delete on.
+      if (!hasBasis) { guarded += 1; continue; }
+      toDelete.push(id);
     }
 
+    if (guarded > 0) {
+      console.warn('[planner-save] staleness guard kept server rows', {
+        guarded, hasBasis, basedOnAt, replay: bookkeeping?.replay === true,
+      });
+    }
     // TODO(debug): remove after cross-client sync is verified.
     console.log('[planner-save] diff', { upsert: toUpsert.length, delete: toDelete.length, server: currentById.size });
 
@@ -1547,11 +1722,7 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     if (seq === _pendingSaveSeq) {
       clearPendingState(userId, yearNumber);
     }
-    savePlannerSnapshot(userId, yearNumber, {
-      rows: allRows,
-      knownIds: [...nextKnown],
-      savedAt: Date.now(),
-    });
+    savePlannerSnapshot(userId, yearNumber, snapshotPayload(yearNumber, allRows));
 
     // Schedule a snapshot after 30s of inactivity so the captured state
     // includes this edit but rapid/mid-thought edits don't produce partials.
@@ -1577,6 +1748,10 @@ setOfflineReplayHandler((yearNumber, payload) => {
     knownIds: payload.knownIds,
     synIds: payload.synIds,
     baseline: payload.baseline,
+    // Pre-fix records have no basedOnAt → restricted mode (see the
+    // staleness guard): they can add rows but never overwrite or delete.
+    basedOnAt: typeof payload.basedOnAt === 'string' ? payload.basedOnAt : null,
+    replay: true,
   });
 });
 
