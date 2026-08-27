@@ -1437,7 +1437,7 @@ export default function StagingPageV2() {
                           }}
                         >
                           <div className="w-full flex items-center gap-2 font-semibold min-w-0 overflow-hidden" style={{ maskImage: 'linear-gradient(to right, black 97%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to right, black 97%, transparent 100%)' }}>
-                            <span className="flex items-baseline gap-0 min-w-0">
+                            <span className="flex items-baseline gap-0 min-w-0 flex-1">
                               <InlineEditableText
                                 value={item.projectName || item.text}
                                 onSave={(v) => handleInlineProjectUpdate(item.id, 'projectName', v)}
@@ -1450,7 +1450,8 @@ export default function StagingPageV2() {
                                 onSave={(v) => handleInlineProjectUpdate(item.id, 'projectTagline', v)}
                                 placeholder="Add tagline"
                                 className="truncate"
-                                style={{ fontWeight: 400, opacity: item.projectTagline ? 0.85 : 0.5, minWidth: 0 }}
+                                style={{ fontWeight: 400, opacity: item.projectTagline ? 0.85 : 0.5, minWidth: 0, flex: 1 }}
+                                inputStyle={{ flex: 1, width: '100%', minWidth: 0 }}
                               />
                             </span>
                           </div>
