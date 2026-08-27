@@ -60,7 +60,7 @@ The snapshot system (`snapshotStorage.js`) captures planner rows, archived weeks
 | `_readHighWater` per year: newest `planner_rows.updated_at` seen at the last real read. A row with no baseline is only overwritten if the server copy is not newer than it. No basis at all → restricted mode: no deletes, no overwrites, inserts only for rows minted this session. | `storage.js` `_saveTaskRowsImpl` |
 | Bookkeeping (known ids, baseline, high-water) is persisted with the IndexedDB snapshot and restored on cache-hit reads, and captured synchronously into every pending record / queued save. | `storage.js` `snapshotPayload`, `captureBookkeeping` |
 | `isPlannerYearServerFresh` + `planner-rows-stale` event: the System page refetches on mount when the year has not been server-read this session, and whenever the tab wakes after ≥60s hidden or regains connectivity (`markPlannerRowsStale`). | `storage.js`, `ProjectTimePlannerV2.jsx` realtime effect |
-| Pending offline saves older than 3 days are discarded, not replayed. | `plannerOffline.js` `PENDING_MAX_AGE_MS` |
+| Pending offline saves older than 30 days are discarded, not replayed (younger ones replay under their own baseline, so a long offline stretch still syncs). | `plannerOffline.js` `PENDING_MAX_AGE_MS` |
 | Service worker checks for a new build on every tab wake and hourly, so a long-lived tab cannot keep running old save logic. | `main.jsx` |
 | `readYearMetadata` falls back to the active year (then newest) and repairs `current_year_id`. | `yearMetadataStorage.js` |
 
@@ -75,6 +75,7 @@ Migrations written but not yet applied to the database. Apply as a batch.
 | Migration file | What it does | Blocked features until applied |
 |---|---|---|
 | `supabase/migrations/20260612000001_add_show_action_times.sql` | Adds `projects.show_action_times` (boolean, default FALSE) | Goal page side-panel "Hide Times" toggle on action rows — saves will fail on the unknown column until applied |
+| `supabase/migrations/20260827000002_add_project_tagline.sql` | Adds `projects.project_tagline` | Project taglines (Goal page "Add tagline", System header rows, mobile header subtitle) — before this the field was never persisted, so taglines vanished on reload. Without the column, staging saves fail on the unknown column. |
 | `supabase/migrations/20260827000001_planner_rows_history_trigger.sql` | UPDATE/DELETE triggers on `planner_rows` writing the previous row to `planning_history`; 30-day per-user prune | Nothing in the client depends on it; without it, app-side edits still have no history |
 
 ---

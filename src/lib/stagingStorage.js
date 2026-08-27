@@ -122,6 +122,9 @@ function dbRowToItem(row) {
     id: row.id,
     text: row.text ?? '',
     projectName: row.project_name ?? undefined,
+    // projects.project_tagline (20260827000002). Shown after the name on
+    // System project header rows (web + mobile); the Goal page edits it.
+    projectTagline: row.project_tagline ?? undefined,
     projectNickname: row.project_nickname ?? undefined,
     color: row.color ?? undefined,
     planTableVisible: row.plan_table_visible ?? false,
@@ -155,6 +158,7 @@ function itemToDbRow({ userId, yearId, item, isArchived, displayOrder }) {
     year_id: yearId,
     text: item.text ?? '',
     project_name: item.projectName ?? null,
+    project_tagline: item.projectTagline ?? null,
     project_nickname: item.projectNickname ?? null,
     color: item.color ?? null,
     plan_table_visible: item.planTableVisible ?? false,
@@ -292,7 +296,7 @@ function stableStringify(value) {
 // rows are not rewritten (a rewrite of an unchanged row would clobber a
 // remote field edit this tab hasn't seen).
 const STAGING_DIFF_KEYS = [
-  'text', 'project_name', 'project_nickname', 'color',
+  'text', 'project_name', 'project_tagline', 'project_nickname', 'color',
   'plan_table_visible', 'plan_table_collapsed', 'has_plan', 'added_to_plan',
   'show_outcome_totals', 'show_action_times', 'area', 'is_simple_table',
   'plan_reason_row_count', 'plan_outcome_row_count',
@@ -600,5 +604,47 @@ export async function saveSystemOrder(orderedProjectIds, yearNumber) {
     if (failed) throw failed.error;
   } catch (error) {
     console.error('Failed to save System project order', error);
+  }
+}
+
+/**
+ * Update one project's tagline (projects.project_tagline) — the write-back
+ * for inline tagline edits on System project header rows, so the Goal page
+ * and System (web + mobile) agree on a single source of truth. Updates the
+ * cache and fires the staging event first so System's header-row sync sees
+ * the new value immediately.
+ *
+ * @param {string} projectId
+ * @param {string} tagline
+ * @param {number} yearNumber
+ */
+export async function saveProjectTagline(projectId, tagline, yearNumber) {
+  if (!projectId || yearNumber == null) return;
+  const value = typeof tagline === 'string' ? tagline.trim() : '';
+
+  const cached = getCached(CACHE_NS, stagingKey(yearNumber));
+  if (cached) {
+    const patch = (list) => (list ?? []).map((item) => (
+      item.id === projectId ? { ...item, projectTagline: value } : item
+    ));
+    const next = { shortlist: patch(cached.shortlist), archived: cached.archived ?? [] };
+    setCached(CACHE_NS, stagingKey(yearNumber), next);
+    dispatchStagingEvent({
+      shortlist: next.shortlist.map(deserializeItemFromCache),
+      archived: next.archived.map(deserializeItemFromCache),
+    }, yearNumber);
+  }
+
+  try {
+    const userId = await requireUserId();
+    const { error } = await supabase
+      .from('projects')
+      .update({ project_tagline: value || null })
+      .eq('user_id', userId)
+      .eq('id', projectId);
+    if (error) throw error;
+    debounceSiteSnapshot(yearNumber);
+  } catch (error) {
+    console.error('Failed to save project tagline', error);
   }
 }

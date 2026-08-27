@@ -21,7 +21,7 @@ import { useTaskRowPanel, TASK_ROW_DETAIL_UPDATE_EVENT } from '../contexts/TaskR
 import { loadSentMetricsSnapshot, peekTacticsMetricsCache } from '../lib/tacticsMetricsStorage';
 import { peekTacticsCache } from '../lib/tacticsStorage';
 import { peekStagingCache } from '../lib/stagingStorage';
-import { loadStagingState, saveSystemOrder } from '../lib/stagingStorage';
+import { loadStagingState, saveSystemOrder, saveProjectTagline } from '../lib/stagingStorage';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import { revertArchive } from '../utils/planner/revertArchive';
@@ -1391,12 +1391,30 @@ export default function ProjectTimePlannerV2() {
           }
         });
 
-        // Do not sync projectName/projectTagline from staging onto existing rows.
-        // Once a project header row exists in System, the user can edit its name/tagline
-        // directly and those edits must be preserved. The staging values are only used
-        // when first inserting a new project header row (below).
+        // Do not sync projectName from staging onto existing rows: once a
+        // project header row exists in System, the user can edit its name
+        // directly and that edit must be preserved. The staging name is only
+        // used when first inserting a new header row (below).
+        //
+        // projectTagline IS synced: projects.project_tagline is the single
+        // source of truth (Goal page edits it; a System inline edit writes
+        // back through saveProjectTagline), and the copy on the header row
+        // is what mobile renders, so keep it current. Only rows whose
+        // project has a non-empty staging tagline that differs are touched.
+        let taglineSynced = false;
+        if (isProjectsLoaded && projectTaglinesMap) {
+          const synced = filteredData.map(row => {
+            if (row._rowType !== 'projectHeader') return row;
+            const staged = projectTaglinesMap[row.projectNickname];
+            if (!staged || staged === (row.projectTagline || '')) return row;
+            taglineSynced = true;
+            return { ...row, projectTagline: staged };
+          });
+          if (taglineSynced) filteredData = synced;
+        }
+
         const newProjects = projects.filter(k => k !== '-' && !existingHeaderIds.has(k));
-        if (newProjects.length === 0 && removedProjects.length === 0) return prevData;
+        if (newProjects.length === 0 && removedProjects.length === 0 && !taglineSynced) return prevData;
         if (newProjects.length === 0) return filteredData;
 
         const newData = [...filteredData];
@@ -2089,6 +2107,19 @@ export default function ProjectTimePlannerV2() {
     setSelectedCells,
     setAnchorCell,
   });
+
+  // Inline tagline edits on a project header row also write back to
+  // projects.project_tagline (the source of truth the Goal page shows and
+  // the header-row sync above reads), so the edit survives the next sync
+  // instead of being reverted to the Goal page's value.
+  const handleEditCompleteWithTaglineSync = useCallback((rowId, columnId, newValue, options) => {
+    handleEditComplete(rowId, columnId, newValue, options);
+    if (columnId !== 'projectTagline') return;
+    const row = latestDataRef.current.find(r => r.id === rowId);
+    if (row?._rowType === 'projectHeader' && row.projectId) {
+      saveProjectTagline(row.projectId, newValue, currentYear);
+    }
+  }, [handleEditComplete, currentYear]);
 
   // Mirror editingCell into the ref read by the realtime refresh timer
   // (declared above, before the realtime effect).
@@ -3446,7 +3477,7 @@ export default function ProjectTimePlannerV2() {
         handleCellDoubleClick={handleCellDoubleClick}
         handleCellContextMenu={handleCellContextMenu}
         contextMenuTargetRowId={contextMenuTargetRowId}
-        handleEditComplete={handleEditComplete}
+        handleEditComplete={handleEditCompleteWithTaglineSync}
         handleEditCancel={handleEditCancel}
         handleEditKeyDown={handleEditKeyDown}
         draggedRowId={draggedRowId}
