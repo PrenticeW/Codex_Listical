@@ -98,6 +98,7 @@ const TableRow = React.memo(function TableRow({
   handleCellDragEnd,
   isCellBeingDragged,
   isCellDropTarget,
+  getDropTargetEdges,
   rowHeight,
   cellFontSize,
   headerFontSize,
@@ -350,6 +351,7 @@ const TableRow = React.memo(function TableRow({
         handleCellDragEnd={handleCellDragEnd}
         isCellBeingDragged={isCellBeingDragged}
         isCellDropTarget={isCellDropTarget}
+        getDropTargetEdges={getDropTargetEdges}
         rowHeight={rowHeight}
         cellFontSize={cellFontSize}
         headerFontSize={headerFontSize}

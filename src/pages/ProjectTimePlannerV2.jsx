@@ -2255,6 +2255,7 @@ export default function ProjectTimePlannerV2() {
     handleCellDragEnd,
     isCellBeingDragged,
     isCellDropTarget,
+    getDropTargetEdges,
   } = useDragAndDropCells({ data, setData, executeCommand, setSelectedCells, setAnchorCell, selectedCells, allColumnIds });
 
   // Note: Old edit handlers removed - now using useEditState hook
@@ -3493,6 +3494,7 @@ export default function ProjectTimePlannerV2() {
         handleCellDragEnd={handleCellDragEnd}
         isCellBeingDragged={isCellBeingDragged}
         isCellDropTarget={isCellDropTarget}
+        getDropTargetEdges={getDropTargetEdges}
         cellFontSize={cellFontSize}
         gripIconSize={gripIconSize}
         dates={dates}

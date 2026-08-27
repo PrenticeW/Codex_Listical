@@ -50,15 +50,18 @@ export default function useDragAndDropCells({
     const row = data.find(r => r.id === rowId);
     if (!row) return;
 
-    // Suppress ghost image using a transparent PNG in the DOM (same technique as TacticsPage)
-    e.dataTransfer.setDragImage(getTransparentDragImage(), 0, 0);
-
     const value = row[columnId] ?? '';
     // Block drag: the grabbed cell is one of several selected cells.
     const key = `${rowId}|${columnId}`;
     const block = selectedCells && selectedCells.size > 1 && selectedCells.has(key)
       ? [...selectedCells].map(k => { const [r, c] = k.split('|'); return { rowId: r, columnId: c }; })
       : null;
+
+    // No ghost for either kind of drag: the ONE piece of feedback is the
+    // destination highlight (every landing cell washed in the selection
+    // colour with an outline round the block's outer edge), which tracks
+    // the real drop position exactly — a floating ghost never quite does.
+    e.dataTransfer.setDragImage(getTransparentDragImage(), 0, 0);
     setDraggedCell({ rowId, columnId, block });
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', JSON.stringify({ rowId, columnId, value }));
@@ -72,8 +75,26 @@ export default function useDragAndDropCells({
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
-    setDropTargetCell({ rowId, columnId });
-  }, [draggedCell]);
+    // For a block drag, precompute every destination cell so all of them
+    // can be highlighted, not just the one under the pointer.
+    let keys = null;
+    if (draggedCell.block && Array.isArray(allColumnIds)) {
+      const rowIndex = new Map(data.map((r, i) => [r.id, i]));
+      const colIndex = new Map(allColumnIds.map((c, i) => [c, i]));
+      const rowDelta = rowIndex.get(rowId) - rowIndex.get(draggedCell.rowId);
+      const colDelta = colIndex.get(columnId) - colIndex.get(draggedCell.columnId);
+      keys = new Set();
+      for (const cell of draggedCell.block) {
+        const ri = rowIndex.get(cell.rowId);
+        const ci = colIndex.get(cell.columnId);
+        if (ri == null || ci == null) continue;
+        const destRow = data[ri + rowDelta];
+        const destCol = allColumnIds[ci + colDelta];
+        if (destRow && destCol && !isSpecialRow(destRow)) keys.add(`${destRow.id}|${destCol}`);
+      }
+    }
+    setDropTargetCell({ rowId, columnId, keys });
+  }, [draggedCell, data, allColumnIds]);
 
   const handleCellDragLeave = useCallback((e) => {
     // Only clear when leaving to a non-child element
@@ -237,8 +258,29 @@ export default function useDragAndDropCells({
   }, [draggedCell]);
 
   const isCellDropTarget = useCallback((rowId, columnId) => {
-    return dropTargetCell?.rowId === rowId && dropTargetCell?.columnId === columnId;
+    if (!dropTargetCell) return false;
+    if (dropTargetCell.keys) return dropTargetCell.keys.has(`${rowId}|${columnId}`);
+    return dropTargetCell.rowId === rowId && dropTargetCell.columnId === columnId;
   }, [dropTargetCell]);
+
+  // Which sides of this landing cell are on the OUTER edge of the landing
+  // block (so TaskRow can draw one outline round the block, not a box per
+  // cell). A single-cell target is an edge on all four sides.
+  const getDropTargetEdges = useCallback((rowId, columnId) => {
+    if (!isCellDropTarget(rowId, columnId)) return null;
+    const keys = dropTargetCell.keys;
+    if (!keys || !Array.isArray(allColumnIds)) return { top: true, bottom: true, left: true, right: true };
+    const ri = data.findIndex(r => r.id === rowId);
+    const ci = allColumnIds.indexOf(columnId);
+    const has = (r, c) => r >= 0 && r < data.length && c >= 0 && c < allColumnIds.length
+      && keys.has(`${data[r].id}|${allColumnIds[c]}`);
+    return {
+      top: !has(ri - 1, ci),
+      bottom: !has(ri + 1, ci),
+      left: !has(ri, ci - 1),
+      right: !has(ri, ci + 1),
+    };
+  }, [isCellDropTarget, dropTargetCell, data, allColumnIds]);
 
   return {
     draggedCell,
@@ -250,5 +292,6 @@ export default function useDragAndDropCells({
     handleCellDragEnd,
     isCellBeingDragged,
     isCellDropTarget,
+    getDropTargetEdges,
   };
 }

@@ -40,6 +40,7 @@ function PlannerTable({
   handleCellDragEnd,
   isCellBeingDragged,
   isCellDropTarget,
+  getDropTargetEdges,
   cellFontSize,
   gripIconSize,
   dates,
@@ -213,6 +214,7 @@ function PlannerTable({
                   handleCellDragEnd={handleCellDragEnd}
                   isCellBeingDragged={isCellBeingDragged}
                   isCellDropTarget={isCellDropTarget}
+                  getDropTargetEdges={getDropTargetEdges}
                   rowHeight={rowHeight}
                   cellFontSize={cellFontSize}
                   headerFontSize={headerFontSize}
@@ -313,6 +315,7 @@ function PlannerTable({
                   handleCellDragEnd={handleCellDragEnd}
                   isCellBeingDragged={isCellBeingDragged}
                   isCellDropTarget={isCellDropTarget}
+                  getDropTargetEdges={getDropTargetEdges}
                   rowHeight={rowHeight}
                   cellFontSize={cellFontSize}
                   headerFontSize={headerFontSize}

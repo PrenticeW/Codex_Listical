@@ -54,6 +54,7 @@ const TaskRow = React.memo(function TaskRow({
   handleCellDragEnd,
   isCellBeingDragged,
   isCellDropTarget,
+  getDropTargetEdges,
   rowHeight,
   cellFontSize,
   headerFontSize,
@@ -278,11 +279,27 @@ const TaskRow = React.memo(function TaskRow({
                 const rect = e.currentTarget.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
-                const onBorder =
-                  x <= BORDER_THRESHOLD ||
-                  y <= BORDER_THRESHOLD ||
-                  x >= rect.width - BORDER_THRESHOLD ||
-                  y >= rect.height - BORDER_THRESHOLD;
+                let onBorder;
+                if (isSelected && hasMultiCellSelection) {
+                  // Multi-cell selection: the grab zone is the OUTER edge of
+                  // the whole selection block (Excel-style), on every side
+                  // it has one — never the seams between two selected cells.
+                  // Slightly wider than a single cell's edge so the 2px
+                  // selection outline is comfortably inside it.
+                  const edges = getCellSelectionEdges?.(rowId, columnId) || {};
+                  const T = BORDER_THRESHOLD + 2;
+                  onBorder =
+                    (edges.left && x <= T) ||
+                    (edges.top && y <= T) ||
+                    (edges.right && x >= rect.width - T) ||
+                    (edges.bottom && y >= rect.height - T);
+                } else {
+                  onBorder =
+                    x <= BORDER_THRESHOLD ||
+                    y <= BORDER_THRESHOLD ||
+                    x >= rect.width - BORDER_THRESHOLD ||
+                    y >= rect.height - BORDER_THRESHOLD;
+                }
                 cellBorderStateRef.current = { columnId, onBorder };
                 e.currentTarget.style.cursor = onBorder ? 'grab' : 'cell';
                 setDraggableColumnId(onBorder ? columnId : null);
@@ -306,14 +323,26 @@ const TaskRow = React.memo(function TaskRow({
               }}
             >
               <div
-                className={`h-full flex items-center w-full ${
-                  isCellDrop ? 'ring-2 ring-inset ring-black bg-[var(--sel-row)]' : ''
-                }`}
+                className="h-full flex items-center w-full"
                 style={{
                   fontSize: `${cellFontSize}px`,
                   minHeight: `${rowHeight}px`,
                   borderBottom: '1px solid #d3d3d3',
                   borderRight: borderRightStyle,
+                  // Drop feedback: selection-colour wash on every landing
+                  // cell, with a 2px outline only on the sides that form
+                  // the outer edge of the landing block (inset box-shadow
+                  // so it never shifts layout).
+                  ...(isCellDrop ? (() => {
+                    const ed = getDropTargetEdges?.(rowId, columnId) || { top: true, bottom: true, left: true, right: true };
+                    const ring = 'var(--sel-ring)';
+                    const shadows = [];
+                    if (ed.top) shadows.push(`inset 0 2px 0 0 ${ring}`);
+                    if (ed.bottom) shadows.push(`inset 0 -2px 0 0 ${ring}`);
+                    if (ed.left) shadows.push(`inset 2px 0 0 0 ${ring}`);
+                    if (ed.right) shadows.push(`inset -2px 0 0 0 ${ring}`);
+                    return { backgroundColor: 'var(--sel-row)', boxShadow: shadows.join(', ') };
+                  })() : {}),
                 }}
                 onMouseDown={(e) => {
                   // If pointer is on the cell border, let the drag initiate — don't call
