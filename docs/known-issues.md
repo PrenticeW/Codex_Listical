@@ -73,6 +73,13 @@ The snapshot system (`snapshotStorage.js`) captures planner rows, archived weeks
 
 **Cleanup still needed:** the duplicate rows this produced are still in `planner_rows` — the client's mount effect hides extra Archive headers but does not delete them. Remove the later-created duplicates of each Inbox/Archive/project header (and any task rows duplicated with a newer `created_at`) by hand in Supabase, then re-check row order.
 
+**Third incident (2026-08-28): opening a stale browser still overwrote the whole System page.** Two remaining holes, addressed 2026-08-28:
+
+| Hole | Fix |
+|---|---|
+| **The stale browser runs the pre-fix bundle first.** The app is a PWA: an old machine's service-worker cache serves its old bundle instantly, that bundle autosaves ~500ms after load with the OLD save logic (delete-all-then-reinsert), and the damage lands before the auto-update fetches the new build and reloads. No client-side guard can reach a bundle that is already cached. | DB-side gate: web now sends `x-tacular-client: <build>` on every request (`src/lib/supabase.ts`, `CLIENT_BUILD`); migration `20260828000001_stale_client_write_gate.sql` (written, **NOT applied** — would break current mobile builds, see its header) rejects UPDATE/DELETE on `planner_rows` and DELETE on `archived_weeks` from clients without a new-enough header. |
+| **Even on the new bundle, a cache-hydrated tab saved before revalidating.** On a cache hit the page counts as hydrated at mount, normalisation `setData` calls trigger the 500ms autosave, and the mount refetch then defers itself 5s behind that very save (echo mute). The archive rewrite was also wholly unguarded — every save delete-all-then-reinserts `archived_weeks`, so a stale tab replaced the whole archive. | Autosave and the unmount flush are skipped while online until `isPlannerYearServerFresh` (offline saves still allowed — they replay under their own bookkeeping); the mount refetch ignores the save-mute until the year is server-fresh (draft years exempt — they never revalidate, known gap); `archived_weeks` is only rewritten when the session has server-read the year (an offline-archived week syncs on the next fresh-session save). |
+
 **Not covered:** draft and archived years skip the realtime effect, so they get no wake revalidation (mobile does not write them). The mobile app's own stale-write behaviour lives in tacular-mobile and is out of scope here.
 
 ---
@@ -86,6 +93,7 @@ Migrations written but not yet applied to the database. Apply as a batch.
 | `supabase/migrations/20260612000001_add_show_action_times.sql` | Adds `projects.show_action_times` (boolean, default FALSE) | Goal page side-panel "Hide Times" toggle on action rows — saves will fail on the unknown column until applied |
 | `supabase/migrations/20260827000002_add_project_tagline.sql` | Adds `projects.project_tagline` | Project taglines (Goal page "Add tagline", System header rows, mobile header subtitle) — before this the field was never persisted, so taglines vanished on reload. Without the column, staging saves fail on the unknown column. |
 | `supabase/migrations/20260827000001_planner_rows_history_trigger.sql` | UPDATE/DELETE triggers on `planner_rows` writing the previous row to `planning_history`; 30-day per-user prune | Nothing in the client depends on it; without it, app-side edits still have no history |
+| `supabase/migrations/20260828000001_stale_client_write_gate.sql` | Rejects destructive planner writes from clients not sending `x-tacular-client` ≥ min build (blocks pre-fix PWA bundles) | **Do NOT apply with the others** — breaks current tacular-mobile builds until mobile ships the header; see the migration's header comment |
 
 ---
 

@@ -1738,20 +1738,31 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     _knownRowIds.set(yearNumber, nextKnown);
     _baselineRows.set(yearNumber, nextBaseline);
 
-    // archived_weeks keeps the replace-the-layer pattern: mobile never
-    // writes it, so a full rewrite can't clobber another client.
-    const archiveDelete = await supabase
-      .from('archived_weeks')
-      .delete()
-      .eq('user_id', userId)
-      .eq('year_id', yearId);
-    if (archiveDelete.error) throw archiveDelete.error;
-    const dbArchiveRows = archiveRowsToWrite.map(({ row, weekNumber }) =>
-      archiveRowPayloadToDb({ row, userId, yearId, weekNumber }),
-    );
-    if (dbArchiveRows.length > 0) {
-      const archiveInsert = await supabase.from('archived_weeks').insert(dbArchiveRows);
-      if (archiveInsert.error) throw archiveInsert.error;
+    // archived_weeks keeps the replace-the-layer pattern (mobile never
+    // writes it) — but replace-the-layer has NO staleness guard, so a
+    // cache-hydrated tab that had not read the server would replace the
+    // whole archive with its weeks-old copy (part of the 2026-08-28
+    // stale-browser overwrite). Only rewrite the layer when THIS session
+    // has actually read the server for the year. Replays skip it too: a
+    // pending record can be days old, and a wholesale rewrite from it
+    // would wipe weeks archived since — an offline-archived week syncs on
+    // the next fresh-session save instead (rare; archiving is weekly).
+    if (_serverReadYears.has(yearNumber)) {
+      const archiveDelete = await supabase
+        .from('archived_weeks')
+        .delete()
+        .eq('user_id', userId)
+        .eq('year_id', yearId);
+      if (archiveDelete.error) throw archiveDelete.error;
+      const dbArchiveRows = archiveRowsToWrite.map(({ row, weekNumber }) =>
+        archiveRowPayloadToDb({ row, userId, yearId, weekNumber }),
+      );
+      if (dbArchiveRows.length > 0) {
+        const archiveInsert = await supabase.from('archived_weeks').insert(dbArchiveRows);
+        if (archiveInsert.error) throw archiveInsert.error;
+      }
+    } else {
+      console.warn('[planner-save] archive rewrite skipped: year not server-read this session');
     }
 
     // Cache the just-saved array so the next read returns it instantly

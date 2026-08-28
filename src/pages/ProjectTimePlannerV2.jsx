@@ -454,6 +454,19 @@ export default function ProjectTimePlannerV2() {
   useEffect(() => {
     if (!dataHydrated.current) return;
     if (isCurrentYearArchived) return;
+    // Cache-hydrated tab that has not yet read the server this session must
+    // NOT autosave while online: its rows may be weeks old, and the save's
+    // echo-mute window would defer the very mount refetch meant to replace
+    // them (2026-08-28 stale-browser overwrite). Offline saves are still
+    // allowed so edits stay durable via the pending record, whose replay
+    // diffs under its own bookkeeping. Draft years are exempt: they skip the
+    // realtime/mount revalidation effect entirely, so freshness would never
+    // arrive and the gate would block their saves forever (known gap).
+    if (
+      !isCurrentYearDraft &&
+      (typeof navigator === 'undefined' || navigator.onLine) &&
+      !isPlannerYearServerFresh(currentYear)
+    ) return;
     // A data swap that came FROM the server (realtime refresh below) must not
     // bounce straight back as a delete-all-then-reinsert save.
     if (skipNextAutoSaveRef.current) {
@@ -474,7 +487,7 @@ export default function ProjectTimePlannerV2() {
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [data, setTaskRows, isCurrentYearArchived]);
+  }, [data, setTaskRows, isCurrentYearArchived, isCurrentYearDraft, currentYear]);
 
   // Flush unsaved data to storage on unmount (bypasses debounce so navigation away doesn't lose edits).
   // Guarded by dataHydrated so React strict-mode's dev double-mount can't
@@ -487,6 +500,13 @@ export default function ProjectTimePlannerV2() {
     return () => {
       if (!dataHydrated.current) return;
       if (isCurrentYearArchived) return;
+      // Same stale-session gate as the debounced autosave above: never flush
+      // rows the session has not verified against the server while online.
+      if (
+        !isCurrentYearDraft &&
+        (typeof navigator === 'undefined' || navigator.onLine) &&
+        !isPlannerYearServerFresh(currentYear)
+      ) return;
       if (Date.now() - lastSaveInitiatedRef.current < 2000) return;
       // saveTaskRows is now async (Supabase). Fire-and-forget on unmount —
       // the user is navigating away so there's no caller to await.
@@ -538,7 +558,12 @@ export default function ProjectTimePlannerV2() {
         // in-memory rows. Also defer while any save is queued/in flight.
         const lastSaveActivity = Math.max(lastSaveInitiatedRef.current, getLastTaskRowsSaveCompletedAt());
         const sinceSave = Date.now() - lastSaveActivity;
-        if (isTaskRowsSaveInFlight() || sinceSave < MUTE_MS) {
+        // Before the first real server read this session the mute must not
+        // apply: any recent "save" was stale-cache normalisation noise, and
+        // deferring behind it is exactly how a stale tab kept its rows
+        // (2026-08-28). In-flight saves still defer below.
+        const muteApplies = isPlannerYearServerFresh(currentYear) && sinceSave < MUTE_MS;
+        if (isTaskRowsSaveInFlight() || muteApplies) {
           const delay = isTaskRowsSaveInFlight() ? 1000 : MUTE_MS - sinceSave + 250;
           // TODO(debug): remove after realtime delivery is verified.
           console.log('[realtime] muted, deferring refresh', delay);
