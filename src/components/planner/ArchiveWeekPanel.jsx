@@ -203,98 +203,40 @@ function AreaWheel({ items, total, range }) {
     };
   });
 
-  // Rotate the whole ring so the largest segment is centred on the left —
-  // the remaining (small) segments then land around the right side, where
-  // their labels can fan out vertically instead of bunching at the top.
-  if (segs.length > 1) {
-    const largest = segs.reduce((m, x) => (x.hours > m.hours ? x : m), segs[0]);
-    const rot = Math.PI * 1.5 - largest.mid;
-    segs.forEach((x) => { x.a0 += rot; x.a1 += rot; x.mid += rot; });
-  }
-
   const arc = (a0, a1) => {
     const [x0, y0] = pt(a0), [x1, y1] = pt(a1);
     const large = a1 - a0 > Math.PI ? 1 : 0;
     return `M ${x0} ${y0} A ${R} ${R} 0 ${large} 1 ${x1} ${y1}`;
   };
 
-  // ── Label layout ──
-  // Every label goes to the left or right of the wheel (by its segment's
-  // mid-angle) and overlapping blocks fan out vertically. Two guards keep it
-  // tidy: each block sits far enough out to clear the ring at its own
-  // height, and each connector follows the ring on its own lane so lines
-  // never cross the chart or each other.
-  const LINE_H = 10;   // name line height
-  const HOURS_H = 12;  // hours line height
-  const GAP = 5;       // min gap between label blocks
-  const RING_CLEAR = R + W / 2 + 5; // labels must stay outside this radius
-  const labels = segs.map((s) => {
-    const sin = Math.sin(s.mid), cos = Math.cos(s.mid);
-    const side = sin >= 0 ? 1 : -1;
-    const words = s.name.toUpperCase().split(' ');
-    const lines = words.length > 1 && s.name.length > 9
-      ? [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')]
-      : [s.name.toUpperCase()];
-    const height = lines.length * LINE_H + HOURS_H;
-    return { seg: s, sin, cos, side, lines, height, y: CY - (R + 22) * cos };
-  });
-  [-1, 1].forEach((side) => {
-    const col = labels.filter((l) => l.side === side).sort((a, b) => a.y - b.y);
-    // top-down: push overlapping blocks down (and off the top edge)
-    for (let k = 0; k < col.length; k++) {
-      const minY = k === 0
-        ? col[k].height / 2 + 4
-        : col[k - 1].y + col[k - 1].height / 2 + GAP + col[k].height / 2;
-      if (col[k].y < minY) col[k].y = minY;
-    }
-    // bottom-up: pull back inside the bottom edge
-    for (let k = col.length - 1; k >= 0; k--) {
-      const maxY = k === col.length - 1
-        ? H - 4 - col[k].height / 2
-        : col[k + 1].y - col[k + 1].height / 2 - GAP - col[k].height / 2;
-      if (col[k].y > maxY) col[k].y = maxY;
-    }
-    // connector lanes: top label outermost, so a lower label's radial stub
-    // never crosses a higher label's arc
-    col.forEach((l, k) => { l.lane = R + 11 + 4 * (col.length - 1 - k); });
-  });
-  // Horizontal position: far enough out that the whole block clears the ring
-  // at the block's vertical span.
-  labels.forEach((l) => {
-    const lo = l.y - l.height / 2, hi = l.y + l.height / 2;
-    const dmin = (CY >= lo && CY <= hi) ? 0 : Math.min(Math.abs(lo - CY), Math.abs(hi - CY));
-    const clearX = dmin >= RING_CLEAR ? 0 : Math.sqrt(RING_CLEAR * RING_CLEAR - dmin * dmin);
-    l.lx = CX + l.side * Math.max((R + 22) * Math.abs(l.sin), clearX + 10, 34);
-  });
-
   return (
     <svg width="270" height={H} viewBox={`0 0 270 ${H}`} style={{ display: 'block', flexShrink: 0, overflow: 'visible' }}>
       {segs.map((s, i) => (
         <path key={i} d={arc(s.a0, s.a1)} fill="none" stroke={s.color} strokeWidth={W} strokeLinecap="round" />
       ))}
-      {labels.map((l, i) => {
-        const s = l.seg;
-        const lx = l.lx;
-        const anchor = l.side > 0 ? 'start' : 'end';
-        const ex = lx - l.side * 4; // leader end, just short of the text
-        // Leader: classic angled callout — out from the slice, then an
-        // elbow into the label's row. Bends sharper than 90° are fine.
-        const t0 = R + W / 2 + 2;
-        const sx = CX + t0 * l.sin, sy = CY - t0 * l.cos;
-        const bx = ex - l.side * 10;
-        const leader = `M ${sx} ${sy} L ${bx} ${l.y} L ${ex} ${l.y}`;
-        const nameY = l.y - l.height / 2 + 8; // first name-line baseline
-        const hoursY = nameY + (l.lines.length - 1) * LINE_H + 11;
+      {segs.map((s, i) => {
+        const LR = R + 15;
+        const lx = CX + LR * Math.sin(s.mid), ly = CY - LR * Math.cos(s.mid);
+        const cos = Math.cos(s.mid), sin = Math.sin(s.mid);
+        const anchor = Math.abs(sin) < 0.35 ? 'middle' : sin > 0 ? 'start' : 'end';
+        const baseY = ly + (cos > 0.35 ? -10 : cos < -0.35 ? 6 : -3);
+        const words = s.name.toUpperCase().split(' ');
+        const lines = words.length > 1 && s.name.length > 9
+          ? [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')]
+          : [s.name.toUpperCase()];
+        const nameY = lines.length > 1 ? baseY - 10 : baseY;
+        const t0 = R + W / 2 + 2, t1 = R + 10;
         return (
           <g key={'l' + i}>
-            <path d={leader} fill="none" stroke={s.color} strokeWidth="1.2" opacity="0.75" />
+            <line x1={CX + t0 * sin} y1={CY - t0 * cos} x2={CX + t1 * sin} y2={CY - t1 * cos}
+              stroke={s.color} strokeWidth="1.4" />
             <text x={lx} y={nameY} textAnchor={anchor}
               style={{ fontFamily: MONO, fontSize: 8.5, fontWeight: 600, letterSpacing: '.1em', fill: s.labelColor }}>
-              {l.lines.map((ln, li) => (
-                <tspan key={li} x={lx} dy={li === 0 ? 0 : LINE_H}>{ln}</tspan>
+              {lines.map((ln, li) => (
+                <tspan key={li} x={lx} dy={li === 0 ? 0 : 10}>{ln}</tspan>
               ))}
             </text>
-            <text x={lx} y={hoursY} textAnchor={anchor}
+            <text x={lx} y={baseY + 11} textAnchor={anchor}
               style={{ fontFamily: FONT, fontSize: 9.5, fontWeight: 600, fill: C.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
               {fmtH(s.hours)} · {Math.round((s.hours / sum) * 100)}%
             </text>
