@@ -184,8 +184,8 @@ function WheelToggle({ mode, setMode }) {
 // a colour get the theme blue ramp.
 
 function AreaWheel({ items, total, range, scale = 1 }) {
-  const CX = 135, CY = 96, R = 56, W = 9;
-  const H = 192;
+  const CX = 135, CY = 112, R = 56, W = 9;
+  const H = 224;
   const sum = items.reduce((s, a) => s + a.hours, 0);
   const pt = (ang) => [CX + R * Math.sin(ang), CY - R * Math.cos(ang)];
   const PAD = 0.09; // angular gap either side of each segment (radians)
@@ -210,36 +210,66 @@ function AreaWheel({ items, total, range, scale = 1 }) {
     return `M ${x0} ${y0} A ${R} ${R} 0 ${large} 1 ${x1} ${y1}`;
   };
 
+  // ── Label layout with collision avoidance ──────────────────────────────
+  // Instead of placing every label at its segment's angle (which piles small
+  // adjacent segments on top of each other), each label is assigned to a
+  // fixed column left or right of the ring, then the labels on each side are
+  // stacked top-to-bottom with a minimum gap. A leader line connects each
+  // label back to its segment.
+  const NAME_LH = 10, GAP = 6;
+  const COL = { r: CX + R + 30, l: CX - R - 30 };
+  const labels = segs.map((seg) => {
+    const sin = Math.sin(seg.mid), cos = Math.cos(seg.mid);
+    const words = seg.name.toUpperCase().split(' ');
+    const lines = words.length > 1 && seg.name.length > 9
+      ? [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')]
+      : [seg.name.toUpperCase()];
+    const h = lines.length * NAME_LH + 12;
+    return { seg, sin, cos, side: sin >= 0 ? 'r' : 'l', lines, h, y: CY - (R + 26) * cos - h / 2 };
+  });
+  ['r', 'l'].forEach((side) => {
+    const list = labels.filter((L) => L.side === side).sort((a, b) => a.y - b.y);
+    for (let i = 1; i < list.length; i++) {
+      list[i].y = Math.max(list[i].y, list[i - 1].y + list[i - 1].h + GAP);
+    }
+    if (list.length) {
+      const last = list[list.length - 1];
+      const overflow = last.y + last.h - (H - 2);
+      if (overflow > 0) {
+        const shift = Math.min(overflow, Math.max(0, list[0].y - 2));
+        list.forEach((L) => { L.y -= shift; });
+      }
+    }
+  });
+
   return (
     <svg viewBox={`0 0 270 ${H}`} style={{ display: 'block', width: '100%', maxWidth: 270 * scale, height: 'auto', overflow: 'visible' }}>
       {segs.map((s, i) => (
         <path key={i} d={arc(s.a0, s.a1)} fill="none" stroke={s.color} strokeWidth={W} strokeLinecap="round" />
       ))}
-      {segs.map((s, i) => {
-        const LR = R + 15;
-        const lx = CX + LR * Math.sin(s.mid), ly = CY - LR * Math.cos(s.mid);
-        const cos = Math.cos(s.mid), sin = Math.sin(s.mid);
-        const anchor = Math.abs(sin) < 0.35 ? 'middle' : sin > 0 ? 'start' : 'end';
-        const baseY = ly + (cos > 0.35 ? -10 : cos < -0.35 ? 6 : -3);
-        const words = s.name.toUpperCase().split(' ');
-        const lines = words.length > 1 && s.name.length > 9
-          ? [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')]
-          : [s.name.toUpperCase()];
-        const nameY = lines.length > 1 ? baseY - 10 : baseY;
-        const t0 = R + W / 2 + 2, t1 = R + 10;
+      {labels.map((L, i) => {
+        const { seg } = L;
+        const t0 = R + W / 2 + 2, t1 = R + 12;
+        const sx = CX + t0 * L.sin, sy = CY - t0 * L.cos;
+        const ex = L.side === 'r' ? COL.r - 5 : COL.l + 5;
+        const ey = L.y + L.h / 2;
+        const anchor = L.side === 'r' ? 'start' : 'end';
+        const tx = L.side === 'r' ? COL.r : COL.l;
         return (
           <g key={'l' + i}>
-            <line x1={CX + t0 * sin} y1={CY - t0 * cos} x2={CX + t1 * sin} y2={CY - t1 * cos}
-              stroke={s.color} strokeWidth="1.4" />
-            <text x={lx} y={nameY} textAnchor={anchor}
-              style={{ fontFamily: MONO, fontSize: 8.5, fontWeight: 600, letterSpacing: '.1em', fill: s.labelColor }}>
-              {lines.map((ln, li) => (
-                <tspan key={li} x={lx} dy={li === 0 ? 0 : 10}>{ln}</tspan>
+            <polyline
+              points={`${sx},${sy} ${CX + t1 * L.sin},${CY - t1 * L.cos} ${ex},${ey}`}
+              fill="none" stroke={seg.color} strokeWidth="1.2" opacity="0.75"
+            />
+            <text x={tx} y={L.y + 8} textAnchor={anchor}
+              style={{ fontFamily: MONO, fontSize: 8.5, fontWeight: 600, letterSpacing: '.1em', fill: seg.labelColor }}>
+              {L.lines.map((ln, li) => (
+                <tspan key={li} x={tx} dy={li === 0 ? 0 : NAME_LH}>{ln}</tspan>
               ))}
             </text>
-            <text x={lx} y={baseY + 11} textAnchor={anchor}
+            <text x={tx} y={L.y + L.lines.length * NAME_LH + 10} textAnchor={anchor}
               style={{ fontFamily: FONT, fontSize: 9.5, fontWeight: 600, fill: C.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
-              {fmtH(s.hours)} · {Math.round((s.hours / sum) * 100)}%
+              {fmtH(seg.hours)} · {Math.round((seg.hours / sum) * 100)}%
             </text>
           </g>
         );
