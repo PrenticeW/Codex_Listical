@@ -1595,6 +1595,21 @@ export default function ProjectTimePlannerV2() {
 
         let changed = false;
 
+        // --- Step 0a: drop spent tombstones ---
+        // A deletedChip tombstone only has a job while what it suppresses
+        // still exists on the Plan page. Once the chip (per-chip tombstone)
+        // or its whole group (header tombstone) is gone from Plan, remove
+        // it — so a chip added back later respawns its row, even if it
+        // reuses a legacy positional id.
+        const pruned = prevData.filter(row => {
+          if (row._rowType !== 'deletedChip') return true;
+          const alive = row._chipGroupKey
+            ? groups.has(row._chipGroupKey)
+            : currentChipIds.has(row._chipId);
+          if (!alive) changed = true;
+          return alive;
+        });
+
         // --- Step 0: re-link rows orphaned by chip renumbering ---
         // Chip ids encode the schedule item's position in its project's list
         // ("schedule-chip-{projectId}-{itemIdx}"), so deleting or reordering
@@ -1606,7 +1621,7 @@ export default function ProjectTimePlannerV2() {
         // under a new number. Matching in group day-order keeps multi-day
         // groups aligned with their rows.
         const liveTaskRowChipIds = new Set(
-          prevData
+          pruned
             .filter(r => r._rowType === 'projectTask' && r._chipId && currentChipIds.has(r._chipId))
             .map(r => r._chipId)
         );
@@ -1616,11 +1631,11 @@ export default function ProjectTimePlannerV2() {
           if (unclaimed.length > 0) unclaimedChipsByKey.set(key, [...unclaimed]);
         });
         const headerKeyByGroupId = new Map(
-          prevData
+          pruned
             .filter(r => r._rowType === 'subprojectHeader' && r._chipGroupKey)
             .map(r => [r.groupId, r._chipGroupKey])
         );
-        const relinked = prevData.map(row => {
+        const relinked = pruned.map(row => {
           if (!row._chipId) return row;
           if (currentChipIds.has(row._chipId)) {
             // Chip came back (e.g. undo on the Plan page) — clear a stale flag.
@@ -2570,17 +2585,28 @@ export default function ProjectTimePlannerV2() {
       .map((row, i) => ({ row, index: rowIndices[i] }))
       .sort((a, b) => a.index - b.index);
 
-    // For chip-linked subproject headers being deleted, create tombstone rows
-    // so the sync effect doesn't re-insert them on next mount.
-    const tombstones = sortedDeletions
-      .filter(({ row }) => row._rowType === 'subprojectHeader' && row._chipId)
-      .map(({ row }) => ({
-        id: `deleted-chip-${row._chipId}`,
-        _rowType: 'deletedChip',
-        _chipId: row._chipId,
-        // Group key suppresses every chip in the group (one header per group)
-        _chipGroupKey: row._chipGroupKey,
-      }));
+    // For chip-linked rows being deleted, create tombstone rows so the sync
+    // effect doesn't re-insert them on next mount / next Send to System.
+    // A deleted header tombstones its whole group (_chipGroupKey set); a
+    // deleted task row tombstones only its own chip. A header tombstone
+    // always wins over a task-row one for the same chip (it is broader).
+    const tombstoneById = new Map();
+    sortedDeletions.forEach(({ row }) => {
+      if (!row._chipId) return;
+      const id = `deleted-chip-${row._chipId}`;
+      if (row._rowType === 'subprojectHeader') {
+        tombstoneById.set(id, {
+          id,
+          _rowType: 'deletedChip',
+          _chipId: row._chipId,
+          // Group key suppresses every chip in the group (one header per group)
+          _chipGroupKey: row._chipGroupKey,
+        });
+      } else if (row._rowType === 'projectTask' && !tombstoneById.has(id)) {
+        tombstoneById.set(id, { id, _rowType: 'deletedChip', _chipId: row._chipId });
+      }
+    });
+    const tombstones = [...tombstoneById.values()];
 
     // Create command for row deletion
     const command = {
