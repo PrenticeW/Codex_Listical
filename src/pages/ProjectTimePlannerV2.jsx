@@ -91,6 +91,7 @@ import {
   insertRecurringSnapshots,
   resetRecurringTasks,
   getArchiveInsertContext,
+  isTaskInArchivedWeek,
 } from '../utils/planner/archiveHelpers';
 import { buildArchiveWeekPanelData } from '../utils/planner/archiveWeekPanelData';
 import { useArchiveTotals } from '../hooks/planner/useArchiveTotals';
@@ -2701,13 +2702,20 @@ export default function ProjectTimePlannerV2() {
     const archivedProjects = createArchivedProjectStructure(projectRows, subprojectRows, archiveWeekRow.id, totalDays, projectWeeklyQuotas, projectIdByNickname, projectAreaById);
 
     // Step 4: Collect non-recurring Done/Abandoned tasks
+    // Scoped to the week being archived: a task scheduled in a different
+    // week (e.g. Done work sitting in week two) must not be swept into this
+    // week's archive just because its status matches. Genuinely unscheduled
+    // tasks (no day value at all) have no week of their own and still
+    // archive with whichever week is being archived, as before.
     const nonRecurringTasks = collectTasksForArchive(data, task =>
-      ['Done', 'Abandoned'].includes(task.status) && !task.recurring
+      ['Done', 'Abandoned'].includes(task.status) && !task.recurring &&
+      isTaskInArchivedWeek(task, firstVisibleDayIndex, totalDays)
     );
 
     // Step 5: Snapshot recurring Done/Abandoned tasks
     const recurringTasks = collectTasksForArchive(data, task =>
-      ['Done', 'Abandoned'].includes(task.status) && task.recurring
+      ['Done', 'Abandoned'].includes(task.status) && task.recurring &&
+      isTaskInArchivedWeek(task, firstVisibleDayIndex, totalDays)
     );
     const recurringSnapshots = recurringTasks.map(snapshotRecurringTask);
 
@@ -2727,7 +2735,7 @@ export default function ProjectTimePlannerV2() {
 
           // IMPORTANT: Reset recurring tasks BEFORE inserting snapshots
           // This ensures the original recurring tasks are reset but snapshots keep their status
-          newData = resetRecurringTasks(newData, totalDays);
+          newData = resetRecurringTasks(newData, totalDays, firstVisibleDayIndex);
 
           // Move non-recurring tasks to archive (already removed from original positions)
           newData = moveTasksToArchive(newData, nonRecurringTasks, archiveWeekRow.id);

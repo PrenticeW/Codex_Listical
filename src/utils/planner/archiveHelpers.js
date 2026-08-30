@@ -10,6 +10,7 @@ import {
   ARCHIVE_HEADER_ID,
 } from '../../constants/planner/rowTypes';
 import { createEmptyDayColumns } from './dayColumnHelpers';
+import { multiStatusKey, deriveMultiRowStatus } from './multiStatus';
 
 /**
  * Generate a unique ID for archive-related rows
@@ -266,6 +267,72 @@ export const collectTasksForArchive = (data, filterFn) => {
 };
 
 /**
+ * Archive-scoped day-value check: does this day cell tie the task to its
+ * week for archiving purposes? Unlike isScheduledDayValue (which requires a
+ * positive time, matching habit-pattern detection), a zero value (0.00 /
+ * 0:00) still anchors a task to its week here — a Done task with 0.00 in
+ * week two must not be treated as "unscheduled" and swept into a week-one
+ * archive, and a 0.00 in the target week must count as belonging to it.
+ * Any non-empty day cell counts.
+ * @param {*} value - Day cell value
+ * @returns {boolean}
+ */
+const isArchiveDayValue = (value) => {
+  if (value === null || value === undefined) return false;
+  return String(value).trim() !== '';
+};
+
+/**
+ * Does this task have a scheduled (non-empty, positive) day value anywhere
+ * within the given day-index range, inclusive?
+ * @param {object} task - Task row
+ * @param {number} startDayIndex - First day index of the target week
+ * @param {number} totalDays - Total number of day columns
+ * @returns {boolean}
+ */
+export const taskHasScheduledDayInRange = (task, startDayIndex, totalDays) => {
+  const endDayIndex = Math.min(startDayIndex + 6, totalDays - 1);
+  for (let i = startDayIndex; i <= endDayIndex; i++) {
+    if (isArchiveDayValue(task[`day-${i}`])) return true;
+  }
+  return false;
+};
+
+/**
+ * Does this task have a scheduled day value anywhere at all (any week)?
+ * Used to distinguish "genuinely unscheduled" tasks (which have no week of
+ * their own and are still swept into whichever week is being archived) from
+ * tasks scheduled in a different week than the one being archived.
+ * @param {object} task - Task row
+ * @param {number} totalDays - Total number of day columns
+ * @returns {boolean}
+ */
+export const taskHasAnyScheduledDay = (task, totalDays) => {
+  for (let i = 0; i < totalDays; i++) {
+    if (isArchiveDayValue(task[`day-${i}`])) return true;
+  }
+  return false;
+};
+
+/**
+ * Should this Done/Abandoned task be swept into the archive for the week
+ * starting at startDayIndex? True when the task is scheduled somewhere in
+ * that week's 7 days, or when it has no day scheduling at all (unscheduled
+ * tasks have no week of their own, so they archive with whichever week is
+ * being archived, matching prior behaviour). False when the task is
+ * scheduled, but only in a *different* week — this is what previously let
+ * a week-two Done task get vacuumed into a week-one archive.
+ * @param {object} task - Task row
+ * @param {number} startDayIndex - First day index of the week being archived
+ * @param {number} totalDays - Total number of day columns
+ * @returns {boolean}
+ */
+export const isTaskInArchivedWeek = (task, startDayIndex, totalDays) => {
+  if (!taskHasAnyScheduledDay(task, totalDays)) return true;
+  return taskHasScheduledDayInRange(task, startDayIndex, totalDays);
+};
+
+/**
  * Create a deep copy snapshot of a recurring task
  * @param {object} task - Task object
  * @returns {object} Deep copy of task with new ID
@@ -489,7 +556,9 @@ export const insertRecurringSnapshots = (data, snapshots, archiveWeekId) => {
  * @param {number} totalDays - Total number of days
  * @returns {object[]} New data array with recurring tasks reset
  */
-export const resetRecurringTasks = (data, totalDays = 84) => {
+export const resetRecurringTasks = (data, totalDays = 84, startDayIndex = 0) => {
+  const endDayIndex = Math.min(startDayIndex + 6, totalDays - 1);
+
   return data.map(row => {
     // Archived snapshots are a frozen record — never reset them, or a later
     // archive wipes the Done statuses recorded in earlier archive weeks.
@@ -497,17 +566,36 @@ export const resetRecurringTasks = (data, totalDays = 84) => {
 
     // Only reset recurring tasks with Done or Abandoned status
     if (row.recurring && ['Done', 'Abandoned'].includes(row.status)) {
-      const updates = {
-        status: 'Not Scheduled',
-        checkbox: '',
-      };
+      // Was this task actually scheduled within the week being archived? If
+      // not, its Done/Abandoned status belongs to an instance in a different
+      // week and must be left alone — clearing the full 84-day span here
+      // would otherwise wipe scheduled/Done instances sitting in other,
+      // not-yet-archived weeks (the same class of bug as the task-collection
+      // scoping above).
+      if (!taskHasScheduledDayInRange(row, startDayIndex, totalDays)) return row;
 
-      // Clear all day entries
-      for (let i = 0; i < totalDays; i++) {
+      const updates = {};
+      // Clear only this week's day entries (and their per-instance status)
+      for (let i = startDayIndex; i <= endDayIndex; i++) {
         updates[`day-${i}`] = '';
+        updates[multiStatusKey(i)] = '';
       }
 
-      return { ...row, ...updates };
+      const clearedRow = { ...row, ...updates };
+
+      // If the row still has scheduled instances in other weeks, recompute
+      // its aggregate status from what's left instead of forcing it back to
+      // Not Scheduled — otherwise a still-scheduled future instance would
+      // lose its status display.
+      const remainingStatus = deriveMultiRowStatus(clearedRow, totalDays);
+      if (remainingStatus) {
+        clearedRow.status = remainingStatus;
+      } else {
+        clearedRow.status = 'Not Scheduled';
+        clearedRow.checkbox = '';
+      }
+
+      return clearedRow;
     }
 
     return row;
