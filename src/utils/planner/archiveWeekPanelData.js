@@ -41,14 +41,21 @@ const DATE_RANGE_PREFIX_RE = /^([A-Za-z]{3,9}\.?\s?\d{1,2}\s*[-–—]\s*[A-Za-z
 
 const round1 = (v) => Math.round(v * 10) / 10;
 
+// Day entries are HH.mm encoded ("2.30" = 2h30m), the same convention as
+// timeValue (see useTotalsCalculation / useArchiveTotals). Convert each
+// entry to minutes before summing, then return decimal hours — reading the
+// raw value with parseFloat would count 2.30 as 2.3h instead of 2.5h.
 const sumRowDayEntries = (row) => {
-  let total = 0;
+  let totalMinutes = 0;
   for (const [key, value] of Object.entries(row)) {
     if (!key.startsWith('day-')) continue;
     const n = parseFloat(value);
-    if (Number.isFinite(n)) total += n;
+    if (!Number.isFinite(n)) continue;
+    const hours = Math.floor(n);
+    const mins = Math.round((n - hours) * 100);
+    totalMinutes += hours * 60 + mins;
   }
-  return total;
+  return totalMinutes / 60;
 };
 
 // "Year X, Week Y" → { yearPart: "Year X", weekPart: "Week Y" }
