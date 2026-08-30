@@ -122,6 +122,10 @@ const TaskRow = React.memo(function TaskRow({
 
   const isRowEditing = editingCell?.rowId === rowId;
   const needsSubprojectReview = row.original._importNeedsSubprojectReview;
+  // Row's Plan chip no longer exists and could not be re-linked (see the
+  // Step 0/Step 1 orphan handling in ProjectTimePlannerV2). Kept, greyed
+  // out, so the user can re-link or delete it — never silently destroyed.
+  const isChipOrphaned = row.original._chipOrphaned === true;
   const style = {
     display: 'flex',
     position: 'absolute',
@@ -136,6 +140,7 @@ const TaskRow = React.memo(function TaskRow({
     gap: 0,
     zIndex: isRowEditing ? 10 : undefined,
     ...(needsSubprojectReview && { borderLeft: '3px solid #f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.05)' }),
+    ...(isChipOrphaned && { opacity: 0.55, borderLeft: '3px solid #9ca3af', backgroundColor: 'rgba(156, 163, 175, 0.08)' }),
   };
 
   return (

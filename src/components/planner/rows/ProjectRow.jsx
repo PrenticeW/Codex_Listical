@@ -124,6 +124,9 @@ export default function ProjectRow({
     width: '100%',
     opacity: isDragging ? 0.5 : 1,
     gap: 0,
+    // Header kept only because an orphaned task row beneath it holds user
+    // data (see the Step 1 orphan safeguard in ProjectTimePlannerV2).
+    ...(row.original._chipOrphaned === true && { opacity: 0.55, borderLeft: '3px solid #9ca3af', backgroundColor: 'rgba(156, 163, 175, 0.08)' }),
   };
 
   return (

@@ -13,6 +13,13 @@ import { createEmptyDayColumns } from './dayColumnHelpers';
 import { multiStatusKey, deriveMultiRowStatus } from './multiStatus';
 
 /**
+ * Statuses swept into a week archive (and cleared from the live plan).
+ * Accounted counts as finished work, same as Done — tasks with any of these
+ * statuses leave the planner section when the week is archived.
+ */
+export const ARCHIVE_SWEEP_STATUSES = ['Done', 'Abandoned', 'Accounted'];
+
+/**
  * Generate a unique ID for archive-related rows
  * @param {string} prefix - ID prefix
  * @returns {string} Unique ID
@@ -500,7 +507,9 @@ export const moveTasksToArchive = (data, tasksToArchive, archiveWeekId) => {
 
   tasksToArchive.forEach(task => {
     const projectKey = resolveProjectKey(task);
-    const targetSection = task.status === 'Done' ? 'general' : 'unscheduled';
+    // Done and Accounted are finished work -> 'general' (same mapping as
+    // sortInbox); Abandoned keeps landing in 'unscheduled'.
+    const targetSection = ['Done', 'Accounted'].includes(task.status) ? 'general' : 'unscheduled';
 
     if (!tasksByProject[projectKey]) {
       tasksByProject[projectKey] = { general: [], unscheduled: [] };
@@ -521,7 +530,25 @@ export const moveTasksToArchive = (data, tasksToArchive, archiveWeekId) => {
       row.parentGroupId === archiveWeekId
     );
 
-    if (!archivedProjectHeader) return;
+    if (!archivedProjectHeader) {
+      // No archived copy of this project exists in the target week (e.g. the
+      // project was created after the week was archived, or a task was
+      // dragged in from a project the archive never captured). Rather than
+      // silently dropping the tasks (they were already removed from their
+      // live positions above), park them directly under the archive week row,
+      // parented to the week itself — the load path keeps week-parented rows
+      // inside the week block (see getArchiveInsertContext).
+      const weekIndex = newData.findIndex(row => row.id === archiveWeekId);
+      if (weekIndex !== -1) {
+        const parked = [...sections.general, ...sections.unscheduled].map(task => ({
+          ...task,
+          parentGroupId: archiveWeekId,
+          _isArchivedTask: true,
+        }));
+        newData.splice(weekIndex + 1, 0, ...parked);
+      }
+      return;
+    }
 
     const archivedProjectGroupId = archivedProjectHeader.groupId;
 
@@ -605,7 +632,7 @@ export const resetRecurringTasks = (data, totalDays = 84, startDayIndex = 0) => 
     // (those are snapshotted into the archive rather than moved whole, so
     // the live row's archived-week values must be cleared here).
     if ((row.recurring || taskHasDayOutsideRange(row, startDayIndex, totalDays)) &&
-        ['Done', 'Abandoned'].includes(row.status)) {
+        ARCHIVE_SWEEP_STATUSES.includes(row.status)) {
       // Was this task actually scheduled within the week being archived? If
       // not, its Done/Abandoned status belongs to an instance in a different
       // week and must be left alone — clearing the full 84-day span here

@@ -84,6 +84,7 @@ import {
   createArchiveWeekRow,
   createArchivedProjectStructure,
   collectTasksForArchive,
+  ARCHIVE_SWEEP_STATUSES,
   snapshotRecurringTask,
   insertArchiveRow,
   insertArchivedProjects,
@@ -1594,17 +1595,142 @@ export default function ProjectTimePlannerV2() {
 
         let changed = false;
 
+        // --- Step 0: re-link rows orphaned by chip renumbering ---
+        // Chip ids encode the schedule item's position in its project's list
+        // ("schedule-chip-{projectId}-{itemIdx}"), so deleting or reordering
+        // schedule items on the Goal page renumbers every item below the
+        // change. A row whose chip id has vanished is therefore not
+        // necessarily a deleted chip. Before Step 1 treats it as one, try to
+        // match the row to a chip in the same group (project + chip name)
+        // that has no task row yet — that is almost always the same chip
+        // under a new number. Matching in group day-order keeps multi-day
+        // groups aligned with their rows.
+        const liveTaskRowChipIds = new Set(
+          prevData
+            .filter(r => r._rowType === 'projectTask' && r._chipId && currentChipIds.has(r._chipId))
+            .map(r => r._chipId)
+        );
+        const unclaimedChipsByKey = new Map();
+        groups.forEach((group, key) => {
+          const unclaimed = group.chips.filter(c => !liveTaskRowChipIds.has(c.id));
+          if (unclaimed.length > 0) unclaimedChipsByKey.set(key, [...unclaimed]);
+        });
+        const headerKeyByGroupId = new Map(
+          prevData
+            .filter(r => r._rowType === 'subprojectHeader' && r._chipGroupKey)
+            .map(r => [r.groupId, r._chipGroupKey])
+        );
+        const relinked = prevData.map(row => {
+          if (!row._chipId) return row;
+          if (currentChipIds.has(row._chipId)) {
+            // Chip came back (e.g. undo on the Plan page) — clear a stale flag.
+            if (row._chipOrphaned) {
+              changed = true;
+              const { _chipOrphaned, ...rest } = row;
+              return rest;
+            }
+            return row;
+          }
+          if (row._rowType === 'projectTask') {
+            const key = headerKeyByGroupId.get(row.parentGroupId)
+              ?? `${row.projectNickname ?? ''}::${(row._originalTask || row.task || '').trim().toLowerCase()}`;
+            const candidates = unclaimedChipsByKey.get(key);
+            if (candidates && candidates.length > 0) {
+              const chip = candidates.shift();
+              changed = true;
+              // Persisted rows carry a DB UUID in row.id — leave that alone
+              // (changing it would delete+re-insert the DB row and break
+              // task_events FKs); _chipId is the join key everywhere. Only a
+              // still-synthetic "chip-task-{oldChipId}" id is renamed, so a
+              // NEW schedule item that later reuses the old positional chip
+              // id cannot collide with this row's id.
+              const { _chipOrphaned, ...rest } = row;
+              const nextId = typeof row.id === 'string' && row.id.startsWith('chip-task-')
+                ? `chip-task-${chip.id}`
+                : row.id;
+              return {
+                ...rest,
+                id: nextId,
+                _chipId: chip.id,
+                projectId: chip.projectId ?? row.projectId ?? null,
+              };
+            }
+          } else if (row._rowType === 'subprojectHeader') {
+            // Header whose lead chip was renumbered but whose group still
+            // exists: point it at the group's current first chip so it is
+            // never mistaken for a deleted group. groupId stays unchanged —
+            // it is only an opaque parent key for the task rows beneath it.
+            const group = row._chipGroupKey ? groups.get(row._chipGroupKey) : null;
+            if (group) {
+              changed = true;
+              const { _chipOrphaned, ...rest } = row;
+              return { ...rest, _chipId: group.chips[0].id };
+            }
+          }
+          return row;
+        });
+
         // --- Step 1: remove rows for chips that no longer exist ---
-        let working = prevData.filter(row => {
+        // Safeguard: a row Step 0 could not re-link is only deleted when it
+        // holds no user data. Rows with day entries, notes, a status, a
+        // ticked checkbox, or edited fields are kept and flagged
+        // _chipOrphaned (greyed out in TaskRow) so a renumbering we failed
+        // to resolve can never silently destroy work. Blank rows delete as
+        // before.
+        const rowHasUserData = (row) => {
+          if (row.notes && String(row.notes).trim() !== '') return true;
+          if (row.status && row.status !== '-' && row.status !== '') return true;
+          if (row.checkbox === true || row.checkbox === 'true') return true;
+          for (const k in row) {
+            if (k.startsWith('day-') && row[k] !== '' && row[k] != null && row[k] !== false) return true;
+          }
+          if (row._originalTask !== undefined && row.task !== row._originalTask) return true;
+          if (row._originalEstimate !== undefined && row.estimate !== row._originalEstimate) return true;
+          if (row._originalTimeValue !== undefined && row.timeValue !== row._originalTimeValue) return true;
+          if (row._originalRecurring !== undefined && row.recurring !== row._originalRecurring) return true;
+          return false;
+        };
+        // A kept orphan task row also keeps its header, or it would be
+        // left dangling with no visible group. Headers precede their task
+        // rows in the array, so decide the task rows first.
+        const keptOrphanGroupIds = new Set();
+        relinked.forEach(row => {
+          if (
+            row._rowType === 'projectTask' &&
+            row._chipId &&
+            !currentChipIds.has(row._chipId) &&
+            rowHasUserData(row)
+          ) keptOrphanGroupIds.add(row.parentGroupId);
+        });
+        let working = [];
+        relinked.forEach(row => {
           if (row._chipId && !currentChipIds.has(row._chipId)) {
-            if (row._rowType === 'projectTask') { changed = true; return false; }
+            if (row._rowType === 'projectTask') {
+              if (rowHasUserData(row)) {
+                if (row._chipOrphaned) { working.push(row); return; }
+                changed = true;
+                working.push({ ...row, _chipOrphaned: true });
+                return;
+              }
+              changed = true;
+              return;
+            }
             // A header survives as long as any chip in its group still exists
             if (row._rowType === 'subprojectHeader') {
               const key = row._chipGroupKey;
-              if (!key || !groups.has(key)) { changed = true; return false; }
+              if (!key || !groups.has(key)) {
+                if (keptOrphanGroupIds.has(row.groupId)) {
+                  if (row._chipOrphaned) { working.push(row); return; }
+                  changed = true;
+                  working.push({ ...row, _chipOrphaned: true });
+                  return;
+                }
+                changed = true;
+                return;
+              }
             }
           }
-          return true;
+          working.push(row);
         });
 
         // --- Step 2: migrate legacy one-header-per-chip rows into group headers ---
@@ -2711,7 +2837,7 @@ export default function ProjectTimePlannerV2() {
     // Tasks that also have day values in OTHER weeks are snapshotted (below)
     // instead of moved whole, so their other-week values stay in the plan.
     const nonRecurringTasks = collectTasksForArchive(data, task =>
-      ['Done', 'Abandoned'].includes(task.status) && !task.recurring &&
+      ARCHIVE_SWEEP_STATUSES.includes(task.status) && !task.recurring &&
       isTaskInArchivedWeek(task, firstVisibleDayIndex, totalDays) &&
       !taskHasDayOutsideRange(task, firstVisibleDayIndex, totalDays)
     );
@@ -2722,7 +2848,7 @@ export default function ProjectTimePlannerV2() {
     // live row keeps its other weeks and gets this week cleared by
     // resetRecurringTasks.
     const recurringTasks = collectTasksForArchive(data, task =>
-      ['Done', 'Abandoned'].includes(task.status) &&
+      ARCHIVE_SWEEP_STATUSES.includes(task.status) &&
       (task.recurring || taskHasDayOutsideRange(task, firstVisibleDayIndex, totalDays)) &&
       isTaskInArchivedWeek(task, firstVisibleDayIndex, totalDays)
     );

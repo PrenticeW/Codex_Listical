@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { UseDragAndDropRowsReturn, PlannerRow, Command } from '../../types/planner';
+import { getArchiveInsertContext } from '../../utils/planner/archiveHelpers';
 
 const isPinnedHeader = (row: PlannerRow | undefined): boolean => !!row && !!(
   row._isMonthRow || row._isWeekRow || row._isDayRow ||
@@ -11,6 +12,23 @@ const isPinnedHeader = (row: PlannerRow | undefined): boolean => !!row && !!(
 const isRegionDivider = (row: PlannerRow | undefined): boolean => !!row && !!(
   row._isInboxRow || row._isArchiveRow || row._rowType === 'archiveHeader'
 );
+
+// Structural / section rows — never filed into an archive week by a drag.
+const NON_FILEABLE_ROW_TYPES = new Set([
+  'projectHeader', 'projectGeneral', 'projectUnscheduled',
+  'subprojectHeader', 'subprojectGeneral', 'subprojectUnscheduled',
+  'archiveHeader', 'archiveRow',
+  'archivedProjectHeader', 'archivedProjectGeneral', 'archivedProjectUnscheduled',
+]);
+
+/** Can this dragged row be filed into an archive week? Task rows only. */
+const canFileIntoArchive = (row: PlannerRow | undefined): boolean => {
+  if (!row) return false;
+  if (isPinnedHeader(row) || isRegionDivider(row)) return false;
+  if (row.isGroupHeader) return false;
+  if (typeof row._rowType === 'string' && NON_FILEABLE_ROW_TYPES.has(row._rowType)) return false;
+  return true;
+};
 
 /**
  * Contiguous index range [start, end) of the project block that begins at the
@@ -193,10 +211,12 @@ export default function useDragAndDropRows({
 
     if (draggedIndices.length === 0) { clear(); return; }
 
-    // Store original positions for undo
+    // Store original positions AND original row objects for undo — a drop can
+    // stamp rows into (or strip them out of) the archive, so undo must
+    // restore the pre-drop row, not the possibly-restamped one.
     const originalPositions = draggedRowIds.map(id => {
       const index = data.findIndex(r => r.id === id);
-      return { id, index };
+      return { id, index, row: index !== -1 ? data[index] : null };
     });
 
     // The block (or rows) always land directly ABOVE the target row, which is
@@ -204,6 +224,45 @@ export default function useDragAndDropRows({
     // is another block's header, or the Inbox divider for "after the last
     // project".
     const insertAt = targetIndex;
+
+    // Archive membership follows the LANDING POSITION, keeping full control
+    // over where the row sits: rows landing inside an archive week block are
+    // stamped as members of that week's nearest archived project group (the
+    // load path rebuilds the archive purely from parentGroupId chains, so an
+    // unstamped row would be relocated out on the next refresh) — and an
+    // archived row dragged back out of the archive has its stamp stripped so
+    // it rejoins the live plan where it was dropped.
+    const movedPreview = moveRows(data, draggedIndices, insertAt);
+    const firstMovedIdx = movedPreview.findIndex(r => r.id === draggedRowIds[0]);
+    const archiveCtx = !blockDrag && firstMovedIdx !== -1
+      ? getArchiveInsertContext(movedPreview, firstMovedIdx)
+      : null;
+    const restampDraggedRows = (rows: PlannerRow[]): PlannerRow[] => {
+      if (blockDrag) return rows;
+      return rows.map(r => {
+        if (!draggedRowIds.includes(r.id)) return r;
+        if (archiveCtx) {
+          if (!canFileIntoArchive(r)) return r;
+          return {
+            ...r,
+            _isArchivedTask: true,
+            parentGroupId: archiveCtx.parentGroupId,
+            // Keep the task's own project identity; fall back to the group's.
+            projectNickname: r.projectNickname || archiveCtx.projectNickname,
+            project: r.project || archiveCtx.project,
+          };
+        }
+        if (r._isArchivedTask || r.archiveWeekLabel) {
+          const stripped = { ...r };
+          delete stripped._isArchivedTask;
+          delete stripped.archiveWeekLabel;
+          // Positional parent assignment re-parents live rows on the next pass.
+          delete stripped.parentGroupId;
+          return stripped;
+        }
+        return r;
+      });
+    };
 
     // Project order before/after, computed from the snapshot so persistence
     // does not depend on when React runs the state updater.
@@ -215,7 +274,7 @@ export default function useDragAndDropRows({
     // Create reorder command
     const reorderCommand: Command = {
       execute: () => {
-        setData(prevData => moveRows(prevData, draggedIndices, insertAt));
+        setData(prevData => restampDraggedRows(moveRows(prevData, draggedIndices, insertAt)));
         if (nextProjectOrder && onProjectOrderChange) onProjectOrderChange(nextProjectOrder);
       },
       undo: () => {
@@ -233,10 +292,10 @@ export default function useDragAndDropRows({
           // Restore rows to their original positions (in order)
           originalPositions
             .sort((a, b) => a.index - b.index)
-            .forEach(({ id, index }) => {
-              const row = prevData.find(r => r.id === id);
-              if (row) {
-                newData.splice(index, 0, row);
+            .forEach(({ id, index, row }) => {
+              const restored = row || prevData.find(r => r.id === id);
+              if (restored) {
+                newData.splice(index, 0, restored);
               }
             });
 

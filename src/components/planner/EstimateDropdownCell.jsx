@@ -43,6 +43,22 @@ function parseDayValueToMinutes(value) {
   return isNaN(num) ? null : Math.round(num * 60);
 }
 
+/**
+ * Decompose a minute total into the matching Hour / Minute row labels.
+ * Labels that don't exist in the columns (e.g. 9+ hours) come back null.
+ */
+function minutesToComboLabels(mins) {
+  if (mins == null || mins <= 0) return { hour: null, minute: null };
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const hourLabel = h > 0 ? `${h} Hour${h === 1 ? '' : 's'}` : null;
+  const minuteLabel = m > 0 ? `${m} Minute${m === 1 ? '' : 's'}` : null;
+  return {
+    hour: hourLabel && EST_HOURS.includes(hourLabel) ? hourLabel : null,
+    minute: minuteLabel && EST_MINUTES.includes(minuteLabel) ? minuteLabel : null,
+  };
+}
+
 /** Footer date label: day-of-month `-` 3-letter weekday, e.g. `08-Mon` */
 function formatInstanceDate(date) {
   if (!(date instanceof Date) || isNaN(date)) return '';
@@ -215,8 +231,21 @@ function EstimateDropdownCell({
     const index = ESTIMATE_VALUES.indexOf(valueToFind);
     return index === -1 ? 0 : index;
   });
-  const [selectedHour, setSelectedHour] = useState(null);
-  const [selectedMinute, setSelectedMinute] = useState(null);
+  // Pre-stage the current value so the panel opens with it already selected:
+  // a preset label highlights its Hour or Minute row, and 'Custom' decomposes
+  // the row's Value column (rowData.timeValue) into the matching Hour + Minute
+  // combo. Multi mode skips this — its own effect stages the SHOWN date's time.
+  const initialStaged = (() => {
+    if (multiMode) return { hour: null, minute: null };
+    if (initialKey !== '-' && EST_HOURS.includes(initialKey)) return { hour: initialKey, minute: null };
+    if (initialKey !== '-' && EST_MINUTES.includes(initialKey)) return { hour: null, minute: initialKey };
+    if (initialKey === 'Custom' && rowData?.timeValue != null) {
+      return minutesToComboLabels(parseDayValueToMinutes(String(rowData.timeValue)));
+    }
+    return { hour: null, minute: null };
+  })();
+  const [selectedHour, setSelectedHour] = useState(initialStaged.hour);
+  const [selectedMinute, setSelectedMinute] = useState(initialStaged.minute);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const dropdownRef = useRef(null);
   const buttonRef = useRef(null);
@@ -424,12 +453,9 @@ function EstimateDropdownCell({
       setSelectedMinute(null);
       return;
     }
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    const hourLabel = h > 0 ? `${h} Hour${h === 1 ? '' : 's'}` : null;
-    const minuteLabel = m > 0 ? `${m} Minute${m === 1 ? '' : 's'}` : null;
-    setSelectedHour(hourLabel && EST_HOURS.includes(hourLabel) ? hourLabel : null);
-    setSelectedMinute(minuteLabel && EST_MINUTES.includes(minuteLabel) ? minuteLabel : null);
+    const combo = minutesToComboLabels(mins);
+    setSelectedHour(combo.hour);
+    setSelectedMinute(combo.minute);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [multiMode, shown?.dayIndex]);
 
@@ -453,6 +479,13 @@ function EstimateDropdownCell({
       return;
     }
     if (!hasCombo) return;
+    // Confirming the untouched pre-staged value is a no-change close — recommit
+    // the initial value verbatim (hosts filter unchanged commits) instead of
+    // re-deriving it, so nothing is rewritten.
+    if (selectedHour === initialStaged.hour && selectedMinute === initialStaged.minute) {
+      handleComplete(initialKey === '-' && initialValue !== '-' ? initialValue : initialKey);
+      return;
+    }
     // Only an Hour+Minute combination produces a figure that isn't already
     // one of the preset labels — that's the only case that should read
     // "Custom". Picking just one side is exactly a preset value (e.g. "3
