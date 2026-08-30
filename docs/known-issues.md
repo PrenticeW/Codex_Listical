@@ -93,7 +93,7 @@ Migrations written but not yet applied to the database. Apply as a batch.
 | `supabase/migrations/20260612000001_add_show_action_times.sql` | Adds `projects.show_action_times` (boolean, default FALSE) | Goal page side-panel "Hide Times" toggle on action rows — saves will fail on the unknown column until applied |
 | `supabase/migrations/20260827000002_add_project_tagline.sql` | Adds `projects.project_tagline` | Project taglines (Goal page "Add tagline", System header rows, mobile header subtitle) — before this the field was never persisted, so taglines vanished on reload. Without the column, staging saves fail on the unknown column. |
 | `supabase/migrations/20260827000001_planner_rows_history_trigger.sql` | UPDATE/DELETE triggers on `planner_rows` writing the previous row to `planning_history`; 30-day per-user prune | Nothing in the client depends on it; without it, app-side edits still have no history |
-| `supabase/migrations/20260828000001_stale_client_write_gate.sql` | Rejects destructive planner writes from clients not sending `x-tacular-client` ≥ min build (blocks pre-fix PWA bundles) | **Do NOT apply with the others** — breaks current tacular-mobile builds until mobile ships the header; see the migration's header comment |
+| `supabase/migrations/20260828000001_stale_client_write_gate.sql` | Rejects destructive planner writes from clients not sending `x-tacular-client` ≥ min build (blocks pre-fix PWA bundles) | **Applied to the live DB 2026-08-28**, after mobile shipped the header (tacular-mobile `6365aad`) and web deployed `CLIENT_BUILD` — both prerequisites met |
 
 ---
 
