@@ -1,6 +1,6 @@
 # Spec — Stable schedule-item IDs (kill positional chip identity)
 
-Status: proposed (2026-08-30). Prerequisite reading: `CLAUDE.md`, `docs/known-issues.md`
+Status: implemented (2026-08-30) — amended after code review the same day; amendments marked ⚠. Chip-id helpers live in `src/utils/scheduleChipId.js`; minting helpers in `src/utils/staging/rowPairing.js` (`createScheduleId`, `ensureScheduleRowIds`). Test: `src/utils/staging/__tests__/scheduleIds.test.js`. Prerequisite reading: `CLAUDE.md`, `docs/known-issues.md`
 ("Chip identity is positional"). The mitigation described there (Step 0 re-link pass +
 `_chipOrphaned` safeguard in `ProjectTimePlannerV2.jsx`, added 2026-08-30) is already live
 and stays in place — this spec removes the root cause.
@@ -50,24 +50,51 @@ rename combined with a renumber, and the heuristic can mis-pair within a same-na
 
 ### 1. Mint a permanent id per schedule item (Goal page)
 
-Add a `__scheduleId` metadata field on Schedule-section rows, minted with
-`crypto.randomUUID()` when a schedule row is created, and lazily for existing rows on
-load/first save (same pattern as `ensurePlanPairingMetadata` in
-`src/utils/staging/rowPairing.js`, which backfills `__pairId`). Persist it in
+Add a `__scheduleId` metadata field on Schedule-section rows, minted lazily at autosave
+time (`useShortlistState` runs `ensureScheduleRowIds` on every item before building the
+plan summary — the single choke point every save passes through; same backfill pattern as
+`ensurePlanPairingMetadata`). ⚠ Ids are **dashless** (`crypto.randomUUID()` with dashes
+stripped) so chip-id parsers can split on `-` unambiguously. Persist in
 `stagingStorage.serializeRow` / `deserializeRow` as `_scheduleId` alongside `_pairId`.
-Duplicating a row must mint a fresh id; moving/reordering must carry it unchanged.
+Duplicating a row mints a fresh id (`useRowCommands` duplicate); moving/reordering carries
+it unchanged.
+
+⚠ `__scheduleId` must survive **every** metadata copy path, not just serialize/deserialize
+— otherwise undo/redo and drafts silently drop it: `defineRowMetadata` (new `scheduleId`
+param), `cloneRowWithMetadata`, `clonePlanTableEntries` (all in `planTableHelpers.js`),
+and the hand-copied metadata in `createDraftYear.js` (~line 110 — this is the draft-copy
+site the edge case below refers to). `snapshotStorage.captureGoal` goes through
+`serializeRow`, so snapshots are covered for free. Goal-page clipboard paste writes cell
+content into existing rows, so it keeps the row's identity (correct); only whole-row
+duplication mints.
 
 ### 2. Thread it through
 
 - `buildProjectPlanSummary`: emit `{ name, timeValue, scheduleId }`.
 - `buildScheduleLayout`: pass `scheduleId` through (the placeholder filter no longer
   matters for identity).
-- `TacticsPage`: chip id becomes `schedule-chip-{projectId}-{scheduleId}` (extras:
-  `...-{scheduleId}-extra-{seq}`). Replace every `parseInt(rest, 10)` index-parse with a
-  lookup of the schedule item by `scheduleId`
-  (`scheduleItemsByProject.get(projectId).find(i => i.scheduleId === ...)`), keeping the
-  string-prefix/`-extra-` split logic. Grep for `schedule-chip-` in `TacticsPage.jsx` to
-  enumerate all sites; every `itemIdx` variable is suspect.
+- ⚠ Chip id format is `schedule-chip-{projectId}-sid-{scheduleId}` — NOT the bare
+  `...-{scheduleId}` originally proposed. The `-sid-` marker makes UUID-form ids
+  self-identifying, which matters because the legacy parsers fail **silently**, not
+  cleanly: `parseInt("3f2b…", 10)` returns 3 (a UUID starting with a digit reads as a
+  valid index), the `/-(\d+)$/` regex matches a UUID's trailing digits, and
+  last-dash splitting breaks outright on dashed ids. Every parser branches on the
+  marker: has `-sid-` → id lookup; otherwise the legacy positional path runs
+  unchanged. All parsing goes through `src/utils/scheduleChipId.js`
+  (`buildScheduleChipId`, `resolveScheduleChip`, `splitScheduleChipInner`,
+  `canonicalScheduleChipId`, `scheduleItemKey`) — no ad-hoc parsing anywhere.
+- ⚠ Extras use the real marker `-extra-chip-{N}` (built as
+  `` `${canonicalId}-extra-${createProjectChipId()}` `` where `createProjectChipId()`
+  returns `chip-{N}`), not the `-extra-{seq}` shorthand originally written.
+- ⚠ Call sites are wider than `TacticsPage.jsx` — the original "grep TacticsPage" note
+  was too narrow. Also updated: `src/components/PlanPanel.jsx` and
+  `src/components/ScheduleItemPanel.jsx` (both parsed ids by last dash + `parseInt` and
+  keyed their `placedChips` maps by numeric index — now keyed by `scheduleItemKey`, with
+  legacy positional placements still counted via an index fallback), and the TacticsPage
+  copy/paste path (clipboard payload field `scheduleItemIdx` → `scheduleItemRef`, which
+  carries `sid-{scheduleId}` or the legacy index; old-field fallback kept for in-flight
+  payloads). When hunting for stragglers, grep for `scheduleItemIdx` and `-(\d+)$` as
+  well as `schedule-chip-`.
 - Fallback: an item with no `scheduleId` (stale cached summary written by an old client)
   falls back to the positional id — identical to today, never worse.
 
@@ -79,7 +106,10 @@ Step 0 re-link pass on the System page absorbs the transition exactly as it abso
 renumber today (a chip whose id changes from positional to UUID form is just an orphan +
 unclaimed same-group chip, and re-links; unmatched rows grey out instead of vanishing).
 This avoids a big-bang rewrite entirely. Accepted cost: items never re-sent keep the old
-fragility until touched.
+fragility until touched. ⚠ Additional accepted cost found in review: `chipDisplayModes`
+(per-chip duration/clock display prefs in `tacticsStorage`) is another chip-id-keyed
+store — those prefs silently reset when a chip's id changes form, same class as
+`chipTimeOverrides` self-healing on the next send.
 
 Only if a hard cutover is later wanted: a one-time per-account routine must rewrite, for
 each year and BOTH `is_sent` layers, `tactics_chips.chip_id` (and `-extra-` derivatives),

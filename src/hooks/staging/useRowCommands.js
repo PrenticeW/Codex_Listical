@@ -6,6 +6,7 @@ import {
   PLAN_TABLE_COLS,
 } from '../../utils/staging/planTableHelpers';
 import { SECTION_CONFIG } from '../../utils/staging/sectionConfig';
+import { createScheduleId, setRowScheduleId } from '../../utils/staging/rowPairing';
 import { createStateMutationExecutor } from '../../utils/staging/commandHelpers';
 
 /**
@@ -193,6 +194,11 @@ export default function useRowCommands({
                 sortedIndices.forEach((idx) => {
                   if (idx >= 0 && idx < entries.length) {
                     const duplicatedRow = cloneRowWithMetadata(entries[idx]);
+                    // A duplicated Schedule row is a new schedule item — it
+                    // must get its own identity, not share the original's.
+                    if (duplicatedRow?.__scheduleId) {
+                      setRowScheduleId(duplicatedRow, createScheduleId());
+                    }
                     entries.splice(idx + 1, 0, duplicatedRow);
                   }
                 });

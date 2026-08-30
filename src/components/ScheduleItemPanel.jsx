@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState, useLayoutEffect, useEffect } from 'react';
+import { scheduleItemKey, splitScheduleChipInner } from '../utils/scheduleChipId';
 import { createPortal } from 'react-dom';
 import { parseEstimateLabelToMinutes } from '../utils/staging/planTableHelpers';
 
@@ -93,7 +94,7 @@ export default function ScheduleItemPanel({
   };
 
   // Collect individual placed chip durations per project+itemIdx for chips in day columns.
-  // placedChips[projectId][itemIdx] = array of { id, minutes } for each placed instance
+  // placedChips[projectId][itemKey] = array of { id, minutes } for each placed instance
   const placedChips = useMemo(() => {
     const result = {};
     if (!projectChips) return result;
@@ -103,19 +104,27 @@ export default function ScheduleItemPanel({
       const extraIdx = chip.id.indexOf('-extra-chip-');
       if (extraIdx === -1) return; // skip canonical (unplaced) chips
       const inner = chip.id.slice('schedule-chip-'.length, extraIdx);
-      const lastDash = inner.lastIndexOf('-');
-      if (lastDash === -1) return;
-      const projectId = inner.slice(0, lastDash);
-      const itemIdx = parseInt(inner.slice(lastDash + 1), 10);
-      if (!projectId || !Number.isFinite(itemIdx)) return;
+      const split = splitScheduleChipInner(inner);
+      if (!split) return;
+      const { projectId, itemKey } = split;
       const canonicalId = `schedule-chip-${inner}`;
       const mins = chipTimeOverrides?.[chip.id] ?? chipTimeOverrides?.[canonicalId] ?? chip.durationMinutes ?? 0;
       if (!result[projectId]) result[projectId] = {};
-      if (!result[projectId][itemIdx]) result[projectId][itemIdx] = [];
-      result[projectId][itemIdx].push({ id: chip.id, minutes: mins });
+      if (!result[projectId][itemKey]) result[projectId][itemKey] = [];
+      result[projectId][itemKey].push({ id: chip.id, minutes: mins });
     });
     return result;
   }, [projectChips, chipTimeOverrides]);
+
+  // Placed instances for a schedule item: keyed by its stable key
+  // ('sid-{scheduleId}' or legacy index); legacy positional placements
+  // (pre-migration chips) for the same slot still count.
+  const instancesForItem = (projectPlaced, item, itemIdx) => {
+    const key = scheduleItemKey(item, itemIdx);
+    const byKey = projectPlaced[key] ?? [];
+    const legacy = key !== String(itemIdx) ? (projectPlaced[String(itemIdx)] ?? []) : [];
+    return legacy.length ? [...byKey, ...legacy] : byKey;
+  };
 
   const hasAnyItems = projects.some(
     (p) => (scheduleLayout?.scheduleItemsByProject?.get(p.id) ?? []).length > 0
@@ -161,8 +170,8 @@ export default function ScheduleItemPanel({
             if (!items.length) return null;
 
             const projectPlacedChips = placedChips[project.id] ?? {};
-            const unscheduledCount = items.filter((_, idx) => {
-              const instances = projectPlacedChips[idx] ?? [];
+            const unscheduledCount = items.filter((item, idx) => {
+              const instances = instancesForItem(projectPlacedChips, item, idx);
               return instances.length === 0;
             }).length;
             const bg = project.color || '#d5a6bd';
@@ -186,7 +195,7 @@ export default function ScheduleItemPanel({
                 {items.map((item, itemIdx) => {
                   const targetMinutes = parseEstimateLabelToMinutes(item.timeValue) ?? incrementMinutes;
                   const heightPx = durationToPx(targetMinutes);
-                  const instances = projectPlacedChips[itemIdx] ?? [];
+                  const instances = instancesForItem(projectPlacedChips, item, itemIdx);
                   const totalPlaced = instances.reduce((s, c) => s + c.minutes, 0);
                   const remainingMinutes = Math.max(0, targetMinutes - totalPlaced);
                   const baseName = (item.name ?? '').trim() || project.label;

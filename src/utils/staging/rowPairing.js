@@ -147,6 +147,74 @@ export const ensurePlanPairingMetadata = ({
   });
 };
 
+// ---------------------------------------------------------------------------
+// Schedule-item identity (__scheduleId)
+// ---------------------------------------------------------------------------
+
+const SCHEDULE_ID_META_KEY = '__scheduleId';
+
+/**
+ * Mint a permanent schedule-item id. Dashless (base36 / hex without dashes)
+ * so chip-id parsers can keep splitting on '-' without ambiguity; ids are
+ * always embedded behind the '-sid-' marker in chip ids regardless.
+ */
+export const createScheduleId = () => {
+  const base =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().replace(/-/g, '')
+      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+  return base;
+};
+
+/**
+ * Get the schedule id from a row (null when absent).
+ */
+export const getRowScheduleId = (row) => {
+  if (!row) return null;
+  const value = row?.[SCHEDULE_ID_META_KEY];
+  return typeof value === 'string' && value ? value : null;
+};
+
+/**
+ * Set the schedule id on a row (as non-enumerable property).
+ */
+export const setRowScheduleId = (row, scheduleId) => {
+  if (!row) return;
+  Object.defineProperty(row, SCHEDULE_ID_META_KEY, {
+    value: scheduleId,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
+};
+
+/**
+ * Lazily mint __scheduleId on every Schedule-section row that lacks one.
+ * Walks the entries the same way buildProjectPlanSummary does (rows after a
+ * 'Schedule' header whose rowType is neither 'header' nor 'data'), mutating
+ * rows in place via non-enumerable metadata — same backfill pattern as
+ * ensurePlanPairingMetadata. Returns true when any id was minted.
+ */
+export const ensureScheduleRowIds = (entries) => {
+  if (!Array.isArray(entries)) return false;
+  let changed = false;
+  let currentSection = null;
+  for (const row of entries) {
+    if (!row) continue;
+    if (row.__rowType === 'header') {
+      currentSection = row.__sectionType ?? null;
+      continue;
+    }
+    if (currentSection === 'Schedule' && row.__rowType !== 'data') {
+      if (!getRowScheduleId(row)) {
+        setRowScheduleId(row, createScheduleId());
+        changed = true;
+      }
+    }
+  }
+  return changed;
+};
+
 /**
  * Build grouped row pairs from primary and secondary entries
  * Returns: { pairs, leftoverPrimary, leftoverSecondary }

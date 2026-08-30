@@ -112,6 +112,9 @@ const extractSubprojectRows = (item) => {
           pairId: row.__pairId,
           sectionType: row.__sectionType,
           isTotalRow: row.__isTotalRow,
+          // Draft chips are copies — preserving scheduleId lets a draft send
+          // match rows imported from the source year (docs/stable-chip-ids-spec.md).
+          scheduleId: row.__scheduleId,
         });
         rows.push(clone);
       }

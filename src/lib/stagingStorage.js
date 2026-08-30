@@ -95,6 +95,7 @@ export const serializeRow = (row) => {
   if (row.__pairId) serialized._pairId = row.__pairId;
   if (row.__sectionType) serialized._sectionType = row.__sectionType;
   if (row.__isTotalRow) serialized._isTotalRow = row.__isTotalRow;
+  if (row.__scheduleId) serialized._scheduleId = row.__scheduleId;
   return serialized;
 };
 
@@ -106,6 +107,7 @@ export const deserializeRow = (row) => {
       pairId: row._pairId,
       sectionType: row._sectionType,
       isTotalRow: row._isTotalRow,
+      scheduleId: row._scheduleId,
     });
   }
   if (Array.isArray(row)) {

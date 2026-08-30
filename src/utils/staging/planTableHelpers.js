@@ -20,6 +20,7 @@ import { getRowPairId } from './rowPairing';
  * @property {string} [__pairId] - Unique ID linking prompt/response row pairs
  * @property {string} [__sectionType] - Section type for header rows (Reasons, Outcomes, Actions, Schedule, Subprojects)
  * @property {boolean} [__isTotalRow] - Whether this row displays totals
+ * @property {string} [__scheduleId] - Permanent identity for Schedule-section rows (UUID, survives reorder/rename)
  */
 
 /**
@@ -126,9 +127,10 @@ export const COL = {
  * @param {string} [metadata.pairId] - Pair ID for linked prompt/response rows
  * @param {string} [metadata.sectionType] - Section type for header rows (Reasons, Outcomes, etc.)
  * @param {boolean} [metadata.isTotalRow] - Whether this is a total row
+ * @param {string} [metadata.scheduleId] - Permanent schedule-item identity (Schedule-section rows)
  * @returns {Array} The same row array with metadata properties added
  */
-export const defineRowMetadata = (row, { rowType, pairId, sectionType, isTotalRow } = {}) => {
+export const defineRowMetadata = (row, { rowType, pairId, sectionType, isTotalRow, scheduleId } = {}) => {
   if (rowType !== undefined) {
     Object.defineProperty(row, '__rowType', {
       value: rowType,
@@ -156,6 +158,14 @@ export const defineRowMetadata = (row, { rowType, pairId, sectionType, isTotalRo
   if (isTotalRow !== undefined) {
     Object.defineProperty(row, '__isTotalRow', {
       value: isTotalRow,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  if (scheduleId !== undefined) {
+    Object.defineProperty(row, '__scheduleId', {
+      value: scheduleId,
       writable: true,
       configurable: true,
       enumerable: false,
@@ -252,6 +262,7 @@ export const cloneRowWithMetadata = (row) => {
     pairId: row['__pairId'],
     sectionType: row['__sectionType'],
     isTotalRow: row['__isTotalRow'],
+    scheduleId: row['__scheduleId'],
   });
 };
 
@@ -297,6 +308,7 @@ export const clonePlanTableEntries = (entries, ensureRows = PLAN_TABLE_ROWS) => 
         pairId: sourceRow['__pairId'],
         sectionType: sourceRow['__sectionType'],
         isTotalRow: sourceRow['__isTotalRow'],
+        scheduleId: sourceRow['__scheduleId'],
       });
     }
 
@@ -463,7 +475,13 @@ export const buildProjectPlanSummary = (item) => {
       const name = (row[COL.CONTENT] ?? '').trim();
       const timeValue = row[COL.ESTIMATE] ?? '';
       if (name || timeValue) {
-        scheduleItems.push({ name: name || 'Schedule Item', timeValue });
+        const scheduleId =
+          typeof row.__scheduleId === 'string' && row.__scheduleId ? row.__scheduleId : null;
+        scheduleItems.push({
+          name: name || 'Schedule Item',
+          timeValue,
+          ...(scheduleId ? { scheduleId } : {}),
+        });
         scheduleTotalMinutes += parseTimeValueToMinutes(timeValue);
       }
     } else if (currentSection === 'Subprojects' && row.__rowType !== 'prompt') {

@@ -6,7 +6,7 @@ import {
   defineRowMetadata,
   PLAN_TABLE_COLS,
 } from '../../utils/staging/planTableHelpers';
-import { ensurePlanPairingMetadata } from '../../utils/staging/rowPairing';
+import { ensurePlanPairingMetadata, ensureScheduleRowIds } from '../../utils/staging/rowPairing';
 import { SECTION_CONFIG, LEGACY_SEED_VALUES, LEGACY_HEADERS } from '../../utils/staging/sectionConfig';
 import { createStateMutationExecutor } from '../../utils/staging/commandHelpers';
 import { pickProjectColour } from '../../utils/staging/projectColour';
@@ -296,10 +296,17 @@ export default function useShortlistState({ currentYear, executeCommand, isCurre
     if (!hasInitialLoaded) return;
     if (isCurrentYearArchived) return;
     const timer = setTimeout(() => {
-      const enrichedShortlist = shortlist.map((item) => ({
-        ...item,
-        planSummary: buildProjectPlanSummary(item),
-      }));
+      const enrichedShortlist = shortlist.map((item) => {
+        // Lazily mint permanent schedule-item ids (__scheduleId) before the
+        // summary is built, so every persisted summary/chip id is stable.
+        // Ids are set as non-enumerable metadata on the existing row arrays
+        // (render-invisible, same pattern as pairing metadata backfill).
+        ensureScheduleRowIds(item.planTableEntries);
+        return {
+          ...item,
+          planSummary: buildProjectPlanSummary(item),
+        };
+      });
       saveStagingState({ shortlist: enrichedShortlist, archived }, currentYear);
     }, 500);
     return () => clearTimeout(timer);

@@ -38,6 +38,13 @@ import {
 import { GEAR_TACTICS_SETTINGS_EVENT } from '../components/GearPanel';
 import { peekStagingCache } from '../lib/stagingStorage';
 import { buildScheduleLayout } from '../ScheduleChips';
+import {
+  buildScheduleChipId,
+  canonicalScheduleChipId,
+  resolveScheduleChip,
+  scheduleItemKey,
+  splitScheduleChipInner,
+} from '../utils/scheduleChipId';
 import usePageSize, { usePageScaleVar } from '../hooks/usePageSize';
 import { PLAN_PANEL_ACTION_EVENT, PLAN_PANEL_STATE_EVENT, PLAN_PANEL_CHIP_EVENT, PLAN_PANEL_SCHEDULE_DATA_EVENT, PLAN_PANEL_NAV_EVENT, PLAN_PANEL_CHIP_EDITOR_EVENT } from '../components/PlanPanel';
 import { chipContrastColour } from '../utils/chipEditorColours';
@@ -1724,10 +1731,9 @@ export default function TacticsPage() {
       if (droppedInDayColumn && isScheduleChip) {
         const projectId = target.projectId;
         const prefix = `schedule-chip-${projectId}-`;
-        const rest = sourceChipId.slice(prefix.length);
-        const itemIdx = parseInt(rest, 10);
-        if (Number.isFinite(itemIdx)) {
-          const canonicalId = `schedule-chip-${projectId}-${itemIdx}`;
+        if (sourceChipId.startsWith(prefix)) {
+          // Works for both UUID-form ('-sid-') and legacy positional ids.
+          const canonicalId = canonicalScheduleChipId(sourceChipId);
           const canonicalIdx = next.findIndex((c) => c.id === canonicalId);
           if (canonicalIdx >= 0) {
             next.splice(canonicalIdx, 1);
@@ -2063,28 +2069,23 @@ export default function TacticsPage() {
         // by buildAndAddScheduleItemChip, so it can't be trusted as the semantic time.
         let effectiveDurationMinutes = timeOverride ?? block.durationMinutes ?? null;
         if (timeOverride == null && block.id.startsWith('schedule-chip-')) {
-          const extraMarker = block.id.indexOf('-extra-chip-');
-          const idForParsing = extraMarker !== -1 ? block.id.slice(0, extraMarker) : block.id;
-          const itemIdxMatch = idForParsing.match(/-(\d+)$/);
-          const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
-          if (itemIdx != null) {
-            const scheduleItems = scheduleLayout?.scheduleItemsByProject?.get(block.projectId) ?? [];
-            const scheduleItem = scheduleItems[itemIdx];
-            if (scheduleItem) {
-              const parsedMins = parseEstimateLabelToMinutes(scheduleItem.timeValue);
-              if (Number.isFinite(parsedMins) && parsedMins > 0) {
-                effectiveDurationMinutes = parsedMins;
-              }
+          const scheduleItems = scheduleLayout?.scheduleItemsByProject?.get(block.projectId) ?? [];
+          const resolved = resolveScheduleChip(block.id, block.projectId, scheduleItems);
+          const scheduleItem = resolved?.scheduleItem ?? null;
+          if (scheduleItem) {
+            const parsedMins = parseEstimateLabelToMinutes(scheduleItem.timeValue);
+            if (Number.isFinite(parsedMins) && parsedMins > 0) {
+              effectiveDurationMinutes = parsedMins;
             }
           }
         }
-        // Capture itemIdx so pasted chips get a schedule-chip-style ID and count toward quota
-        let scheduleItemIdx = null;
+        // Capture the schedule-item ref ('sid-{scheduleId}' or legacy index)
+        // so pasted chips get a schedule-chip-style ID and count toward quota
+        let scheduleItemRef = null;
         if (block.id.startsWith('schedule-chip-')) {
-          const extraMarker = block.id.indexOf('-extra-chip-');
-          const idForIdx = extraMarker !== -1 ? block.id.slice(0, extraMarker) : block.id;
-          const idxMatch = idForIdx.match(/-(\d+)$/);
-          if (idxMatch) scheduleItemIdx = parseInt(idxMatch[1], 10);
+          const idForRef = canonicalScheduleChipId(block.id);
+          const prefix = `schedule-chip-${block.projectId}-`;
+          if (idForRef.startsWith(prefix)) scheduleItemRef = idForRef.slice(prefix.length);
         }
         return {
           projectId: block.projectId ?? 'sleep',
@@ -2093,7 +2094,7 @@ export default function TacticsPage() {
           endRowId: block.endRowId,
           timeOverride,
           durationMinutes: effectiveDurationMinutes,
-          ...(scheduleItemIdx != null ? { scheduleItemIdx } : {}),
+          ...(scheduleItemRef != null ? { scheduleItemRef } : {}),
         };
       })
     );
@@ -2132,9 +2133,11 @@ export default function TacticsPage() {
       const baseId = createProjectChipId();
       const chipId = existing
         ? existing.id
-        : entry.scheduleItemIdx != null
-          ? `schedule-chip-${entry.projectId}-${entry.scheduleItemIdx}-extra-${baseId}`
-          : baseId;
+        : entry.scheduleItemRef != null
+          ? `schedule-chip-${entry.projectId}-${entry.scheduleItemRef}-extra-${baseId}`
+          : entry.scheduleItemIdx != null
+            ? `schedule-chip-${entry.projectId}-${entry.scheduleItemIdx}-extra-${baseId}`
+            : baseId;
 
       if (existing) {
         newChips.push({
@@ -2287,11 +2290,10 @@ export default function TacticsPage() {
       chip.projectId !== 'buffer';
     if (!isScheduleChip) return;
     const { projectId } = chip;
-    const prefix = `schedule-chip-${projectId}-`;
-    const rest = chip.id.slice(prefix.length);
-    const itemIdx = parseInt(rest, 10);
-    if (!Number.isFinite(itemIdx)) return;
-    const canonicalId = `schedule-chip-${projectId}-${itemIdx}`;
+    const schedItemsForResolve = scheduleLayout?.scheduleItemsByProject?.get(projectId) ?? [];
+    const resolvedChip = resolveScheduleChip(chip.id, projectId, schedItemsForResolve);
+    if (!resolvedChip) return;
+    const canonicalId = resolvedChip.canonicalId;
     if (filtered.some((c) => c.id === canonicalId)) return;
     const colConfig = stagingColumnConfigsRef.current.find(
       (c) => c.type === 'project' && c.project?.id === projectId
@@ -2299,8 +2301,7 @@ export default function TacticsPage() {
     if (!colConfig) return;
     const stagingIdx = stagingColumnConfigsRef.current.indexOf(colConfig);
     const projectColumnIndex = DAY_COLUMN_COUNT + stagingIdx;
-    const schedItems = scheduleLayout?.scheduleItemsByProject?.get(projectId) ?? [];
-    const scheduleItem = schedItems[itemIdx];
+    const scheduleItem = resolvedChip.scheduleItem;
     if (!scheduleItem) return;
     const minutes = parseEstimateLabelToMinutes(scheduleItem.timeValue);
     const durationMinutes = Number.isFinite(minutes) ? minutes : incrementMinutes;
@@ -2781,14 +2782,8 @@ export default function TacticsPage() {
       const isScheduleChip = typeof block.id === 'string' && block.id.startsWith('schedule-chip-');
       if (isScheduleChip) {
         // For schedule chips, edit both name and time
-        const extraMarker = block.id.indexOf('-extra-chip-');
-        const idForParsing = extraMarker !== -1 ? block.id.slice(0, extraMarker) : block.id;
-        const itemIdxMatch = idForParsing.match(/-(\d+)$/);
-        const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
-        const scheduleItems = itemIdx != null
-          ? (scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [])
-          : [];
-        const scheduleItem = itemIdx != null ? scheduleItems[itemIdx] : null;
+        const scheduleItems = scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [];
+        const scheduleItem = resolveScheduleChip(block.id, block.projectId, scheduleItems)?.scheduleItem ?? null;
         const currentOverride = chipTimeOverrides[chipId];
         const spanMinutes = getBlockDuration(block, rowIndexMap, timelineRowIds, incrementMinutes);
         let currentMinutes;
@@ -2926,14 +2921,8 @@ export default function TacticsPage() {
       }
 
       if (duration == null && isScheduleChip && isSingleCell) {
-        const extraMarker = block.id.indexOf('-extra-chip-');
-        const idForParsing = extraMarker !== -1 ? block.id.slice(0, extraMarker) : block.id;
-        const itemIdxMatch = idForParsing.match(/-(\d+)$/);
-        const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
-        const scheduleItems = itemIdx != null
-          ? (scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [])
-          : [];
-        const scheduleItem = itemIdx != null ? scheduleItems[itemIdx] : null;
+        const scheduleItems = scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [];
+        const scheduleItem = resolveScheduleChip(block.id, block.projectId, scheduleItems)?.scheduleItem ?? null;
         const parsedMins = scheduleItem ? parseEstimateLabelToMinutes(scheduleItem.timeValue) : null;
         if (Number.isFinite(parsedMins) && parsedMins > 0 && parsedMins < incrementMinutes) {
           duration = parsedMins;
@@ -3370,17 +3359,19 @@ export default function TacticsPage() {
       const minutes = parseEstimateLabelToMinutes(scheduleItem.timeValue);
       const totalMinutes = Number.isFinite(minutes) ? minutes : incrementMinutes;
       // Compute how many minutes are already placed in day columns for this item
-      const canonicalId = `schedule-chip-${projectId}-${itemIdx}`;
+      const canonicalId = buildScheduleChipId(projectId, scheduleItem, itemIdx);
+      const itemKey = scheduleItemKey(scheduleItem, itemIdx);
       const alreadyPlaced = projectChips.reduce((sum, c) => {
         if (!c.id.startsWith('schedule-chip-')) return sum;
         if (c.columnIndex >= 8) return sum;
         const extraIdx = c.id.indexOf('-extra-chip-');
         if (extraIdx === -1) return sum;
         const inner = c.id.slice('schedule-chip-'.length, extraIdx);
-        const lastDash = inner.lastIndexOf('-');
-        if (lastDash === -1) return sum;
-        if (inner.slice(0, lastDash) !== projectId) return sum;
-        if (parseInt(inner.slice(lastDash + 1), 10) !== itemIdx) return sum;
+        const split = splitScheduleChipInner(inner);
+        if (!split || split.projectId !== projectId) return sum;
+        // Match by stable key; legacy-form placements for the same slot
+        // (pre-migration chips) still match by index.
+        if (split.itemKey !== itemKey && split.itemIdx !== itemIdx) return sum;
         const chipMins = chipTimeOverrides[c.id] ?? chipTimeOverrides[canonicalId] ?? c.durationMinutes ?? 0;
         return sum + chipMins;
       }, 0);
@@ -3400,7 +3391,7 @@ export default function TacticsPage() {
       const displayLabel = hasScheduleName ? trimmedName : null;
 
       const newChip = {
-        id: `schedule-chip-${projectId}-${itemIdx}-extra-${createProjectChipId()}`,
+        id: `${canonicalId}-extra-${createProjectChipId()}`,
         columnIndex,
         dayName: null,
         startRowId,
@@ -3443,7 +3434,8 @@ export default function TacticsPage() {
         const scheduleItem = schedItems[itemIdx];
         if (!scheduleItem) return;
 
-        const canonicalId = `schedule-chip-${projectId}-${itemIdx}`;
+        const canonicalId = buildScheduleChipId(projectId, scheduleItem, itemIdx);
+      const itemKey = scheduleItemKey(scheduleItem, itemIdx);
         const minutes = parseEstimateLabelToMinutes(scheduleItem.timeValue);
         const totalMinutes = Number.isFinite(minutes) ? minutes : incrementMinutes;
         const alreadyPlaced = projectChips.reduce((sum, c) => {
@@ -3452,10 +3444,11 @@ export default function TacticsPage() {
           const extraIdx = c.id.indexOf('-extra-chip-');
           if (extraIdx === -1) return sum;
           const inner = c.id.slice('schedule-chip-'.length, extraIdx);
-          const lastDash = inner.lastIndexOf('-');
-          if (lastDash === -1) return sum;
-          if (inner.slice(0, lastDash) !== projectId) return sum;
-          if (parseInt(inner.slice(lastDash + 1), 10) !== itemIdx) return sum;
+          const split = splitScheduleChipInner(inner);
+          if (!split || split.projectId !== projectId) return sum;
+          // Match by stable key; legacy-form placements for the same slot
+          // (pre-migration chips) still match by index.
+          if (split.itemKey !== itemKey && split.itemIdx !== itemIdx) return sum;
           const chipMins = chipTimeOverrides[c.id] ?? chipTimeOverrides[canonicalId] ?? c.durationMinutes ?? 0;
           return sum + chipMins;
         }, 0);
@@ -3475,7 +3468,7 @@ export default function TacticsPage() {
         const hasScheduleName = Boolean(trimmedName && trimmedName !== scheduleDefaultText);
 
         const newChip = {
-          id: `schedule-chip-${projectId}-${itemIdx}-extra-${createProjectChipId()}`,
+          id: `${canonicalId}-extra-${createProjectChipId()}`,
           columnIndex: targetColumnIndex,
           dayName: targetColumnIndex < DAY_COLUMN_COUNT ? (displayedWeekDays[targetColumnIndex] ?? null) : null,
           startRowId,
@@ -3536,17 +3529,19 @@ export default function TacticsPage() {
 
       const minutes = parseEstimateLabelToMinutes(scheduleItem.timeValue);
       const totalMinutes = Number.isFinite(minutes) ? minutes : incrementMinutes;
-      const canonicalId = `schedule-chip-${projectId}-${itemIdx}`;
+      const canonicalId = buildScheduleChipId(projectId, scheduleItem, itemIdx);
+      const itemKey = scheduleItemKey(scheduleItem, itemIdx);
       const alreadyPlaced = projectChips.reduce((sum, c) => {
         if (!c.id.startsWith('schedule-chip-')) return sum;
         if (c.columnIndex >= 8) return sum;
         const extraIdx = c.id.indexOf('-extra-chip-');
         if (extraIdx === -1) return sum;
         const inner = c.id.slice('schedule-chip-'.length, extraIdx);
-        const lastDash = inner.lastIndexOf('-');
-        if (lastDash === -1) return sum;
-        if (inner.slice(0, lastDash) !== projectId) return sum;
-        if (parseInt(inner.slice(lastDash + 1), 10) !== itemIdx) return sum;
+        const split = splitScheduleChipInner(inner);
+        if (!split || split.projectId !== projectId) return sum;
+        // Match by stable key; legacy-form placements for the same slot
+        // (pre-migration chips) still match by index.
+        if (split.itemKey !== itemKey && split.itemIdx !== itemIdx) return sum;
         const chipMins = chipTimeOverrides[c.id] ?? chipTimeOverrides[canonicalId] ?? c.durationMinutes ?? 0;
         return sum + chipMins;
       }, 0);
@@ -3566,7 +3561,7 @@ export default function TacticsPage() {
       const displayLabel = hasScheduleName ? trimmedName : null;
 
       const newChip = {
-        id: `schedule-chip-${projectId}-${itemIdx}-extra-${createProjectChipId()}`,
+        id: `${canonicalId}-extra-${createProjectChipId()}`,
         columnIndex,
         dayName: null,
         startRowId,
@@ -4227,17 +4222,12 @@ export default function TacticsPage() {
       let largeTimeStr = null;
       if (isScheduleChip) {
         // Derive label directly from schedule data at render time so it's always fresh.
-        // Extra-copy IDs: schedule-chip-{projectId}-{itemIdx}-extra-chip-{N}
-        // Canonical IDs:  schedule-chip-{projectId}-{itemIdx}
+        // Extra-copy IDs: {canonicalId}-extra-chip-{N}
+        // Canonical IDs:  schedule-chip-{projectId}-sid-{scheduleId} (UUID form)
+        //                 schedule-chip-{projectId}-{itemIdx} (legacy positional)
         // Use fixed "-extra-chip-" split to avoid matching the trailing sequence number.
-        const extraMarker = block.id.indexOf('-extra-chip-');
-        const idForParsing = extraMarker !== -1 ? block.id.slice(0, extraMarker) : block.id;
-        const itemIdxMatch = idForParsing.match(/-(\d+)$/);
-        const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
-        const scheduleItems = itemIdx != null
-          ? (scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [])
-          : [];
-        const scheduleItem = itemIdx != null ? scheduleItems[itemIdx] : null;
+        const scheduleItems = scheduleLayout.scheduleItemsByProject.get(block.projectId) ?? [];
+        const scheduleItem = resolveScheduleChip(block.id, block.projectId, scheduleItems)?.scheduleItem ?? null;
         const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
         // Prefer user-edited displayLabel, then scheduleItem name, then project label
         const itemName = scheduleItem ? (scheduleItem.name ?? '').trim() : '';
@@ -4849,14 +4839,8 @@ export default function TacticsPage() {
 
         {/* ── Rename schedule chip ──────────────────────────────── */}
         {targetChip?.id?.startsWith('schedule-chip-') ? (() => {
-          const extraMarker = targetChip.id.indexOf('-extra-chip-');
-          const idForParsing = extraMarker !== -1 ? targetChip.id.slice(0, extraMarker) : targetChip.id;
-          const itemIdxMatch = idForParsing.match(/-(\d+)$/);
-          const itemIdx = itemIdxMatch ? parseInt(itemIdxMatch[1], 10) : null;
-          const scheduleItems = itemIdx != null
-            ? (scheduleLayout.scheduleItemsByProject.get(targetChip.projectId) ?? [])
-            : [];
-          const scheduleItem = itemIdx != null ? scheduleItems[itemIdx] : null;
+          const scheduleItems = scheduleLayout.scheduleItemsByProject.get(targetChip.projectId) ?? [];
+          const scheduleItem = resolveScheduleChip(targetChip.id, targetChip.projectId, scheduleItems)?.scheduleItem ?? null;
           const scheduleDefaultText = SECTION_CONFIG.Schedule.placeholder;
           const itemName = scheduleItem ? (scheduleItem.name ?? '').trim() : '';
           const hasScheduleName = Boolean(itemName && itemName !== scheduleDefaultText);
