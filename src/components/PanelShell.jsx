@@ -20,7 +20,7 @@
  *                             onWidthChange(newWidth) once on mouseup so the
  *                             caller can persist the final value.
  *   minWidth      number    — clamp floor while dragging (default 280)
- *   maxWidth      number    — clamp ceiling while dragging (default 600)
+ *   maxWidth      number    — clamp ceiling while dragging (default 800)
  *   scaleBaseWidth number   — width at which content renders 1:1 (default 420).
  *                             Widened past this, the tray content keeps its
  *                             base-width layout and scales up uniformly
@@ -54,7 +54,7 @@ export default function PanelShell({
   zIndex = 99994,
   onWidthChange,
   minWidth = 280,
-  maxWidth = 600,
+  maxWidth = 800,
   scaleBaseWidth = 420,
   children,
 }) {

@@ -74,6 +74,16 @@ function fmtH(v) {
   return `${h}h ${String(mm).padStart(2, '0')}m`;
 }
 
+// Decimal hours → the app's H.MM entry format ("7.05", "0.45"), unit-free.
+// Used everywhere in this pane except the wheel labels, where space allows
+// the explicit h/m form above.
+function fmtHMM(v) {
+  if (v == null) return '—';
+  const m = Math.round(v * 60);
+  const h = Math.floor(m / 60), mm = m % 60;
+  return `${h}.${String(mm).padStart(2, '0')}`;
+}
+
 // ─── Back button (same pill as TaskRowPanel) ─────────────────────────────────
 
 function BackBtn({ onClick }) {
@@ -190,11 +200,27 @@ function AreaWheel({ items, total, range, scale = 1 }) {
   const pt = (ang) => [CX + R * Math.sin(ang), CY - R * Math.cos(ang)];
   const PAD = 0.09; // angular gap either side of each segment (radians)
 
+  // Rotate the whole ring so the largest segment is centred at 3 o'clock.
+  // Its label owns the right column, and any cluster of small segments
+  // lands on the opposite side, spread vertically down the left column —
+  // the ideal shape for the stacked-column labels below.
+  const visible = items.filter((a) => a.hours > 0);
+  const TWO_PI = Math.PI * 2;
+  let rot = 0;
+  if (visible.length > 1) {
+    let pre = 0, bestMid = 0, bestHours = -1;
+    for (const a of visible) {
+      if (a.hours > bestHours) { bestHours = a.hours; bestMid = (pre + a.hours / 2) / sum * TWO_PI; }
+      pre += a.hours;
+    }
+    rot = Math.PI / 2 - bestMid;
+  }
+
   let acc = 0, ci = 0;
-  const segs = items.filter((a) => a.hours > 0).map((a) => {
-    const a0 = (acc / sum) * Math.PI * 2;
+  const segs = visible.map((a) => {
+    const a0 = (acc / sum) * TWO_PI + rot;
     acc += a.hours;
-    const a1 = (acc / sum) * Math.PI * 2;
+    const a1 = (acc / sum) * TWO_PI + rot;
     const idx = ci;
     const color = a.color || (a.unassigned ? UNASSIGNED : RAMP[ci++ % RAMP.length]);
     const labelColor = a.labelColor || a.color || (a.unassigned ? C.inkFaint : LABEL_RAMP[idx % LABEL_RAMP.length]);
@@ -210,13 +236,11 @@ function AreaWheel({ items, total, range, scale = 1 }) {
     return `M ${x0} ${y0} A ${R} ${R} 0 ${large} 1 ${x1} ${y1}`;
   };
 
-  // ── Label layout with collision avoidance ──────────────────────────────
-  // Instead of placing every label at its segment's angle (which piles small
-  // adjacent segments on top of each other), each label is assigned to a
-  // fixed column left or right of the ring, then the labels on each side are
-  // stacked top-to-bottom with a minimum gap. A leader line connects each
-  // label back to its segment.
-  const NAME_LH = 10, GAP = 6;
+  // ── Label columns with collision avoidance ─────────────────────────────
+  // Each label goes to a fixed column on its segment's side of the ring,
+  // and the labels in each column are stacked with a minimum gap so they
+  // can never overlap. Leader lines connect labels back to their segments.
+  const NAME_LH = 10, GAP = 14;
   const COL = { r: CX + R + 30, l: CX - R - 30 };
   const labels = segs.map((seg) => {
     const sin = Math.sin(seg.mid), cos = Math.cos(seg.mid);
@@ -243,7 +267,7 @@ function AreaWheel({ items, total, range, scale = 1 }) {
   });
 
   return (
-    <svg viewBox={`0 0 270 ${H}`} style={{ display: 'block', width: '100%', maxWidth: 270 * scale, height: 'auto', overflow: 'visible' }}>
+    <svg viewBox={`-30 0 330 ${H}`} style={{ display: 'block', width: '100%', maxWidth: 330 * scale, height: 'auto' }}>
       {segs.map((s, i) => (
         <path key={i} d={arc(s.a0, s.a1)} fill="none" stroke={s.color} strokeWidth={W} strokeLinecap="round" />
       ))}
@@ -289,9 +313,10 @@ function AreaWheel({ items, total, range, scale = 1 }) {
 // ─── Comparison card pieces ──────────────────────────────────────────────────
 
 function ColHead({ lastLabel, thisLabel, scale = 1 }) {
+  const colW = Math.round(52 * (1 + (scale - 1) * 0.6));
   const cell = (txt) => (
     <span key={txt} style={{
-      width: 52 * scale, textAlign: 'center', fontSize: 8.5 * scale, fontWeight: 600,
+      width: colW, flexShrink: 0, textAlign: 'center', fontSize: 8.5 * scale, fontWeight: 600,
       letterSpacing: '.1em', textTransform: 'uppercase', color: C.inkFaint,
       fontFamily: MONO, lineHeight: 1.3,
     }}>{txt}</span>
@@ -309,18 +334,19 @@ function ColHead({ lastLabel, thisLabel, scale = 1 }) {
 // One project row: colour chip + three tabular hour cells. Delta compares
 // this week to last week; no frozen quota (unplanned project) → '—'.
 function ProjectRow({ name, color, last, current, quota, isLast, scale = 1 }) {
+  const colW = Math.round(52 * (1 + (scale - 1) * 0.6));
   const d = (quota == null || last == null || current == null)
     ? null
     : Math.round((current - last) * 60) / 60; // whole-minute delta
   const trendColor = d == null ? C.inkFaint : d > 0 ? DELTA_POS : d < 0 ? DELTA_NEG : C.inkMute;
   const cell = (v, emph) => (
     <span style={{
-      width: 52 * scale, textAlign: 'center', fontSize: 12.5 * scale,
+      width: colW, flexShrink: 0, textAlign: 'center', fontSize: 12.5 * scale,
       fontFamily: FONT, fontVariantNumeric: 'tabular-nums',
       color: v == null ? C.inkFaint : emph ? C.ink : C.inkMute,
       fontWeight: emph && v != null ? 700 : 500,
     }}>
-      {fmtH(v)}
+      {fmtHMM(v)}
     </span>
   );
   return (
@@ -330,7 +356,7 @@ function ProjectRow({ name, color, last, current, quota, isLast, scale = 1 }) {
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <span style={{
-          display: 'inline-block', width: 108 * scale, background: color, color: '#fff',
+          display: 'inline-block', width: '100%', maxWidth: 130 * scale, background: color, color: '#fff',
           fontWeight: 700, fontSize: 9.5 * scale, letterSpacing: '.03em', textTransform: 'uppercase',
           fontFamily: FONT, borderRadius: 4, padding: '3px 7px', whiteSpace: 'nowrap',
           textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', boxSizing: 'border-box',
@@ -338,10 +364,10 @@ function ProjectRow({ name, color, last, current, quota, isLast, scale = 1 }) {
       </div>
       {cell(last)}
       <span style={{
-        width: 52 * scale, textAlign: 'center', fontSize: 12.5 * scale, fontFamily: FONT,
+        width: colW, flexShrink: 0, textAlign: 'center', fontSize: 12.5 * scale, fontFamily: FONT,
         fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: trendColor,
       }}>
-        {d == null ? '—' : d === 0 ? '0' : `${d > 0 ? '+' : '−'}${fmtH(Math.abs(d))}`}
+        {d == null ? '—' : d === 0 ? '0' : `${d > 0 ? '+' : '−'}${fmtHMM(Math.abs(d))}`}
       </span>
       {cell(current, true)}
     </div>
@@ -362,8 +388,10 @@ export function ArchiveWeekContent({ week, onBack }) {
   // the pager re-selects adjacent archive rows).
   const [wheelMode, setWheelMode] = useState('areas');
 
-  // Responsive scale: 1 at the 320px default panel width, growing to ~1.4
-  // at the 600px maximum. The archive pane is exactly as wide as the panel
+  // Responsive scale: 1 at the 320px default panel width, capped at ~1.4
+  // (reached around 450px; PanelShell's uniform zoom takes over above its
+  // 420px base width, so this cap avoids compounding growth at the 800px
+  // maximum). The archive pane is exactly as wide as the panel
   // (50% of SystemPanel's 200% slide track), so the shared panel width is
   // the right thing to key off.
   const { width: panelWidth } = usePanelWidth();

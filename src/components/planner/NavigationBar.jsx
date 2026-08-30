@@ -9,6 +9,7 @@ import { usePlanPanel } from '../../contexts/PlanPanelContext';
 import { useGoalPanel } from '../../contexts/GoalPanelContext';
 import wordmark from '../../assets/brand/tacular-wordmark-black.svg';
 import { gridSvgLayer, useThemeVersion } from '../../utils/themeBackground';
+import usePageSize from '../../hooks/usePageSize';
 
 // Map routes to page identifiers and display names
 const PAGE_CONFIG = {
@@ -43,6 +44,8 @@ export default function NavigationBar({
 }) {
   // Recompute the nav background (grid SVG layer) on theme change
   useThemeVersion();
+  // Nav bar scale, set from the gear panel's Nav bar section
+  const { sizeScale: navScale } = usePageSize('nav');
   const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
@@ -114,6 +117,9 @@ export default function NavigationBar({
       data-nav=""
       style={{
         ...navBgStyle(),
+        // CSS zoom (not transform) so the bar keeps its place in layout flow
+        // and panel-position measurements of [data-nav] stay correct.
+        zoom: navScale,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',

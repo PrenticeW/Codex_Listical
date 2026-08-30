@@ -18,7 +18,7 @@ const EVENT_NAME = 'panel-width-change';
 
 export const DEFAULT_PANEL_WIDTH = 320;
 export const MIN_PANEL_WIDTH = 280;
-export const MAX_PANEL_WIDTH = 600;
+export const MAX_PANEL_WIDTH = 800;
 
 const clampWidth = (value) =>
   Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, value));
