@@ -25,13 +25,20 @@ import { TaskDetailContent } from './planner/TaskRowPanel';
 import { ArchiveWeekContent } from './planner/ArchiveWeekPanel';
 import { useYear } from '../contexts/YearContext';
 import { peekTacticsCache, loadTacticsYearSettings } from '../lib/tacticsStorage';
-import { GEAR_TACTICS_SETTINGS_EVENT } from './GearPanel';
+import { GEAR_TACTICS_SETTINGS_EVENT, PLANNER_SETTINGS_UPDATE_EVENT, Toggle } from './GearPanel';
+import {
+  peekPlannerCache,
+  readShowRecurring,
+  readShowSubprojects,
+  readShowMaxMinRows,
+} from '../utils/planner/storage';
 
 // Cross-component action event — consumed by ProjectTimePlannerV2
 export const SYSTEM_PANEL_ACTION_EVENT = 'system-panel-action';
 // Fired by ProjectTimePlannerV2 when row selection changes
 export const SYSTEM_PANEL_SELECTION_EVENT = 'system-panel-selection';
-// Fired by ProjectTimePlannerV2 when page scale changes
+// Fired by ProjectTimePlannerV2 when page scale changes (scale UI now lives in
+// the gear panel's Scale view; no current consumer)
 export const SYSTEM_PANEL_SCALE_EVENT = 'system-panel-scale';
 // Fired by ProjectTimePlannerV2 when the day filter changes
 export const SYSTEM_PANEL_DAY_FILTER_EVENT = 'system-panel-day-filter';
@@ -765,66 +772,7 @@ function ButtonPair({ left, right }) {
   );
 }
 
-function StepBtn({ onClick, disabled, children }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        fontSize: 18, fontWeight: 300, color: disabled ? C.textFaint : C.textDim,
-        background: '#fafaf8', border: 'none',
-        transition: 'background 0.1s, color 0.1s',
-        padding: 0, lineHeight: 1, fontFamily: FONT,
-      }}
-      onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = C.borderLight; e.currentTarget.style.color = C.text; } }}
-      onMouseLeave={e => { e.currentTarget.style.background = '#fafaf8'; e.currentTarget.style.color = disabled ? C.textFaint : C.textDim; }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function StepperRow({ icon, label, value, onDecrease, onIncrease, decreaseDisabled, increaseDisabled }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-      border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 16px',
-    }}>
-      <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        {icon}
-        {label}
-      </span>
-      <div style={{
-        display: 'flex', alignItems: 'center', flex: 1, maxWidth: 200,
-        border: `1px solid ${C.border}`, borderRadius: 7, overflow: 'hidden',
-      }}>
-        <StepBtn onClick={onDecrease} disabled={decreaseDisabled}>−</StepBtn>
-        <span style={{
-          flex: 1, minWidth: 38, textAlign: 'center', fontSize: 14, fontWeight: 500, color: C.text,
-          borderLeft: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`,
-          lineHeight: '28px',
-        }}>
-          {value}
-        </span>
-        <StepBtn onClick={onIncrease} disabled={increaseDisabled}>+</StepBtn>
-      </div>
-    </div>
-  );
-}
-
 function PageSection() {
-  const [scale, setScale] = useState(1.0);
-
-  useEffect(() => {
-    const handler = (e) => setScale(e.detail?.scale ?? 1.0);
-    window.addEventListener(SYSTEM_PANEL_SCALE_EVENT, handler);
-    return () => window.removeEventListener(SYSTEM_PANEL_SCALE_EVENT, handler);
-  }, []);
-
-  const displayScale = Math.round(scale * 100);
-
   return (
     <div style={{ ...BENTO_CARD, margin: '11px 11px 11px' }}>
       <SectionLabel>Page</SectionLabel>
@@ -851,19 +799,55 @@ function PageSection() {
           onClick: () => dispatchSystemAction('redo'),
         }}
       />
+    </div>
+  );
+}
 
-      <StepperRow
-        icon={
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-            <circle cx="5.5" cy="5.5" r="4" stroke="#999" strokeWidth="1.2"/>
-            <path d="M8.5 8.5L12 12" stroke="#999" strokeWidth="1.2" strokeLinecap="round"/>
-          </svg>
-        }
-        label="Zoom"
-        value={`${displayScale}%`}
-        onDecrease={() => dispatchSystemAction('zoomOut')}
-        onIncrease={() => dispatchSystemAction('zoomIn')}
-      />
+
+// ─── Appearance (moved from the gear menu's "System page settings") ──────────
+// Row-visibility toggles for the System page. Saves flow through the same
+// planner-settings-update event ProjectTimePlannerV2 already listens to.
+
+function AppearanceSection() {
+  const { currentYear } = useYear();
+
+  // Initialise from in-memory cache for instant rendering on panel open
+  const cached = () => peekPlannerCache(currentYear).plannerSettings;
+  const [showRecurring,    setShowRecurring]    = useState(() => { const r = cached(); return r ? r.show_recurring    !== false : true; });
+  const [showSubprojects,  setShowSubprojects]  = useState(() => { const r = cached(); return r ? r.show_subprojects  !== false : true; });
+  const [showMinMax,       setShowMinMax]       = useState(() => { const r = cached(); return r ? r.show_max_min_rows !== false : true; });
+
+  // Async refresh in case the cache was empty or stale
+  useEffect(() => {
+    readShowRecurring(currentYear).then(v   => setShowRecurring(v));
+    readShowSubprojects(currentYear).then(v => setShowSubprojects(v));
+    readShowMaxMinRows(currentYear).then(v  => setShowMinMax(v));
+  }, [currentYear]);
+
+  const dispatchUpdate = (patch) => {
+    window.dispatchEvent(new CustomEvent(PLANNER_SETTINGS_UPDATE_EVENT, {
+      detail: { ...patch, __eventYear: currentYear },
+    }));
+  };
+
+  const rowStyle  = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 };
+  const labelStyle = { fontFamily: FONT, fontSize: 13, color: C.textDim };
+
+  return (
+    <div style={BENTO_CARD}>
+      <SectionLabel>Appearance</SectionLabel>
+      <div style={rowStyle}>
+        <span style={labelStyle}>Show recurring</span>
+        <Toggle checked={showRecurring} onChange={val => { setShowRecurring(val); dispatchUpdate({ showRecurring: val }); }} />
+      </div>
+      <div style={rowStyle}>
+        <span style={labelStyle}>Show subprojects</span>
+        <Toggle checked={showSubprojects} onChange={val => { setShowSubprojects(val); dispatchUpdate({ showSubprojects: val }); }} />
+      </div>
+      <div style={{ ...rowStyle, marginBottom: 0 }}>
+        <span style={labelStyle}>Show max/min hours</span>
+        <Toggle checked={showMinMax} onChange={val => { setShowMinMax(val); dispatchUpdate({ showMaxMinRows: val }); }} />
+      </div>
     </div>
   );
 }
@@ -977,6 +961,7 @@ export default function SystemPanel() {
               <SortSection />
               <ArchiveSection />
               <PlanSection />
+              <AppearanceSection />
             </div>
             <div style={{ flexShrink: 0, borderTop: '1px solid var(--brand-bd)' }}>
               <PageSection />

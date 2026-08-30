@@ -26,7 +26,6 @@ import PanelShell from './PanelShell';
 import { usePlanPanel } from '../contexts/PlanPanelContext';
 import { usePanelLock } from '../contexts/PagePanelContext';
 import PanelLockButton from './PanelLockButton';
-import usePageSize from '../hooks/usePageSize';
 import usePanelWidth from '../hooks/usePanelWidth';
 import { parseEstimateLabelToMinutes } from '../utils/staging/planTableHelpers';
 import {
@@ -487,58 +486,6 @@ function Btn({ icon, label, disabled, onClick }) {
     >
       {icon}
       {label}
-    </button>
-  );
-}
-
-// ─── Stepper row ──────────────────────────────────────────────────────────────
-
-function StepperRow({ icon, label, value, onDecrease, onIncrease, decreaseDisabled, increaseDisabled }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-      border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 16px',
-    }}>
-      <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        {icon}
-        {label}
-      </span>
-      <div style={{
-        display: 'flex', alignItems: 'center', flex: 1, maxWidth: 200,
-        border: `1px solid ${C.border}`, borderRadius: 7, overflow: 'hidden',
-      }}>
-        <StepBtn onClick={onDecrease} disabled={decreaseDisabled}>−</StepBtn>
-        <span style={{
-          flex: 1, minWidth: 38, textAlign: 'center', fontSize: 14, fontWeight: 500, color: C.text,
-          borderLeft: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`,
-          lineHeight: '28px',
-        }}>
-          {value}
-        </span>
-        <StepBtn onClick={onIncrease} disabled={increaseDisabled}>+</StepBtn>
-      </div>
-    </div>
-  );
-}
-
-function StepBtn({ onClick, disabled, children }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        fontSize: 18, fontWeight: 300, color: disabled ? C.textFaint : (hovered ? C.text : C.textDim),
-        background: hovered && !disabled ? C.borderLight : '#fafaf8',
-        border: 'none', transition: 'background 0.1s, color 0.1s',
-        padding: 0, lineHeight: 1, fontFamily: FONT,
-      }}
-    >
-      {children}
     </button>
   );
 }
@@ -1512,7 +1459,6 @@ function RemoveSection({ onRemove, disabled }) {
 function PageFooter() {
   const [undoAvailable, setUndoAvailable] = useState(false);
   const [redoAvailable, setRedoAvailable] = useState(false);
-  const { sizeScale, increaseSize, decreaseSize, minScale, maxScale } = usePageSize('plan');
 
   useEffect(() => {
     const handler = (e) => {
@@ -1522,8 +1468,6 @@ function PageFooter() {
     window.addEventListener(PLAN_PANEL_STATE_EVENT, handler);
     return () => window.removeEventListener(PLAN_PANEL_STATE_EVENT, handler);
   }, []);
-
-  const displayScale = Math.round(sizeScale * 100);
 
   return (
     <div style={{ ...BENTO_CARD, margin: '11px 11px 11px', flexShrink: 0 }}>
@@ -1542,16 +1486,6 @@ function PageFooter() {
           disabled: !redoAvailable,
           onClick: () => dispatchPlanAction('redo'),
         }}
-      />
-
-      <StepperRow
-        icon={ICON.zoom}
-        label="Zoom"
-        value={`${displayScale}%`}
-        onDecrease={decreaseSize}
-        onIncrease={increaseSize}
-        decreaseDisabled={sizeScale <= minScale}
-        increaseDisabled={sizeScale >= maxScale}
       />
     </div>
   );

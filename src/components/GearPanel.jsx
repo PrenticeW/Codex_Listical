@@ -2,9 +2,11 @@
  * GearPanel
  *
  * Shared settings panel opened by the gear icon in NavigationBar.
- * Fixed right-side overlay, 320 px wide. Two horizontally-sliding views:
- *   - Main view  (settings sections)
+ * Fixed right-side overlay, 320 px wide. Horizontally-sliding views:
+ *   - Main view    (settings sections)
  *   - History view (version snapshot list)
+ *   - Theme view   (theme colour picker)
+ *   - Scale view   (per-page + nav bar scale objects)
  *
  * Sections wired to storage are marked // WIRED.
  * Sections pending storage connections are marked // TODO.
@@ -26,13 +28,7 @@ import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import { ArchiveYearModal } from './ArchiveYearModal';
 import CalendarPopup from './CalendarPopup';
 import { DeleteAccountModal } from './DeleteAccountModal';
-import {
-  peekPlannerCache,
-  readShowRecurring,
-  readShowSubprojects,
-  readShowMaxMinRows,
-  saveStartDate,
-} from '../utils/planner/storage';
+import { saveStartDate } from '../utils/planner/storage';
 import {
   peekTacticsCache,
   loadTacticsYearSettings,
@@ -98,7 +94,7 @@ function SectionLabel({ children }) {
   );
 }
 
-function Toggle({ checked, onChange }) {
+export function Toggle({ checked, onChange }) {
   return (
     <label style={{ position: 'relative', width: 36, height: 20, flexShrink: 0, cursor: 'pointer', display: 'block' }}>
       <input
@@ -368,61 +364,19 @@ function TimeCarousel({ value, onChange, incrementMinutes = 60 }) {
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
 
-function YourYearSection() {
-  const { activeYear, draftYear, refreshMetadata, currentYear, currentYearInfo, allYears, switchToYear } = useYear();
-  const navigate = useNavigate();
+function YourYearSection({ children }) {
+  const { refreshMetadata, currentYear, currentYearInfo, allYears, switchToYear } = useYear();
 
-  const [isCreating, setIsCreating]     = useState(false);
-  const [isUndoing, setIsUndoing]       = useState(false);
-  const [actionError, setActionError]   = useState(null);
-  const [showArchiveModal, setShowArchiveModal] = useState(false);
-  const { isOpen, close: closePanel } = useGearPanel();
+  const { isOpen } = useGearPanel();
 
-  // Reset all button state when the panel closes so stale in-flight
-  // state never bleeds into the next open cycle.
+  // Reset in-flight state when the panel closes so it never bleeds
+  // into the next open cycle.
   useEffect(() => {
     if (!isOpen) {
-      setIsCreating(false);
-      setIsUndoing(false);
-      setActionError(null);
-      setShowArchiveModal(false);
       setPendingDate(dateVal);
       setIsSavingDate(false);
     }
   }, [isOpen]);
-
-  const handlePlanNextYear = async () => {
-    if (!activeYear || isCreating) return;
-    setIsCreating(true);
-    setActionError(null);
-    const result = await createDraftYearFromActive(activeYear.yearNumber);
-    if (result.success) {
-      await refreshMetadata();
-      closePanel();
-      navigate('/staging');
-    } else {
-      setActionError(result.error || 'Something went wrong.');
-      setIsCreating(false);
-    }
-  };
-
-  const handleUndoDraft = async () => {
-    if (isUndoing) return;
-    setIsUndoing(true);
-    setActionError(null);
-    const result = await undoDraftYear();
-    if (result.success) {
-      setIsUndoing(false);
-      refreshMetadata();
-    } else {
-      setActionError(result.error || 'Something went wrong.');
-      setIsUndoing(false);
-    }
-  };
-
-  // Block "Plan next year" from appearing while an undo is in flight so the
-  // two buttons can't swap DOM positions mid-click and cause a misfired event.
-  const canPlanNextYear = !!activeYear && !draftYear && !isUndoing;
 
   const DAYS   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -546,7 +500,95 @@ function YourYearSection() {
         </div>
       </label>
 
-      {/* Plan next year */}
+      {children}
+    </div>
+  );
+}
+
+function TimelineSection({ onShowHistory }) {
+  const { activeYear, draftYear, refreshMetadata } = useYear();
+  const navigate = useNavigate();
+  const { isOpen, close: closePanel } = useGearPanel();
+
+  const [isCreating, setIsCreating]   = useState(false);
+  const [isUndoing, setIsUndoing]     = useState(false);
+  const [actionError, setActionError] = useState(null);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+
+  // Reset all button state when the panel closes so stale in-flight
+  // state never bleeds into the next open cycle.
+  useEffect(() => {
+    if (!isOpen) {
+      setIsCreating(false);
+      setIsUndoing(false);
+      setActionError(null);
+      setShowArchiveModal(false);
+    }
+  }, [isOpen]);
+
+  const handlePlanNextYear = async () => {
+    if (!activeYear || isCreating) return;
+    setIsCreating(true);
+    setActionError(null);
+    const result = await createDraftYearFromActive(activeYear.yearNumber);
+    if (result.success) {
+      await refreshMetadata();
+      closePanel();
+      navigate('/staging');
+    } else {
+      setActionError(result.error || 'Something went wrong.');
+      setIsCreating(false);
+    }
+  };
+
+  const handleUndoDraft = async () => {
+    if (isUndoing) return;
+    setIsUndoing(true);
+    setActionError(null);
+    const result = await undoDraftYear();
+    if (result.success) {
+      setIsUndoing(false);
+      refreshMetadata();
+    } else {
+      setActionError(result.error || 'Something went wrong.');
+      setIsUndoing(false);
+    }
+  };
+
+  // Block "Plan next year" from appearing while an undo is in flight so the
+  // two buttons can't swap DOM positions mid-click and cause a misfired event.
+  const canPlanNextYear = !!activeYear && !draftYear && !isUndoing;
+
+  const btnStyle = {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
+    padding: '13px 16px', fontSize: 14, fontWeight: 400,
+    color: C.textDim, cursor: 'pointer', width: '100%', textAlign: 'left',
+    transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+  };
+
+  return (
+    <div style={BENTO_CARD}>
+      <SectionLabel>Timeline</SectionLabel>
+      <button
+        style={btnStyle}
+        onClick={onShowHistory}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--brand)'; e.currentTarget.style.color = 'var(--brand-deep)'; e.currentTarget.style.background = 'var(--brand-hover-bg)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; e.currentTarget.style.background = 'none'; }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" strokeWidth="1.2" />
+            <path d="M6.5 4v3l2 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          View version history
+        </div>
+        <svg width="7" height="11" viewBox="0 0 7 11" fill="none">
+          <path d="M1 1l5 4.5L1 10" stroke="#ccc" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {/* Plan next year — moved from the Your Year card */}
       {canPlanNextYear && (
         <button
           key="plan-next-year"
@@ -559,6 +601,7 @@ function YourYearSection() {
             color: isCreating ? C.textLight : C.textDim,
             cursor: isCreating ? 'default' : 'pointer',
             width: '100%', textAlign: 'left', opacity: isCreating ? 0.6 : 1,
+            marginTop: 8,
           }}
           onMouseEnter={e => { if (!isCreating) { e.currentTarget.style.borderColor = 'var(--brand)'; e.currentTarget.style.color = 'var(--brand-deep)'; } }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = isCreating ? C.textLight : C.textDim; }}
@@ -595,6 +638,7 @@ function YourYearSection() {
             color: isUndoing ? C.textLight : C.textDim,
             cursor: isUndoing ? 'default' : 'pointer',
             width: '100%', textAlign: 'left', opacity: isUndoing ? 0.6 : 1,
+            marginTop: 8,
           }}
           onMouseEnter={e => { if (!isUndoing) { e.currentTarget.style.borderColor = C.danger; e.currentTarget.style.color = C.danger; } }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = isUndoing ? C.textLight : C.textDim; }}
@@ -655,82 +699,6 @@ function YourYearSection() {
   );
 }
 
-function TimelineSection({ onShowHistory }) {
-  const btnStyle = {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
-    padding: '13px 16px', fontSize: 14, fontWeight: 400,
-    color: C.textDim, cursor: 'pointer', width: '100%', textAlign: 'left',
-  };
-
-  return (
-    <div style={BENTO_CARD}>
-      <SectionLabel>Timeline</SectionLabel>
-      <button
-        style={btnStyle}
-        onClick={onShowHistory}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--brand)'; e.currentTarget.style.color = 'var(--brand-deep)'; }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-            <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" strokeWidth="1.2" />
-            <path d="M6.5 4v3l2 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          View version history
-        </div>
-        <svg width="7" height="11" viewBox="0 0 7 11" fill="none">
-          <path d="M1 1l5 4.5L1 10" stroke="#ccc" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
-    </div>
-  );
-}
-
-function SystemSettingsSection() {
-  const { currentYear } = useYear();
-
-  // Initialise from in-memory cache for instant rendering on panel open
-  const cached = () => peekPlannerCache(currentYear).plannerSettings;
-  const [showRecurring,    setShowRecurring]    = useState(() => { const r = cached(); return r ? r.show_recurring    !== false : true; });
-  const [showSubprojects,  setShowSubprojects]  = useState(() => { const r = cached(); return r ? r.show_subprojects  !== false : true; });
-  const [showMinMax,       setShowMinMax]       = useState(() => { const r = cached(); return r ? r.show_max_min_rows !== false : true; });
-
-  // Async refresh in case the cache was empty or stale
-  useEffect(() => {
-    readShowRecurring(currentYear).then(v   => setShowRecurring(v));
-    readShowSubprojects(currentYear).then(v => setShowSubprojects(v));
-    readShowMaxMinRows(currentYear).then(v  => setShowMinMax(v));
-  }, [currentYear]);
-
-  const dispatchUpdate = (patch) => {
-    window.dispatchEvent(new CustomEvent(PLANNER_SETTINGS_UPDATE_EVENT, {
-      detail: { ...patch, __eventYear: currentYear },
-    }));
-  };
-
-  const rowStyle  = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 };
-  const labelStyle = { fontSize: 13, color: C.textMed };
-
-  return (
-    <div style={BENTO_CARD}>
-      <SectionLabel>System page settings</SectionLabel>
-      <div style={rowStyle}>
-        <span style={labelStyle}>Show recurring</span>
-        <Toggle checked={showRecurring} onChange={val => { setShowRecurring(val); dispatchUpdate({ showRecurring: val }); }} />
-      </div>
-      <div style={rowStyle}>
-        <span style={labelStyle}>Show subprojects</span>
-        <Toggle checked={showSubprojects} onChange={val => { setShowSubprojects(val); dispatchUpdate({ showSubprojects: val }); }} />
-      </div>
-      <div style={{ ...rowStyle, marginBottom: 0 }}>
-        <span style={labelStyle}>Show max/min hours</span>
-        <Toggle checked={showMinMax} onChange={val => { setShowMinMax(val); dispatchUpdate({ showMaxMinRows: val }); }} />
-      </div>
-    </div>
-  );
-}
-
 function PlanSettingsSection() {
   const { currentYear } = useYear();
 
@@ -768,38 +736,37 @@ function PlanSettingsSection() {
   const labelStyle = { fontSize: 13, color: C.textMed };
 
   return (
-    <div style={BENTO_CARD}>
-      <SectionLabel>Plan page settings</SectionLabel>
+    <div style={{ marginTop: 18 }}>
+      <SectionLabel>Your Schedule</SectionLabel>
       <div style={rowStyle}>
-        <span style={labelStyle}>Clock format</span>
+        <span style={labelStyle}>Wake time</span>
+        <TimeCarousel value={wakeTime} onChange={v => save({ startMinute: v })} incrementMinutes={settings?.incrementMinutes ?? 60} />
+      </div>
+      <div style={rowStyle}>
+        <span style={labelStyle}>Bed time</span>
+        <TimeCarousel value={bedTime} onChange={v => save({ startHour: v })} incrementMinutes={settings?.incrementMinutes ?? 60} />
+      </div>
+      <div style={rowStyle}>
+        <span style={labelStyle}>Time format</span>
         <PanelDropdown
           value={clockFormat}
           options={['AM / PM', '24 hour']}
           onChange={v => save({ use24Hour: v === '24 hour', showAmPm: v !== '24 hour' })}
         />
       </div>
-      <div style={rowStyle}>
-        <span style={labelStyle}>Increment</span>
+      <div style={{ ...rowStyle, marginBottom: 0 }}>
+        <span style={labelStyle}>Time increment</span>
         <PanelDropdown
           value={increment}
           options={['1 hour', '30 min', '15 min']}
           onChange={v => save({ incrementMinutes: v === '15 min' ? 15 : v === '30 min' ? 30 : 60 })}
         />
       </div>
-      <div style={rowStyle}>
-        <span style={labelStyle}>Wake time</span>
-        <TimeCarousel value={wakeTime} onChange={v => save({ startMinute: v })} incrementMinutes={settings?.incrementMinutes ?? 60} />
-      </div>
-      <div style={{ ...rowStyle, marginBottom: 0 }}>
-        <span style={labelStyle}>Bed time</span>
-        <TimeCarousel value={bedTime} onChange={v => save({ startHour: v })} incrementMinutes={settings?.incrementMinutes ?? 60} />
-      </div>
     </div>
   );
 }
 
-// ─── Nav bar section ──────────────────────────────────────────────────────────
-// Same stepper UI as the page panels' Zoom row (SystemPanel/PlanPanel/GoalPanel).
+// ─── Stepper (shared by the Scale view) ───────────────────────────────────────
 
 function StepBtn({ onClick, disabled, children }) {
   return (
@@ -850,29 +817,119 @@ function StepperRow({ icon, label, value, onDecrease, onIncrease, decreaseDisabl
   );
 }
 
-// Scale stepper for the navigation bar. Persists via usePageSize('nav');
-// NavigationBar reads the same key and applies the scale live. // WIRED
-function NavBarSection() {
-  const { sizeScale, increaseSize, decreaseSize, minScale, maxScale } = usePageSize('nav');
+// ─── Scale section + sub-view ─────────────────────────────────────────────────
+// All four scales persist via usePageSize ('goal' | 'plan' | 'system' | 'nav');
+// each page (and NavigationBar) reads the same key and applies the scale live,
+// so the state a stepper is left in IS the final scale — no confirm step.
+// Expanding a page's object navigates to that page so the user adjusts by
+// sight (the nav bar is always visible, so its object doesn't navigate). // WIRED
+
+const SCALE_ICON = (
+  // Lucide zoom-in
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8"/>
+    <line x1="21" x2="16.65" y1="21" y2="16.65"/>
+    <line x1="11" x2="11" y1="8" y2="14"/>
+    <line x1="8" x2="14" y1="11" y2="11"/>
+  </svg>
+);
+
+const SCALE_TARGETS = [
+  { id: 'goal',   label: 'Goal page',   route: '/staging' },
+  { id: 'plan',   label: 'Plan page',   route: '/tactics' },
+  { id: 'system', label: 'System page', route: '/' },
+  { id: 'nav',    label: 'Nav bar',     route: null },
+];
+
+// Expandable object header — same treatment as SystemPanel's ExpandRowHeader
+// ("Move from Inbox to Planner").
+function ScaleRowHeader({ label, expanded, onToggle }) {
+  const [hov, setHov] = useState(false);
+  const active = hov || expanded;
+  return (
+    <div
+      onClick={onToggle}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex', alignItems: 'center', padding: '13px 16px',
+        cursor: 'pointer',
+        background: active ? 'var(--brand-hover-bg)' : 'transparent',
+        transition: 'background 0.15s',
+      }}
+    >
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, flex: 1,
+        color: active ? 'var(--brand-deep)' : C.textDim, transition: 'color 0.15s',
+      }}>
+        <span style={{ display: 'flex' }}>{SCALE_ICON}</span>
+        <span style={{ fontFamily: FONT, fontSize: 14 }}>{label}</span>
+      </div>
+      <svg
+        width="7" height="11" viewBox="0 0 7 11" fill="none"
+        style={{ transition: 'transform 0.2s, stroke 0.15s', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)', flexShrink: 0 }}
+      >
+        <path d="M1 1l5 4.5L1 10" stroke={active ? 'var(--brand-deep)' : C.textLight} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    </div>
+  );
+}
+
+// One page's (or the nav bar's) collapsible scale object. The stepper writes
+// through usePageSize; the target page/nav reads the same key and applies the
+// scale live, so there is no confirm step.
+function ScaleRow({ target, expanded, onToggle }) {
+  const { sizeScale, increaseSize, decreaseSize, minScale, maxScale } = usePageSize(target.id);
   const displayScale = Math.round(sizeScale * 100);
 
   return (
-    <div style={BENTO_CARD}>
-      <SectionLabel>Nav bar</SectionLabel>
-      <StepperRow
-        icon={
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-            <circle cx="5.5" cy="5.5" r="4" stroke="#999" strokeWidth="1.2"/>
-            <path d="M8.5 8.5L12 12" stroke="#999" strokeWidth="1.2" strokeLinecap="round"/>
-          </svg>
-        }
-        label="Scale"
-        value={`${displayScale}%`}
-        onDecrease={decreaseSize}
-        onIncrease={increaseSize}
-        decreaseDisabled={sizeScale <= minScale + 1e-9}
-        increaseDisabled={sizeScale >= maxScale - 1e-9}
-      />
+    <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+      <ScaleRowHeader label={target.label} expanded={expanded} onToggle={onToggle} />
+      {expanded && (
+        <div style={{ borderTop: `1px solid ${C.border}`, padding: '12px 16px 14px' }}>
+          <StepperRow
+            icon={SCALE_ICON}
+            label="Scale"
+            value={`${displayScale}%`}
+            onDecrease={decreaseSize}
+            onIncrease={increaseSize}
+            decreaseDisabled={sizeScale <= minScale + 1e-9}
+            increaseDisabled={sizeScale >= maxScale - 1e-9}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Scale sub-view — back button + one expandable object per page + the nav bar.
+// One object open at a time; expanding a page's object routes to that page.
+function ScaleView({ isActive, onBack }) {
+  const navigate = useNavigate();
+  const [openId, setOpenId] = useState(null);
+
+  // Collapse everything whenever the view slides out of focus
+  useEffect(() => { if (!isActive) setOpenId(null); }, [isActive]);
+
+  const handleToggle = (target) => {
+    const opening = openId !== target.id;
+    setOpenId(opening ? target.id : null);
+    if (opening && target.route) navigate(target.route);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '16px 12px 8px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+        <ThemeBackButton onClick={onBack} />
+      </div>
+      <div style={{ ...BENTO_CARD, margin: '8px 12px 0' }}>
+        <SectionLabel>Zoom</SectionLabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {SCALE_TARGETS.map(t => (
+            <ScaleRow key={t.id} target={t} expanded={openId === t.id} onToggle={() => handleToggle(t)} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1043,20 +1100,25 @@ const PALETTE_ICON = (
 
 // The Appearance card in the main settings view. Shows the current theme
 // family (14px dot + name + chevron) and opens the theme picker sub-view.
-function AppearanceSection({ themeFamily, onShowTheme }) {
+function AppearanceSection({ themeFamily, onShowTheme, onShowScale }) {
   return (
     <div style={BENTO_CARD}>
       <SectionLabel>Appearance</SectionLabel>
       <button
         onClick={onShowTheme}
         style={{
-          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-          fontFamily: FONT, fontSize: 13, color: C.textMed,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
+          padding: '13px 16px', fontSize: 14, fontWeight: 400,
+          color: C.textDim, cursor: 'pointer', width: '100%', textAlign: 'left',
+          fontFamily: FONT, gap: 8,
+          transition: 'border-color 0.15s, color 0.15s, background 0.15s',
         }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--brand)'; e.currentTarget.style.color = 'var(--brand-deep)'; e.currentTarget.style.background = 'var(--brand-hover-bg)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; e.currentTarget.style.background = 'none'; }}
       >
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: C.textFaint, display: 'inline-flex' }}>{PALETTE_ICON}</span>
+          {PALETTE_ICON}
           Theme colour
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 500, color: C.text }}>
@@ -1066,10 +1128,32 @@ function AppearanceSection({ themeFamily, onShowTheme }) {
             boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.10)',
           }} />
           {familyDisplayName(themeFamily)}
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: C.textFaint }}>
-            <path d="m9 18 6-6-6-6"/>
+          <svg width="7" height="11" viewBox="0 0 7 11" fill="none">
+            <path d="M1 1l5 4.5L1 10" stroke="#ccc" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
+      </button>
+
+      <button
+        onClick={onShowScale}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
+          padding: '13px 16px', fontSize: 14, fontWeight: 400,
+          color: C.textDim, cursor: 'pointer', width: '100%', textAlign: 'left',
+          fontFamily: FONT, marginTop: 8,
+          transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--brand)'; e.currentTarget.style.color = 'var(--brand-deep)'; e.currentTarget.style.background = 'var(--brand-hover-bg)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; e.currentTarget.style.background = 'none'; }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {SCALE_ICON}
+          Zoom
+        </div>
+        <svg width="7" height="11" viewBox="0 0 7 11" fill="none">
+          <path d="M1 1l5 4.5L1 10" stroke="#ccc" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
     </div>
   );
@@ -1536,6 +1620,7 @@ export default function GearPanel() {
   const { currentYear } = useYear();
   const [showHistory, setShowHistory] = useState(false);
   const [showTheme, setShowTheme] = useState(false);
+  const [showScale, setShowScale] = useState(false);
 
   // Colour theme family — loaded once, updated on commit from ThemeView
   const [themeFamily, setThemeFamily] = useState(DEFAULT_THEME_FAMILY);
@@ -1593,7 +1678,7 @@ export default function GearPanel() {
 
   // Reset sub-views when panel closes
   useEffect(() => {
-    if (!isOpen) { setShowHistory(false); setShowTheme(false); }
+    if (!isOpen) { setShowHistory(false); setShowTheme(false); setShowScale(false); }
   }, [isOpen]);
 
   // Escape key closes panel
@@ -1603,6 +1688,13 @@ export default function GearPanel() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [isOpen, close]);
+
+  // Which sub-view the slider shows. visibleSub keeps the outgoing sub-view
+  // on screen while the pane slides back to Main after Back is pressed.
+  const activeSub = showHistory ? 'history' : showTheme ? 'theme' : showScale ? 'scale' : null;
+  const [lastSub, setLastSub] = useState(null);
+  useEffect(() => { if (activeSub) setLastSub(activeSub); }, [activeSub]);
+  const visibleSub = activeSub ?? lastSub;
 
   return (
     <PanelShell
@@ -1614,46 +1706,48 @@ export default function GearPanel() {
       minWidth={minWidth}
       maxWidth={maxWidth}
     >
-      {/* Three-view slider — 300% wide (three ⅓ panes), not fixed px.
+      {/* Two-pane slider — 200% wide (two ½ panes), not fixed px.
           PanelShell's frosted tray is inset 7px from the panel's own width,
           so it's narrower than that width prop; percentage-based sizing
           always matches the tray's real width instead of overflowing past
-          its right edge. Main slides to History or to the Theme picker;
-          both sub-views share the same back-button flow. */}
+          its right edge. The second pane STACKS the three sub-views
+          (History / Theme / Scale) in the same slot, with only the current
+          one visible — so opening any of them slides one step right without
+          the others streaking past. All stay mounted (their isActive props
+          drive load/revert logic), and the outgoing sub-view stays visible
+          while the pane slides back to Main. */}
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div
           style={{
             display: 'flex',
-            width: '300%',
+            width: '200%',
             flex: 1,
             minHeight: 0,
-            transform: showHistory
-              ? 'translateX(-33.3333%)'
-              : showTheme
-                ? 'translateX(-66.6667%)'
-                : 'translateX(0)',
+            transform: activeSub ? 'translateX(-50%)' : 'translateX(0)',
             transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
           }}
         >
           {/* Main view */}
-          <div style={{ width: '33.3333%', flexShrink: 0, overflowY: 'auto', paddingTop: 20, paddingBottom: 24 }}>
-            <YourYearSection />
+          <div style={{ width: '50%', flexShrink: 0, overflowY: 'auto', paddingTop: 20, paddingBottom: 24 }}>
+            <YourYearSection>
+              <PlanSettingsSection />
+            </YourYearSection>
             <TimelineSection onShowHistory={() => setShowHistory(true)} />
-            <AppearanceSection themeFamily={themeFamily} onShowTheme={() => setShowTheme(true)} />
-            <NavBarSection />
-            <SystemSettingsSection />
-            <PlanSettingsSection />
+            <AppearanceSection themeFamily={themeFamily} onShowTheme={() => setShowTheme(true)} onShowScale={() => setShowScale(true)} />
             <AccountSection onClose={close} />
           </div>
 
-          {/* History view */}
-          <div style={{ width: '33.3333%', flexShrink: 0, overflowY: 'auto' }}>
-            <HistoryView onBack={() => setShowHistory(false)} isActive={showHistory && isOpen} use24Hour={use24Hour} />
-          </div>
-
-          {/* Theme picker view */}
-          <div style={{ width: '33.3333%', flexShrink: 0, overflowY: 'auto' }}>
-            <ThemeView themeFamily={themeFamily} isActive={showTheme && isOpen} onBack={() => setShowTheme(false)} onCommit={handleThemeCommit} />
+          {/* Sub-view slot — stacked layers, one visible at a time */}
+          <div style={{ width: '50%', flexShrink: 0, position: 'relative' }}>
+            <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', visibility: visibleSub === 'history' ? 'visible' : 'hidden' }}>
+              <HistoryView onBack={() => setShowHistory(false)} isActive={showHistory && isOpen} use24Hour={use24Hour} />
+            </div>
+            <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', visibility: visibleSub === 'theme' ? 'visible' : 'hidden' }}>
+              <ThemeView themeFamily={themeFamily} isActive={showTheme && isOpen} onBack={() => setShowTheme(false)} onCommit={handleThemeCommit} />
+            </div>
+            <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', visibility: visibleSub === 'scale' ? 'visible' : 'hidden' }}>
+              <ScaleView isActive={showScale && isOpen} onBack={() => setShowScale(false)} />
+            </div>
           </div>
         </div>
       </div>

@@ -18,7 +18,6 @@ import { useGoalPanel } from '../contexts/GoalPanelContext';
 import { usePanelLock } from '../contexts/PagePanelContext';
 import PanelLockButton from './PanelLockButton';
 import { useYear } from '../contexts/YearContext';
-import usePageSize from '../hooks/usePageSize';
 import usePanelWidth from '../hooks/usePanelWidth';
 import { PALETTE } from '../utils/staging/projectColour';
 
@@ -211,55 +210,6 @@ function ButtonPair({ left, right }) {
           {btn.label}
         </button>
       ))}
-    </div>
-  );
-}
-
-function StepBtn({ onClick, disabled, children }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        fontSize: 18, fontWeight: 300, color: disabled ? C.textFaint : C.textDim,
-        background: '#fafaf8', border: 'none',
-        transition: 'background 0.1s, color 0.1s',
-        padding: 0, lineHeight: 1, fontFamily: FONT,
-      }}
-      onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = C.borderLight; e.currentTarget.style.color = C.text; } }}
-      onMouseLeave={e => { e.currentTarget.style.background = '#fafaf8'; e.currentTarget.style.color = disabled ? C.textFaint : C.textDim; }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function StepperRow({ icon, label, value, onDecrease, onIncrease, decreaseDisabled, increaseDisabled }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-      border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 16px',
-    }}>
-      <span style={{ fontFamily: FONT, fontSize: 14, color: C.textDim, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        {icon}
-        {label}
-      </span>
-      <div style={{
-        display: 'flex', alignItems: 'center', flex: 1, maxWidth: 200,
-        border: `1px solid ${C.border}`, borderRadius: 7, overflow: 'hidden',
-      }}>
-        <StepBtn onClick={onDecrease} disabled={decreaseDisabled}>−</StepBtn>
-        <span style={{
-          flex: 1, minWidth: 38, textAlign: 'center', fontSize: 14, fontWeight: 500, color: C.text,
-          borderLeft: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`,
-          lineHeight: '28px',
-        }}>
-          {value}
-        </span>
-        <StepBtn onClick={onIncrease} disabled={increaseDisabled}>+</StepBtn>
-      </div>
     </div>
   );
 }
@@ -1121,7 +1071,6 @@ function GoalSection({ goal, onOpenColour }) {
 function PageSection() {
   const [undoAvailable, setUndoAvailable] = useState(false);
   const [redoAvailable, setRedoAvailable] = useState(false);
-  const { sizeScale, increaseSize, decreaseSize, minScale, maxScale } = usePageSize('goal');
 
   useEffect(() => {
     const handler = (e) => {
@@ -1131,8 +1080,6 @@ function PageSection() {
     window.addEventListener(GOAL_PANEL_STATE_EVENT, handler);
     return () => window.removeEventListener(GOAL_PANEL_STATE_EVENT, handler);
   }, []);
-
-  const displayScale = Math.round(sizeScale * 100);
 
   return (
     <div style={{ ...BENTO_CARD, margin: '11px 11px 11px' }}>
@@ -1161,21 +1108,6 @@ function PageSection() {
           disabled: !redoAvailable,
           onClick: () => dispatchGoalAction('redo'),
         }}
-      />
-
-      <StepperRow
-        icon={
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-            <circle cx="5.5" cy="5.5" r="4" stroke="#999" strokeWidth="1.2"/>
-            <path d="M8.5 8.5L12 12" stroke="#999" strokeWidth="1.2" strokeLinecap="round"/>
-          </svg>
-        }
-        label="Zoom"
-        value={`${displayScale}%`}
-        onDecrease={decreaseSize}
-        onIncrease={increaseSize}
-        decreaseDisabled={sizeScale <= minScale}
-        increaseDisabled={sizeScale >= maxScale}
       />
     </div>
   );
