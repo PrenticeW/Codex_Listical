@@ -18,6 +18,7 @@
 
 import React, { useState } from 'react';
 import PanelLockButton from '../PanelLockButton';
+import usePanelWidth from '../../hooks/usePanelWidth';
 import { TASK_ROW_DETAIL_EVENT } from '../../contexts/TaskRowPanelContext';
 
 // ─── Design tokens (match GearPanel/SystemPanel/TaskRowPanel) ────────────────
@@ -105,10 +106,10 @@ function BackBtn({ onClick }) {
   );
 }
 
-function SectionLabel({ children }) {
+function SectionLabel({ children, scale = 1 }) {
   return (
     <div style={{
-      fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
+      fontFamily: MONO, fontSize: 9 * scale, fontWeight: 700, letterSpacing: '0.14em',
       textTransform: 'uppercase', color: 'var(--brand-ink)',
       paddingBottom: 9, borderBottom: '1px solid var(--brand-bd)',
       marginBottom: 11,
@@ -182,7 +183,7 @@ function WheelToggle({ mode, setMode }) {
 // items = [{ name, hours, color?, labelColor?, unassigned? }]; items without
 // a colour get the theme blue ramp.
 
-function AreaWheel({ items, total, range }) {
+function AreaWheel({ items, total, range, scale = 1 }) {
   const CX = 135, CY = 96, R = 56, W = 9;
   const H = 192;
   const sum = items.reduce((s, a) => s + a.hours, 0);
@@ -210,7 +211,7 @@ function AreaWheel({ items, total, range }) {
   };
 
   return (
-    <svg width="270" height={H} viewBox={`0 0 270 ${H}`} style={{ display: 'block', flexShrink: 0, overflow: 'visible' }}>
+    <svg viewBox={`0 0 270 ${H}`} style={{ display: 'block', width: '100%', maxWidth: 270 * scale, height: 'auto', overflow: 'visible' }}>
       {segs.map((s, i) => (
         <path key={i} d={arc(s.a0, s.a1)} fill="none" stroke={s.color} strokeWidth={W} strokeLinecap="round" />
       ))}
@@ -257,10 +258,10 @@ function AreaWheel({ items, total, range }) {
 
 // ─── Comparison card pieces ──────────────────────────────────────────────────
 
-function ColHead({ lastLabel, thisLabel }) {
+function ColHead({ lastLabel, thisLabel, scale = 1 }) {
   const cell = (txt) => (
     <span key={txt} style={{
-      width: 52, textAlign: 'center', fontSize: 8.5, fontWeight: 600,
+      width: 52 * scale, textAlign: 'center', fontSize: 8.5 * scale, fontWeight: 600,
       letterSpacing: '.1em', textTransform: 'uppercase', color: C.inkFaint,
       fontFamily: MONO, lineHeight: 1.3,
     }}>{txt}</span>
@@ -277,14 +278,14 @@ function ColHead({ lastLabel, thisLabel }) {
 
 // One project row: colour chip + three tabular hour cells. Delta compares
 // this week to last week; no frozen quota (unplanned project) → '—'.
-function ProjectRow({ name, color, last, current, quota, isLast }) {
+function ProjectRow({ name, color, last, current, quota, isLast, scale = 1 }) {
   const d = (quota == null || last == null || current == null)
     ? null
     : Math.round((current - last) * 60) / 60; // whole-minute delta
   const trendColor = d == null ? C.inkFaint : d > 0 ? DELTA_POS : d < 0 ? DELTA_NEG : C.inkMute;
   const cell = (v, emph) => (
     <span style={{
-      width: 52, textAlign: 'center', fontSize: 12.5,
+      width: 52 * scale, textAlign: 'center', fontSize: 12.5 * scale,
       fontFamily: FONT, fontVariantNumeric: 'tabular-nums',
       color: v == null ? C.inkFaint : emph ? C.ink : C.inkMute,
       fontWeight: emph && v != null ? 700 : 500,
@@ -299,15 +300,15 @@ function ProjectRow({ name, color, last, current, quota, isLast }) {
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <span style={{
-          display: 'inline-block', width: 108, background: color, color: '#fff',
-          fontWeight: 700, fontSize: 9.5, letterSpacing: '.03em', textTransform: 'uppercase',
+          display: 'inline-block', width: 108 * scale, background: color, color: '#fff',
+          fontWeight: 700, fontSize: 9.5 * scale, letterSpacing: '.03em', textTransform: 'uppercase',
           fontFamily: FONT, borderRadius: 4, padding: '3px 7px', whiteSpace: 'nowrap',
           textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', boxSizing: 'border-box',
         }}>{name}</span>
       </div>
       {cell(last)}
       <span style={{
-        width: 52, textAlign: 'center', fontSize: 12.5, fontFamily: FONT,
+        width: 52 * scale, textAlign: 'center', fontSize: 12.5 * scale, fontFamily: FONT,
         fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: trendColor,
       }}>
         {d == null ? '—' : d === 0 ? '0' : `${d > 0 ? '+' : '−'}${fmtH(Math.abs(d))}`}
@@ -330,6 +331,13 @@ export function ArchiveWeekContent({ week, onBack }) {
   // Toggle state persists across week changes (component stays mounted while
   // the pager re-selects adjacent archive rows).
   const [wheelMode, setWheelMode] = useState('areas');
+
+  // Responsive scale: 1 at the 320px default panel width, growing to ~1.4
+  // at the 600px maximum. The archive pane is exactly as wide as the panel
+  // (50% of SystemPanel's 200% slide track), so the shared panel width is
+  // the right thing to key off.
+  const { width: panelWidth } = usePanelWidth();
+  const scale = Math.min(Math.max(panelWidth / 320, 1), 1.4);
 
   const selectWeek = (row) => {
     if (!row) return;
@@ -361,14 +369,14 @@ export function ArchiveWeekContent({ week, onBack }) {
               <PagerBtn dir="prev" disabled={week.isFirstWeek} onClick={() => selectWeek(week.prevRow)} />
               <div style={{ textAlign: 'center' }}>
                 <div style={{
-                  fontSize: 12, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase',
+                  fontSize: 12 * scale, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase',
                   color: 'var(--brand-ink)', fontFamily: MONO,
                 }}>{week.label}</div>
                 {week.range && (
-                  <div style={{ fontSize: 10, color: C.inkMute, fontFamily: MONO, marginTop: 6 }}>{week.range}</div>
+                  <div style={{ fontSize: 10 * scale, color: C.inkMute, fontFamily: MONO, marginTop: 6 }}>{week.range}</div>
                 )}
                 {week.nameLines.map((line, i) => (
-                  <div key={i} style={{ fontSize: 10.5, color: C.inkSoft, fontStyle: 'italic', fontFamily: FONT, marginTop: 5 }}>
+                  <div key={i} style={{ fontSize: 10.5 * scale, color: C.inkSoft, fontStyle: 'italic', fontFamily: FONT, marginTop: 5 }}>
                     {line}
                   </div>
                 ))}
@@ -379,17 +387,17 @@ export function ArchiveWeekContent({ week, onBack }) {
               <WheelToggle mode={wheelMode} setMode={setWheelMode} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0 12px' }}>
-              <AreaWheel items={wheelItems} total={weekTotal} range={week.quotaRange} />
+              <AreaWheel items={wheelItems} total={weekTotal} range={week.quotaRange} scale={scale} />
             </div>
           </div>
 
           <div style={{ ...BENTO_CARD, marginBottom: 0 }}>
             <div style={{ textAlign: 'center', paddingTop: 4 }}>
-              <SectionLabel>Comparison</SectionLabel>
+              <SectionLabel scale={scale}>Comparison</SectionLabel>
             </div>
-            <ColHead lastLabel={week.lastLabel} thisLabel={week.thisLabel} />
+            <ColHead lastLabel={week.lastLabel} thisLabel={week.thisLabel} scale={scale} />
             {week.projects.map((p, i) => (
-              <ProjectRow key={i} {...p} isLast={i === week.projects.length - 1} />
+              <ProjectRow key={i} {...p} scale={scale} isLast={i === week.projects.length - 1} />
             ))}
           </div>
 
