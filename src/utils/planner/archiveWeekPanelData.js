@@ -39,7 +39,8 @@ const AREA_LABELS = {
 // follows (after an optional separator) as the context line.
 const DATE_RANGE_PREFIX_RE = /^([A-Za-z]{3,9}\.?\s?\d{1,2}\s*[-–—]\s*[A-Za-z]{3,9}\.?\s?\d{1,2})\s*[-–—:,·|]*\s*([\s\S]*)$/;
 
-const round1 = (v) => Math.round(v * 10) / 10;
+// Round to whole minutes (not 0.1h — 7h05m must stay 7h05m, not become 7.1h).
+const roundMin = (v) => Math.round(v * 60) / 60;
 
 // Day entries are HH.mm encoded ("2.30" = 2h30m), the same convention as
 // timeValue (see useTotalsCalculation / useArchiveTotals). Convert each
@@ -101,7 +102,7 @@ const projectEntriesForWeek = (data, archiveWeekId) => {
     const hours = data
       .filter((r) => r.parentGroupId === header.groupId)
       .reduce((sum, r) => sum + sumRowDayEntries(r), 0);
-    return { header, hours: round1(hours) };
+    return { header, hours: roundMin(hours) };
   });
 };
 
@@ -176,11 +177,11 @@ export function buildArchiveWeekPanelData(
   });
   const areas = AREA_ORDER.filter((a) => (areaTotals.get(a) || 0) > 0).map((a) => ({
     name: AREA_LABELS[a],
-    hours: round1(areaTotals.get(a)),
+    hours: roundMin(areaTotals.get(a)),
   }));
   const unassignedHours = areaTotals.get('unassigned') || 0;
   if (unassignedHours > 0) {
-    areas.push({ name: 'Unassigned', hours: round1(unassignedHours), unassigned: true });
+    areas.push({ name: 'Unassigned', hours: roundMin(unassignedHours), unassigned: true });
   }
 
   const { weekPart } = splitWeekLabel(row.archiveWeekLabel || '');

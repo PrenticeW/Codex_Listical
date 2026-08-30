@@ -12,8 +12,8 @@ describe('archive week panel hours', () => {
   it('sums HH.mm day entries via minutes, not decimals', () => {
     const panel = buildArchiveWeekPanelData(data, 'wk1', {});
     const alpha = panel.projects.find((p) => p.name === 'Alpha');
-    // 2h30m + 45m = 3h15m = 3.25 decimal hours → 3.3 after 1dp rounding.
-    // The old parseFloat sum gave 2.30 + 0.45 = 2.8 (rounded from 2.75).
-    expect(alpha.current).toBe(3.3);
+    // 2h30m + 45m = 3h15m = 3.25 decimal hours, kept at minute precision.
+    // The old parseFloat sum gave 2.30 + 0.45 = 2.75.
+    expect(alpha.current).toBe(3.25);
   });
 });
