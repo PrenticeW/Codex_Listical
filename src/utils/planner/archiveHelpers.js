@@ -315,6 +315,25 @@ export const taskHasAnyScheduledDay = (task, totalDays) => {
 };
 
 /**
+ * Does this task have a day value anywhere OUTSIDE the given week's range?
+ * Used to spot tasks that span the archived week and other weeks — those
+ * must be snapshotted (archive keeps the week's portion) rather than moved
+ * whole, so their other-week values stay in the live plan.
+ * @param {object} task - Task row
+ * @param {number} startDayIndex - First day index of the week being archived
+ * @param {number} totalDays - Total number of day columns
+ * @returns {boolean}
+ */
+export const taskHasDayOutsideRange = (task, startDayIndex, totalDays) => {
+  const endDayIndex = Math.min(startDayIndex + 6, totalDays - 1);
+  for (let i = 0; i < totalDays; i++) {
+    if (i >= startDayIndex && i <= endDayIndex) continue;
+    if (isArchiveDayValue(task[`day-${i}`])) return true;
+  }
+  return false;
+};
+
+/**
  * Should this Done/Abandoned task be swept into the archive for the week
  * starting at startDayIndex? True when the task is scheduled somewhere in
  * that week's 7 days, or when it has no day scheduling at all (unscheduled
@@ -337,13 +356,31 @@ export const isTaskInArchivedWeek = (task, startDayIndex, totalDays) => {
  * @param {object} task - Task object
  * @returns {object} Deep copy of task with new ID
  */
-export const snapshotRecurringTask = (task) => {
-  return {
+export const snapshotRecurringTask = (task, startDayIndex = null, totalDays = 84) => {
+  const snapshot = {
     ...task,
     id: generateUniqueId(`${ARCHIVED_ROW_ID_PREFIX}${task.id}-snapshot-`),
     // Deep copy day entries if they exist
     ...(task.dayEntries ? { dayEntries: [...task.dayEntries] } : {}),
   };
+
+  // When a week range is given, keep only that week's day values in the
+  // snapshot. Without this, a task also scheduled in other weeks carries
+  // those values into the archive, inflating the archived week's totals.
+  if (startDayIndex !== null) {
+    const endDayIndex = Math.min(startDayIndex + 6, totalDays - 1);
+    for (let i = 0; i < totalDays; i++) {
+      if (i >= startDayIndex && i <= endDayIndex) continue;
+      if (snapshot[`day-${i}`] !== undefined && snapshot[`day-${i}`] !== '') {
+        snapshot[`day-${i}`] = '';
+      }
+      if (snapshot[multiStatusKey(i)]) {
+        snapshot[multiStatusKey(i)] = '';
+      }
+    }
+  }
+
+  return snapshot;
 };
 
 /**
@@ -564,8 +601,11 @@ export const resetRecurringTasks = (data, totalDays = 84, startDayIndex = 0) => 
     // archive wipes the Done statuses recorded in earlier archive weeks.
     if (row._isArchivedTask || row.archiveWeekLabel) return row;
 
-    // Only reset recurring tasks with Done or Abandoned status
-    if (row.recurring && ['Done', 'Abandoned'].includes(row.status)) {
+    // Reset recurring tasks, and non-recurring tasks that span other weeks
+    // (those are snapshotted into the archive rather than moved whole, so
+    // the live row's archived-week values must be cleared here).
+    if ((row.recurring || taskHasDayOutsideRange(row, startDayIndex, totalDays)) &&
+        ['Done', 'Abandoned'].includes(row.status)) {
       // Was this task actually scheduled within the week being archived? If
       // not, its Done/Abandoned status belongs to an instance in a different
       // week and must be left alone — clearing the full 84-day span here
@@ -590,6 +630,20 @@ export const resetRecurringTasks = (data, totalDays = 84, startDayIndex = 0) => 
       const remainingStatus = deriveMultiRowStatus(clearedRow, totalDays);
       if (remainingStatus) {
         clearedRow.status = remainingStatus;
+      } else if (taskHasAnyScheduledDay(clearedRow, totalDays)) {
+        // Exactly one scheduled day remains (deriveMultiRowStatus needs two
+        // or more instances, so it returned null). Use that day's stored
+        // per-instance status, defaulting to Scheduled — never force a task
+        // that still has a scheduled day back to Not Scheduled.
+        let singleStatus = 'Scheduled';
+        for (let i = 0; i < totalDays; i++) {
+          if (isArchiveDayValue(clearedRow[`day-${i}`])) {
+            const stored = clearedRow[multiStatusKey(i)];
+            if (stored && stored !== '-') singleStatus = stored;
+            break;
+          }
+        }
+        clearedRow.status = singleStatus;
       } else {
         clearedRow.status = 'Not Scheduled';
         clearedRow.checkbox = '';

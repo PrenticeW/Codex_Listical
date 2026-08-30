@@ -92,6 +92,7 @@ import {
   resetRecurringTasks,
   getArchiveInsertContext,
   isTaskInArchivedWeek,
+  taskHasDayOutsideRange,
 } from '../utils/planner/archiveHelpers';
 import { buildArchiveWeekPanelData } from '../utils/planner/archiveWeekPanelData';
 import { useArchiveTotals } from '../hooks/planner/useArchiveTotals';
@@ -2707,17 +2708,26 @@ export default function ProjectTimePlannerV2() {
     // week's archive just because its status matches. Genuinely unscheduled
     // tasks (no day value at all) have no week of their own and still
     // archive with whichever week is being archived, as before.
+    // Tasks that also have day values in OTHER weeks are snapshotted (below)
+    // instead of moved whole, so their other-week values stay in the plan.
     const nonRecurringTasks = collectTasksForArchive(data, task =>
       ['Done', 'Abandoned'].includes(task.status) && !task.recurring &&
-      isTaskInArchivedWeek(task, firstVisibleDayIndex, totalDays)
+      isTaskInArchivedWeek(task, firstVisibleDayIndex, totalDays) &&
+      !taskHasDayOutsideRange(task, firstVisibleDayIndex, totalDays)
     );
 
     // Step 5: Snapshot recurring Done/Abandoned tasks
+    // Recurring tasks, plus non-recurring tasks spanning multiple weeks:
+    // both are copied into the archive (this week's values only) while the
+    // live row keeps its other weeks and gets this week cleared by
+    // resetRecurringTasks.
     const recurringTasks = collectTasksForArchive(data, task =>
-      ['Done', 'Abandoned'].includes(task.status) && task.recurring &&
+      ['Done', 'Abandoned'].includes(task.status) &&
+      (task.recurring || taskHasDayOutsideRange(task, firstVisibleDayIndex, totalDays)) &&
       isTaskInArchivedWeek(task, firstVisibleDayIndex, totalDays)
     );
-    const recurringSnapshots = recurringTasks.map(snapshotRecurringTask);
+    const recurringSnapshots = recurringTasks.map(task =>
+      snapshotRecurringTask(task, firstVisibleDayIndex, totalDays));
 
     // Step 6: Store original data for undo
     const originalData = data;
