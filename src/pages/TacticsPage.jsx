@@ -4965,8 +4965,17 @@ export default function TacticsPage() {
       root.style.overflow = 'visible';
       root.style.height = 'auto';
     }
-    if (html) html.style.overflow = 'visible';
-    if (body) body.style.overflow = 'auto';
+    // Hide the bar itself (scrolling still works) so the page doesn't
+    // shift sideways relative to Goal/System, which never show one. The
+    // viewport scrollbar belongs to <html>, so it needs the class too.
+    if (html) {
+      html.style.overflow = 'visible';
+      html.classList.add('no-scrollbar');
+    }
+    if (body) {
+      body.style.overflow = 'auto';
+      body.classList.add('no-scrollbar');
+    }
 
     // Cleanup: restore original values when unmounting
     return () => {
@@ -4974,8 +4983,14 @@ export default function TacticsPage() {
         root.style.overflow = originalRootOverflow || '';
         root.style.height = originalRootHeight || '';
       }
-      if (html) html.style.overflow = originalHtmlOverflow || '';
-      if (body) body.style.overflow = originalBodyOverflow || '';
+      if (html) {
+        html.style.overflow = originalHtmlOverflow || '';
+        html.classList.remove('no-scrollbar');
+      }
+      if (body) {
+        body.style.overflow = originalBodyOverflow || '';
+        body.classList.remove('no-scrollbar');
+      }
     };
   }, []);
 

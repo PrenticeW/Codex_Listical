@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
+import { useGearPanel } from './GearPanelContext';
 
 /**
  * Shared open/closed state for the three page panels (Goal, Plan, System).
@@ -12,19 +13,28 @@ import { createContext, useContext, useState, useRef, useCallback, useEffect } f
  * incoming table/chip selection events and keep showing whatever they were
  * showing when the lock was engaged. `lockedRef` mirrors `locked` so event
  * listeners can read the current value without re-subscribing.
+ *
+ * Mutual exclusion with the gear panel: only one of the two can be open.
+ * Opening a page panel closes the gear panel, and vice versa. Both sides
+ * live here because GearPanelProvider wraps this provider (Layout.jsx),
+ * so only this one can see both states.
  */
 const PagePanelContext = createContext(null);
 
 export function PagePanelProvider({ children }) {
   const [isOpen, setIsOpen] = useState(false);
   const closedAt = useRef(0);
+  const gear = useGearPanel();
 
   const [locked, setLocked] = useState(false);
   const lockedRef = useRef(false);
   useEffect(() => { lockedRef.current = locked; }, [locked]);
   const toggleLock = useCallback(() => setLocked(v => !v), []);
 
-  const open = useCallback(() => setIsOpen(true), []);
+  const open = useCallback(() => {
+    gear.close();
+    setIsOpen(true);
+  }, [gear]);
   const close = useCallback(() => {
     closedAt.current = Date.now();
     setIsOpen(false);
@@ -34,8 +44,22 @@ export function PagePanelProvider({ children }) {
     // toggle-button race) — same debounce the per-page contexts used.
     const msSinceClose = Date.now() - closedAt.current;
     if (msSinceClose < 500) return;
-    setIsOpen(v => !v);
-  }, []);
+    setIsOpen(v => {
+      const next = !v;
+      if (next) gear.close();
+      return next;
+    });
+  }, [gear]);
+
+  // Gear panel opened → close the page panel so it can't sit hidden behind it
+  useEffect(() => {
+    if (gear.isOpen) {
+      setIsOpen(wasOpen => {
+        if (wasOpen) closedAt.current = Date.now();
+        return false;
+      });
+    }
+  }, [gear.isOpen]);
 
   return (
     <PagePanelContext.Provider value={{ isOpen, open, close, toggle, locked, lockedRef, setLocked, toggleLock }}>

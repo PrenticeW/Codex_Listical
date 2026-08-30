@@ -1217,7 +1217,7 @@ export default function GoalPanel() {
     >
       {/* Scrollable content + pinned footer */}
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingTop: 20, paddingBottom: 24 }}>
+        <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingTop: 20, paddingBottom: 24 }}>
           <GoalSection goal={selectedGoal} onOpenColour={() => setColourViewOpen(true)} />
           <RowSection row={selectedRow} />
         </div>
@@ -1227,7 +1227,7 @@ export default function GoalPanel() {
       </div>
 
       {/* Colour picker overlay — slides in from the right on top */}
-      <div style={{
+      <div className="no-scrollbar" style={{
         position: 'absolute', inset: 0,
         background: 'rgba(255,255,255,0.98)',
         overflowY: 'auto',

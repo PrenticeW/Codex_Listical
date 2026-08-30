@@ -676,7 +676,7 @@ function ColourView({ chipName, chipColour, onBack, onConfirm, viewWidth = DEFAU
       </div>
 
       {/* Scrollable palette */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto' }}>
         {PANEL_PALETTE_GROUPS.map((group, gi) => (
           <div key={gi}>
             <div style={{
@@ -1083,7 +1083,7 @@ function ScheduleView({ scheduleData, onDragStartRef, onAddChipRef, onBack, view
 
       {/* Scrollable body — no horizontal padding here; BENTO_CARD's own
           margin insets each card from the tray edges, matching MainView. */}
-      <div style={{ flex: 1, overflowY: 'auto', paddingTop: 20, paddingBottom: 8 }}>
+      <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', paddingTop: 20, paddingBottom: 8 }}>
         {!hasAnyItems ? (
           <p style={{ fontFamily: FONT, fontSize: 13, color: C.textFaint, fontStyle: 'italic', padding: '8px 22px 0' }}>
             No schedule items defined. Add them on the Goal page.
@@ -1523,7 +1523,7 @@ function MainView({
         </div>
       )}
       {/* Scrollable body */}
-      <div style={{ flex: 1, overflowY: 'auto', paddingTop: hasChip ? 8 : 20, paddingBottom: 8 }}>
+      <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', paddingTop: hasChip ? 8 : 20, paddingBottom: 8 }}>
         <UpdateSection isUpToDate={isUpToDate} onSendToSystem={onSendToSystem} showLock={!hasChip} />
         {!hasChip ? (
           <>
@@ -1665,7 +1665,7 @@ function ChipEditorView({ editor, onBack, onConfirm, viewWidth = DEFAULT_VIEW_WI
       </div>
 
       {/* Scrollable body */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '10px 22px 16px' }}>
+      <div className="no-scrollbar" style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '10px 22px 16px' }}>
         <div
           style={{ marginBottom:10, display:'flex', width:'100%', alignItems:'center', justifyContent:'center', borderRadius:4, padding:'8px 12px', fontFamily:"'DM Sans',-apple-system,sans-serif", fontSize:'calc(11px * var(--pz))', fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', minHeight:32, background: colour, color: chipContrastColour(colour) }}
         >

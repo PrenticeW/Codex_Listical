@@ -1728,7 +1728,7 @@ export default function GearPanel() {
           }}
         >
           {/* Main view */}
-          <div style={{ width: '50%', flexShrink: 0, overflowY: 'auto', paddingTop: 20, paddingBottom: 24 }}>
+          <div className="no-scrollbar" style={{ width: '50%', flexShrink: 0, overflowY: 'auto', paddingTop: 20, paddingBottom: 24 }}>
             <YourYearSection>
               <PlanSettingsSection />
             </YourYearSection>
@@ -1739,13 +1739,13 @@ export default function GearPanel() {
 
           {/* Sub-view slot — stacked layers, one visible at a time */}
           <div style={{ width: '50%', flexShrink: 0, position: 'relative' }}>
-            <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', visibility: visibleSub === 'history' ? 'visible' : 'hidden' }}>
+            <div className="no-scrollbar" style={{ position: 'absolute', inset: 0, overflowY: 'auto', visibility: visibleSub === 'history' ? 'visible' : 'hidden' }}>
               <HistoryView onBack={() => setShowHistory(false)} isActive={showHistory && isOpen} use24Hour={use24Hour} />
             </div>
-            <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', visibility: visibleSub === 'theme' ? 'visible' : 'hidden' }}>
+            <div className="no-scrollbar" style={{ position: 'absolute', inset: 0, overflowY: 'auto', visibility: visibleSub === 'theme' ? 'visible' : 'hidden' }}>
               <ThemeView themeFamily={themeFamily} isActive={showTheme && isOpen} onBack={() => setShowTheme(false)} onCommit={handleThemeCommit} />
             </div>
-            <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', visibility: visibleSub === 'scale' ? 'visible' : 'hidden' }}>
+            <div className="no-scrollbar" style={{ position: 'absolute', inset: 0, overflowY: 'auto', visibility: visibleSub === 'scale' ? 'visible' : 'hidden' }}>
               <ScaleView isActive={showScale && isOpen} onBack={() => setShowScale(false)} />
             </div>
           </div>
