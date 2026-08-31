@@ -13,7 +13,6 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { GripVertical, Pencil, Trash2, Lock, Plus, ChevronDown } from 'lucide-react';
-import PanelShell from './PanelShell';
 import ChipEditorView from './ChipEditorView';
 import PanelLockButton from './PanelLockButton';
 import { useStatuses } from '../hooks/useStatuses';
@@ -247,7 +246,12 @@ function DeleteDialog({ status, statuses, onCancel, onConfirm }) {
   );
 }
 
-export default function ManageStatusesPanel({ isOpen, onBack, navBottom }) {
+/**
+ * Content-only: rendered INSIDE SystemPanel's PanelShell (in the detail pane
+ * of its slide track), so it inherits the shared panel's drag-resize and
+ * content scaling. isOpen resets sub-views when the pane slides away.
+ */
+export default function ManageStatusesContent({ isOpen, onBack }) {
   const statuses = useStatuses();
   // editor: { mode: 'edit'|'add', status? } | null
   const [editor, setEditor] = useState(null);
@@ -319,8 +323,7 @@ export default function ManageStatusesPanel({ isOpen, onBack, navBottom }) {
   const showEditor = Boolean(editor);
 
   return (
-    <PanelShell isOpen={isOpen} navBottom={navBottom} width={346} zIndex={99995}>
-      <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div style={{
           display: 'flex', width: '200%', height: '100%',
           transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
@@ -436,17 +439,22 @@ export default function ManageStatusesPanel({ isOpen, onBack, navBottom }) {
           {/* ── Chip editor pane ── */}
           <div style={{ width: '50%', flexShrink: 0, height: '100%', overflow: 'hidden' }}>
             {showEditor && (
-              <ChipEditorView
-                editor={chipEditorPayload}
-                onBack={() => setEditor(null)}
-                onConfirm={handleEditorConfirm}
-                viewWidth={346 - 14}
-                nameLocked={editor?.mode === 'edit' && editor.status.locked}
-              />
+              /* ChipEditorView sizes its text with calc(Npx * var(--pz)) —
+                 the Plan page's zoom variable. The statuses list uses fixed
+                 sizes, so pin --pz to 1 here or the editor inflates with
+                 page zoom while the list doesn't. */
+              <div style={{ '--pz': 1, width: '100%', height: '100%', display: 'flex' }}>
+                <ChipEditorView
+                  editor={chipEditorPayload}
+                  onBack={() => setEditor(null)}
+                  onConfirm={handleEditorConfirm}
+                  viewWidth="100%"
+                  nameLocked={editor?.mode === 'edit' && editor.status.locked}
+                />
+              </div>
             )}
           </div>
         </div>
-      </div>
-    </PanelShell>
+    </div>
   );
 }

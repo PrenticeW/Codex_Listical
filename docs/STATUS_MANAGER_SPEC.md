@@ -84,9 +84,11 @@ update the checklist as work lands.
 
 ## Deviations from the design handoff / legacy behaviour
 
-1. **Chip editor slides within the tray** (GoalPanel/SystemPanel pattern)
-   instead of a second side-by-side PanelShell — PanelShell anchors to the
-   right edge and doesn't support side-by-side stacking.
+1. **The whole statuses view lives inside SystemPanel's own PanelShell**
+   (rendered in the detail pane of its slide track, like task detail), so it
+   inherits the shared panel's drag-resize and content scaling; the chip
+   editor slides within it (GoalPanel pattern) instead of the handoff's
+   second side-by-side PanelShell.
 2. **Delete always shows the reassign dialog**, even for unused statuses
    (the panel has no cheap "in use" count without asking the planner).
    Harmless: reassigning nothing is a no-op.

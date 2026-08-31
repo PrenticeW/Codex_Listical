@@ -17,7 +17,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import PanelShell from './PanelShell';
 import { useStatuses } from '../hooks/useStatuses';
-import ManageStatusesPanel from './ManageStatusesPanel';
+import ManageStatusesContent from './ManageStatusesPanel';
 import { useLocation } from 'react-router-dom';
 import { useSystemPanel } from '../contexts/SystemPanelContext';
 import PanelLockButton from './PanelLockButton';
@@ -892,6 +892,8 @@ export default function SystemPanel() {
   // Manage Statuses sub-panel (slides in above this panel, zIndex 99995)
   const [statusesOpen, setStatusesOpen] = useState(false);
   useEffect(() => { if (!isOpen) setStatusesOpen(false); }, [isOpen]);
+  // A task-row click while the statuses view is open switches to task detail.
+  useEffect(() => { if (selectedTask) setStatusesOpen(false); }, [selectedTask]);
   useEffect(() => {
     const handler = (e) => { if (e.detail?.week) setArchiveWeek(e.detail.week); };
     window.addEventListener(SYSTEM_PANEL_ARCHIVE_WEEK_EVENT, handler);
@@ -948,13 +950,12 @@ export default function SystemPanel() {
   // so the panel is still there when the user returns.
   if (pathname !== '/') return null;
 
-  const showTaskDetail = Boolean(selectedTask);
+  const showTaskDetail = Boolean(selectedTask) || statusesOpen;
   // Archive week rows get their own read-only detail view instead of the
   // task detail card. Same outer slide, different pane content.
   const showArchiveDetail = selectedTask?._rowType === 'archiveRow';
 
   return (
-    <>
     <PanelShell
       isOpen={isOpen}
       navBottom={navBottom}
@@ -987,7 +988,7 @@ export default function SystemPanel() {
             >
               <InsertSection />
               <SortSection />
-              <StatusesSection onOpenStatuses={() => setStatusesOpen(true)} />
+              <StatusesSection onOpenStatuses={() => { closePanel(); setStatusesOpen(true); }} />
               <ArchiveSection />
               <PlanSection />
               <AppearanceSection />
@@ -999,7 +1000,9 @@ export default function SystemPanel() {
 
           {/* Task detail / Archive week detail view */}
           <div style={{ width: '50%', flexShrink: 0, overflow: 'hidden', height: '100%' }}>
-            {showArchiveDetail ? (
+            {statusesOpen ? (
+              <ManageStatusesContent isOpen={statusesOpen} onBack={() => setStatusesOpen(false)} />
+            ) : showArchiveDetail ? (
               <ArchiveWeekContent
                 week={archiveWeek && archiveWeek.id === selectedTask.id ? archiveWeek : null}
                 onBack={closePanel}
@@ -1011,11 +1014,5 @@ export default function SystemPanel() {
         </div>
       </div>
     </PanelShell>
-      <ManageStatusesPanel
-        isOpen={isOpen && statusesOpen}
-        onBack={() => setStatusesOpen(false)}
-        navBottom={navBottom}
-      />
-    </>
   );
 }
