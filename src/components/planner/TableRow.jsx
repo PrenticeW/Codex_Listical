@@ -923,7 +923,7 @@ const TableRow = React.memo(function TableRow({
                       handleCellMouseEnter(e, rowId, editableColumnId);
                     }
                   }}
-                  onDoubleClick={(e) => {
+                  onDoubleClick={() => {
                     if (isTaskColumn && handleCellDoubleClick) {
                       handleCellDoubleClick(rowId, editableColumnId, dateRange);
                     }
@@ -1219,11 +1219,10 @@ const TableRow = React.memo(function TableRow({
       });
     })()
       ) : isFilterRow ? (
-        // Render filter row: fixed-column (A-H) labels/filters/resize only
-        // now — day-column totals/filters/resize moved to the Daily Total
-        // row above (see isDailyTotalRow branch below).
+        // Render filter row: fixed-column (A-H) labels/filters/resize, plus
+        // a visual filter button per day column (under each Daily Total
+        // cell above).
         (() => {
-        let mergedDayCellRendered = false;
         return row.getVisibleCells().map(cell => {
         const columnId = cell.column.id;
 
@@ -1447,22 +1446,17 @@ const TableRow = React.memo(function TableRow({
           );
         }
 
-        // Day columns: single merged plain black bar — totals/filters/
-        // resize for day columns now live on the Daily Total row above.
-        if (!mergedDayCellRendered) {
-          mergedDayCellRendered = true;
-          // Filter to visible day columns only, same as the other merged
-          // bars above -- otherwise this bar renders wider than the
-          // table's actual visible width whenever day columns are hidden
-          // (e.g. hide-past-weeks), overflowing/clipping the row.
-          const dayColumnsWidth = Array.from({ length: totalDays }, (_, i) => `day-${i}`)
-            .filter(dayColId => table.getColumn(dayColId).getIsVisible())
-            .reduce((sum, dayColId) => sum + table.getColumn(dayColId).getSize(), 0);
+        // Day columns: one cell per day with the day-filter toggle button
+        // (functionality moved back here from the Daily Total row above).
+        if (columnId.startsWith('day-')) {
+          const dayIndex = parseInt(columnId.split('-')[1]);
+          const isLastDayOfWeek = (dayIndex + 1) % 7 === 0;
+          const isDayFilterActive = dayColumnFilters && dayColumnFilters.has(columnId);
           return (
             <td
-              key="merged-day-cols"
+              key={cell.id}
               style={{
-                width: `${dayColumnsWidth}px`,
+                width: `${cell.column.getSize()}px`,
                 flexShrink: 0,
                 flexGrow: 0,
                 height: `${rowHeight}px`,
@@ -1471,16 +1465,34 @@ const TableRow = React.memo(function TableRow({
               className="p-0"
             >
               <div
-                className="h-full"
+                className="h-full flex items-center justify-center"
                 style={{
                   minHeight: `${rowHeight}px`,
-                  // Keep this consistent with the rest of the filter row's
-                  // #DCE4F5 pale-blue chrome instead of switching to pure
-                  // black once it reaches the day columns.
-                  backgroundColor: 'var(--th-section)',
+                  backgroundColor: isDayFilterActive ? 'var(--brand)' : 'var(--th-section)',
+                  boxShadow: isDayFilterActive ? 'inset 0 0 0 1.5px var(--sel-ring)' : undefined,
                   borderBottom: '1px solid #d3d3d3',
+                  borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3',
+                  cursor: 'pointer',
                 }}
-              />
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (handleDayColumnFilterToggle) {
+                    handleDayColumnFilterToggle(columnId);
+                  }
+                }}
+                title={isDayFilterActive ? 'Filter active — click to clear' : 'Filter by this day'}
+              >
+                <span style={{ transform: 'scale(var(--pz))' }}>
+                  <FilterIcon
+                    size={10}
+                    active={isDayFilterActive}
+                    activeColor="#FFFFFF"
+                    inactiveColor="#000000"
+                    onClick={undefined}
+                    title=""
+                  />
+                </span>
+              </div>
             </td>
           );
         }
@@ -1603,14 +1615,13 @@ const TableRow = React.memo(function TableRow({
               return null;
             }
 
-            // Day columns: total value + filter button (right-aligned) —
-            // moved here from the old Filter row. Day columns are not
-            // individually resizable (there are 84 of them; not a useful
-            // affordance), so no resize handle here.
+            // Day columns: total value only. The day-filter buttons live
+            // on the Filter row below; this row is display-only. Day
+            // columns are not individually resizable (there are 84 of
+            // them; not a useful affordance), so no resize handle here.
             const value = row.original[columnId] || '';
             const dayIndex = parseInt(columnId.split('-')[1]);
             const isLastDayOfWeek = (dayIndex + 1) % 7 === 0;
-            const isFilterActive = dayColumnFilters && dayColumnFilters.has(columnId);
 
             return (
               <td
@@ -1625,7 +1636,7 @@ const TableRow = React.memo(function TableRow({
                 className="p-0"
               >
                 <div
-                  className="h-full flex items-center justify-center group/daycell"
+                  className="h-full flex items-center justify-center"
                   style={{
                     position: 'relative',
                     minHeight: `${rowHeight}px`,
@@ -1633,65 +1644,25 @@ const TableRow = React.memo(function TableRow({
                     // Design handover (reference/SystemView.jsx H7 "Daily
                     // Total" row) fills the day columns with the project
                     // header color (P.headerSet[0]) -- same #8BA8D8 band
-                    // used for project header rows elsewhere in this table
-                    // -- not the whisper-blue wash that was here before.
-                    // Active-filter feedback lives in the cell chrome, not
-                    // the text: darker band + inset ring, so the centered
-                    // total never shifts when a filter toggles on.
-                    backgroundColor: isFilterActive ? 'var(--brand)' : 'var(--th-header)',
-                    // Active-filter ring uses the theme's highlight colour
-                    // (--sel-ring, same as the row-selection ring) rather
-                    // than the hardcoded filter-icon blue.
-                    boxShadow: isFilterActive ? 'inset 0 0 0 1.5px var(--sel-ring)' : undefined,
+                    // used for project header rows elsewhere in this table.
+                    backgroundColor: 'var(--th-header)',
                     borderBottom: '1px solid #d3d3d3',
                     borderRight: isLastDayOfWeek ? '1.5px solid black' : '1px solid #d3d3d3',
-                    cursor: 'pointer',
                   }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (handleDayColumnFilterToggle) {
-                      handleDayColumnFilterToggle(columnId);
-                    }
-                  }}
-                  title={isFilterActive ? 'Filter active — click to clear' : 'Filter by this day'}
                 >
                   {/* Matches reference/SystemView.jsx H7 dayTotals span (fontSize: 11) -- fixed chrome size, not the cellFontSize zoom scale.
-                      Centered like the date/min/max cells above. On hover the
-                      value swaps out for the filter icon (opacity swap, both
-                      absolutely centered, so nothing moves or spills outside
-                      the cell). When the filter is active the value stays
-                      visible -- white on the darker band is the "on" state. */}
+                      Centered like the date/min/max cells above. */}
                   <span
-                    className={`text-center flex-1 ${isFilterActive ? '' : 'group-hover/daycell:opacity-0'}`}
+                    className="text-center flex-1"
                     style={{
                       fontFamily: "'Mulish', sans-serif",
                       fontSize: 'calc(11px * var(--pz))',
                       fontWeight: 'bold',
                       lineHeight: 1,
-                      color: isFilterActive ? '#FFFFFF' : undefined,
-                      transition: 'opacity 0.1s',
                     }}
                   >
                     {value}
                   </span>
-                  {!isFilterActive && (
-                    // transform: scale(--pz) keeps the icon inside the cell
-                    // bounds at any zoom level (the icon itself is fixed-size
-                    // chrome; the cell shrinks with the page scale).
-                    <span
-                      className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/daycell:opacity-100 transition-opacity pointer-events-none"
-                      style={{ transform: 'scale(var(--pz))' }}
-                    >
-                      <FilterIcon
-                        size={10}
-                        active={false}
-                        activeColor={FILTER_ACTIVE_COLOR}
-                        inactiveColor="#000000"
-                        onClick={undefined}
-                        title=""
-                      />
-                    </span>
-                  )}
                 </div>
               </td>
             );
