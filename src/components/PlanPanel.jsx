@@ -893,6 +893,100 @@ function GoalDropdown({ allChips, currentProjectId, anchorRect, onSelect, onClos
   );
 }
 
+
+// ─── Chip picker view ("Add new chip" — bento-grouped, drag onto calendar) ────
+
+function ChipPickerView({ allChips, onDragStartRef, onCreateCustomChipRef, onBack, viewWidth = DEFAULT_VIEW_WIDTH }) {
+  const { defaults = [], projects = [], customs = [] } = allChips ?? {};
+
+  const Chip = ({ chip }) => {
+    const fg = chipTextColour(chip.colour);
+    return (
+      <div
+        draggable
+        onDragStart={(e) => onDragStartRef?.current?.(chip.id, e)}
+        title="Drag onto the calendar"
+        style={{
+          width: '100%', boxSizing: 'border-box',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          borderRadius: 4, padding: '8px 10px', minHeight: 30,
+          fontFamily: FONT, fontSize: 11, fontWeight: 700,
+          textTransform: 'uppercase', letterSpacing: '.04em',
+          background: chip.colour, color: fg,
+          cursor: 'grab', userSelect: 'none',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          border: '1px solid rgba(255,255,255,0.65)',
+          boxShadow: '0 1px 2px rgba(15,23,42,0.10)',
+          transition: 'opacity 0.12s',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.85'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
+      >
+        {chip.name}
+      </div>
+    );
+  };
+
+  const Bento = ({ label, chips }) => {
+    if (!chips.length) return null;
+    return (
+      <div style={{
+        background: '#fff', border: '1px solid #e8e8e4', borderRadius: 8,
+        padding: '10px 12px 12px', marginBottom: 10,
+        boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 6px rgba(72,50,75,0.07)',
+      }}>
+        <div style={{
+          fontSize: 9, fontWeight: 700, letterSpacing: '.14em',
+          textTransform: 'uppercase', color: 'var(--brand-ink)',
+          fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
+          borderBottom: '1px solid var(--brand-bd)', paddingBottom: 3, marginBottom: 8,
+        }}>
+          {label}
+        </div>
+        {/* 12px gap — matches the schedule view's chip spacing (8px item
+            margin + 4px inner chip margin) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {chips.map((chip) => <Chip key={chip.id} chip={chip} />)}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ width: viewWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      {/* Header */}
+      <div style={{ padding: '16px 18px 0', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <BackBtn onClick={onBack} />
+        <PanelLockButton />
+      </div>
+      {/* Scrollable body */}
+      <div className="no-scrollbar" style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '14px 22px 16px' }}>
+        <Bento label="Default chips" chips={defaults} />
+        <Bento label="Project chips" chips={projects} />
+        <Bento label="Custom chips" chips={customs} />
+        <button
+          type="button"
+          onClick={() => onCreateCustomChipRef?.current?.()}
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            borderRadius: 8, padding: '9px 10px',
+            background: '#fff', border: '1.5px dashed #d5d5d0',
+            fontFamily: FONT, fontSize: 11, fontWeight: 600,
+            color: 'var(--brand-deep)', cursor: 'pointer',
+            transition: 'border-color .15s, background .15s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--brand)'; e.currentTarget.style.background = '#fcfcfb'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#d5d5d0'; e.currentTarget.style.background = '#fff'; }}
+        >
+          + Create custom chip
+        </button>
+      </div>
+      <PageFooter />
+    </div>
+  );
+}
+
 // ─── Time picker sub-view ─────────────────────────────────────────────────────
 
 function TimePickerView({ label, initialMinutes, incrementMinutes, onBack, onConfirm, viewWidth = DEFAULT_VIEW_WIDTH }) {
@@ -1573,7 +1667,7 @@ export default function PlanPanel() {
   // overshoots (content clipped left/right in the second slot).
   const viewWidth = Math.min(panelWidth, PANEL_SCALE_BASE_WIDTH) - TRAY_INSET * 2;
 
-  // Panel view: 'main' | 'colour' | 'schedule'
+  // Panel view: 'main' | 'colour' | 'schedule' | 'chipPicker' | 'chipEditor'
   const [panelView, setPanelView] = useState('main');
   // Delay hiding the second-slot view until the slide-out animation finishes
   const [secondSlotView, setSecondSlotView] = useState('colour'); // 'colour' | 'schedule'
@@ -1588,11 +1682,17 @@ export default function PlanPanel() {
   // no chip is selected, so the "Add new chip" goal picker has data to show.
   const [allChips, setAllChips] = useState(null);
 
-  // Goal picker anchor for the "Add new chip" flow (separate from chip-edit flow)
-  const [addChipAnchorRect, setAddChipAnchorRect] = useState(null);
+  // "Add new chip" picker callbacks — pushed in via PLAN_PANEL_SCHEDULE_DATA_EVENT
+  const onChipPickerDragStartRef = useRef(null);
+  const onCreateCustomChipRef = useRef(null);
 
   // Ref so the chip-selection effect can call goToMain before it's defined below
   const goToMainRef = useRef(null);
+
+  // Mirror of panelView for event handlers with stale closures, and the view
+  // to return to when the chip editor was opened from the chip picker.
+  const panelViewRef = useRef('main');
+  const editorReturnViewRef = useRef(null);
 
   // Colour pending during colour-picker editing
   const [pendingColour, setPendingColour] = useState(null);
@@ -1655,10 +1755,9 @@ export default function PlanPanel() {
       const chip = e.detail?.chip ?? null;
       setSelectedChip(chip);
       if (chips) setAllChips(chips);
-      setAddChipAnchorRect(null);
       if (chip) {
         goToMainRef.current?.();
-      } else if (panelView !== 'main' && panelView !== 'schedule' && panelView !== 'chipEditor') {
+      } else if (panelView !== 'main' && panelView !== 'schedule' && panelView !== 'chipEditor' && panelView !== 'chipPicker') {
         goToMainRef.current?.();
       }
     };
@@ -1705,13 +1804,19 @@ export default function PlanPanel() {
     }, 280);
   }, []);
   goToMainRef.current = goToMain;
+  panelViewRef.current = panelView;
 
   // ── Chip-definition editor (opened from the Plan page right-click menu) ──
   const closeChipEditorView = useCallback(() => {
+    if (editorReturnViewRef.current === 'chipPicker') {
+      editorReturnViewRef.current = null;
+      openView('chipPicker');
+      return;
+    }
     goToMain();
     // If the panel was only opened for the editor, slide it away again.
     if (!wasOpenBeforeEditorRef.current) close();
-  }, [goToMain, close]);
+  }, [goToMain, close, openView]);
 
   const handleChipEditorConfirm = useCallback((payload) => {
     dispatchPlanAction('commitChipEditor', payload);
@@ -1723,6 +1828,7 @@ export default function PlanPanel() {
       const d = e.detail ?? {};
       if (!d.kind || (!d.id && !d.isNew)) return;
       wasOpenBeforeEditorRef.current = isOpen;
+      editorReturnViewRef.current = panelViewRef.current === 'chipPicker' ? 'chipPicker' : null;
       setChipDefEditor({ kind: d.kind, id: d.id ?? null, name: d.name ?? '', colour: d.colour, chipId: d.chipId ?? null, isNew: d.isNew ?? false, targetCell: d.targetCell ?? null });
       open();
       openView('chipEditor');
@@ -1758,14 +1864,11 @@ export default function PlanPanel() {
   const handleRemoveChip    = useCallback(() => { dispatchPlanAction('removeChip', { chipId: selectedChip?.id }); setSelectedChip(null); }, [selectedChip]);
   const handleSendToSystem   = useCallback(() => dispatchPlanAction('sendToSystem'), []);
 
-  // "Add new chip" — opens goal picker anchored to the button rect
-  const handleAddChip = useCallback((rect) => {
-    setAddChipAnchorRect(rect ?? null);
-  }, []);
-  const handleAddChipGoalSelect = useCallback((projectId) => {
-    dispatchPlanAction('addChipToCell', { projectId });
-    setAddChipAnchorRect(null);
-  }, []);
+  // "Add new chip" — slides to the chip picker view (bento-grouped chips,
+  // draggable onto the calendar; same panel, no floating dropdown).
+  const handleAddChip = useCallback(() => {
+    openView('chipPicker');
+  }, [openView]);
 
   // Keep local sync state in sync when TacticsPage pushes state
   useEffect(() => {
@@ -1782,6 +1885,8 @@ export default function PlanPanel() {
       const d = e.detail ?? {};
       onDragStartRef.current = d.onDragStart ?? null;
       onAddChipRef.current = d.onAddChip ?? null;
+      onChipPickerDragStartRef.current = d.onChipPickerDragStart ?? null;
+      onCreateCustomChipRef.current = d.onCreateCustomChip ?? null;
       setScheduleData({
         projects:        d.projects        ?? [],
         scheduleLayout:  d.scheduleLayout  ?? null,
@@ -1863,7 +1968,15 @@ export default function PlanPanel() {
             />
 
             {/* View 2 — Colour, Schedule, or Chip editor */}
-            {secondSlotView === 'schedule' ? (
+            {secondSlotView === 'chipPicker' ? (
+              <ChipPickerView
+                allChips={allChips}
+                onDragStartRef={onChipPickerDragStartRef}
+                onCreateCustomChipRef={onCreateCustomChipRef}
+                onBack={goToMain}
+                viewWidth={viewWidth}
+              />
+            ) : secondSlotView === 'schedule' ? (
               <ScheduleView
                 scheduleData={scheduleData}
                 onDragStartRef={onDragStartRef}
@@ -1872,12 +1985,18 @@ export default function PlanPanel() {
                 viewWidth={viewWidth}
               />
             ) : secondSlotView === 'chipEditor' ? (
-              <ChipEditorView
-                editor={chipDefEditor}
-                onBack={closeChipEditorView}
-                onConfirm={handleChipEditorConfirm}
-                viewWidth={viewWidth}
-              />
+              /* ChipEditorView sizes its text with the page-zoom var (--pz);
+                 the tray already scales via PanelShell's CSS zoom, so pin
+                 --pz to 1 here or the editor inflates twice (same fix as
+                 ManageStatusesPanel). */
+              <div style={{ '--pz': 1, width: viewWidth, flexShrink: 0, display: 'flex', minHeight: 0 }}>
+                <ChipEditorView
+                  editor={chipDefEditor}
+                  onBack={closeChipEditorView}
+                  onConfirm={handleChipEditorConfirm}
+                  viewWidth={viewWidth}
+                />
+              </div>
             ) : (
               <ColourView
                 chipName={selectedChip?.name}
@@ -1899,15 +2018,6 @@ export default function PlanPanel() {
           anchorRect={goalAnchorRect}
           onSelect={handleGoalSelect}
           onClose={() => setGoalAnchorRect(null)}
-        />
-      )}
-      {addChipAnchorRect && (
-        <GoalDropdown
-          allChips={allChips}
-          currentProjectId={null}
-          anchorRect={addChipAnchorRect}
-          onSelect={handleAddChipGoalSelect}
-          onClose={() => setAddChipAnchorRect(null)}
         />
       )}
     </>

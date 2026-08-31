@@ -3636,6 +3636,74 @@ export default function TacticsPage() {
     ]
   );
 
+
+  // Drag-start for the PlanPanel "Add new chip" picker. Builds a plain chip
+  // (default / project / custom) without committing it to state — held in
+  // pendingPanelChipRef until dropped, same flow as handlePanelDragStart, so
+  // the picker stays open and nothing appears until a valid drop.
+  const handleChipPickerDragStart = useCallback(
+    (projectId, dragEvent) => {
+      if (!projectId) return;
+      const startRowIdx = Math.min(2, timelineRowIds.length - 1);
+      const startRowId = timelineRowIds[startRowIdx] ?? timelineRowIds[timelineRowIds.length - 1];
+      if (!startRowId) return;
+
+      const newChip = {
+        id: createProjectChipId(),
+        columnIndex: DAY_COLUMN_COUNT,
+        dayName: null,
+        startRowId,
+        endRowId: startRowId,
+        startMinutes: rowIdToClockMinutes(startRowId, trailingMinuteRows),
+        projectId,
+      };
+      pendingPanelChipRef.current = newChip;
+
+      dragEvent.dataTransfer.setData(SLEEP_DRAG_TYPE, newChip.id);
+      dragEvent.dataTransfer.setData('text/plain', newChip.id);
+      dragEvent.dataTransfer.effectAllowed = 'move';
+      if (dragEvent.dataTransfer.setDragImage) {
+        const meta = projectMetadata.get(projectId);
+        const colour = meta?.color ?? '#d9d9d9';
+        const dayRect = columnRects.find(Boolean);
+        const rowHeight = rowMetrics[startRowId]?.height || DEFAULT_SLEEP_CELL_HEIGHT;
+        const ghostW = Math.max(24, Math.round(dayRect ? dayRect.right - dayRect.left : 80));
+        const ghostH = Math.max(16, Math.round(rowHeight));
+        const ghost = document.createElement('div');
+        Object.assign(ghost.style, {
+          position: 'fixed', top: '-1000px', left: '-1000px',
+          width: `${ghostW}px`, height: `${ghostH}px`,
+          boxSizing: 'border-box', borderRadius: '4px',
+          border: '1px solid white', overflow: 'hidden',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 4px', fontSize: '10px', lineHeight: '1',
+          fontFamily: "'DM Sans', -apple-system, sans-serif", fontWeight: '700',
+          textTransform: 'uppercase', whiteSpace: 'nowrap',
+          backgroundColor: colour,
+          color: meta?.textColor ?? getContrastTextColor(colour),
+          pointerEvents: 'none', zIndex: '-1',
+        });
+        ghost.textContent = meta?.label ?? '';
+        document.body.appendChild(ghost);
+        dragEvent.dataTransfer.setDragImage(ghost, Math.round(ghostW / 2), Math.round(ghostH / 2));
+        // The browser snapshots the drag image synchronously; remove after this tick.
+        setTimeout(() => ghost.remove(), 0);
+      }
+
+      draggingSleepChipIdRef.current = newChip.id;
+      dragAnchorOffsetRef.current = 0;
+      setIsDragging(true);
+      // Do NOT select the pending chip here (see handlePanelDragStart).
+      setDragPreview({
+        sourceChipId: newChip.id,
+        targetColumnIndex: newChip.columnIndex,
+        startRowId: newChip.startRowId,
+        endRowId: newChip.endRowId,
+      });
+    },
+    [columnRects, projectMetadata, rowMetrics, timelineRowIds, trailingMinuteRows]
+  );
+
   const hasInitializedScheduleChips = useRef(false);
   // Track previous staging projects to detect changes
   const prevStagingProjectsRef = useRef(null);
@@ -4006,6 +4074,8 @@ export default function TacticsPage() {
         rowMetrics,
         onDragStart: handlePanelDragStart,
         onAddChip: handleAddScheduleItemChip,
+        onChipPickerDragStart: handleChipPickerDragStart,
+        onCreateCustomChip: handleCreateCustomProject,
         allChips,
       },
     }));
@@ -4019,6 +4089,8 @@ export default function TacticsPage() {
     rowMetrics,
     handlePanelDragStart,
     handleAddScheduleItemChip,
+    handleChipPickerDragStart,
+    handleCreateCustomProject,
     customProjects,
   ]);
 
