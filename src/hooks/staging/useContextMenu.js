@@ -67,17 +67,19 @@ export default function useContextMenu() {
 
     const handleClickOutside = () => closeContextMenu();
     const handleEscape = (e) => {
-      if (e.key === 'Escape') closeContextMenu();
+      // Capture phase + stopPropagation: the open menu claims Escape so
+      // page/panel-level Escape handlers don't also fire.
+      if (e.key === 'Escape') { e.stopPropagation(); closeContextMenu(); }
     };
 
     document.addEventListener('click', handleClickOutside);
     document.addEventListener('contextmenu', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
+    window.addEventListener('keydown', handleEscape, true);
 
     return () => {
       document.removeEventListener('click', handleClickOutside);
       document.removeEventListener('contextmenu', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('keydown', handleEscape, true);
     };
   }, [contextMenu.isOpen, closeContextMenu]);
 

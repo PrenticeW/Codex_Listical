@@ -67,6 +67,16 @@ function ProjectDropdownCell({
     };
   }, [isOpen, selectedIndex]);
 
+  // Whenever the dropdown opens, make sure the trigger owns keyboard focus.
+  // The cell can mount already open with focus left on <body>, so Escape /
+  // Enter never reached the wrapper's onKeyDown (same fix as
+  // EstimateDropdownCell).
+  useEffect(() => {
+    if (isOpen && buttonRef.current && document.activeElement !== buttonRef.current) {
+      buttonRef.current.focus({ preventScroll: true });
+    }
+  }, [isOpen]);
+
   const handleComplete = (value) => {
     setIsOpen(false);
     onComplete(value);

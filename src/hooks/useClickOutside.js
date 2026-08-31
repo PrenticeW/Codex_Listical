@@ -27,16 +27,19 @@ export default function useClickOutside({ isOpen, menuRef, buttonRef, onClose })
 
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
+        // Claim the keypress (capture phase) so an enclosing panel/page
+        // Escape handler doesn't also fire — topmost layer closes first.
+        event.stopPropagation();
         onClose();
       }
     };
 
     window.addEventListener('mousedown', handleClickOutside, true);
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
 
     return () => {
       window.removeEventListener('mousedown', handleClickOutside, true);
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [isOpen, menuRef, buttonRef, onClose]);
 }

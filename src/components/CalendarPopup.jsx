@@ -119,12 +119,16 @@ export default function CalendarPopup({
         !(anchorRef?.current && anchorRef.current.contains(e.target))
       ) onClose();
     };
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    // Capture-phase Escape: close just the popup and stop the event so an
+    // enclosing panel's Escape handler doesn't also close the panel.
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
+    };
     document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
     return () => {
       document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
     };
   }, [isOpen, onClose, anchorRef]);
 

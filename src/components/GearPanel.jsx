@@ -137,8 +137,17 @@ function PanelDropdown({ value, options, onChange }) {
   useEffect(() => {
     if (!open) return;
     const close = () => setOpen(false);
+    // Capture-phase Escape: close just this dropdown and stop the event so
+    // the panel's own Escape handler doesn't also close the whole panel.
+    const onKey = e => {
+      if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); }
+    };
     document.addEventListener('click', close);
-    return () => document.removeEventListener('click', close);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('click', close);
+      window.removeEventListener('keydown', onKey, true);
+    };
   }, [open]);
 
   const triggerStyle = {
@@ -274,8 +283,16 @@ function TimeCarousel({ value, onChange, incrementMinutes = 60 }) {
     const close = e => {
       if (!e.target.closest('[data-time-picker]')) setOpen(false);
     };
+    // Capture-phase Escape: close just the picker, not the whole panel.
+    const onKey = e => {
+      if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); }
+    };
     document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      window.removeEventListener('keydown', onKey, true);
+    };
   }, [open]);
 
   const hIdx = HOUR_VALS.indexOf(tH);

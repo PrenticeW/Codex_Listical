@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useYear } from '../contexts/YearContext';
 import { ChevronDown, Archive } from 'lucide-react';
 
@@ -19,6 +19,16 @@ export function YearSelector({ className = '' }) {
   } = useYear();
 
   const [isOpen, setIsOpen] = useState(false);
+
+  // Escape closes the dropdown (capture phase so nothing else also reacts)
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); setIsOpen(false); }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [isOpen]);
 
   const handleYearSelect = (yearNumber) => {
     switchToYear(yearNumber);
