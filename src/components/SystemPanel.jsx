@@ -842,9 +842,9 @@ function AppearanceSection() {
 
   // Async refresh in case the cache was empty or stale
   useEffect(() => {
-    readShowRecurring(currentYear).then(v   => setShowRecurring(v));
-    readShowSubprojects(currentYear).then(v => setShowSubprojects(v));
-    readShowMaxMinRows(currentYear).then(v  => setShowMinMax(v));
+    readShowRecurring(undefined, currentYear).then(v   => setShowRecurring(v));
+    readShowSubprojects(undefined, currentYear).then(v => setShowSubprojects(v));
+    readShowMaxMinRows(undefined, currentYear).then(v  => setShowMinMax(v));
   }, [currentYear]);
 
   const dispatchUpdate = (patch) => {
