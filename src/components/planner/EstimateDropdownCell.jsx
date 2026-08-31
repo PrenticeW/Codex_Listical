@@ -350,7 +350,7 @@ function EstimateDropdownCell({
 
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (multiMode || hasCombo) {
+      if (multiMode || hasCombo || stagedChanged) {
         // A staged Hour / Minute pick commits exactly as the Confirm button would.
         handleConfirmCombo(e);
       } else {
@@ -375,19 +375,27 @@ function EstimateDropdownCell({
     onKeyDown(e, ESTIMATE_VALUES[selectedIndex]);
   };
 
-  // '-' (clear) — instant commit, same as a single preset pick. On a Multi
-  // row it clears the SHOWN date's time instead, and the panel stays open.
-  const handleSelectInstant = (e, option) => {
+  // '-' (clear) — per-column: stages clearing ONLY that side, committed by
+  // Confirm/Enter like any other pick (4h20m + minute-dash -> 4 Hours).
+  // On a Multi row the dash keeps its old meaning: clear the SHOWN date's
+  // time entirely, panel stays open.
+  const clearMultiShownDate = () => {
+    rememberBaseline(shown.dayIndex);
+    onInstanceTimeChange(shown.dayIndex, '');
+    setSelectedHour(null);
+    setSelectedMinute(null);
+  };
+  const handleDashHour = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (multiMode) {
-      rememberBaseline(shown.dayIndex);
-      onInstanceTimeChange(shown.dayIndex, '');
-      setSelectedHour(null);
-      setSelectedMinute(null);
-      return;
-    }
-    handleComplete(option);
+    if (multiMode) { clearMultiShownDate(); return; }
+    setSelectedHour(null);
+  };
+  const handleDashMinute = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (multiMode) { clearMultiShownDate(); return; }
+    setSelectedMinute(null);
   };
 
   // Hours / Minutes — stage the pick (toggle on/off), don't close or commit yet.
@@ -407,6 +415,10 @@ function EstimateDropdownCell({
   };
 
   const hasCombo = Boolean(selectedHour || selectedMinute);
+  // True once the staged pick differs from what the dropdown opened with —
+  // this is what arms Confirm/Enter after a dash-clear of one (or both) sides.
+  const stagedChanged =
+    selectedHour !== initialStaged.hour || selectedMinute !== initialStaged.minute;
 
   // Multi mode live preview: picks write into the SHOWN date's day cell
   // immediately, and the whole visit stays PROVISIONAL until Confirm. Every
@@ -478,7 +490,12 @@ function EstimateDropdownCell({
       if (onCancel) onCancel(); else onComplete(initialValue);
       return;
     }
-    if (!hasCombo) return;
+    if (!hasCombo) {
+      // Everything cleared via the dashes: a staged change commits as '-',
+      // an untouched empty stage stays a no-op.
+      if (stagedChanged) handleComplete('-');
+      return;
+    }
     // Confirming the untouched pre-staged value is a no-change close — recommit
     // the initial value verbatim (hosts filter unchanged commits) instead of
     // re-deriving it, so nothing is rewritten.
@@ -592,7 +609,7 @@ function EstimateDropdownCell({
                   cellFontSize={cellFontSize}
                   staged={option !== '-' && selectedHour === option}
                   legacyHighlighted={option === '-' && (multiMode ? dashHighlighted : (option === currentValue && !hasCombo))}
-                  onMouseDown={(e) => (option === '-' ? handleSelectInstant(e, option) : handleToggleHour(e, option))}
+                  onMouseDown={(e) => (option === '-' ? handleDashHour(e) : handleToggleHour(e, option))}
                 />
               ))}
             </div>
@@ -607,7 +624,7 @@ function EstimateDropdownCell({
                   colorText={ESTIMATE_COLOR_MAP[option]?.text}
                   staged={option !== '-' && selectedMinute === option}
                   legacyHighlighted={option === '-' && (multiMode ? dashHighlighted : (option === currentValue && !hasCombo))}
-                  onMouseDown={(e) => (option === '-' ? handleSelectInstant(e, option) : handleToggleMinute(e, option))}
+                  onMouseDown={(e) => (option === '-' ? handleDashMinute(e) : handleToggleMinute(e, option))}
                 />
               ))}
             </div>
@@ -651,17 +668,17 @@ function EstimateDropdownCell({
               <button
                 type="button"
                 onMouseDown={handleConfirmCombo}
-                disabled={multiMode ? touchedCount === 0 : !hasCombo}
+                disabled={multiMode ? touchedCount === 0 : !(hasCombo || stagedChanged)}
                 style={{
                   fontFamily: FONT,
                   fontSize: 'calc(11px * var(--pz))',
                   fontWeight: 600,
-                  color: (multiMode ? touchedCount > 0 : hasCombo) ? '#ffffff' : '#999999',
-                  background: (multiMode ? touchedCount > 0 : hasCombo) ? 'var(--brand-deep)' : '#e8e8e4',
+                  color: (multiMode ? touchedCount > 0 : (hasCombo || stagedChanged)) ? '#ffffff' : '#999999',
+                  background: (multiMode ? touchedCount > 0 : (hasCombo || stagedChanged)) ? 'var(--brand-deep)' : '#e8e8e4',
                   border: 'none',
                   borderRadius: 6,
                   padding: '5px 12px',
-                  cursor: (multiMode ? touchedCount > 0 : hasCombo) ? 'pointer' : 'default',
+                  cursor: (multiMode ? touchedCount > 0 : (hasCombo || stagedChanged)) ? 'pointer' : 'default',
                   width: multiMode ? '100%' : 'auto',
                 }}
               >
