@@ -899,35 +899,63 @@ function GoalDropdown({ allChips, currentProjectId, anchorRect, onSelect, onClos
 function ChipPickerView({ allChips, onDragStartRef, onCreateCustomChipRef, onBack, viewWidth = DEFAULT_VIEW_WIDTH }) {
   const { defaults = [], projects = [], customs = [] } = allChips ?? {};
 
-  const Chip = ({ chip }) => {
+  // Opens the shared chip-definition editor for this chip; the panel's
+  // editor-return logic brings the user back to this picker on Back/Confirm.
+  const openEditor = (kind, chip) => {
+    window.dispatchEvent(new CustomEvent(PLAN_PANEL_CHIP_EDITOR_EVENT, {
+      detail: { kind, id: chip.id, name: chip.name ?? '', colour: chip.colour || '#8a7fd6', chipId: null },
+    }));
+  };
+
+  const Chip = ({ chip, kind }) => {
     const fg = chipTextColour(chip.colour);
     return (
-      <div
-        draggable
-        onDragStart={(e) => onDragStartRef?.current?.(chip.id, e)}
-        title="Drag onto the calendar"
-        style={{
-          width: '100%', boxSizing: 'border-box',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          borderRadius: 4, padding: '8px 10px', minHeight: 30,
-          fontFamily: FONT, fontSize: 11, fontWeight: 700,
-          textTransform: 'uppercase', letterSpacing: '.04em',
-          background: chip.colour, color: fg,
-          cursor: 'grab', userSelect: 'none',
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          border: '1px solid rgba(255,255,255,0.65)',
-          boxShadow: '0 1px 2px rgba(15,23,42,0.10)',
-          transition: 'opacity 0.12s',
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.85'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
-      >
-        {chip.name}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div
+          draggable
+          onDragStart={(e) => onDragStartRef?.current?.(chip.id, e)}
+          title="Drag onto the calendar"
+          style={{
+            flex: 1, minWidth: 0, boxSizing: 'border-box',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: 4, padding: '8px 10px', minHeight: 30,
+            fontFamily: FONT, fontSize: 11, fontWeight: 700,
+            textTransform: 'uppercase', letterSpacing: '.04em',
+            background: chip.colour, color: fg,
+            cursor: 'grab', userSelect: 'none',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            border: '1px solid rgba(255,255,255,0.65)',
+            boxShadow: '0 1px 2px rgba(15,23,42,0.10)',
+            transition: 'opacity 0.12s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.85'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
+        >
+          {chip.name}
+        </div>
+        <button
+          type="button"
+          title="Edit chip"
+          onClick={() => openEditor(kind, chip)}
+          style={{
+            width: 26, height: 26, flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: 4, background: '#f7f7f5', border: '1px solid #e0e0e0',
+            cursor: 'pointer', color: '#b0b0b0',
+            transition: 'color .15s, border-color .15s, background .15s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#333'; e.currentTarget.style.borderColor = '#aaa'; e.currentTarget.style.background = '#ececea'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#b0b0b0'; e.currentTarget.style.borderColor = '#e0e0e0'; e.currentTarget.style.background = '#f7f7f5'; }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+          </svg>
+        </button>
       </div>
     );
   };
 
-  const Bento = ({ label, chips }) => {
+  const Bento = ({ label, chips, kind }) => {
     if (!chips.length) return null;
     return (
       <div style={{
@@ -946,7 +974,7 @@ function ChipPickerView({ allChips, onDragStartRef, onCreateCustomChipRef, onBac
         {/* 12px gap — matches the schedule view's chip spacing (8px item
             margin + 4px inner chip margin) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {chips.map((chip) => <Chip key={chip.id} chip={chip} />)}
+          {chips.map((chip) => <Chip key={chip.id} chip={chip} kind={kind} />)}
         </div>
       </div>
     );
@@ -961,9 +989,9 @@ function ChipPickerView({ allChips, onDragStartRef, onCreateCustomChipRef, onBac
       </div>
       {/* Scrollable body */}
       <div className="no-scrollbar" style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '14px 22px 16px' }}>
-        <Bento label="Default chips" chips={defaults} />
-        <Bento label="Project chips" chips={projects} />
-        <Bento label="Custom chips" chips={customs} />
+        <Bento label="Default chips" chips={defaults} kind="default" />
+        <Bento label="Project chips" chips={projects} kind="project" />
+        <Bento label="Custom chips" chips={customs} kind="custom" />
         <button
           type="button"
           onClick={() => onCreateCustomChipRef?.current?.()}
