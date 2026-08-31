@@ -58,6 +58,41 @@ function BackBtn({ onClick }) {
   );
 }
 
+
+/**
+ * Styled hover tooltip (same pattern as staging/TableRow.jsx, inline-styled to
+ * match the design handoff: #1F1F1F bubble, white 10.5px/500, radius 6).
+ * align='center' centres under the child; 'right' right-aligns so the bubble
+ * never clips outside the panel edge.
+ */
+function Tip({ text, align = 'center', children }) {
+  const [show, setShow] = useState(false);
+  return (
+    <span
+      style={{ position: 'relative', display: 'inline-flex' }}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      {children}
+      {show && (
+        <span
+          role="tooltip"
+          style={{
+            position: 'absolute', top: '100%', marginTop: 4, zIndex: 10,
+            ...(align === 'right' ? { right: 0 } : { left: '50%', transform: 'translateX(-50%)' }),
+            background: '#1F1F1F', color: '#fff', borderRadius: 6,
+            padding: '4px 8px', fontFamily: FONT, fontSize: 10.5, fontWeight: 500,
+            whiteSpace: 'nowrap', pointerEvents: 'none',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+          }}
+        >
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function Tog({ on, onChange }) {
   return (
     <button
@@ -311,11 +346,12 @@ export default function ManageStatusesPanel({ isOpen, onBack, navBottom }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px 6px 4px' }}>
                   <span style={{ width: 14, flexShrink: 0 }} />
                   <span style={{ flex: 1, fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: C.textFaint }}>Status</span>
-                  <span
-                    title="Status included when Archive Week is pressed"
-                    style={{ width: 64, textAlign: 'center', flexShrink: 0, fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: C.textFaint, cursor: 'help' }}
-                  >
-                    Archive
+                  <span style={{ width: 64, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+                    <Tip text="Status included when Archive Week is pressed" align="right">
+                      <span style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: C.textFaint, cursor: 'help' }}>
+                        Archive
+                      </span>
+                    </Tip>
                   </span>
                   <span style={{ width: 56, flexShrink: 0 }} />
                 </div>
@@ -356,12 +392,11 @@ export default function ManageStatusesPanel({ isOpen, onBack, navBottom }) {
                         <Pencil size={15} />
                       </IconBtn>
                       {s.locked ? (
-                        <span
-                          title="Built in status"
-                          style={{ width: 26, height: 26, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: C.grip, flexShrink: 0 }}
-                        >
-                          <Lock size={15} />
-                        </span>
+                        <Tip text="Built in status" align="right">
+                          <span style={{ width: 26, height: 26, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: C.grip, flexShrink: 0 }}>
+                            <Lock size={15} />
+                          </span>
+                        </Tip>
                       ) : (
                         <IconBtn title="Delete status" danger onClick={() => setDeleteConfirm(s)}>
                           <Trash2 size={15} />

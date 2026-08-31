@@ -99,6 +99,8 @@ update the checklist as work lands.
 5. Seeded chips keep their original tinted text colours while their bg is
    unchanged; recoloured/custom chips derive black/white text from bg.
 6. **Reassignment is not undoable** (plain setData, not a command) — v1.
+7. Archive-header and lock tooltips use the styled dark bubble (Tip in
+   ManageStatusesPanel, pattern from staging/TableRow.jsx), per the handoff.
 
 ## Known gaps / follow-ups
 
