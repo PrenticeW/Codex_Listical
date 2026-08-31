@@ -97,14 +97,28 @@ export const createArchiveWeekRow = ({
   // Calculate min and max from the 7 days belonging to the week being archived.
   // startDayIndex is the first visible day (pole-position day 0 of that week),
   // so we read dailyMinValues[startDayIndex .. startDayIndex+6].
-  let weeklyMin = 0;
-  let weeklyMax = 0;
+  // Day values are HH.mm encoded ("1.30" = 1h30m), so summing them with
+  // parseFloat would read 1.30 + 0.30 as 1.60 instead of 2.00 — convert each
+  // value to minutes, sum, then format back so minutes carry into hours.
+  const hhmmToMinutes = (value) => {
+    const n = parseFloat(value);
+    if (!Number.isFinite(n)) return 0;
+    const hours = Math.floor(n);
+    const mins = Math.round((n - hours) * 100);
+    return hours * 60 + mins;
+  };
+  const minutesToHHmm = (minutes) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours}.${mins.toString().padStart(2, '0')}`;
+  };
+
+  let weeklyMinMinutes = 0;
+  let weeklyMaxMinutes = 0;
 
   for (let i = startDayIndex; i < Math.min(startDayIndex + 7, totalDays); i++) {
-    const minValue = parseFloat(dailyMinValues[i]) || 0;
-    const maxValue = parseFloat(dailyMaxValues[i]) || 0;
-    weeklyMin += minValue;
-    weeklyMax += maxValue;
+    weeklyMinMinutes += hhmmToMinutes(dailyMinValues[i]);
+    weeklyMaxMinutes += hhmmToMinutes(dailyMaxValues[i]);
   }
 
   return {
@@ -112,8 +126,8 @@ export const createArchiveWeekRow = ({
     _rowType: ARCHIVE_ROW_TYPES.ARCHIVE_WEEK,
     archiveLabel: weekRange,
     archiveWeekLabel: `Year ${weekNumber.year}, Week ${weekNumber.week}`,
-    archiveWeeklyMin: weeklyMin.toFixed(2),
-    archiveWeeklyMax: weeklyMax.toFixed(2),
+    archiveWeeklyMin: minutesToHHmm(weeklyMinMinutes),
+    archiveWeeklyMax: minutesToHHmm(weeklyMaxMinutes),
     archiveTotalHours: '0.00', // Will be calculated from archived tasks
     groupId: archiveWeekId,
     isGroupHeader: true,

@@ -106,6 +106,15 @@ const projectEntriesForWeek = (data, archiveWeekId) => {
   });
 };
 
+// "2.30" (2h30m) -> 2.5 decimal hours
+const hhmmToDecimalHours = (value) => {
+  const n = parseFloat(value);
+  if (!Number.isFinite(n)) return 0;
+  const hours = Math.floor(n);
+  const mins = Math.round((n - hours) * 100);
+  return hours + mins / 60;
+};
+
 const parseQuota = (raw) => {
   if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
   if (typeof raw === 'string' && raw.trim() !== '') {
@@ -217,9 +226,11 @@ export function buildArchiveWeekPanelData(
     isLatestWeek: index === weeks.length - 1,
     lastLabel: lastNum != null ? `Wk ${lastNum}` : '—',
     thisLabel: `Wk ${thisNum}`,
+    // archiveWeeklyMin/Max are HH.mm encoded ("2.30" = 2h30m) — convert to
+    // decimal hours for the panel, which works in fractional hours.
     quotaRange: [
-      parseFloat(row.archiveWeeklyMin) || 0,
-      parseFloat(row.archiveWeeklyMax) || 0,
+      hhmmToDecimalHours(row.archiveWeeklyMin),
+      hhmmToDecimalHours(row.archiveWeeklyMax),
     ],
     projects,
     areas,
