@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { setCurrentUserId, getCurrentUserId, clearUserKeys } from '../lib/storageService';
 import useAsyncHandler from '../hooks/common/useAsyncHandler';
 import { supabase } from '../lib/supabase';
+import { loadStatuses } from '../lib/statusesStorage';
 
 /**
  * AuthContext
@@ -62,6 +63,9 @@ export function AuthProvider({ children }) {
           setSession(currentSession);
           setIsAuthenticated(true);
           setCurrentUserId(currentSession.user.id);
+          // Warm the statuses registry (chips/dropdowns/sorting read it
+          // synchronously — docs/STATUS_MANAGER_SPEC.md). Fire and forget.
+          loadStatuses();
         }
       } catch (error) {
         console.error('Auth initialization error:', error);

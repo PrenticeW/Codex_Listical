@@ -33,6 +33,9 @@ export const ESTIMATE_VALUES = [
   '10 Hours',
 ];
 
+// LEGACY — statuses are data-driven now (src/lib/statusesStorage.js,
+// docs/STATUS_MANAGER_SPEC.md). The status constants below are kept only as
+// a historical reference / test fixture; live code reads the registry.
 // Status color styling
 export const STATUS_COLOR_MAP = {
   '-': { bg: '#ffffff', text: '#000000' },

@@ -1,4 +1,5 @@
 import React from 'react';
+import { getStatusLabel } from '../../lib/statusesStorage';
 import useClickOutside from '../../hooks/useClickOutside';
 
 // ─── Shared filter menu chrome ────────────────────────────────────────────────
@@ -164,7 +165,7 @@ const FilterPanel = React.memo(function FilterPanel({
             {statusNames.length === 0 ? (
               <FilterEmptyState label="statuses" />
             ) : statusNames.map(name => (
-              <FilterItem key={name} name={name} isSelected={selectedStatusFilters.has(name)} onClick={() => handleStatusFilterSelect(name)} />
+              <FilterItem key={name} name={getStatusLabel(name)} isSelected={selectedStatusFilters.has(name)} onClick={() => handleStatusFilterSelect(name)} />
             ))}
           </div>
           <div style={{ padding: '4px 6px 6px', borderTop: '1px solid #f0f0ed' }}>

@@ -16,6 +16,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import PanelLockButton from '../PanelLockButton';
 import { PILLBOX_COLORS } from './DropdownCell';
+import { getStatusLabel } from '../../lib/statusesStorage';
 import { saveTaskNote, readTaskEvents } from '../../utils/planner/storage';
 import { TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
 import { fmtTimestamp } from '../../utils/fmtTimestamp';
@@ -115,7 +116,7 @@ function StatusChipSm({ status }) {
       padding: '2px 8px', whiteSpace: 'nowrap',
       background: s.bg, color: s.color, border: `1px solid ${s.border}`,
     }}>
-      {status}
+      {getStatusLabel(status)}
     </span>
   );
 }

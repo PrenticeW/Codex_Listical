@@ -84,7 +84,7 @@ import {
   createArchiveWeekRow,
   createArchivedProjectStructure,
   collectTasksForArchive,
-  ARCHIVE_SWEEP_STATUSES,
+  isArchiveSweepStatus,
   snapshotRecurringTask,
   insertArchiveRow,
   insertArchivedProjects,
@@ -98,8 +98,6 @@ import {
 import { buildArchiveWeekPanelData } from '../utils/planner/archiveWeekPanelData';
 import { useArchiveTotals } from '../hooks/planner/useArchiveTotals';
 
-// Sortable status values for the "Sort Inbox" feature
-const SORTABLE_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned', 'Skipped', 'Accounted'];
 
 // --- Tactics data helpers (loaded on mount + "Send to System" only) ---
 
@@ -2863,7 +2861,7 @@ export default function ProjectTimePlannerV2() {
     // Tasks that also have day values in OTHER weeks are snapshotted (below)
     // instead of moved whole, so their other-week values stay in the plan.
     const nonRecurringTasks = collectTasksForArchive(data, task =>
-      ARCHIVE_SWEEP_STATUSES.includes(task.status) && !task.recurring &&
+      isArchiveSweepStatus(task.status) && !task.recurring &&
       isTaskInArchivedWeek(task, firstVisibleDayIndex, totalDays) &&
       !taskHasDayOutsideRange(task, firstVisibleDayIndex, totalDays)
     );
@@ -2874,7 +2872,7 @@ export default function ProjectTimePlannerV2() {
     // live row keeps its other weeks and gets this week cleared by
     // resetRecurringTasks.
     const recurringTasks = collectTasksForArchive(data, task =>
-      ARCHIVE_SWEEP_STATUSES.includes(task.status) &&
+      isArchiveSweepStatus(task.status) &&
       (task.recurring || taskHasDayOutsideRange(task, firstVisibleDayIndex, totalDays)) &&
       isTaskInArchivedWeek(task, firstVisibleDayIndex, totalDays)
     );
@@ -3421,6 +3419,29 @@ export default function ProjectTimePlannerV2() {
       }
       if (action === 'setProjectFilter') {
         setProjectFilter(e.detail.project ?? null);
+        return;
+      }
+      if (action === 'reassignStatus') {
+        // Manage Statuses panel: a status was deleted — move live rows off it
+        // before the soft delete (docs/STATUS_MANAGER_SPEC.md decision 7).
+        // Archived rows are a frozen record and keep the old status; the
+        // multiStatus-<n> per-instance keys are swept along with row.status.
+        const { fromId, toId } = e.detail;
+        if (fromId && toId && fromId !== toId) {
+          setData(prev => prev.map(r => {
+            if (r._isArchivedTask || r.archiveWeekLabel) return r;
+            let changed = false;
+            const next = { ...r };
+            if (r.status === fromId) { next.status = toId; changed = true; }
+            for (const key of Object.keys(r)) {
+              if (/^multiStatus-\d+$/.test(key) && r[key] === fromId) {
+                next[key] = toId;
+                changed = true;
+              }
+            }
+            return changed ? next : r;
+          }));
+        }
         return;
       }
       if (action === 'sortInbox' && e.detail.statuses?.length > 0) {

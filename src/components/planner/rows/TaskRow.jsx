@@ -3,6 +3,7 @@ import { GripVertical } from 'lucide-react';
 import { TASK_ROW_DETAIL_EVENT, TASK_ROW_PANEL_CLOSE_EVENT } from '../../../contexts/TaskRowPanelContext';
 import EditableCell from '../EditableCell';
 import DropdownCell, { PILLBOX_COLORS } from '../DropdownCell';
+import { getStatusLabel } from '../../../lib/statusesStorage';
 import EstimateDropdownCell from '../EstimateDropdownCell';
 import CheckboxCell from '../CheckboxCell';
 import ProjectDropdownCell from '../ProjectDropdownCell';
@@ -537,7 +538,7 @@ const TaskRow = React.memo(function TaskRow({
                             minWidth: 0,
                           }}
                         >
-                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value}>{value}</span>
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={getStatusLabel(value)}>{getStatusLabel(value)}</span>
                           <ChevronDown
                             size={10}
                             style={{ color: '#000000', cursor: 'pointer' }}
@@ -641,7 +642,7 @@ const TaskRow = React.memo(function TaskRow({
                             minWidth: 0,
                           }}
                         >
-                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value}>{value}</span>
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={getStatusLabel(value)}>{getStatusLabel(value)}</span>
                           <ChevronDown
                             size={10}
                             style={{ color: PILLBOX_COLORS[value]?.text || PILLBOX_COLORS['-'].text, cursor: 'pointer' }}

@@ -3,7 +3,7 @@
  * Functions for validating, transforming, and checking row data
  */
 
-import { PROTECTED_STATUSES, TASK_ROW_TYPES } from '../constants/plannerConstants';
+import { TASK_ROW_TYPES } from '../constants/plannerConstants';
 
 /**
  * Coerces a value to a number, handling strings with commas and nulls
@@ -52,8 +52,10 @@ export const syncDayEntriesWithTimeValue = (dayEntries, nextTimeValue, prevTimeV
  * Checks if a status is protected (cannot be easily changed)
  */
 export const isProtectedStatus = (status) => {
+  // Any deliberately-set status is protected; only the auto-assigned trio
+  // ('-', 'Not Scheduled', 'Scheduled') is not (docs/STATUS_MANAGER_SPEC.md).
   if (!status || status === '-') return false;
-  return PROTECTED_STATUSES.has(status);
+  return status !== 'Not Scheduled' && status !== 'Scheduled';
 };
 
 /**

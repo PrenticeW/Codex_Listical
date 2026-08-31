@@ -75,6 +75,9 @@ export const ROW_H = 26;
 export const MIN_COLUMN_WIDTH = 40;
 export const COLUMN_RESIZE_HANDLE_WIDTH = 10;
 
+// LEGACY — statuses are data-driven now (src/lib/statusesStorage.js,
+// docs/STATUS_MANAGER_SPEC.md). The status constants below are kept only as
+// a historical reference / test fixture; live code reads the registry.
 // ============================================================
 // COLOR MAPS & STYLES
 // ============================================================

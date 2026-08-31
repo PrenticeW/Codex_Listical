@@ -1,7 +1,9 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronLeft, ChevronRight, Check } from 'lucide-react';
-import { DROPDOWN_OPTIONS, PILLBOX_COLORS } from './DropdownCell';
+import { getStatusDropdownOptions, PILLBOX_COLORS } from './DropdownCell';
+import { getStatusLabel } from '../../lib/statusesStorage';
+import { useStatuses } from '../../hooks/useStatuses';
 import { getMultiInstances, getCurrentInstanceIndex } from '../../utils/planner/multiStatus';
 import { getPageZoom } from '../../utils/pageZoom';
 
@@ -66,6 +68,9 @@ function MultiStatusDropdownCell({
   onShownInstanceChange, // (dayIndex | null) => void — moves the table selection while the panel is open
   focusDayIndex = null, // day index of this row's selected day cell (the focused instance), if any
 }) {
+  useStatuses(); // repaint when statuses are edited
+  // '-' is meaningless for an instance; options are the active statuses.
+  const statusOptions = getStatusDropdownOptions().filter((o) => o !== '-');
   const instances = getMultiInstances(rowData, totalDays);
   const currentIdx = getCurrentInstanceIndex(instances);
   // Index of the externally focused instance (selected day cell), -1 if none
@@ -206,9 +211,9 @@ function MultiStatusDropdownCell({
       >
         <span
           style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
-          title={trigger?.status || '-'}
+          title={getStatusLabel(trigger?.status) || '-'}
         >
-          {trigger?.status || '-'}
+          {getStatusLabel(trigger?.status) || '-'}
         </span>
         <span
           style={{
@@ -241,7 +246,7 @@ function MultiStatusDropdownCell({
           }}
         >
           {/* Status options for the shown date */}
-          {DROPDOWN_OPTIONS.map((option, i) => {
+          {statusOptions.map((option, i) => {
             const colors = PILLBOX_COLORS[option] || PILLBOX_COLORS['-'];
             const isCurrent = option === shown.status;
             return (
@@ -267,7 +272,7 @@ function MultiStatusDropdownCell({
                     boxShadow: isCurrent ? 'inset 0 0 0 1.5px var(--brand-deep)' : 'none',
                   }}
                 >
-                  {option}
+                  {getStatusLabel(option)}
                   {isCurrent && (
                     <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
                       <Check size={11} style={{ color: colors.text }} />

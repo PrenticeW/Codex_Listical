@@ -6,17 +6,13 @@
  */
 
 import { normalizeProjectKey } from './valueNormalizers';
+// @ts-ignore — plain JS module
+import { getSortTarget } from '../../lib/statusesStorage';
 
-// Map status values to their target sections for Sort Planner
-export const SORT_PLANNER_TARGET_MAP: Record<string, 'general' | 'unscheduled'> = {
-  'Done': 'general',
-  'Scheduled': 'general',
-  'Not Scheduled': 'unscheduled',
-  'Abandoned': 'unscheduled',
-  'Blocked': 'unscheduled',
-  'On Hold': 'unscheduled',
-  'Skipped': 'unscheduled',
-};
+// Target sections are data-driven since the Status Manager
+// (docs/STATUS_MANAGER_SPEC.md): getSortTarget maps a status id to
+// 'general' | 'unscheduled' from its archive_sweep flag, with legacy
+// overrides for Abandoned / Skipped / Special.
 
 /**
  * Check if a row is a special row that should be skipped during sorting
@@ -94,7 +90,7 @@ const collectPlannerTasks = (
     }
 
     // Determine target section
-    const target = SORT_PLANNER_TARGET_MAP[status];
+    const target = getSortTarget(status);
     if (!target) {
       continue;
     }

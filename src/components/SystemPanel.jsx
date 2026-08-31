@@ -16,6 +16,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import PanelShell from './PanelShell';
+import { useStatuses } from '../hooks/useStatuses';
+import ManageStatusesPanel from './ManageStatusesPanel';
 import { useLocation } from 'react-router-dom';
 import { useSystemPanel } from '../contexts/SystemPanelContext';
 import PanelLockButton from './PanelLockButton';
@@ -327,8 +329,9 @@ function StatusChip({ label, checked, onChange }) {
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
 
-// Must match keys in SORT_INBOX_TARGET_MAP in sortInbox.ts exactly
-const SORT_STATUSES = ['Done', 'Scheduled', 'Not Scheduled', 'Blocked', 'On Hold', 'Abandoned', 'Skipped', 'Accounted', 'Special'];
+// Sort checklist statuses are data-driven (statuses registry) — see
+// docs/STATUS_MANAGER_SPEC.md. Ids flow into sortInbox/sortPlanner, whose
+// targets come from getSortTarget.
 
 function InsertSection() {
   const [taskCount, setTaskCount] = useState('');
@@ -464,6 +467,7 @@ function InsertSection() {
 }
 
 function SortSection() {
+  const sortStatuses = useStatuses(); // active, in panel order
   const [inboxOpen, setInboxOpen] = useState(false);
   const [checked, setChecked] = useState({});
 
@@ -505,12 +509,12 @@ function SortSection() {
         {inboxOpen && (
           <div style={{ borderTop: `1px solid ${C.border}`, padding: '12px 16px 14px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {SORT_STATUSES.map(s => (
+              {sortStatuses.map(s => (
                 <StatusChip
-                  key={s}
-                  label={s}
-                  checked={!!checked[s]}
-                  onChange={val => toggleStatus(s, val)}
+                  key={s.id}
+                  label={s.label}
+                  checked={!!checked[s.id]}
+                  onChange={val => toggleStatus(s.id, val)}
                 />
               ))}
             </div>
@@ -520,6 +524,25 @@ function SortSection() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function StatusesSection({ onOpenStatuses }) {
+  return (
+    <div style={BENTO_CARD}>
+      <SectionLabel>Statuses</SectionLabel>
+      <ActionBtn
+        icon={
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <rect x="1" y="2" width="7" height="3" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
+            <rect x="3" y="8" width="9" height="3" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
+          </svg>
+        }
+        label="Manage statuses"
+        onClick={onOpenStatuses}
+        style={{ marginBottom: 0 }}
+      />
     </div>
   );
 }
@@ -866,6 +889,9 @@ export default function SystemPanel() {
   // (buildArchiveWeekPanelData). Kept in state so the detail pane re-renders
   // when the pager changes weeks or the underlying data reloads.
   const [archiveWeek, setArchiveWeek] = useState(null);
+  // Manage Statuses sub-panel (slides in above this panel, zIndex 99995)
+  const [statusesOpen, setStatusesOpen] = useState(false);
+  useEffect(() => { if (!isOpen) setStatusesOpen(false); }, [isOpen]);
   useEffect(() => {
     const handler = (e) => { if (e.detail?.week) setArchiveWeek(e.detail.week); };
     window.addEventListener(SYSTEM_PANEL_ARCHIVE_WEEK_EVENT, handler);
@@ -909,12 +935,13 @@ export default function SystemPanel() {
     if (!isOpen) return;
     const handler = e => {
       if (e.key !== 'Escape') return;
+      if (statusesOpen) return; // ManageStatusesPanel owns Escape while open
       if (selectedTask) closePanel();
       else close();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isOpen, selectedTask, close, closePanel]);
+  }, [isOpen, selectedTask, statusesOpen, close, closePanel]);
 
   // Page panels are mounted globally in Layout; render only on the System
   // page so panels never stack across page switches. Open state is kept,
@@ -927,6 +954,7 @@ export default function SystemPanel() {
   const showArchiveDetail = selectedTask?._rowType === 'archiveRow';
 
   return (
+    <>
     <PanelShell
       isOpen={isOpen}
       navBottom={navBottom}
@@ -959,6 +987,7 @@ export default function SystemPanel() {
             >
               <InsertSection />
               <SortSection />
+              <StatusesSection onOpenStatuses={() => setStatusesOpen(true)} />
               <ArchiveSection />
               <PlanSection />
               <AppearanceSection />
@@ -982,5 +1011,11 @@ export default function SystemPanel() {
         </div>
       </div>
     </PanelShell>
+      <ManageStatusesPanel
+        isOpen={isOpen && statusesOpen}
+        onBack={() => setStatusesOpen(false)}
+        navBottom={navBottom}
+      />
+    </>
   );
 }

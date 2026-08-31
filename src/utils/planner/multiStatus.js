@@ -18,8 +18,16 @@ export const MULTI_STATUS_KEY_RE = /^multiStatus-(\d+)$/;
 
 export const multiStatusKey = (dayIndex) => `multiStatus-${dayIndex}`;
 
-/** Statuses that count as "finished" when picking the current instance */
-const TERMINAL_STATUSES = new Set(['Done', 'Abandoned', 'Skipped', 'Accounted']);
+import { isSweepStatus } from '../../lib/statusesStorage';
+
+/**
+ * "Finished" check when picking the current instance. Data-driven: a status
+ * counts as terminal when its archive_sweep flag is on (the merged
+ * finished/sweep flag — docs/STATUS_MANAGER_SPEC.md decision 5). Falls back
+ * to the legacy set (Done, Abandoned, Skipped, Accounted) via
+ * DEFAULT_STATUSES before the statuses table has loaded.
+ */
+const isTerminalStatus = (status) => isSweepStatus(status);
 
 /**
  * Mirror of the habit-pattern day-cell check (useHabitPatternDetection):
@@ -64,7 +72,7 @@ export function getMultiInstances(row, totalDays) {
 
 /** First instance whose status is not terminal; if all terminal, the last. */
 export function getCurrentInstanceIndex(instances) {
-  const i = instances.findIndex((inst) => !TERMINAL_STATUSES.has(inst.status));
+  const i = instances.findIndex((inst) => !isTerminalStatus(inst.status));
   return i === -1 ? instances.length - 1 : i;
 }
 

@@ -4,7 +4,7 @@
  * Prepares task rows from the active year for import into a draft year.
  *
  * Rules:
- * - Done and Abandoned tasks are excluded
+ * - Finished tasks (archive_sweep statuses, e.g. Done/Abandoned) are excluded
  * - Empty rows (no task name and no project) are excluded
  * - Structural/special rows are excluded
  * - All day allocations are cleared and status reset to "Not Scheduled"
@@ -14,9 +14,12 @@
  */
 
 import { isSpecialRow, isProjectStructureRow } from './rowTypeChecks';
+import { isSweepStatus } from '../../lib/statusesStorage';
 
-// Terminal statuses that should not be carried into a new year.
-export const EXCLUDED_STATUSES = new Set(['Done', 'Abandoned', 'Accounted']);
+// Terminal statuses should not be carried into a new year. Data-driven since
+// the Status Manager: a status is terminal when its archive_sweep flag is on
+// (docs/STATUS_MANAGER_SPEC.md decision 5).
+export const isExcludedStatus = (status) => isSweepStatus(status);
 
 /**
  * True when `rows` contains at least one real (non-chip, non-structural,
@@ -99,7 +102,7 @@ export function importTasksForDraftYear(sourceRows, draftProjectNicknames, draft
     // Skip structural/special rows
     if (isSpecialRow(row) || isProjectStructureRow(row)) continue;
     // Skip Done and Abandoned
-    if (EXCLUDED_STATUSES.has(row.status)) continue;
+    if (isExcludedStatus(row.status)) continue;
     // Skip archived tasks (archives are a frozen record of the old year)
     if (row._isArchivedTask || row.archiveWeekLabel) continue;
     // Skip empty rows

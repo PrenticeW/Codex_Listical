@@ -1,37 +1,26 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
+import { getActiveStatuses, getStatusColors, getStatusLabel } from '../../lib/statusesStorage';
+import { useStatuses } from '../../hooks/useStatuses';
 
 /**
  * DropdownCell Component
  * Dropdown selector for spreadsheet cells with keyboard navigation
  */
-export const DROPDOWN_OPTIONS = [
-  '-',
-  'Not Scheduled',
-  'Scheduled',
-  'Done',
-  'Abandoned',
-  'Blocked',
-  'On Hold',
-  'Special',
-  'Skipped',
-  'Accounted'
-];
+// Status ids for the dropdown, in user order. Data-driven since the Status
+// Manager (docs/STATUS_MANAGER_SPEC.md); '-' stays first as the blank
+// default. Call at render time — the list changes when statuses are edited.
+export const getStatusDropdownOptions = () =>
+  ['-', ...getActiveStatuses().map((s) => s.id)];
 
-// Pillbox color configuration — exported so other components stay in sync
-export const PILLBOX_COLORS = {
-  '-': { bg: '#ffffff', text: '#000000' },
-  'Not Scheduled': { bg: '#e5e5e5', text: '#000000' },
-  'Scheduled': { bg: '#ffe5a0', text: '#473821' },
-  'Done': { bg: '#c9e9c0', text: '#276436' },
-  'Abandoned': { bg: '#e8d9f3', text: '#5a3b74' },
-  'Blocked': { bg: '#f3c4c4', text: '#9c2f2f' },
-  'On Hold': { bg: '#505050', text: '#ffffff' },
-  'Special': { bg: '#cce3ff', text: '#3a70b7' },
-  'Skipped': { bg: '#f9eeff', text: '#5a3286' },
-  'Accounted': { bg: '#b3cd99', text: '#11734b' }
-};
+// Pillbox colours — kept as a keyed lookup for existing call sites
+// (PILLBOX_COLORS[id] → { bg, text }) but backed by the statuses registry so
+// edits/renames/recolours flow through everywhere. Values update live.
+export const PILLBOX_COLORS = new Proxy({}, {
+  get: (_t, key) => (typeof key === 'string' ? getStatusColors(key) : undefined),
+  has: () => true,
+});
 
 function DropdownCell({
   initialValue,
@@ -43,11 +32,20 @@ function DropdownCell({
   isPillbox = false, // New prop to enable pillbox styling
   autoOpen = false, // Auto-open dropdown when mounted
 }) {
+  const activeStatuses = useStatuses();
+  // Recompute when statuses change; include the current value even if it is
+  // a soft-deleted status (so an archived/stale row still shows its chip).
+  const DROPDOWN_OPTIONS = useMemo(() => {
+    const opts = ['-', ...activeStatuses.map((s) => s.id)];
+    const current = initialValue === '' ? '-' : initialValue;
+    if (current && !opts.includes(current)) opts.push(current);
+    return opts;
+  }, [activeStatuses, initialValue]);
   const [isOpen, setIsOpen] = useState(autoOpen);
   const [selectedIndex, setSelectedIndex] = useState(() => {
     // Handle empty string as "-"
     const valueToFind = initialValue === '' ? '-' : initialValue;
-    const index = DROPDOWN_OPTIONS.indexOf(valueToFind);
+    const index = ['-', ...getActiveStatuses().map((s) => s.id)].indexOf(valueToFind);
     return index === -1 ? 0 : index;
   });
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
@@ -175,7 +173,7 @@ function DropdownCell({
         onClick={() => setIsOpen(!isOpen)}
       >
         <span className={isPillbox ? '' : 'flex-1 text-left'}>
-          {DROPDOWN_OPTIONS[selectedIndex] || '\u00A0'}
+          {getStatusLabel(DROPDOWN_OPTIONS[selectedIndex]) || '\u00A0'}
         </span>
         <ChevronDown size={isPillbox ? 10 : 12} className="flex-shrink-0" style={{ color: isPillbox && colors ? colors.text : '#9ca3af' }} />
       </button>
@@ -218,7 +216,7 @@ function DropdownCell({
                 onMouseDown={(e) => handleSelect(e, option)}
                 onMouseEnter={() => setSelectedIndex(index)}
               >
-                {option}
+                {getStatusLabel(option)}
               </div>
             );
           })}

@@ -114,10 +114,12 @@ export default function useComputedDataV2({
         }
       } else {
         // Task has content
-        // Statuses the user has set deliberately — auto-status logic must not overwrite these.
-        // Mirror of PROTECTED_STATUSES in src/constants/plannerConstants.js (legacy/dead),
-        // kept inline here while plannerConstants.js stays out of the active import graph.
-        const manualStatuses = ['Done', 'Blocked', 'On Hold', 'Abandoned', 'Skipped', 'Accounted', 'Special'];
+        // Statuses the user has set deliberately — auto-status logic must not
+        // overwrite these. Data-driven definition (docs/STATUS_MANAGER_SPEC.md):
+        // everything except the auto-assigned trio ('-', 'Not Scheduled',
+        // 'Scheduled') is manual, so custom statuses are protected too.
+        const isManualStatus = (st: string) =>
+          st !== '-' && st !== 'Not Scheduled' && st !== 'Scheduled';
         if (hasScheduledTime) {
           // Auto-update to Scheduled only if no manual status has been set
           if (status === '-' || status === 'Not Scheduled') {
@@ -126,8 +128,8 @@ export default function useComputedDataV2({
         } else {
           // No scheduled time - reset to 'Not Scheduled' only if no manual status has been set.
           // 'Scheduled' is system-assigned (never user-set), so it is intentionally NOT in
-          // manualStatuses and must revert here when all time values are cleared.
-          if (!manualStatuses.includes(status)) {
+          // isManualStatus and must revert here when all time values are cleared.
+          if (!isManualStatus(status)) {
             status = 'Not Scheduled';
           }
         }

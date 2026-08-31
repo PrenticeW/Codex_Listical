@@ -3,7 +3,8 @@
  * Functions for generating styles based on state and values
  */
 
-import { STATUS_COLOR_MAP, ROW_LABEL_BASE_STYLE } from '../constants/plannerConstants';
+import { ROW_LABEL_BASE_STYLE } from '../constants/plannerConstants';
+import { getStatusColors } from '../lib/statusesStorage';
 
 /**
  * Gets the background and text color for a status value
@@ -11,7 +12,11 @@ import { STATUS_COLOR_MAP, ROW_LABEL_BASE_STYLE } from '../constants/plannerCons
  * @returns {Object} Style object with backgroundColor and color
  */
 export const getStatusColorStyle = (status) => {
-  const colors = STATUS_COLOR_MAP[status] || { bg: '#ffffff', text: '#000000' };
+  // Data-driven via the statuses registry (docs/STATUS_MANAGER_SPEC.md);
+  // '-'/unknown fall back inside getStatusColors.
+  const colors = status === '-' || !status
+    ? { bg: '#ffffff', text: '#000000' }
+    : getStatusColors(status);
   return { backgroundColor: colors.bg, color: colors.text };
 };
 

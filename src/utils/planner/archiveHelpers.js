@@ -11,13 +11,18 @@ import {
 } from '../../constants/planner/rowTypes';
 import { createEmptyDayColumns } from './dayColumnHelpers';
 import { multiStatusKey, deriveMultiRowStatus } from './multiStatus';
+import { isSweepStatus, getSortTarget } from '../../lib/statusesStorage';
 
 /**
  * Statuses swept into a week archive (and cleared from the live plan).
  * Accounted counts as finished work, same as Done — tasks with any of these
  * statuses leave the planner section when the week is archived.
  */
-export const ARCHIVE_SWEEP_STATUSES = ['Done', 'Abandoned', 'Accounted'];
+// Data-driven since the Status Manager (docs/STATUS_MANAGER_SPEC.md): a
+// status is swept when its archive_sweep flag is on. Legacy default set
+// (Done, Abandoned, Accounted [+ Skipped, merged with terminal]) lives in
+// DEFAULT_STATUSES and applies until the statuses table loads.
+export const isArchiveSweepStatus = (status) => isSweepStatus(status);
 
 /**
  * Generate a unique ID for archive-related rows
@@ -507,9 +512,9 @@ export const moveTasksToArchive = (data, tasksToArchive, archiveWeekId) => {
 
   tasksToArchive.forEach(task => {
     const projectKey = resolveProjectKey(task);
-    // Done and Accounted are finished work -> 'general' (same mapping as
-    // sortInbox); Abandoned keeps landing in 'unscheduled'.
-    const targetSection = ['Done', 'Accounted'].includes(task.status) ? 'general' : 'unscheduled';
+    // Finished work -> 'general', same mapping as sortInbox (legacy
+    // overrides for Abandoned/Skipped/Special live in getSortTarget).
+    const targetSection = getSortTarget(task.status);
 
     if (!tasksByProject[projectKey]) {
       tasksByProject[projectKey] = { general: [], unscheduled: [] };
@@ -632,7 +637,7 @@ export const resetRecurringTasks = (data, totalDays = 84, startDayIndex = 0) => 
     // (those are snapshotted into the archive rather than moved whole, so
     // the live row's archived-week values must be cleared here).
     if ((row.recurring || taskHasDayOutsideRange(row, startDayIndex, totalDays)) &&
-        ARCHIVE_SWEEP_STATUSES.includes(row.status)) {
+        isArchiveSweepStatus(row.status)) {
       // Was this task actually scheduled within the week being archived? If
       // not, its Done/Abandoned status belongs to an instance in a different
       // week and must be left alone — clearing the full 84-day span here
