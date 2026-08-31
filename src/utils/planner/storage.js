@@ -1738,31 +1738,63 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     _knownRowIds.set(yearNumber, nextKnown);
     _baselineRows.set(yearNumber, nextBaseline);
 
-    // archived_weeks keeps the replace-the-layer pattern (mobile never
-    // writes it) — but replace-the-layer has NO staleness guard, so a
-    // cache-hydrated tab that had not read the server would replace the
-    // whole archive with its weeks-old copy (part of the 2026-08-28
-    // stale-browser overwrite). Only rewrite the layer when THIS session
-    // has actually read the server for the year. Replays skip it too: a
-    // pending record can be days old, and a wholesale rewrite from it
-    // would wipe weeks archived since — an offline-archived week syncs on
-    // the next fresh-session save instead (rare; archiving is weekly).
-    if (_serverReadYears.has(yearNumber)) {
-      const archiveDelete = await supabase
+    // archived_weeks used to be replace-the-layer (delete-all then
+    // re-insert), gated on _serverReadYears after the 2026-08-28
+    // stale-browser overwrite. That gate had its own data-loss hole: a week
+    // archived in a session the gate distrusted was never written at all,
+    // and the next reload rebuilt the archive section from the (empty)
+    // table, so the week silently vanished (happened in production,
+    // 2026-08-26). Now the save is non-destructive: every in-memory week is
+    // upserted (matched by the snapshot's client-generated id, so re-saves
+    // update rather than duplicate) in EVERY save, stale or fresh — an
+    // insert/update cannot wipe weeks this session has never seen. Deleting
+    // server weeks absent from memory (archive revert) stays behind the
+    // server-read gate.
+    {
+      const existingRes = await supabase
         .from('archived_weeks')
-        .delete()
+        .select('id, week_number, snapshot')
         .eq('user_id', userId)
         .eq('year_id', yearId);
-      if (archiveDelete.error) throw archiveDelete.error;
-      const dbArchiveRows = archiveRowsToWrite.map(({ row, weekNumber }) =>
-        archiveRowPayloadToDb({ row, userId, yearId, weekNumber }),
+      if (existingRes.error) throw existingRes.error;
+      const existingBySnapId = new Map(
+        (existingRes.data || [])
+          .filter((r) => r.snapshot && typeof r.snapshot.id === 'string')
+          .map((r) => [r.snapshot.id, r]),
       );
-      if (dbArchiveRows.length > 0) {
-        const archiveInsert = await supabase.from('archived_weeks').insert(dbArchiveRows);
-        if (archiveInsert.error) throw archiveInsert.error;
+
+      const memorySnapIds = new Set();
+      for (const { row, weekNumber } of archiveRowsToWrite) {
+        const dbRow = archiveRowPayloadToDb({ row, userId, yearId, weekNumber });
+        const snapId = typeof row.id === 'string' ? row.id : null;
+        if (snapId) memorySnapIds.add(snapId);
+        const existing = snapId ? existingBySnapId.get(snapId) : null;
+        if (existing) {
+          const upd = await supabase
+            .from('archived_weeks')
+            .update(dbRow)
+            .eq('id', existing.id);
+          if (upd.error) throw upd.error;
+        } else {
+          const ins = await supabase.from('archived_weeks').insert(dbRow);
+          if (ins.error) throw ins.error;
+        }
       }
-    } else {
-      console.warn('[planner-save] archive rewrite skipped: year not server-read this session');
+
+      // Destructive part only: remove server weeks the user deleted from a
+      // session that has genuinely read the server (archive revert). A stale
+      // or offline session can add and update weeks but never remove them.
+      if (_serverReadYears.has(yearNumber)) {
+        const toRemove = (existingRes.data || []).filter(
+          (r) => !(r.snapshot && memorySnapIds.has(r.snapshot.id)),
+        );
+        for (const r of toRemove) {
+          const del = await supabase.from('archived_weeks').delete().eq('id', r.id);
+          if (del.error) throw del.error;
+        }
+      } else if ((existingRes.data || []).some((r) => !(r.snapshot && memorySnapIds.has(r.snapshot.id)))) {
+        console.warn('[planner-save] archive deletes skipped: year not server-read this session');
+      }
     }
 
     // Cache the just-saved array so the next read returns it instantly
