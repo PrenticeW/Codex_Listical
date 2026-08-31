@@ -379,8 +379,21 @@ export default function useEditState({
             if (row.id === rowId) {
               const updates: Partial<PlannerRow> = { estimate: newValue, timeValue: newTimeValue };
               // For preset estimates, replace all filled day cells with the new timeValue
-              // For Custom, leave day cells as-is (user controls them)
+              // For Custom from the dropdown's Hours+Minutes combo (explicit
+              // timeValueOverride), replace all filled day cells with the new
+              // total — same rule as picking a preset estimate.
+              // For any other Custom, leave day cells as-is (user controls them)
               if (newValue !== 'Custom') {
+                const dayUpdates: Record<string, string> = {};
+                forEachDayColumn(totalDays, (colId) => {
+                  const current = (row[colId] ?? '').toString().trim();
+                  if (current !== '') {
+                    dayUpdates[colId] = newTimeValue;
+                  }
+                });
+                return { ...row, ...updates, ...dayUpdates };
+              }
+              if (options?.timeValueOverride !== undefined) {
                 const dayUpdates: Record<string, string> = {};
                 forEachDayColumn(totalDays, (colId) => {
                   const current = (row[colId] ?? '').toString().trim();
