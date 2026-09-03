@@ -10,7 +10,7 @@
  * - Syncing computed changes back to source data
  */
 
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import type { UseComputedDataReturn, PlannerRow } from '../../types/planner';
 import { calculateTimeValue, calculateMultiTimeValue } from './useTimeValueCalculation';
 import { getEstimateWithHabitCheck } from './useHabitPatternDetection';
@@ -28,7 +28,17 @@ export default function useComputedDataV2({
   setData: React.Dispatch<React.SetStateAction<PlannerRow[]>>;
   totalDays: number;
 }): UseComputedDataReturn {
+  // Snapshot of which day cells each row had filled on the previous compute.
+  // Used to detect "a time was just added to a day" regardless of how it got
+  // there (typed, pasted, dragged, side panel…): a newly filled day cell
+  // always schedules the task, even one that was Done / Abandoned / Blocked /
+  // a custom status. Rows without a snapshot (first load, year switch,
+  // newly created rows) are never flipped — only a change flips them.
+  const prevFilledDaysRef = useRef<Map<string, string>>(new Map());
+
   const computedData = useMemo(() => {
+    const prevFilledDays = prevFilledDaysRef.current;
+
     // Step 1: Compute timeValue and handle habit patterns
     const dataWithTimeValues = data.map(row => {
       // Skip special rows
@@ -89,6 +99,8 @@ export default function useComputedDataV2({
 
       // Check if any day column has a time value (including '0.00')
       let hasScheduledTime = false;
+      let newlyFilledDay = false;
+      const filledDays: number[] = [];
       for (let i = 0; i < totalDays; i++) {
         const dayColumnId = `day-${i}` as `day-${number}`;
         const dayValue = row[dayColumnId];
@@ -98,7 +110,15 @@ export default function useComputedDataV2({
         // Consider any non-empty value (including '0.00') as scheduled
         if (dayValue && dayValue !== '') {
           hasScheduledTime = true;
-          break;
+          filledDays.push(i);
+        }
+      }
+      if (row.id) {
+        const prevKey = prevFilledDays.get(row.id);
+        const nextKey = filledDays.join(',');
+        if (prevKey !== undefined && prevKey !== nextKey) {
+          const prevSet = new Set(prevKey === '' ? [] : prevKey.split(',').map(Number));
+          newlyFilledDay = filledDays.some(i => !prevSet.has(i));
         }
       }
 
@@ -121,8 +141,10 @@ export default function useComputedDataV2({
         const isManualStatus = (st: string) =>
           st !== '-' && st !== 'Not Scheduled' && st !== 'Scheduled';
         if (hasScheduledTime) {
-          // Auto-update to Scheduled only if no manual status has been set
-          if (status === '-' || status === 'Not Scheduled') {
+          // Auto-update to Scheduled only if no manual status has been set —
+          // unless a day cell was just filled, which always schedules the task
+          // (Done, Abandoned, Blocked, custom statuses included).
+          if (status === '-' || status === 'Not Scheduled' || newlyFilledDay) {
             status = 'Scheduled';
           }
         } else {
@@ -150,6 +172,23 @@ export default function useComputedDataV2({
 
     // Step 2: Assign parent group IDs
     return assignParentGroupIds(dataWithTimeValues);
+  }, [data, totalDays]);
+
+  // Refresh the filled-days snapshot after each committed render. Done in an
+  // effect (not inside the memo) so StrictMode's double render can't consume
+  // the change before the sync-back below has acted on it.
+  useEffect(() => {
+    const next = new Map<string, string>();
+    data.forEach(row => {
+      if (!row.id) return;
+      const filled: number[] = [];
+      for (let i = 0; i < totalDays; i++) {
+        const v = row[`day-${i}` as `day-${number}`];
+        if (v && v !== '') filled.push(i);
+      }
+      next.set(row.id, filled.join(','));
+    });
+    prevFilledDaysRef.current = next;
   }, [data, totalDays]);
 
   // Sync computed status, estimate, and timeValue changes back to source data

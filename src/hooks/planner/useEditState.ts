@@ -1,10 +1,50 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { UseEditStateReturn, CellReference, PlannerRow, Command } from '../../types/planner';
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm, ESTIMATE_VALUES } from '../../constants/planner/rowTypes';
-import { forEachDayColumn, isDayColumn } from '../../utils/planner/dayColumnHelpers';
+import { forEachDayColumn, isDayColumn, getDayIndexFromColumnId } from '../../utils/planner/dayColumnHelpers';
 import { writeTaskEvent } from '../../utils/planner/storage';
-import { MULTI_STATUS_KEY_RE, deriveMultiRowStatus } from '../../utils/planner/multiStatus';
+import { MULTI_STATUS_KEY_RE, deriveMultiRowStatus, multiStatusKey } from '../../utils/planner/multiStatus';
 import { TASK_ROW_DETAIL_UPDATE_EVENT, TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
+
+/**
+ * Adding a time to a day cell (any non-empty value, 0.00 included) always
+ * schedules that date. Returns the status fields to merge into the row on
+ * execute, plus the fields to restore on undo — or null when nothing moves.
+ *
+ * - Single rows: the row's own status becomes 'Scheduled', whatever it was
+ *   (Done, Abandoned, Blocked, custom…). useComputedDataV2 only promotes
+ *   '-' / 'Not Scheduled', so manual statuses have to be flipped here, at
+ *   the moment of the edit, otherwise a Done task with time would be forced
+ *   back to Scheduled on every recompute.
+ * - Multi rows: the instance for that date becomes 'Scheduled' (its
+ *   multiStatus-<i> key) and the aggregate row status is re-derived.
+ */
+function getScheduleOnTimeUpdates(
+  row: PlannerRow | undefined,
+  columnId: string,
+  newValue: string,
+  totalDays: number,
+): { execute: Record<string, unknown>; undo: Record<string, unknown> } | null {
+  if (!row || !isDayColumn(columnId)) return null;
+  if ((newValue ?? '').toString().trim() === '') return null;
+  const oldStatus = row.status || '';
+
+  if (row.estimate === 'Multi') {
+    const dayIndex = getDayIndexFromColumnId(columnId);
+    if (dayIndex === null) return null;
+    const key = multiStatusKey(dayIndex);
+    const nextRow = { ...row, [columnId]: newValue, [key]: 'Scheduled' } as PlannerRow;
+    const newStatus = deriveMultiRowStatus(nextRow, totalDays) ?? 'Scheduled';
+    if ((row as any)[key] === 'Scheduled' && newStatus === oldStatus) return null;
+    return {
+      execute: { [key]: 'Scheduled', status: newStatus },
+      undo: { [key]: (row as any)[key], status: oldStatus },
+    };
+  }
+
+  if (oldStatus === 'Scheduled') return null;
+  return { execute: { status: 'Scheduled' }, undo: { status: oldStatus } };
+}
 
 /** Day-of-week patterns for auto-detecting a day tag from subheader text */
 const DAY_TAG_PATTERNS: [RegExp, string][] = [
@@ -204,26 +244,40 @@ export default function useEditState({
         const oldDayValue = (row?.[columnId as `day-${number}`] ?? '').toString();
         const oldEstimate = row?.estimate || '';
         const oldTimeValue = row?.timeValue || '0.00';
+        const scheduleUpdates = getScheduleOnTimeUpdates(row, columnId, formatted, totalDays);
 
         const command: Command = {
           execute: () => {
             setData(prev => prev.map(r => r.id === rowId
-              ? { ...r, [columnId]: formatted, estimate: matchedEstimate, timeValue: formatted }
+              ? { ...r, [columnId]: formatted, estimate: matchedEstimate, timeValue: formatted, ...(scheduleUpdates?.execute ?? {}) }
               : r));
           },
           undo: () => {
             setData(prev => prev.map(r => r.id === rowId
-              ? { ...r, [columnId]: oldDayValue, estimate: oldEstimate, timeValue: oldTimeValue }
+              ? { ...r, [columnId]: oldDayValue, estimate: oldEstimate, timeValue: oldTimeValue, ...(scheduleUpdates?.undo ?? {}) }
               : r));
           },
         };
 
         executeCommand(command);
 
+        if (row?.id && scheduleUpdates && scheduleUpdates.execute.status !== (row.status || '')) {
+          writeTaskEvent(rowId, {
+            field: 'status',
+            oldValue: row.status || null,
+            newValue: 'Scheduled',
+            isRecurring: row?.recurring === 'true' || (row?.recurring as any) === true,
+          }).then(() => {
+            window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
+              detail: { taskId: rowId },
+            }));
+          });
+        }
+
         // Push fresh task data to the detail panel
         if (row?.id) {
           window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_UPDATE_EVENT, {
-            detail: { task: { ...row, [columnId]: formatted, estimate: matchedEstimate, timeValue: formatted } },
+            detail: { task: { ...row, [columnId]: formatted, estimate: matchedEstimate, timeValue: formatted, ...(scheduleUpdates?.execute ?? {}) } },
           }));
         }
 
@@ -435,6 +489,10 @@ export default function useEditState({
       !!newValue;
     const stampedCreatedAt = shouldStampCreatedAt ? new Date().toISOString() : null;
 
+    // Adding a time to a day cell schedules that date (see getScheduleOnTimeUpdates).
+    // Reaches here for Multi rows and for non-numeric day input such as =timeValue.
+    const scheduleUpdates = getScheduleOnTimeUpdates(row, columnId, newValue, totalDays);
+
     // Parse-on-write day detection for subheader rows.
     // Only runs when the subheader text itself is being edited and the user hasn't
     // manually locked the day tag in the side panel.
@@ -452,6 +510,7 @@ export default function useEditState({
             const updates: any = { [actualColumnId]: newValue };
             if (stampedCreatedAt) updates.taskCreatedAt = stampedCreatedAt;
             if (newDayTag !== undefined) updates.dayTag = newDayTag;
+            if (scheduleUpdates) Object.assign(updates, scheduleUpdates.execute);
             // Clear import review flag when subproject or project is updated
             if ((columnId === 'subproject' || columnId === 'project') && row._importNeedsSubprojectReview) {
               updates._importNeedsSubprojectReview = undefined;
@@ -467,6 +526,7 @@ export default function useEditState({
             const undoUpdates: any = { [actualColumnId]: oldValue };
             if (stampedCreatedAt) undoUpdates.taskCreatedAt = null;
             if (newDayTag !== undefined) undoUpdates.dayTag = oldDayTag;
+            if (scheduleUpdates) Object.assign(undoUpdates, scheduleUpdates.undo);
             return { ...row, ...undoUpdates };
           }
           return row;
@@ -483,6 +543,17 @@ export default function useEditState({
         field: 'status',
         oldValue: oldValue || null,
         newValue,
+        isRecurring,
+      }).then(() => {
+        window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
+          detail: { taskId: rowId },
+        }));
+      });
+    } else if (scheduleUpdates && row?.id && scheduleUpdates.execute.status !== (row.status || '')) {
+      writeTaskEvent(rowId, {
+        field: 'status',
+        oldValue: row.status || null,
+        newValue: scheduleUpdates.execute.status as string,
         isRecurring,
       }).then(() => {
         window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
@@ -523,6 +594,7 @@ export default function useEditState({
             ...(stampedCreatedAt ? { taskCreatedAt: stampedCreatedAt } : {}),
             // Propagate auto-detected dayTag so the side panel reflects the new value
             ...(newDayTag !== undefined ? { dayTag: newDayTag } : {}),
+            ...(scheduleUpdates?.execute ?? {}),
           },
         },
       }));
