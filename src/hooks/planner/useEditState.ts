@@ -12,13 +12,20 @@ import { TASK_ROW_DETAIL_UPDATE_EVENT, TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } fr
  * execute, plus the fields to restore on undo — or null when nothing moves.
  *
  * - Single rows: the row's own status becomes 'Scheduled', whatever it was
- *   (Done, Abandoned, Blocked, custom…). useComputedDataV2 only promotes
+ *   (Abandoned, Blocked, On Hold, custom…) except Done / Accounted. useComputedDataV2 only promotes
  *   '-' / 'Not Scheduled', so manual statuses have to be flipped here, at
  *   the moment of the edit, otherwise a Done task with time would be forced
  *   back to Scheduled on every recompute.
  * - Multi rows: the instance for that date becomes 'Scheduled' (its
  *   multiStatus-<i> key) and the aggregate row status is re-derived.
  */
+/**
+ * Statuses that survive a time being added to a day cell. Done is often set
+ * before the time is filled in (and Accounted is a finished state), so
+ * adding the hours afterwards must not reopen the task.
+ */
+export const KEEP_ON_TIME_ADDED = new Set(['Done', 'Accounted']);
+
 function getScheduleOnTimeUpdates(
   row: PlannerRow | undefined,
   columnId: string,
@@ -33,6 +40,7 @@ function getScheduleOnTimeUpdates(
     const dayIndex = getDayIndexFromColumnId(columnId);
     if (dayIndex === null) return null;
     const key = multiStatusKey(dayIndex);
+    if (KEEP_ON_TIME_ADDED.has((row as any)[key])) return null;
     const nextRow = { ...row, [columnId]: newValue, [key]: 'Scheduled' } as PlannerRow;
     const newStatus = deriveMultiRowStatus(nextRow, totalDays) ?? 'Scheduled';
     if ((row as any)[key] === 'Scheduled' && newStatus === oldStatus) return null;
@@ -42,7 +50,7 @@ function getScheduleOnTimeUpdates(
     };
   }
 
-  if (oldStatus === 'Scheduled') return null;
+  if (oldStatus === 'Scheduled' || KEEP_ON_TIME_ADDED.has(oldStatus)) return null;
   return { execute: { status: 'Scheduled' }, undo: { status: oldStatus } };
 }
 

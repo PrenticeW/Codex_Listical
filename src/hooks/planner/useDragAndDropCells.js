@@ -104,13 +104,17 @@ export default function useDragAndDropCells({
   }, []);
 
   const handleCellDrop = useCallback((e, targetRowId, targetColumnId) => {
-    e.preventDefault();
-    e.stopPropagation();
-
+    // Not a cell drag (e.g. a row being reordered via its gutter handle):
+    // leave the event alone so it bubbles up to the <tr>'s row drop
+    // handler. Swallowing it here meant rows could only be dropped on
+    // the gutter itself.
     if (!draggedCell) {
       setDropTargetCell(null);
       return;
     }
+
+    e.preventDefault();
+    e.stopPropagation();
 
     const { rowId: sourceRowId, columnId: sourceColumnId } = draggedCell;
 

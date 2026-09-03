@@ -18,6 +18,7 @@ import { assignParentGroupIds } from './useParentGroupAssignment';
 import { writeTaskEvent } from '../../utils/planner/storage';
 import { TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
 import { MULTI_STATUS_KEY_RE, isScheduledDayValue, deriveMultiRowStatus } from '../../utils/planner/multiStatus';
+import { KEEP_ON_TIME_ADDED } from './useEditState';
 
 export default function useComputedDataV2({
   data,
@@ -143,8 +144,9 @@ export default function useComputedDataV2({
         if (hasScheduledTime) {
           // Auto-update to Scheduled only if no manual status has been set —
           // unless a day cell was just filled, which always schedules the task
-          // (Done, Abandoned, Blocked, custom statuses included).
-          if (status === '-' || status === 'Not Scheduled' || newlyFilledDay) {
+          // (Abandoned, Blocked, custom statuses included) — except Done and
+          // Accounted, which are often set before the hours are filled in.
+          if (status === '-' || status === 'Not Scheduled' || (newlyFilledDay && !KEEP_ON_TIME_ADDED.has(status))) {
             status = 'Scheduled';
           }
         } else {
