@@ -131,7 +131,7 @@ const FilterPanel = React.memo(function FilterPanel({
     <>
       {projectFilterMenu.open && (
         <div ref={projectFilterMenuRef} style={{ ...PANEL_STYLE, top: projectFilterMenu.top, left: projectFilterMenu.left }}>
-          <div style={{ maxHeight: 256, overflowY: 'auto' }}>
+          <div>
             {projectNames.length === 0 ? (
               <FilterEmptyState label="projects" />
             ) : projectNames.map(name => (
@@ -146,7 +146,7 @@ const FilterPanel = React.memo(function FilterPanel({
 
       {subprojectFilterMenu.open && (
         <div ref={subprojectFilterMenuRef} style={{ ...PANEL_STYLE, top: subprojectFilterMenu.top, left: subprojectFilterMenu.left }}>
-          <div style={{ maxHeight: 256, overflowY: 'auto' }}>
+          <div>
             {subprojectNames.length === 0 ? (
               <FilterEmptyState label="subprojects" />
             ) : subprojectNames.map(name => (
@@ -161,7 +161,7 @@ const FilterPanel = React.memo(function FilterPanel({
 
       {statusFilterMenu.open && (
         <div ref={statusFilterMenuRef} style={{ ...PANEL_STYLE, top: statusFilterMenu.top, left: statusFilterMenu.left }}>
-          <div style={{ maxHeight: 256, overflowY: 'auto' }}>
+          <div>
             {statusNames.length === 0 ? (
               <FilterEmptyState label="statuses" />
             ) : statusNames.map(name => (
@@ -176,7 +176,7 @@ const FilterPanel = React.memo(function FilterPanel({
 
       {recurringFilterMenu.open && (
         <div ref={recurringFilterMenuRef} style={{ ...PANEL_STYLE, top: recurringFilterMenu.top, left: recurringFilterMenu.left }}>
-          <div style={{ maxHeight: 256, overflowY: 'auto' }}>
+          <div>
             {recurringNames.length === 0 ? (
               <FilterEmptyState label="options" />
             ) : recurringNames.map(name => (
@@ -191,7 +191,7 @@ const FilterPanel = React.memo(function FilterPanel({
 
       {estimateFilterMenu.open && (
         <div ref={estimateFilterMenuRef} style={{ ...PANEL_STYLE, top: estimateFilterMenu.top, left: estimateFilterMenu.left }}>
-          <div style={{ maxHeight: 256, overflowY: 'auto' }}>
+          <div>
             {estimateNames.length === 0 ? (
               <FilterEmptyState label="estimates" />
             ) : estimateNames.map(name => (

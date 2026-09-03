@@ -76,12 +76,22 @@ export default function AddLinkDialog({
       const z = getPageZoom();
       const w = CARD_W * z;
       const h = CARD_H * z;
-      const gap = 4 * z;
+      const gap = 2 * z;
       if (!el) {
         setPos({ top: (window.innerHeight - h) / 2, left: (window.innerWidth - w) / 2, width: w });
         return;
       }
-      const r = el.getBoundingClientRect();
+      // Horizontally align with the enclosing cell (when there is one), but
+      // take the vertical extent from whichever is taller: the editor grows
+      // past the cell while editing, so the card must clear the editor, not
+      // just the cell.
+      const er = el.getBoundingClientRect();
+      const cr = (el.closest?.('td') ?? el).getBoundingClientRect();
+      const r = {
+        left: cr.left,
+        top: Math.min(er.top, cr.top),
+        bottom: Math.max(er.bottom, cr.bottom),
+      };
       const fitsBelow = r.bottom + gap + h < window.innerHeight - 8;
       setPos({
         top: fitsBelow ? r.bottom + gap : Math.max(8, r.top - gap - h),

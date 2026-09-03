@@ -32,8 +32,13 @@ function useFilter() {
     event.stopPropagation();
     if (!isBrowserEnvironment()) return;
     const buttonRect = event.currentTarget.getBoundingClientRect();
-    const left = buttonRect.left + window.scrollX;
-    const top = buttonRect.bottom + window.scrollY;
+    // Align the menu with the column's left edge (the enclosing cell),
+    // not the filter button, which sits at the right of the cell.
+    const cellRect = event.currentTarget.closest('td')?.getBoundingClientRect() ?? buttonRect;
+    const left = cellRect.left + window.scrollX;
+    // Drop just below the cell (not the button, which is shorter than the
+    // cell and left the menu overlapping the header row).
+    const top = cellRect.bottom + window.scrollY + 2;
     const isAlreadyOpen = menuState.open;
     filterButtonRef.current = event.currentTarget;
     setFilterMenu({
