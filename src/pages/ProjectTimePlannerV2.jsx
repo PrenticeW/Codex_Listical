@@ -2147,16 +2147,26 @@ export default function ProjectTimePlannerV2() {
           .filter(r => r._rowType === 'projectTask' && (r._chipId || r.id?.startsWith('chip-task-')))
           .map(r => r._chipId || r.id.slice('chip-task-'.length))
       );
+      // Respect deletedChip tombstones (see handleDeleteRows) exactly as the
+      // chip sync effect does — a chip the user deleted must not be
+      // re-created here, or it comes back on every page load.
+      const deletedGroupKeys = new Set(
+        newData.filter(r => r._rowType === 'deletedChip' && r._chipGroupKey).map(r => r._chipGroupKey)
+      );
+      const deletedChipIds = new Set(
+        newData.filter(r => r._rowType === 'deletedChip' && r._chipId && !r._chipGroupKey).map(r => r._chipId)
+      );
       chips.forEach(chip => {
         if (!chip.projectNickname || existingChipTaskIds.has(chip.id)) return;
         const key = chipGroupKey(chip);
+        if (deletedChipIds.has(chip.id) || deletedGroupKeys.has(key)) return;
         const headerIndex = newData.findIndex(r => r._rowType === 'subprojectHeader' && (r._chipGroupKey === key || r._chipId === chip.id));
         if (headerIndex === -1) return;
         const chipGroupId = newData[headerIndex].groupId;
         const shortLabel = chipShortLabelMap.get(chip.id);
         const estimateLabel = minutesToEstimateLabel(chip.durationMinutes);
         const timeVal = chip.durationMinutes ? formatMinutesToHHmm(chip.durationMinutes) : '';
-        const recurringInitial = 'true';
+        const recurringInitial = 'Recurring';
         const taskRow = {
           id: `chip-task-${chip.id}`,
           _rowType: 'projectTask',
