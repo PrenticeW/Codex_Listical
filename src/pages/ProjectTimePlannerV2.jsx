@@ -73,6 +73,7 @@ import {
   handleCopyOperation,
   handlePasteOperation,
 } from '../utils/planner/clipboardOperations';
+import { getClipboardTextWithLinks } from '../utils/clipboardText';
 import { createSortInboxCommand } from '../utils/planner/sortInbox';
 import { createSortPlannerCommand } from '../utils/planner/sortPlanner';
 import { saveTaskRows, readTaskRows, invalidateTaskRowsCache, loadChipTaskNote, preloadChipTaskNotes, isTaskRowsSaveInFlight, getLastTaskRowsSaveCompletedAt, writeTaskEvent, isPlannerYearServerFresh, PLANNER_ROWS_STALE_EVENT } from '../utils/planner/storage';
@@ -2522,7 +2523,9 @@ export default function ProjectTimePlannerV2() {
     };
 
     if (e?.clipboardData) {
-      const pastedText = e.clipboardData.getData('text');
+      // Rich-text sources keep URLs in the html flavour only — fold them in
+      // so a group paste of linked titles doesn't lose its links.
+      const pastedText = getClipboardTextWithLinks(e.clipboardData);
       if (performPaste(pastedText)) {
         e.preventDefault();
       }

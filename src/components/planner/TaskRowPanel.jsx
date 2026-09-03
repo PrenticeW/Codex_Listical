@@ -21,6 +21,7 @@ import { saveTaskNote, readTaskEvents } from '../../utils/planner/storage';
 import { TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
 import { fmtTimestamp } from '../../utils/fmtTimestamp';
 import { linkifyText, containsUrl, renderUrlSegments } from '../../utils/linkify';
+import { pasteKeepingLinks } from '../../utils/clipboardText';
 
 // ─── Design tokens (match GearPanel/SystemPanel) ─────────────────────────────
 
@@ -526,6 +527,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
                     placeholder="Add a note…"
                     value={notes}
                     onChange={handleNotesChange}
+                    onPaste={(e) => pasteKeepingLinks(e, (v) => handleNotesChange({ target: { value: v } }))}
                     onScroll={(e) => {
                       if (notesMirrorRef.current) notesMirrorRef.current.scrollTop = e.target.scrollTop;
                     }}

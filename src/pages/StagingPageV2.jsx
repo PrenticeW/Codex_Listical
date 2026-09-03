@@ -46,6 +46,7 @@ import {
 import { loadTacticsChipsState, saveTacticsChipsState } from '../lib/tacticsStorage';
 import { readTaskRows, saveTaskRows } from '../utils/planner/storage';
 import { DEFAULT_PROJECT_ID } from '../constants/plannerStorageKeys';
+import { getClipboardTextWithLinks } from '../utils/clipboardText';
 
 /**
  * Helper to get section type for any row by finding the nearest header above
@@ -429,7 +430,7 @@ export default function StagingPageV2() {
   // Paste handler
   const handlePaste = useCallback(
     (e) => {
-      const clipboardText = e.clipboardData.getData('text/plain');
+      const clipboardText = getClipboardTextWithLinks(e.clipboardData);
       const command = handlePasteOperation({
         clipboardText,
         selectedCells,

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { containsUrl, renderUrlSegments } from '../../utils/linkify';
+import { pasteKeepingLinks } from '../../utils/clipboardText';
 
 /**
  * EditableCell Component
@@ -125,6 +126,7 @@ function EditableCell({
         }}
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
+        onPaste={(e) => pasteKeepingLinks(e, setLocalValue)}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         style={{

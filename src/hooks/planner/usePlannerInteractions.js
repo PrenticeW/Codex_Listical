@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import isBrowserEnvironment from '../../utils/isBrowserEnvironment';
+import { getClipboardTextWithLinks } from '../../utils/clipboardText';
 
 export default function usePlannerInteractions({
   columnWidths,
@@ -139,7 +140,7 @@ export default function usePlannerInteractions({
     if (typeof applyValue !== 'function') return;
     const clipboardData = event.clipboardData;
     if (!clipboardData) return;
-    const text = clipboardData.getData('text/plain');
+    const text = getClipboardTextWithLinks(clipboardData);
     if (text == null) return;
     event.preventDefault();
     applyValue(text);
