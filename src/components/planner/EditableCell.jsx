@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { containsUrl, renderUrlSegments } from '../../utils/linkify';
+import { containsUrl } from '../../utils/linkify';
 import { pasteKeepingLinks } from '../../utils/clipboardText';
+import useAddLink from '../../hooks/useAddLink';
 
 /**
  * EditableCell Component
@@ -18,6 +19,21 @@ function EditableCell({
   const localValueRef = useRef(localValue); // Track current value for unmount
   const onCompleteRef = useRef(onComplete); // Keep latest onComplete without retriggering effects
   const initialValueRef = useRef(initialValue);
+
+  // Cmd/Ctrl+K → Add link popup (see useAddLink).
+  const addLink = useAddLink({
+    inputRef,
+    value: localValue,
+    setValue: setLocalValue,
+    // Confirm commits straight away so the cell closes and shows the link.
+    onCommit: (next) => {
+      shouldSaveRef.current = false; // the unmount/blur path must not double-save
+      localValueRef.current = next;
+      onCompleteRef.current(next);
+    },
+  });
+  const addLinkOpenRef = useRef(false);
+  addLinkOpenRef.current = addLink.isOpen;
 
   // Update refs when values change
   useEffect(() => {
@@ -50,6 +66,8 @@ function EditableCell({
   }, []);
 
   const handleBlur = () => {
+    // Focus moving into the Add link popup is not the end of the edit.
+    if (addLinkOpenRef.current) return;
     // Only save if we haven't cancelled (e.g., via Escape)
     if (shouldSaveRef.current) {
       onComplete(localValue);
@@ -57,6 +75,7 @@ function EditableCell({
   };
 
   const handleKeyDown = (e) => {
+    if (addLink.onKeyDown(e)) return;
     if (e.key === 'Escape') {
       // Don't save on blur when escape is pressed
       shouldSaveRef.current = false;
@@ -116,7 +135,7 @@ function EditableCell({
             overflow: 'hidden',
           }}
         >
-          {renderUrlSegments(localValue)}
+          {addLink.renderMirror()}
         </div>
       )}
       <textarea
@@ -124,9 +143,9 @@ function EditableCell({
           inputRef.current = el;
           adjustHeight(el);
         }}
-        value={localValue}
-        onChange={(e) => setLocalValue(e.target.value)}
-        onPaste={(e) => pasteKeepingLinks(e, setLocalValue)}
+        value={addLink.viewValue}
+        onChange={addLink.onViewChange}
+        onPaste={(e) => pasteKeepingLinks(e, addLink.onViewChange)}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         style={{
@@ -141,6 +160,7 @@ function EditableCell({
           zIndex: 11,
         }}
       />
+      {addLink.dialog}
     </>
   );
 }

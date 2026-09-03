@@ -11,7 +11,7 @@ import SubprojectDropdownCell from '../SubprojectDropdownCell';
 import { ESTIMATE_COLOR_MAP } from '../../../constants/planner/rowTypes';
 import { ChevronDown } from 'lucide-react';
 import { getSelectionEdgeClassNames } from '../../../utils/planner/selectionEdgeClasses';
-import { linkifyText } from '../../../utils/linkify';
+import LinkedText from '../../LinkedText';
 import MultiStatusDropdownCell from '../MultiStatusDropdownCell';
 import { isMultiStatusRow, getMultiInstances, getCurrentInstanceIndex } from '../../../utils/planner/multiStatus';
 
@@ -734,7 +734,7 @@ const TaskRow = React.memo(function TaskRow({
                        a long name never swallows it. */
                     <div className="w-full flex items-center" style={{ paddingLeft: '8px', paddingRight: '3px', overflow: 'hidden', minWidth: 0 }}>
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
-                        {value ? linkifyText(value) : '\u00A0'}
+                        {value ? <LinkedText text={value} onChange={(v) => handleEditComplete(rowId, columnId, v)} /> : '\u00A0'}
                       </span>
                       {((rowData?.notes ?? row.original.notes) || '').trim() !== '' && (
                         <span
@@ -747,7 +747,7 @@ const TaskRow = React.memo(function TaskRow({
                     </div>
                   ) : (
                     <div className="w-full" style={{ paddingLeft: '8px', paddingRight: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
-                      {value ? linkifyText(value) : '\u00A0'}
+                      {value ? <LinkedText text={value} onChange={(v) => handleEditComplete(rowId, columnId, v)} /> : '\u00A0'}
                     </div>
                   )
                 )}

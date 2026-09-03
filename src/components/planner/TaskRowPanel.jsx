@@ -20,7 +20,9 @@ import { getStatusLabel } from '../../lib/statusesStorage';
 import { saveTaskNote, readTaskEvents } from '../../utils/planner/storage';
 import { TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
 import { fmtTimestamp } from '../../utils/fmtTimestamp';
-import { linkifyText, containsUrl, renderUrlSegments } from '../../utils/linkify';
+import { containsUrl } from '../../utils/linkify';
+import LinkedText from '../LinkedText';
+import useAddLink from '../../hooks/useAddLink';
 import { pasteKeepingLinks } from '../../utils/clipboardText';
 
 // ─── Design tokens (match GearPanel/SystemPanel) ─────────────────────────────
@@ -256,7 +258,7 @@ function HistoryEntry({ status, fromStatus, time, note, isLast }) {
           <span style={{ fontSize: 10.5, color: 'var(--th-gutter-text)', fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" }}>{time}</span>
         </div>
         {note && (
-          <div style={{ fontSize: 12, color: C.textFaint, marginTop: 2, lineHeight: 1.45 }}>{linkifyText(note)}</div>
+          <div style={{ fontSize: 12, color: C.textFaint, marginTop: 2, lineHeight: 1.45 }}><LinkedText text={note} /></div>
         )}
       </div>
     </div>
@@ -332,6 +334,10 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
   const notesTextareaRef = React.useRef(null);
   const notesMirrorRef = React.useRef(null);
   const noteSaveDebounceRef = React.useRef(null);
+  // Latest stored note text (may contain [label](url)); the textarea itself
+  // only shows the labels, so blur must save from here, not e.target.value.
+  const notesRef = React.useRef('');
+  notesRef.current = notes;
 
   useEffect(() => {
     if (isEditingNotes && notesTextareaRef.current) notesTextareaRef.current.focus();
@@ -393,14 +399,30 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
     }, 800);
   }, [selectedTask?.id, persistNote]);
 
-  const handleNotesBlur = useCallback((e) => {
+  // Cmd/Ctrl+K → Add link popup (see useAddLink).
+  const setNotesFromLink = useCallback((v) => handleNotesChange({ target: { value: v } }), [handleNotesChange]);
+  const notesAddLink = useAddLink({
+    inputRef: notesTextareaRef,
+    value: notes,
+    setValue: setNotesFromLink,
+    // Confirm closes the editor so the note shows the clickable link.
+    onCommit: (next) => {
+      if (noteSaveDebounceRef.current) { clearTimeout(noteSaveDebounceRef.current); noteSaveDebounceRef.current = null; }
+      if (selectedTask?.id) persistNote(selectedTask.id, next);
+      setIsEditingNotes(false);
+    },
+  });
+  const notesAddLinkOpenRef = React.useRef(false);
+  notesAddLinkOpenRef.current = notesAddLink.isOpen;
+
+  const handleNotesBlur = useCallback(() => {
     // Flush immediately on blur — cancels the debounce timer
     if (noteSaveDebounceRef.current) {
       clearTimeout(noteSaveDebounceRef.current);
       noteSaveDebounceRef.current = null;
     }
     if (selectedTask?.id) {
-      persistNote(selectedTask.id, e.target.value);
+      persistNote(selectedTask.id, notesRef.current);
     }
   }, [selectedTask?.id, persistNote]);
 
@@ -470,7 +492,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
             {/* Task name */}
             <div style={BENTO_CARD}>
               <div style={{ fontSize: 13, fontWeight: 600, color: C.text, lineHeight: 1.4 }}>
-                {linkifyText(taskName)}
+                <LinkedText text={taskName} />
               </div>
             </div>
 
@@ -499,7 +521,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
                     overflowWrap: 'anywhere', cursor: 'text',
                   }}
                 >
-                  {linkifyText(notes)}
+                  <LinkedText text={notes} onChange={setNotesFromLink} />
                 </div>
               ) : (
                 // While editing a note that contains a URL, a mirror layer
@@ -519,19 +541,20 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
                         pointerEvents: 'none',
                       }}
                     >
-                      {renderUrlSegments(notes)}
+                      {notesAddLink.renderMirror()}
                     </div>
                   )}
                   <textarea
                     ref={notesTextareaRef}
                     placeholder="Add a note…"
-                    value={notes}
-                    onChange={handleNotesChange}
-                    onPaste={(e) => pasteKeepingLinks(e, (v) => handleNotesChange({ target: { value: v } }))}
+                    value={notesAddLink.viewValue}
+                    onChange={notesAddLink.onViewChange}
+                    onPaste={(e) => pasteKeepingLinks(e, notesAddLink.onViewChange)}
                     onScroll={(e) => {
                       if (notesMirrorRef.current) notesMirrorRef.current.scrollTop = e.target.scrollTop;
                     }}
-                    onBlur={(e) => { setIsEditingNotes(false); handleNotesBlur(e); }}
+                    onKeyDown={(e) => { notesAddLink.onKeyDown(e); }}
+                    onBlur={(e) => { if (notesAddLinkOpenRef.current) return; setIsEditingNotes(false); handleNotesBlur(e); }}
                     style={{
                       position: 'relative',
                       width: '100%', boxSizing: 'border-box', minHeight: 360, resize: 'none',
@@ -550,6 +573,8 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
                 </div>
               )}
             </div>
+
+            {notesAddLink.dialog}
 
             {/* Status history preview */}
             <div style={{ ...BENTO_CARD, marginBottom: 0 }}>

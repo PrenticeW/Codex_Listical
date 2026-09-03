@@ -12,7 +12,7 @@ import {
 } from '../../constants/planner/rowTypes';
 import { TASK_ROW_DETAIL_EVENT } from '../../contexts/TaskRowPanelContext';
 import { getSelectionEdgeClassNames } from '../../utils/planner/selectionEdgeClasses';
-import { linkifyText } from '../../utils/linkify';
+import LinkedText from '../LinkedText';
 
 // Active-filter icon color. Filters keep the same icon at rest and when
 // active — only the color changes (no icon swap). High-saturation blue,
@@ -849,7 +849,7 @@ const TableRow = React.memo(function TableRow({
                             }
                           }}
                         >
-                          {linkifyText(weekName)}
+                          <LinkedText text={weekName} />
                         </span>
                       )}
                     </div>

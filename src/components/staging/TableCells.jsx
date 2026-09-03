@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { linkifyText, containsUrl, renderUrlSegments } from '../../utils/linkify';
+import { containsUrl } from '../../utils/linkify';
+import LinkedText from '../LinkedText';
 import EstimateDropdownCell from '../planner/EstimateDropdownCell';
+import useAddLink from '../../hooks/useAddLink';
 
 /**
  * Shared cell styling utilities
@@ -113,6 +115,18 @@ export function TextInputCell({
   const inputRef = useRef(null);
   const showLinkifiedDisplay = !isEditing && containsUrl(value);
 
+  // Cmd/Ctrl+K → Add link popup (see useAddLink). The cell's value is
+  // parent-controlled, so confirm goes through onChange.
+  const addLink = useAddLink({
+    inputRef,
+    value: value || '',
+    setValue: onChange,
+    // Confirm closes the edit view so the cell shows the clickable link.
+    onCommit: () => { setIsEditing(false); inputRef.current?.blur(); },
+  });
+  const addLinkOpenRef = useRef(false);
+  addLinkOpenRef.current = addLink.isOpen;
+
   useEffect(() => {
     if (isEditing && inputRef.current) inputRef.current.focus();
   }, [isEditing]);
@@ -172,7 +186,7 @@ export function TextInputCell({
       onFocus={() => setIsEditing(true)}
       {...dataAttributes}
     >
-      {linkifyText(value)}
+      <LinkedText text={value} onChange={onChange} />
     </div>
   );
 
@@ -202,7 +216,7 @@ export function TextInputCell({
             pointerEvents: 'none',
           }}
         >
-          <span>{renderUrlSegments(value || '')}</span>
+          <span>{addLink.renderMirror()}</span>
         </div>
       )}
       <input
@@ -210,12 +224,12 @@ export function TextInputCell({
         type="text"
         autoComplete="off"
         size={1}
-        value={value || ''}
-        onChange={(e) => { onChange(e.target.value); syncMirrorScroll(e); }}
+        value={addLink.viewValue}
+        onChange={(e) => { addLink.onViewChange(e); syncMirrorScroll(e); }}
         onScroll={syncMirrorScroll}
-        onKeyDown={onKeyDown}
+        onKeyDown={(e) => { if (addLink.onKeyDown(e)) { setIsEditing(true); return; } onKeyDown?.(e); }}
         onFocus={onFocus}
-        onBlur={() => setIsEditing(false)}
+        onBlur={() => { if (!addLinkOpenRef.current) setIsEditing(false); }}
         onMouseDown={onMouseDown}
         placeholder={placeholder}
         style={{
@@ -249,6 +263,7 @@ export function TextInputCell({
       ) : (
         showLinkifiedDisplay ? linkifiedDisplay : input
       )}
+      {addLink.dialog}
     </td>
   );
 }

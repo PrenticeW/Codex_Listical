@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import useAddLink from '../../hooks/useAddLink';
 
 /**
  * Inline-editable text span. Displays as plain text; on click, switches to an input.
@@ -17,6 +18,21 @@ export default function InlineEditableText({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? '');
   const inputRef = useRef(null);
+
+  // Cmd/Ctrl+K → Add link popup (see useAddLink).
+  const addLink = useAddLink({
+    inputRef,
+    value: draft,
+    setValue: setDraft,
+    // Confirm saves straight away so the text shows as a link.
+    onCommit: (next) => {
+      const trimmed = next.trim();
+      setEditing(false);
+      if (trimmed !== (value ?? '').trim()) onSave(trimmed);
+    },
+  });
+  const addLinkOpenRef = useRef(false);
+  addLinkOpenRef.current = addLink.isOpen;
 
   // Sync draft when value changes externally while not editing
   useEffect(() => {
@@ -46,6 +62,7 @@ export default function InlineEditableText({
 
   const handleKeyDown = useCallback(
     (e) => {
+      if (addLink.onKeyDown(e)) return;
       if (e.key === 'Enter') {
         e.preventDefault();
         commit();
@@ -56,19 +73,20 @@ export default function InlineEditableText({
       // Stop propagation so parent shortcuts don't fire
       e.stopPropagation();
     },
-    [commit, cancel]
+    [commit, cancel, addLink]
   );
 
   if (editing) {
     return (
+      <>
       <input
         ref={inputRef}
         type="text"
         autoComplete="off"
-        value={draft}
+        value={addLink.viewValue}
         maxLength={maxLength}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
+        onChange={addLink.onViewChange}
+        onBlur={() => { if (!addLinkOpenRef.current) commit(); }}
         onKeyDown={handleKeyDown}
         onClick={(e) => e.stopPropagation()}
         className={inputClassName}
@@ -86,6 +104,8 @@ export default function InlineEditableText({
         }}
         placeholder={placeholder}
       />
+      {addLink.dialog}
+      </>
     );
   }
 
