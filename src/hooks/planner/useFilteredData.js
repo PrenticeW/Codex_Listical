@@ -25,6 +25,7 @@ import {
   isProjectStructureRow,
   isSpecialRow,
   isTimelineRow,
+  isMetricsRow,
 } from '../../utils/planner/rowTypeChecks';
 import { getNormalizedColumnValue } from '../../utils/planner/valueNormalizers';
 import { getMultiInstances, MULTI_STATUS_KEY_RE, isScheduledDayValue } from '../../utils/planner/multiStatus';
@@ -306,13 +307,21 @@ export const useFilteredData = ({
         .some(row => leafMatchesActiveFilters(row));
     }
 
-    let archiveHasVisibleContent = true;
-    if (archiveHeaderIndex !== -1) {
-      const archiveWeekRows = visibleData.filter(r => r._rowType === 'archiveRow');
-      archiveHasVisibleContent = archiveWeekRows.some(r => groupHasVisibleContent(r.groupId));
-    }
+    // The Archive section is not filterable: while any column filter
+    // (project/subproject/status/recurring/estimate/day-column) is active,
+    // the Archive header and every row beneath it are hidden outright.
+    const columnFiltersActive = dayFilterActive ||
+      selectedProjectFilters.size > 0 ||
+      selectedSubprojectFilters.size > 0 ||
+      selectedStatusFilters.size > 0 ||
+      selectedRecurringFilters.size > 0 ||
+      selectedEstimateFilters.size > 0;
 
-    const filtered = visibleData.filter(row => {
+    const filtered = visibleData.filter((row, index) => {
+      if (columnFiltersActive && archiveHeaderIndex !== -1 && index >= archiveHeaderIndex) {
+        return false;
+      }
+
       // Filter out rows that belong to collapsed groups (archive weeks and projects)
       // Use recursive check to handle nested groups (e.g., archive week > project > sections)
       if (isInCollapsedGroup(row)) {
@@ -373,7 +382,7 @@ export const useFilteredData = ({
         // Timeline/metrics rows (month, week, day headers, daily min/max,
         // daily total, filter row) carry no filterable content of their
         // own -- always show these regardless of filter state.
-        if (isTimelineRow(row) || row._isDailyTotalRow || row._isFilterRow) {
+        if (isTimelineRow(row) || isMetricsRow(row) || row._isDailyTotalRow || row._isFilterRow) {
           return true;
         }
 
@@ -391,9 +400,6 @@ export const useFilteredData = ({
         // filters (project/status/recurring/estimate).
         if (row._isInboxRow) {
           return inboxHasVisibleContent;
-        }
-        if (row._rowType === 'archiveHeader') {
-          return archiveHasVisibleContent;
         }
         if (row.groupId) {
           // projectHeader, subprojectHeader, archiveRow (week), archivedProjectHeader

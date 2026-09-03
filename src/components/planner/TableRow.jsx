@@ -14,11 +14,6 @@ import { TASK_ROW_DETAIL_EVENT } from '../../contexts/TaskRowPanelContext';
 import { getSelectionEdgeClassNames } from '../../utils/planner/selectionEdgeClasses';
 import LinkedText from '../LinkedText';
 
-// Active-filter icon color. Filters keep the same icon at rest and when
-// active — only the color changes (no icon swap). High-saturation blue,
-// distinct from the muted --brand-deep token used elsewhere.
-const FILTER_ACTIVE_COLOR = '#0066FF';
-
 // Shared filter funnel icon for column headers + day-total cells. Same
 // glyph at rest and active (color-only state change per design review).
 // On hover: solid white fill behind the icon, icon turns black.
@@ -1358,7 +1353,11 @@ const TableRow = React.memo(function TableRow({
                   // filter icons now live (reference/SystemView.jsx H8), and
                   // it now shares the same colour family as the Subproject
                   // rows directly below it instead of the old dark chrome.
-                  backgroundColor: 'var(--th-section)',
+                  // Active filter: same brand fill + inset ring as the day
+                  // column filter cells below, so every active filter reads
+                  // the same way across the row.
+                  backgroundColor: isFilterActive ? 'var(--brand)' : 'var(--th-section)',
+                  boxShadow: isFilterActive ? 'inset 0 0 0 1.5px var(--sel-ring)' : undefined,
                   borderRight: isTimeHeaderCell ? '1.5px solid black' : '1px solid #d3d3d3',
                   // Design handover (reference/SystemView.jsx H8 row) uses
                   // `padding: '0 8px'` uniformly on these cells -- was 6px/2px.
@@ -1373,7 +1372,7 @@ const TableRow = React.memo(function TableRow({
                       fontWeight: 700,
                       // Plain black ink for column labels -- these are
                       // structural chrome, not themed surfaces.
-                      color: '#000000',
+                      color: isFilterActive ? '#FFFFFF' : '#000000',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -1388,7 +1387,7 @@ const TableRow = React.memo(function TableRow({
                     // instead of staying fixed-size chrome.
                     size={Math.max(10, Math.round(14 * (rowHeight / 24)))}
                     active={isFilterActive}
-                    activeColor={FILTER_ACTIVE_COLOR}
+                    activeColor="#FFFFFF"
                     // Inactive: same muted blue-grey used for the Subproject
                     // row's gutter text/chevron (#6A7A9E / #8090A8), so the
                     // filter icon reads correctly against the pale-blue fill.

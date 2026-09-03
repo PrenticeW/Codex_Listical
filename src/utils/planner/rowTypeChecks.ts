@@ -154,11 +154,12 @@ export const isEditableRow = (row: any): boolean => {
 
 /**
  * Check if row should be excluded from filtering
- * (timeline rows, filter row, inbox/archive dividers, project structure rows, archive rows)
+ * (timeline rows, daily min/max rows, filter row, inbox/archive dividers, project structure rows, archive rows)
  */
 export const shouldBypassFilters = (row: any): boolean => {
   return (
     isTimelineRow(row) ||
+    isMetricsRow(row) ||
     row._isDailyTotalRow ||
     row._isFilterRow ||
     isSectionDivider(row) ||

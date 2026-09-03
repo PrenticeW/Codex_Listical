@@ -834,6 +834,47 @@ export default function ProjectTimePlannerV2() {
   // Day column filters hook
   const { dayColumnFilters, toggleDayFilter: handleDayColumnFilterToggle, isDayFiltered, clearAllDayFilters } = useDayColumnFilters();
 
+  // Escape clears every active filter (column + day-column) in one press,
+  // even while a filter menu is open. Registered in the capture phase on
+  // window: an open menu's useClickOutside also listens there and calls
+  // stopPropagation, but that never suppresses sibling listeners on the
+  // same node, so both run — the menu closes and the filter clears together.
+  // Keys typed inside an editor are left to that editor.
+  const anyFilterActive =
+    dayColumnFilters.size > 0 ||
+    selectedProjectFilters.size > 0 ||
+    selectedSubprojectFilters.size > 0 ||
+    selectedStatusFilters.size > 0 ||
+    selectedRecurringFilters.size > 0 ||
+    selectedEstimateFilters.size > 0;
+  useEffect(() => {
+    if (!anyFilterActive) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      const target = event.target;
+      if (target && (
+        target.isContentEditable ||
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+      )) return;
+      clearAllDayFilters();
+      clearProjectFilter();
+      clearSubprojectFilter();
+      clearStatusFilter();
+      clearRecurringFilter();
+      clearEstimateFilter();
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [
+    anyFilterActive,
+    clearAllDayFilters,
+    clearProjectFilter,
+    clearSubprojectFilter,
+    clearStatusFilter,
+    clearRecurringFilter,
+    clearEstimateFilter,
+  ]);
+
   // Collapsible groups hook
   const { collapsedGroups, setCollapsedGroups, toggleGroupCollapse, isCollapsed } = useCollapsibleGroups({ projectId: DEFAULT_PROJECT_ID, yearNumber: currentYear });
 
