@@ -4,6 +4,11 @@ import { ChevronDown } from 'lucide-react';
 import { getActiveStatuses, getStatusColors, getStatusLabel } from '../../lib/statusesStorage';
 import { useStatuses } from '../../hooks/useStatuses';
 
+// Open list is wider than the cell so it stands out from the rows; options
+// keep the cell width, leaving blank space on the right.
+const DROPDOWN_EXTRA_WIDTH = 48;
+const DROPDOWN_EXTRA_HEIGHT = 24;
+
 /**
  * DropdownCell Component
  * Dropdown selector for spreadsheet cells with keyboard navigation
@@ -56,11 +61,11 @@ function DropdownCell({
   useEffect(() => {
     if (isOpen && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      const estimatedHeight = Math.min(DROPDOWN_OPTIONS.length * rowHeight + 8, 300);
+      const estimatedHeight = Math.min(DROPDOWN_OPTIONS.length * rowHeight + 8 + DROPDOWN_EXTRA_HEIGHT, 300);
       const fitsBelow = rect.bottom + estimatedHeight < window.innerHeight - 8;
       setDropdownPosition({
         top: fitsBelow ? rect.bottom : rect.top - estimatedHeight,
-        left: Math.min(rect.left, window.innerWidth - rect.width - 8),
+        left: Math.min(rect.left, window.innerWidth - rect.width - DROPDOWN_EXTRA_WIDTH - 8),
         width: rect.width
       });
     }
@@ -175,7 +180,7 @@ function DropdownCell({
         <span className={isPillbox ? '' : 'flex-1 text-left'}>
           {getStatusLabel(DROPDOWN_OPTIONS[selectedIndex]) || '\u00A0'}
         </span>
-        <ChevronDown size={isPillbox ? 10 : 12} className="flex-shrink-0" style={{ color: isPillbox && colors ? colors.text : '#9ca3af' }} />
+        <ChevronDown size={14} className="flex-shrink-0" style={{ color: isPillbox && colors ? colors.text : '#9ca3af' }} />
       </button>
 
       {isOpen && createPortal(
@@ -184,12 +189,13 @@ function DropdownCell({
             position: 'fixed',
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
-            width: `${dropdownPosition.width}px`,
+            width: `${dropdownPosition.width + DROPDOWN_EXTRA_WIDTH}px`,
             backgroundColor: '#ffffff',
             border: '1px solid #e8e8e4',
             borderRadius: 6,
             boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 12px rgba(72,50,75,0.10)',
             zIndex: 9999,
+            paddingBottom: `${DROPDOWN_EXTRA_HEIGHT}px`,
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
@@ -211,7 +217,8 @@ function DropdownCell({
                   margin: isPillbox ? '2px 4px' : '0',
                   fontWeight: isPillbox ? '500' : 'normal',
                   paddingLeft: isPillbox ? '8px' : '8px',
-                  paddingRight: isPillbox ? '8px' : '8px'
+                  paddingRight: isPillbox ? '8px' : '8px',
+                  width: `${dropdownPosition.width - (isPillbox ? 8 : 0)}px`
                 }}
                 onMouseDown={(e) => handleSelect(e, option)}
                 onMouseEnter={() => setSelectedIndex(index)}

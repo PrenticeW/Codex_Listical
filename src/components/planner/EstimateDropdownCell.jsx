@@ -564,7 +564,7 @@ function EstimateDropdownCell({
           </span>
         )}
         <ChevronDown
-          size={12}
+          size={14}
           className="flex-shrink-0"
           style={{ color: chevronColor || triggerStyle?.color || 'currentColor', cursor: 'pointer' }}
           onMouseDown={(e) => { if (chevronOnlyTrigger) { e.preventDefault(); e.stopPropagation(); } }}

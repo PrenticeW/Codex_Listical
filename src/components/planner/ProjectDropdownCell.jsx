@@ -2,6 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 
+// Open list is wider than the cell so it stands out from the rows; options
+// keep the cell width, leaving blank space on the right.
+const DROPDOWN_EXTRA_WIDTH = 48;
+const DROPDOWN_EXTRA_HEIGHT = 24;
+
 /**
  * ProjectDropdownCell Component
  * Dropdown selector for project selection with grey chip styling
@@ -39,11 +44,11 @@ function ProjectDropdownCell({
   useEffect(() => {
     if (isOpen && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      const estimatedHeight = Math.min(PROJECT_OPTIONS.length * rowHeight + 8, 300);
+      const estimatedHeight = Math.min(PROJECT_OPTIONS.length * rowHeight + 8 + DROPDOWN_EXTRA_HEIGHT, 300);
       const fitsBelow = rect.bottom + estimatedHeight < window.innerHeight - 8;
       setDropdownPosition({
         top: fitsBelow ? rect.bottom : rect.top - estimatedHeight,
-        left: Math.min(rect.left, window.innerWidth - rect.width - 8),
+        left: Math.min(rect.left, window.innerWidth - rect.width - DROPDOWN_EXTRA_WIDTH - 8),
         width: rect.width
       });
     }
@@ -158,7 +163,7 @@ function ProjectDropdownCell({
         <span>
           {PROJECT_OPTIONS[selectedIndex] || '\u00A0'}
         </span>
-        <ChevronDown size={10} className="flex-shrink-0" style={{ color: currentColors.text }} />
+        <ChevronDown size={14} className="flex-shrink-0" style={{ color: currentColors.text }} />
       </button>
 
       {isOpen && createPortal(
@@ -167,12 +172,13 @@ function ProjectDropdownCell({
             position: 'fixed',
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
-            width: `${dropdownPosition.width}px`,
+            width: `${dropdownPosition.width + DROPDOWN_EXTRA_WIDTH}px`,
             backgroundColor: '#ffffff',
             border: '1px solid #e8e8e4',
             borderRadius: 6,
             boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 12px rgba(72,50,75,0.10)',
             zIndex: 9999,
+            paddingBottom: `${DROPDOWN_EXTRA_HEIGHT}px`,
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
@@ -193,7 +199,8 @@ function ProjectDropdownCell({
                   margin: '2px 4px',
                   fontWeight: '500',
                   paddingLeft: '8px',
-                  paddingRight: '8px'
+                  paddingRight: '8px',
+                  width: `${dropdownPosition.width - 8}px`
                 }}
                 onMouseDown={(e) => handleSelect(e, option)}
                 onMouseEnter={() => setSelectedIndex(index)}

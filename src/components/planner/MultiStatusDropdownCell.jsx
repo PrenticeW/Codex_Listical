@@ -231,7 +231,7 @@ function MultiStatusDropdownCell({
           }}
           style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0, padding: '2px 4px' }}
         >
-          <ChevronDown size={10} style={{ color: triggerColors.text }} />
+          <ChevronDown size={14} style={{ color: triggerColors.text }} />
         </span>
       </div>
 

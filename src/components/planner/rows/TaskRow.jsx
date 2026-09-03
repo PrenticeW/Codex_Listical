@@ -540,7 +540,7 @@ const TaskRow = React.memo(function TaskRow({
                         >
                           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={getStatusLabel(value)}>{getStatusLabel(value)}</span>
                           <ChevronDown
-                            size={10}
+                            size={14}
                             style={{ color: '#000000', cursor: 'pointer' }}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -563,7 +563,7 @@ const TaskRow = React.memo(function TaskRow({
                         >
                           <span>-</span>
                           <ChevronDown
-                            size={10}
+                            size={14}
                             style={{ color: '#000000', cursor: 'pointer' }}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -605,8 +605,8 @@ const TaskRow = React.memo(function TaskRow({
                       >
                         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value || '-'}>{value || '-'}</span>
                         <ChevronDown
-                          size={12}
-                          style={{ color: '#9ca3af', cursor: 'pointer' }}
+                          size={14}
+                          style={{ color: '#000000', cursor: 'pointer' }}
                           onClick={(e) => {
                             e.stopPropagation();
                             handleCellDoubleClick(rowId, columnId, value);
@@ -644,7 +644,7 @@ const TaskRow = React.memo(function TaskRow({
                         >
                           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={getStatusLabel(value)}>{getStatusLabel(value)}</span>
                           <ChevronDown
-                            size={10}
+                            size={14}
                             style={{ color: PILLBOX_COLORS[value]?.text || PILLBOX_COLORS['-'].text, cursor: 'pointer' }}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -667,7 +667,7 @@ const TaskRow = React.memo(function TaskRow({
                         >
                           <span>-</span>
                           <ChevronDown
-                            size={10}
+                            size={14}
                             style={{ color: PILLBOX_COLORS['-'].text, cursor: 'pointer' }}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -707,7 +707,7 @@ const TaskRow = React.memo(function TaskRow({
                           </span>
                         )}
                         <ChevronDown
-                          size={12}
+                          size={14}
                           style={{ color: 'currentColor', cursor: 'pointer' }}
                           onClick={(e) => {
                             e.stopPropagation();
