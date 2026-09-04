@@ -91,6 +91,7 @@ vi.mock('../../../lib/storageCache', () => ({
   hasCached: (ns, k) => cache.has(`${ns}|${k}`),
   setCached: (ns, k, v) => cache.set(`${ns}|${k}`, v),
   invalidate: (ns, k) => cache.delete(`${ns}|${k}`),
+  onSessionReset: () => () => {},
 }));
 
 // In-memory stand-in for the IndexedDB layer, same surface as plannerOffline.

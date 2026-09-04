@@ -161,13 +161,35 @@ function hydrateForUser(userId) {
  * different user, drop everything of theirs first (memory + mirror).
  * Safe to call repeatedly with the same id (no-op after the first call).
  */
+/**
+ * Session-reset hooks. Storage modules keep per-session, in-memory
+ * bookkeeping (known row ids, diff baselines, CAS version numbers, note
+ * caches) keyed by year but NOT by user. Anything registered here runs
+ * whenever the cache owner goes away (SIGNED_OUT / USER_DELETED) or changes
+ * (account switch with no SIGNED_OUT), with the previous owner's id, so
+ * each module can drop state that would otherwise leak into the next
+ * account's first save in the same tab.
+ */
+const sessionResetHooks = new Set();
+export function onSessionReset(fn) {
+  sessionResetHooks.add(fn);
+  return () => sessionResetHooks.delete(fn);
+}
+function runSessionResetHooks(previousUserId) {
+  for (const fn of sessionResetHooks) {
+    try { fn(previousUserId); } catch { /* one module's failure must not block the rest */ }
+  }
+}
+
 function adoptUser(userId) {
   if (!userId || userId === currentOwnerId) return;
   if (currentOwnerId !== null) {
     // Account switch without a SIGNED_OUT in between — wipe the previous
     // user's data before adopting the new one.
+    const previous = currentOwnerId;
     caches.clear();
     clearAllLocalStorage();
+    runSessionResetHooks(previous);
   } else {
     // First adoption this page-load. Memory should be empty (nothing is
     // hydrated before an owner is known), but clear defensively.
@@ -296,8 +318,10 @@ function attachAuthListener() {
   try {
     supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+        const previous = currentOwnerId;
         clearAll();
         currentOwnerId = null;
+        runSessionResetHooks(previous);
       } else if (session?.user?.id) {
         // INITIAL_SESSION / SIGNED_IN / TOKEN_REFRESHED / USER_UPDATED —
         // adopt the session's user. No-op when the id matches the current

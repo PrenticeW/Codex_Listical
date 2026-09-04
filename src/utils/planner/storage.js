@@ -49,6 +49,7 @@ import {
   hasCached,
   invalidate,
   setCached,
+  onSessionReset,
 } from '../../lib/storageCache';
 import {
   localUserId,
@@ -1878,6 +1879,18 @@ setOfflineReplayHandler((yearNumber, payload) => {
 // migration are still visible until the user saves them again.
 const CHIP_NOTE_PREFIX = 'listical-chip-note-';
 const chipNotesCache = new Map(); // chipId → note text (or null)
+
+// Sign-out / account-switch: drop every piece of per-session bookkeeping so
+// the next account's first save in this tab cannot diff against, or adopt
+// ids from, the previous account (see storageCache.onSessionReset).
+onSessionReset(() => {
+  _knownRowIds.clear();
+  _syntheticRowIds.clear();
+  _baselineRows.clear();
+  _readHighWater.clear();
+  _serverReadYears.clear();
+  chipNotesCache.clear();
+});
 
 // Fetch all chip notes for the signed-in user and populate chipNotesCache.
 // Also migrates any localStorage-only notes to Supabase (one-time, per device).

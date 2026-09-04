@@ -19,7 +19,7 @@
 
 import { supabase } from './supabase';
 import { defineRowMetadata } from '../utils/staging/planTableHelpers';
-import { getCached, hasCached, setCached, invalidate } from './storageCache';
+import { getCached, hasCached, setCached, invalidate, onSessionReset } from './storageCache';
 import { debounceSiteSnapshot } from './snapshotStorage';
 
 export const STAGING_STORAGE_EVENT = 'staging-state-update';
@@ -253,6 +253,8 @@ const _knownProjectIds = new Map(); // yearNumber -> Set<id>
 // a Goal page save (whose in-memory shortlist may predate a System reorder)
 // never broadcasts a stale order.
 const _systemOrders = new Map();
+
+onSessionReset(() => { _knownProjectIds.clear(); _systemOrders.clear(); });
 
 function recordSystemOrders(yearNumber, rows) {
   if (yearNumber == null) return;

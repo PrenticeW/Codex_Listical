@@ -533,8 +533,6 @@ export default function ProjectTimePlannerV2() {
   //     coalesce into one refetch.
   //   - archived/draft years never refresh (mobile only writes the active year).
   useEffect(() => {
-    // TODO(debug): remove after realtime delivery is verified.
-    console.log('[realtime] effect run', { currentYear, isCurrentYearArchived, isCurrentYearDraft });
     if (isCurrentYearArchived || isCurrentYearDraft) return undefined;
     let cancelled = false;
     let refreshTimer = null;
@@ -567,8 +565,6 @@ export default function ProjectTimePlannerV2() {
         const muteApplies = isPlannerYearServerFresh(currentYear) && sinceSave < MUTE_MS;
         if (isTaskRowsSaveInFlight() || muteApplies) {
           const delay = isTaskRowsSaveInFlight() ? 1000 : MUTE_MS - sinceSave + 250;
-          // TODO(debug): remove after realtime delivery is verified.
-          console.log('[realtime] muted, deferring refresh', delay);
           scheduleRefresh(delay);
           return;
         }
@@ -587,8 +583,6 @@ export default function ProjectTimePlannerV2() {
             scheduleRefresh(1000);
             return;
           }
-          // TODO(debug): remove after realtime delivery is verified.
-          console.log('[realtime] refetched rows', Array.isArray(rows) ? rows.length : rows);
           if (Array.isArray(rows) && rows.length > 0) {
             skipNextAutoSaveRef.current = true;
             setData(prev => {
@@ -627,13 +621,35 @@ export default function ProjectTimePlannerV2() {
     // trust (or save) anything.
     const onStale = () => scheduleRefresh(0);
     window.addEventListener(PLANNER_ROWS_STALE_EVENT, onStale);
-    (async () => {
+    // Refetch when the window regains focus or is restored from the bfcache
+    // (laptop lid reopened with this tab in front never trips the 60s
+    // hidden rule in plannerStorage, and the realtime socket is usually dead
+    // by then). Throttled so alt-tabbing does not hammer the server.
+    const WAKE_REFETCH_MIN_GAP_MS = 30000;
+    let lastWakeRefetchAt = 0;
+    const onWake = () => {
+      if (Date.now() - lastWakeRefetchAt < WAKE_REFETCH_MIN_GAP_MS) return;
+      lastWakeRefetchAt = Date.now();
+      scheduleRefresh(0);
+    };
+    window.addEventListener('focus', onWake);
+    window.addEventListener('pageshow', onWake);
+
+    // Realtime channel with recovery. supabase-js reconnects the socket on
+    // its own, but a channel that ends in CHANNEL_ERROR / TIMED_OUT / CLOSED
+    // (sleep, network change, server restart) stays dead unless re-created.
+    // On any of those: refetch now (events were missed) and resubscribe
+    // with capped backoff. Cleanup sets `cancelled`, so the CLOSED our own
+    // removeChannel produces is ignored.
+    let reconnectTimer = null;
+    let reconnectAttempt = 0;
+    const RECONNECT_BASE_MS = 2000;
+    const RECONNECT_MAX_MS = 60000;
+    const connect = async () => {
       const { data: userData } = await supabase.auth.getUser();
       const uid = userData?.user?.id;
-      // TODO(debug): remove after realtime delivery is verified.
-      console.log('[realtime] auth uid', uid, 'cancelled', cancelled);
       if (!uid || cancelled) return;
-      channel = supabase
+      const ch = supabase
         .channel(`planner-rows-web-${currentYear}`)
         .on(
           'postgres_changes',
@@ -642,9 +658,7 @@ export default function ProjectTimePlannerV2() {
           // `year_id=eq.` filter works. RLS already scopes delivery to this
           // user's rows, so the filter was only an optimization.
           { event: '*', schema: 'public', table: 'planner_rows' },
-          (payload) => {
-            // TODO(debug): remove after realtime delivery is verified.
-            console.log('[realtime] planner_rows event', payload?.eventType, payload?.old?.id ?? payload?.new?.id);
+          () => {
             // Defer — never drop. Events that arrive inside the echo-mute
             // window used to be discarded outright, which lost real mobile
             // writes landing during it (e.g. a delete-undo's re-insert while
@@ -655,15 +669,39 @@ export default function ProjectTimePlannerV2() {
             scheduleRefresh(800);
           }
         )
-        .subscribe((status, err) => {
-          // TODO(debug): remove after realtime delivery is verified.
-          console.log('[realtime] channel status', status, err?.message ?? '');
+        .subscribe((status) => {
+          if (cancelled) return;
+          if (status === 'SUBSCRIBED') {
+            // Anything written while we were disconnected was missed.
+            if (reconnectAttempt > 0) scheduleRefresh(0);
+            reconnectAttempt = 0;
+            return;
+          }
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            if (channel === ch) {
+              supabase.removeChannel(ch);
+              channel = null;
+            }
+            scheduleRefresh(0);
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** reconnectAttempt);
+            reconnectAttempt += 1;
+            reconnectTimer = setTimeout(() => {
+              reconnectTimer = null;
+              if (!cancelled) connect();
+            }, delay);
+          }
         });
-    })();
+      channel = ch;
+    };
+    connect();
     return () => {
       cancelled = true;
       window.removeEventListener(PLANNER_ROWS_STALE_EVENT, onStale);
+      window.removeEventListener('focus', onWake);
+      window.removeEventListener('pageshow', onWake);
       if (refreshTimer) clearTimeout(refreshTimer);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       if (channel) supabase.removeChannel(channel);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps

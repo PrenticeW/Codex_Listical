@@ -40,7 +40,7 @@
  */
 
 import { supabase } from './supabase';
-import { getCached, hasCached, setCached } from './storageCache';
+import { getCached, hasCached, setCached, onSessionReset } from './storageCache';
 import { debounceSiteSnapshot } from './snapshotStorage';
 
 // --- cache namespacing -------------------------------------------------
@@ -448,6 +448,8 @@ function customProjectPayloadToRow(custom, { userId, yearId, isSent }) {
 // other tab's chips. Adoption happens at state-application moments only
 // (peekTacticsCache and readChipsLayer), never at save time.
 const _chipLiveVersions = new Map();
+
+onSessionReset(() => { _chipLiveVersions.clear(); });
 
 const chipsLiveVersionKey = (yearNumber) => `chips_live_version:${yearNumber}`;
 

@@ -20,7 +20,7 @@
  */
 
 import { supabase } from './supabase';
-import { getCached, hasCached, setCached } from './storageCache';
+import { getCached, hasCached, setCached, onSessionReset } from './storageCache';
 
 export const TACTICS_METRICS_STORAGE_EVENT = 'tactics-metrics-state-update';
 
@@ -189,6 +189,8 @@ function dbRowToPayload(row) {
 // moments only (peekTacticsMetricsCache and cache-hit reads), never at save
 // time. Mirrors _chipLiveVersions in tacticsStorage.js.
 const _metricsLiveVersions = new Map();
+
+onSessionReset(() => { _metricsLiveVersions.clear(); });
 
 function adoptLiveVersionFromCachedRow(yearNumber, row) {
   if (yearNumber == null) return;

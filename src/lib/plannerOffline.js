@@ -28,6 +28,7 @@
 // { pending, __eventYear }) or poll hasPendingOfflineSave().
 
 import { supabase } from './supabase';
+import { onSessionReset } from './storageCache';
 
 const DB_NAME = 'listical-offline';
 const DB_VERSION = 1;
@@ -59,8 +60,19 @@ function openDb() {
         req.result.createObjectStore(STORE);
       }
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const db = req.result;
+      // The browser can close the connection out from under us (storage
+      // eviction, version change from another tab). Forget it so the next
+      // call re-opens instead of failing forever.
+      db.onclose = () => { _dbPromise = null; };
+      db.onversionchange = () => { db.close(); _dbPromise = null; };
+      resolve(db);
+    };
+    req.onerror = () => {
+      _dbPromise = null; // a transient failure must not poison the session
+      reject(req.error);
+    };
   });
   return _dbPromise;
 }
@@ -181,6 +193,34 @@ export async function loadPendingStates(uid) {
     return [];
   }
 }
+
+// --- sign-out cleanup -----------------------------------------------------
+
+// Delete every snapshot / pending record belonging to `uid`. Called on
+// SIGNED_OUT, USER_DELETED and account switch (via storageCache's session
+// reset hooks) so a shared browser never keeps the previous user's planner
+// rows on disk after they leave — the IndexedDB counterpart of the
+// `cw-cache:` localStorage scoping. A pending save that has not reached the
+// server is dropped with it: after sign-out there is no session to replay
+// it under.
+export async function clearUserOfflineData(uid) {
+  if (!uid) return;
+  try {
+    const keys = await idbKeys();
+    const mine = keys.filter(
+      (k) => typeof k === 'string' && (k.startsWith(`snapshot:${uid}:`) || k.startsWith(`pending:${uid}:`)),
+    );
+    for (const key of mine) await idbDel(key);
+    if (_pendingFlag) {
+      _pendingFlag = false;
+      dispatchPendingEvent(null);
+    }
+  } catch {
+    // best effort
+  }
+}
+
+onSessionReset((previousUserId) => { clearUserOfflineData(previousUserId); });
 
 // --- replay ---------------------------------------------------------------
 
