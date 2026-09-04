@@ -2329,6 +2329,7 @@ export default function ProjectTimePlannerV2() {
     getCellKey: (rowId, columnId) => `${rowId}|${columnId}`,
     setSelectedCells,
     setAnchorCell,
+    projectIdByNickname,
   });
 
   // Inline tagline edits on a project header row also write back to

@@ -121,6 +121,7 @@ export default function useEditState({
   getCellKey,
   setSelectedCells,
   setAnchorCell,
+  projectIdByNickname,
 }: {
   data: PlannerRow[];
   setData: React.Dispatch<React.SetStateAction<PlannerRow[]>>;
@@ -129,7 +130,15 @@ export default function useEditState({
   getCellKey: (rowId: string, columnId: string) => string;
   setSelectedCells: React.Dispatch<React.SetStateAction<Set<string>>>;
   setAnchorCell: React.Dispatch<React.SetStateAction<CellReference | null>>;
+  // Nickname -> projects.id. A project-cell edit stamps projectId alongside
+  // the display nickname so the row carries the stable join key (the mobile
+  // app treats project_id as the source of truth for a task's project).
+  projectIdByNickname?: Map<string, string>;
 }): UseEditStateReturn {
+  const projectIdByNicknameRef = useRef(projectIdByNickname);
+  useEffect(() => {
+    projectIdByNicknameRef.current = projectIdByNickname;
+  }, [projectIdByNickname]);
   const [editingCell, setEditingCell] = useState<CellReference | null>(null);
   const [editValue, setEditValue] = useState('');
 
@@ -510,6 +519,16 @@ export default function useEditState({
       ? detectDayTag(newValue)
       : undefined; // undefined = don't touch dayTag
 
+    // A project-cell edit also stamps the stable project id (or clears it
+    // when the cell goes back to '-'). Only task rows: structural rows keep
+    // the projectId the structure injector gave them.
+    const isProjectCellEdit = actualColumnId === 'project' && row?._rowType !== 'projectHeader'
+      && row?._rowType !== 'projectGeneral' && row?._rowType !== 'projectUnscheduled';
+    const oldProjectId = (row as any)?.projectId ?? null;
+    const projectIdUpdate = isProjectCellEdit
+      ? ((newValue && newValue !== '-') ? (projectIdByNicknameRef.current?.get(newValue) ?? null) : null)
+      : undefined;
+
     // Create command for regular edits
     const command: Command = {
       execute: () => {
@@ -519,6 +538,7 @@ export default function useEditState({
             if (stampedCreatedAt) updates.taskCreatedAt = stampedCreatedAt;
             if (newDayTag !== undefined) updates.dayTag = newDayTag;
             if (scheduleUpdates) Object.assign(updates, scheduleUpdates.execute);
+            if (projectIdUpdate !== undefined) updates.projectId = projectIdUpdate;
             // Clear import review flag when subproject or project is updated
             if ((columnId === 'subproject' || columnId === 'project') && row._importNeedsSubprojectReview) {
               updates._importNeedsSubprojectReview = undefined;
@@ -535,6 +555,7 @@ export default function useEditState({
             if (stampedCreatedAt) undoUpdates.taskCreatedAt = null;
             if (newDayTag !== undefined) undoUpdates.dayTag = oldDayTag;
             if (scheduleUpdates) Object.assign(undoUpdates, scheduleUpdates.undo);
+            if (projectIdUpdate !== undefined) undoUpdates.projectId = oldProjectId;
             return { ...row, ...undoUpdates };
           }
           return row;
