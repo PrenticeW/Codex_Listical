@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { isRecurringValue } from '../../utils/planner/valueNormalizers';
 
 // ============================================================
 // CONSTANTS
@@ -710,13 +711,13 @@ export default function useRowRenderers({
             {...cellClickProps('recurring')}
             data-cell-purpose="recurring-toggle"
             data-interactive="true"
-            data-is-recurring={row.recurring === 'Recurring' || undefined}
+            data-is-recurring={isRecurringValue(row.recurring) || undefined}
           >
             <div className="flex h-full w-full items-center justify-center">
               <input
                 type="checkbox"
                 className={checkboxInputClass}
-                checked={row.recurring === 'Recurring'}
+                checked={isRecurringValue(row.recurring)}
                 tabIndex={0}
                 onClick={(e) => e.stopPropagation()}
                 onFocus={() => handleCellActivate(rowId, 'recurring')}

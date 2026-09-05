@@ -12,6 +12,7 @@ import {
 import { createEmptyDayColumns } from './dayColumnHelpers';
 import { multiStatusKey, deriveMultiRowStatus } from './multiStatus';
 import { isSweepStatus, getSortTarget } from '../../lib/statusesStorage';
+import { isRecurringValue } from './valueNormalizers';
 
 /**
  * Statuses swept into a week archive (and cleared from the live plan).
@@ -650,7 +651,10 @@ export const resetRecurringTasks = (data, totalDays = 84, startDayIndex = 0) => 
     // Reset recurring tasks, and non-recurring tasks that span other weeks
     // (those are snapshotted into the archive rather than moved whole, so
     // the live row's archived-week values must be cleared here).
-    if ((row.recurring || taskHasDayOutsideRange(row, startDayIndex, totalDays)) &&
+    // isRecurringValue, not row.recurring: 'Not Recurring' / 'false' are
+    // truthy strings and would otherwise make a plain Done task get reset
+    // in place (snapshot path) instead of moved out of the planner.
+    if ((isRecurringValue(row.recurring) || taskHasDayOutsideRange(row, startDayIndex, totalDays)) &&
         isArchiveSweepStatus(row.status)) {
       // Was this task actually scheduled within the week being archived? If
       // not, its Done/Abandoned status belongs to an instance in a different

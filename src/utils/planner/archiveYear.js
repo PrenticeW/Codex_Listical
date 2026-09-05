@@ -47,6 +47,7 @@ import {
 } from '../../lib/tacticsMetricsStorage';
 import { isProjectTask } from './rowTypeChecks';
 import { clearForYear } from '../../lib/storageCache';
+import { isRecurringValue } from './valueNormalizers';
 
 const DEFAULT_PROJECT_ID = 'project-1';
 
@@ -57,7 +58,7 @@ const DEFAULT_PROJECT_ID = 'project-1';
  */
 function extractRecurringTasks(taskRows) {
   return taskRows.filter(row => {
-    return isProjectTask(row) && row.recurring === 'Recurring';
+    return isProjectTask(row) && isRecurringValue(row.recurring);
   });
 }
 

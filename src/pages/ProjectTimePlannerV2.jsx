@@ -68,6 +68,7 @@ import {
 import {
   normalizeValue,
   coerceToNumber,
+  isRecurringValue,
 } from '../utils/planner/valueNormalizers';
 import {
   handleCopyOperation,
@@ -2122,7 +2123,7 @@ export default function ProjectTimePlannerV2() {
             if (chip && shortLabel !== undefined) {
               const estimateLabel = minutesToEstimateLabel(chip.durationMinutes);
               const timeVal = chip.durationMinutes ? formatMinutesToHHmm(chip.durationMinutes) : '';
-              const canonicalRecurring = 'true';
+              const canonicalRecurring = 'Recurring';
 
               // Per-field user-edit detection.
               // A field is considered user-edited when its _original* stamp exists and
@@ -2134,7 +2135,9 @@ export default function ProjectTimePlannerV2() {
               const taskEdited = row._originalTask !== undefined && row.task !== row._originalTask;
               const estimateEdited = row._originalEstimate !== undefined && row.estimate !== row._originalEstimate;
               const timeValueEdited = row._originalTimeValue !== undefined && row.timeValue !== row._originalTimeValue;
-              const recurringEdited = row._originalRecurring !== undefined && row.recurring !== row._originalRecurring;
+              // Compare by meaning: older rows hold 'true' from the previous canonical
+              // spelling, and that must not read as a user edit.
+              const recurringEdited = row._originalRecurring !== undefined && isRecurringValue(row.recurring) !== isRecurringValue(row._originalRecurring);
 
               const nextTask = taskEdited ? row.task : shortLabel;
               const nextEstimate = estimateEdited ? row.estimate : estimateLabel;
@@ -2153,11 +2156,11 @@ export default function ProjectTimePlannerV2() {
                 row.task !== nextTask ||
                 row.estimate !== nextEstimate ||
                 row.timeValue !== nextTimeValue ||
-                row.recurring !== nextRecurring ||
+                isRecurringValue(row.recurring) !== isRecurringValue(nextRecurring) ||
                 row._originalTask !== nextOriginalTask ||
                 row._originalEstimate !== nextOriginalEstimate ||
                 row._originalTimeValue !== nextOriginalTimeValue ||
-                row._originalRecurring !== nextOriginalRecurring;
+                isRecurringValue(row._originalRecurring) !== isRecurringValue(nextOriginalRecurring);
 
               if (needsUpdate) {
                 changed = true;
@@ -2954,7 +2957,7 @@ export default function ProjectTimePlannerV2() {
     // Tasks that also have day values in OTHER weeks are snapshotted (below)
     // instead of moved whole, so their other-week values stay in the plan.
     const nonRecurringTasks = collectTasksForArchive(data, task =>
-      isArchiveSweepStatus(task.status) && !task.recurring &&
+      isArchiveSweepStatus(task.status) && !isRecurringValue(task.recurring) &&
       isTaskInArchivedWeek(task, firstVisibleDayIndex, totalDays) &&
       !taskHasDayOutsideRange(task, firstVisibleDayIndex, totalDays)
     );
@@ -2966,7 +2969,7 @@ export default function ProjectTimePlannerV2() {
     // resetRecurringTasks.
     const recurringTasks = collectTasksForArchive(data, task =>
       isArchiveSweepStatus(task.status) &&
-      (task.recurring || taskHasDayOutsideRange(task, firstVisibleDayIndex, totalDays)) &&
+      (isRecurringValue(task.recurring) || taskHasDayOutsideRange(task, firstVisibleDayIndex, totalDays)) &&
       isTaskInArchivedWeek(task, firstVisibleDayIndex, totalDays)
     );
     const recurringSnapshots = recurringTasks.map(task =>

@@ -19,6 +19,7 @@ import { writeTaskEvent } from '../../utils/planner/storage';
 import { TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
 import { MULTI_STATUS_KEY_RE, isScheduledDayValue, deriveMultiRowStatus } from '../../utils/planner/multiStatus';
 import { KEEP_ON_TIME_ADDED } from './useEditState';
+import { isRecurringValue } from '../../utils/planner/valueNormalizers';
 
 export default function useComputedDataV2({
   data,
@@ -228,7 +229,7 @@ export default function useComputedDataV2({
             field: 'status',
             oldValue: row.status || null,
             newValue: computed.status,
-            isRecurring: row.recurring === 'true' || (row.recurring as any) === true,
+            isRecurring: isRecurringValue(row.recurring),
           }).then(() => {
             window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
               detail: { taskId: row.id },

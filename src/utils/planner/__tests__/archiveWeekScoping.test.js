@@ -45,21 +45,47 @@ describe('archive week scoping', () => {
   });
 
   it('reset uses the remaining single instance stored status', () => {
-    const rows = [{ id: 'a', recurring: 'Weekly', status: 'Done', 'day-2': '1:00', 'day-9': '2:00', 'multiStatus-9': 'In Progress' }];
+    const rows = [{ id: 'a', recurring: 'Recurring', status: 'Done', 'day-2': '1:00', 'day-9': '2:00', 'multiStatus-9': 'In Progress' }];
     const [out] = resetRecurringTasks(rows, T, 0);
     expect(out.status).toBe('In Progress');
   });
 
   it('reset leaves rows scheduled only in other weeks alone', () => {
-    const rows = [{ id: 'a', recurring: 'Weekly', status: 'Done', 'day-9': '2:00' }];
+    const rows = [{ id: 'a', recurring: 'Recurring', status: 'Done', 'day-9': '2:00' }];
     const [out] = resetRecurringTasks(rows, T, 0);
     expect(out['day-9']).toBe('2:00');
     expect(out.status).toBe('Done');
   });
 
   it('reset falls back to Not Scheduled when nothing remains', () => {
-    const rows = [{ id: 'a', recurring: 'Weekly', status: 'Done', 'day-2': '1:00' }];
+    const rows = [{ id: 'a', recurring: 'Recurring', status: 'Done', 'day-2': '1:00' }];
     const [out] = resetRecurringTasks(rows, T, 0);
     expect(out.status).toBe('Not Scheduled');
+  });
+});
+
+describe('recurring vocabulary at archive time', () => {
+  it("'Not Recurring' and 'false' are not recurring; the live row is left for moveTasksToArchive", () => {
+    const rows = [
+      { id: 'a', status: 'Done', recurring: 'Not Recurring', 'day-2': '1:00' },
+      { id: 'b', status: 'Accounted', recurring: 'false', 'day-3': '1:00' },
+      { id: 'c', status: 'Abandoned', recurring: '', 'day-4': '1:00' },
+    ];
+    // Not treated as recurring → resetRecurringTasks must not touch them
+    // (they are moved whole into the archive by the caller instead).
+    const out = resetRecurringTasks(rows, T, 0);
+    expect(out).toEqual(rows);
+  });
+
+  it("'Recurring' and 'true' are recurring; the live row is reset in place", () => {
+    const rows = [
+      { id: 'a', status: 'Done', recurring: 'Recurring', 'day-2': '1:00' },
+      { id: 'b', status: 'Done', recurring: 'true', 'day-3': '1:00' },
+    ];
+    const out = resetRecurringTasks(rows, T, 0);
+    expect(out[0].status).toBe('Not Scheduled');
+    expect(out[0]['day-2']).toBe('');
+    expect(out[1].status).toBe('Not Scheduled');
+    expect(out[1]['day-3']).toBe('');
   });
 });

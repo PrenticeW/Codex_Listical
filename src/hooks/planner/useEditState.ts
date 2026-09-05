@@ -5,6 +5,7 @@ import { forEachDayColumn, isDayColumn, getDayIndexFromColumnId } from '../../ut
 import { writeTaskEvent } from '../../utils/planner/storage';
 import { MULTI_STATUS_KEY_RE, deriveMultiRowStatus, multiStatusKey } from '../../utils/planner/multiStatus';
 import { TASK_ROW_DETAIL_UPDATE_EVENT, TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
+import { isRecurringValue } from '../../utils/planner/valueNormalizers';
 
 /**
  * Adding a time to a day cell (any non-empty value, 0.00 included) always
@@ -218,7 +219,7 @@ export default function useEditState({
           field: 'status',
           oldValue: oldStatus || null,
           newValue: newStatus,
-          isRecurring: row?.recurring === 'true' || (row?.recurring as any) === true,
+          isRecurring: isRecurringValue(row?.recurring),
         }).then(() => {
           window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
             detail: { taskId: rowId },
@@ -283,7 +284,7 @@ export default function useEditState({
             field: 'status',
             oldValue: row.status || null,
             newValue: 'Scheduled',
-            isRecurring: row?.recurring === 'true' || (row?.recurring as any) === true,
+            isRecurring: isRecurringValue(row?.recurring),
           }).then(() => {
             window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
               detail: { taskId: rowId },
@@ -360,7 +361,7 @@ export default function useEditState({
           field: 'status',
           oldValue: oldValue || null,
           newValue,
-          isRecurring: row?.recurring === 'true' || row?.recurring === true,
+          isRecurring: isRecurringValue(row?.recurring),
         }).then(() => {
           window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
             detail: { taskId: rowId },
@@ -566,7 +567,7 @@ export default function useEditState({
     executeCommand(command);
 
     // Write task events for status and task name changes
-    const isRecurring = row?.recurring === 'true' || (row?.recurring as any) === true;
+    const isRecurring = isRecurringValue(row?.recurring);
     if (columnId === 'status' && row?.id) {
       writeTaskEvent(rowId, {
         field: 'status',

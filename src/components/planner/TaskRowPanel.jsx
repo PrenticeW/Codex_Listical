@@ -24,6 +24,7 @@ import { containsUrl } from '../../utils/linkify';
 import LinkedText from '../LinkedText';
 import useAddLink from '../../hooks/useAddLink';
 import { pasteKeepingLinks } from '../../utils/clipboardText';
+import { isRecurringValue } from '../../utils/planner/valueNormalizers';
 
 // ─── Design tokens (match GearPanel/SystemPanel) ─────────────────────────────
 
@@ -353,7 +354,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
     setShowHistory(false);
     setIsEditingNotes(false);
     if (selectedTask) {
-      setRecurringActive(selectedTask.recurring === 'true' || selectedTask.recurring === true);
+      setRecurringActive(isRecurringValue(selectedTask.recurring));
       setNotes(selectedTask.notes ?? '');
       readTaskEvents(selectedTask.id).then(setEvents);
     } else {
@@ -365,7 +366,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
   // Reload events (and sync recurring state) when status or recurring changes on the same task
   useEffect(() => {
     if (!selectedTask?.id) return;
-    setRecurringActive(selectedTask.recurring === 'true' || selectedTask.recurring === true);
+    setRecurringActive(isRecurringValue(selectedTask.recurring));
     readTaskEvents(selectedTask.id).then(setEvents);
   }, [selectedTask?.status, selectedTask?.recurring, selectedTask?.completionCount, selectedTask?.lastCompletedAt]);
 
@@ -431,7 +432,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
     setRecurringActive(next);
     if (selectedTask?.id) {
       window.dispatchEvent(new CustomEvent('system-panel-action', {
-        detail: { action: 'updateTaskField', rowId: selectedTask.id, field: 'recurring', value: String(next) },
+        detail: { action: 'updateTaskField', rowId: selectedTask.id, field: 'recurring', value: next ? 'Recurring' : 'Not Recurring' },
       }));
     }
   }

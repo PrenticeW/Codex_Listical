@@ -29,6 +29,7 @@ import {
 } from '../../utils/planner/rowTypeChecks';
 import { getNormalizedColumnValue } from '../../utils/planner/valueNormalizers';
 import { getMultiInstances, MULTI_STATUS_KEY_RE, isScheduledDayValue } from '../../utils/planner/multiStatus';
+import { isRecurringValue } from '../../utils/planner/valueNormalizers';
 
 /**
  * Custom hook for filtering planner data
@@ -221,7 +222,7 @@ export const useFilteredData = ({
       if (shouldBypassFilters(row)) {
         return !isSectionDivider(row) && !isProjectStructureRow(row);
       }
-      const value = row.recurring === 'Recurring' ? 'Recurring' : 'Not Recurring';
+      const value = isRecurringValue(row.recurring) ? 'Recurring' : 'Not Recurring';
       return selectedRecurringFilters.has(value);
     };
 

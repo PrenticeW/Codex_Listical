@@ -141,6 +141,22 @@ export const normalizeRecurring = (recurring: any): string => {
 };
 
 /**
+ * Is this row's recurring flag ON? The field is stored in two vocabularies
+ * ('Recurring' / 'Not Recurring' from the table checkbox, 'true' / 'false'
+ * from the task panel and Send to System — see docs/known-issues.md), so a
+ * plain truthiness check is wrong: 'Not Recurring' and 'false' are non-empty
+ * strings. Use this everywhere the recurring state matters.
+ * @param recurring - The stored recurring value
+ * @returns True only for an explicit "on" value
+ */
+export const isRecurringValue = (recurring: any): boolean => {
+  if (recurring === true) return true;
+  if (typeof recurring !== 'string') return false;
+  const v = recurring.trim().toLowerCase();
+  return v === 'true' || v === 'recurring';
+};
+
+/**
  * Convert a string to a safe filter key (lowercase, trimmed, handles empty)
  * @param value - The value to convert
  * @returns Safe filter key
