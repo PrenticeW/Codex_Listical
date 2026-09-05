@@ -12,12 +12,30 @@ const DAY_TAG_PATTERNS = [
   [/\b(sunday|sun)\b/i, 'Sun'],
 ];
 
-function detectDayTagFromText(text) {
-  if (!text) return null;
+/**
+ * All day tags mentioned in a subheader label. Plan-inherited headers span
+ * several days ("… on Tuesday and Thursday"), so a single first-match tag
+ * would drop the row from every day but one.
+ */
+function detectDayTagsFromText(text) {
+  const tags = [];
+  if (!text) return tags;
   for (const [pattern, tag] of DAY_TAG_PATTERNS) {
-    if (pattern.test(text)) return tag;
+    if (pattern.test(text)) tags.push(tag);
   }
-  return null;
+  return tags;
+}
+
+/**
+ * Effective days for a subheader row. A manually locked dayTag wins outright;
+ * otherwise the stored tag (auto-detected, single) is unioned with every day
+ * found in the label text.
+ */
+function getSubheaderDays(row) {
+  if (row.dayTagLocked && row.dayTag) return [row.dayTag];
+  const days = new Set(detectDayTagsFromText(row.subprojectName || row.subproject || row.task || ''));
+  if (row.dayTag) days.add(row.dayTag);
+  return Array.from(days);
 }
 import {
   shouldBypassFilters,
@@ -132,11 +150,11 @@ export const useFilteredData = ({
       const projectsWithMatchingDay = new Set();
       for (const row of visibleData) {
         if (row._rowType !== 'subprojectHeader') continue;
-        // Stored dayTag takes precedence; fall back to scanning the subheader text
-        const effectiveDay = row.dayTag
-          ?? detectDayTagFromText(row.subprojectName || row.subproject || row.task || '');
-        if (!effectiveDay) continue; // untagged — resolved by its project's fate
-        if (dayFilter.has(effectiveDay)) {
+        // A subheader can carry several days (multi-day Plan groups); it
+        // matches when ANY of them is in the active filter.
+        const effectiveDays = getSubheaderDays(row);
+        if (effectiveDays.length === 0) continue; // untagged — resolved by its project's fate
+        if (effectiveDays.some(day => dayFilter.has(day))) {
           const projectGroupId = findProjectGroupId(row);
           if (projectGroupId) projectsWithMatchingDay.add(projectGroupId);
         } else if (row.groupId) {
