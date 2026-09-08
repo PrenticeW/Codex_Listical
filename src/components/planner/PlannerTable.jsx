@@ -122,14 +122,19 @@ function PlannerTable({
       else if (x > rect.right) el.scrollLeft += step;
     };
 
-    document.addEventListener('dragstart', onDragStart);
-    document.addEventListener('dragend', onDragStop);
-    document.addEventListener('drop', onDragStop);
+    // Capture phase: the row/cell dragstart handlers call
+    // e.stopPropagation(), so a bubble-phase document listener never fires
+    // and dragActive would stay false forever (killing the auto-scroll for
+    // every in-app drag). Capture runs document-first, before any
+    // stopPropagation in the tree can block it.
+    document.addEventListener('dragstart', onDragStart, true);
+    document.addEventListener('dragend', onDragStop, true);
+    document.addEventListener('drop', onDragStop, true);
     document.addEventListener('dragover', onDragOver);
     return () => {
-      document.removeEventListener('dragstart', onDragStart);
-      document.removeEventListener('dragend', onDragStop);
-      document.removeEventListener('drop', onDragStop);
+      document.removeEventListener('dragstart', onDragStart, true);
+      document.removeEventListener('dragend', onDragStop, true);
+      document.removeEventListener('drop', onDragStop, true);
       document.removeEventListener('dragover', onDragOver);
     };
   }, [tableBodyRef]);
