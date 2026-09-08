@@ -198,7 +198,12 @@ function AreaWheel({ items, total, range, scale = 1 }) {
   const H = 224;
   const sum = items.reduce((s, a) => s + a.hours, 0);
   const pt = (ang) => [CX + R * Math.sin(ang), CY - R * Math.cos(ang)];
-  const PAD = 0.09; // angular gap either side of each segment (radians)
+  // Flat-ended segments separated by a constant gap (in drawing units,
+  // converted to an angle at the ring radius) so they read as slices of one
+  // ring rather than overlapping rounded strokes.
+  const GAP_PX = 0;
+  const PAD = (GAP_PX / 2) / R;
+  const MIN_SEG = 0.03; // keep the smallest slices visible
 
   // Rotate the whole ring so the largest segment is centred at 3 o'clock.
   // Its label owns the right column, and any cluster of small segments
@@ -225,7 +230,7 @@ function AreaWheel({ items, total, range, scale = 1 }) {
     const color = a.color || (a.unassigned ? UNASSIGNED : RAMP[ci++ % RAMP.length]);
     const labelColor = a.labelColor || a.color || (a.unassigned ? C.inkFaint : LABEL_RAMP[idx % LABEL_RAMP.length]);
     return {
-      a0: a0 + PAD, a1: Math.max(a0 + PAD, a1 - PAD), color, labelColor,
+      a0: a0 + PAD, a1: Math.max(a0 + PAD + MIN_SEG, a1 - PAD), color, labelColor,
       mid: (a0 + a1) / 2, name: a.name, hours: a.hours,
     };
   });
@@ -266,10 +271,17 @@ function AreaWheel({ items, total, range, scale = 1 }) {
     }
   });
 
+  // Grow the drawing area to fit every label. With many small segments the
+  // stacked columns can run past the fixed ring height; rather than clip
+  // them, extend the viewBox (the panel scrolls, so height is free).
+  const labelTop = labels.reduce((m, L) => Math.min(m, L.y - 2), 0);
+  const labelBottom = labels.reduce((m, L) => Math.max(m, L.y + L.h + 4), H);
+  const vbH = labelBottom - labelTop;
+
   return (
-    <svg viewBox={`-30 0 330 ${H}`} style={{ display: 'block', width: '100%', maxWidth: 330 * scale, height: 'auto' }}>
+    <svg viewBox={`-30 ${labelTop} 330 ${vbH}`} style={{ display: 'block', width: '100%', maxWidth: 330 * scale, height: 'auto' }}>
       {segs.map((s, i) => (
-        <path key={i} d={arc(s.a0, s.a1)} fill="none" stroke={s.color} strokeWidth={W} strokeLinecap="round" />
+        <path key={i} d={arc(s.a0, s.a1)} fill="none" stroke={s.color} strokeWidth={W} strokeLinecap="butt" />
       ))}
       {labels.map((L, i) => {
         const { seg } = L;
