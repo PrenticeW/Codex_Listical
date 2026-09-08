@@ -681,15 +681,17 @@ export const resetRecurringTasks = (data, totalDays = 84, startDayIndex = 0) => 
       // here starts the new week on the planned time and lets the next Send
       // apply chip changes again. Rows without a plan (created on System, no
       // chip) and Multi rows (estimate derived from day cells) are untouched.
+      // Only reset when BOTH originals are present: restoring the estimate
+      // label without its timeValue would leave a mismatched pair (planned
+      // label, logged number).
       if (
         isRecurringValue(row.recurring) &&
         typeof row._originalEstimate === 'string' && row._originalEstimate !== '' &&
+        typeof row._originalTimeValue === 'string' && row._originalTimeValue !== '' &&
         row.estimate !== 'Multi' && row._originalEstimate !== 'Multi'
       ) {
         clearedRow.estimate = row._originalEstimate;
-        if (typeof row._originalTimeValue === 'string' && row._originalTimeValue !== '') {
-          clearedRow.timeValue = row._originalTimeValue;
-        }
+        clearedRow.timeValue = row._originalTimeValue;
       }
 
       // If the row still has scheduled instances in other weeks, recompute

@@ -35,6 +35,12 @@ describe('archive resets recurring chip tasks to their planned estimate', () => 
     expect(out.timeValue).toBe('3.00');
   });
 
+  it('does not reset a lone estimate when the original timeValue is missing', () => {
+    const [out] = resetRecurringTasks([chipTask({ _originalTimeValue: '' })], T, WEEK);
+    expect(out.estimate).toBe('Custom');
+    expect(out.timeValue).toBe('3.00');
+  });
+
   it('leaves Multi rows alone', () => {
     const [out] = resetRecurringTasks(
       [chipTask({ estimate: 'Multi', 'day-8': '1.00' })], T, WEEK);

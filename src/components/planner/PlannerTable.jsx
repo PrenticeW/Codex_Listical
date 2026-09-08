@@ -87,8 +87,16 @@ function PlannerTable({
     // past the edge, not in a zone inside it.
     const SPEED = 500; // px per second
     let lastTs = 0;
+    // Only drags that started inside this document may drive the scroll.
+    // Without this, ANY dragover — an OS file dragged over the window, a
+    // drag from another tab — would scroll the table whenever the pointer
+    // was outside it (the listener is on the document by design).
+    let dragActive = false;
+    const onDragStart = () => { dragActive = true; };
+    const onDragStop = () => { dragActive = false; lastTs = 0; };
 
     const onDragOver = (e) => {
+      if (!dragActive) return;
       const el = tableBodyRef?.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
@@ -114,8 +122,16 @@ function PlannerTable({
       else if (x > rect.right) el.scrollLeft += step;
     };
 
+    document.addEventListener('dragstart', onDragStart);
+    document.addEventListener('dragend', onDragStop);
+    document.addEventListener('drop', onDragStop);
     document.addEventListener('dragover', onDragOver);
-    return () => document.removeEventListener('dragover', onDragOver);
+    return () => {
+      document.removeEventListener('dragstart', onDragStart);
+      document.removeEventListener('dragend', onDragStop);
+      document.removeEventListener('drop', onDragStop);
+      document.removeEventListener('dragover', onDragOver);
+    };
   }, [tableBodyRef]);
 
   return (

@@ -4,6 +4,7 @@ import {
   saveCollapsedGroups,
   peekPlannerCache,
   readPlannerSettingsRowStrict,
+  isPlannerSettingsWriteRecent,
   PLANNER_ROWS_STALE_EVENT,
 } from '../../utils/planner/storage';
 import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
@@ -89,9 +90,13 @@ export default function useCollapsibleGroups(
     };
 
     revalidate();
-    const onStale = () => revalidate();
+    // Never revalidate over this tab's own in-flight (or just-landed)
+    // settings save — the read could return the pre-save row and revert
+    // the user's toggle (see isPlannerSettingsWriteRecent in storage.js).
+    const onStale = () => { if (!isPlannerSettingsWriteRecent()) revalidate(); };
     const onWake = () => {
       if (Date.now() - lastWakeAt < WAKE_MIN_GAP_MS) return;
+      if (isPlannerSettingsWriteRecent()) return;
       lastWakeAt = Date.now();
       revalidate();
     };

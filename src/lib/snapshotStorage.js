@@ -57,32 +57,36 @@ const DEFAULT_PROJECT_ID = 'project-1';
 // ---------------------------------------------------------------------------
 
 function showSnapshotToast() {
-  const now = new Date();
-  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const el = document.createElement('div');
-  el.textContent = `📸 Snapshot taken at ${time}`;
+  // Deliberately not "Saved": edits are saved continuously; a snapshot is a
+  // restore point for version history.
+  el.textContent = 'Saving…';
   Object.assign(el.style, {
     position:     'fixed',
     // Bottom-left, to the right of the 40px debug snapshot button that sits
     // at bottom:24/left:24 (Layout.jsx), vertically centred against it.
+    // Deliberately quiet: pale, low-contrast, no heavy shadow, and a slow
+    // fade in / out so it doesn't pull the eye away from the table.
     bottom:       '26px',
     left:         '76px',
     zIndex:       '999999',
-    background:   '#1e293b',
-    color:        '#f8fafc',
+    background:   'rgba(248, 250, 252, 0.96)',
+    color:        '#334155',
+    border:       '1px solid rgba(100, 116, 139, 0.25)',
     fontSize:     '13px',
-    fontWeight:   '600',
-    padding:      '10px 16px',
-    borderRadius: '8px',
-    boxShadow:    '0 4px 16px rgba(0,0,0,0.35)',
-    opacity:      '1',
-    transition:   'opacity 0.4s ease',
+    fontWeight:   '500',
+    padding:      '8px 14px',
+    borderRadius: '999px',
+    boxShadow:    '0 1px 4px rgba(0,0,0,0.08)',
+    opacity:      '0',
+    transition:   'opacity 0.8s ease',
     pointerEvents:'none',
     fontFamily:   'system-ui, sans-serif',
   });
   document.body.appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; }, 2500);
-  setTimeout(() => { el.remove(); }, 3000);
+  requestAnimationFrame(() => requestAnimationFrame(() => { el.style.opacity = '1'; }));
+  setTimeout(() => { el.style.transition = 'opacity 1.5s ease'; el.style.opacity = '0'; }, 2500);
+  setTimeout(() => { el.remove(); }, 4200);
 }
 
 // ---------------------------------------------------------------------------

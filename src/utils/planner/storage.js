@@ -236,22 +236,43 @@ async function readPlannerSettingsRow({ userId, yearId, yearNumber }) {
  * Refreshes the cache with the freshly-written row so the next read returns
  * the new value without a round-trip.
  */
+// Settings-write guard. Wake/focus revalidation (usePlannerStorage,
+// useCollapsibleGroups) must not adopt a server row while one of this tab's
+// own settings writes is in flight or has only just landed — the read could
+// return the pre-save row and silently revert the user's change, which the
+// autosave would then persist. Every planner_settings write funnels through
+// writePlannerSettingsColumns, so tracking it here covers all columns
+// (including collapsed_groups).
+let _settingsWritesInFlight = 0;
+let _lastSettingsWriteAt = 0;
+const SETTINGS_WRITE_RECENT_MS = 5000;
+export function isPlannerSettingsWriteRecent() {
+  return _settingsWritesInFlight > 0
+    || (Date.now() - _lastSettingsWriteAt) < SETTINGS_WRITE_RECENT_MS;
+}
+
 async function writePlannerSettingsColumns({ userId, yearId, yearNumber, columns }) {
   // Pure upsert — no read needed. ON CONFLICT DO UPDATE updates only the
   // columns present in the payload; other columns keep their DB values.
   // Eliminates the read-first race where 8 concurrent callers all see "no
   // row" and then all try to INSERT, causing unique-constraint violations.
-  const { data, error } = await supabase
-    .from('planner_settings')
-    .upsert(
-      { user_id: userId, year_id: yearId, ...columns },
-      { onConflict: 'user_id,year_id' },
-    )
-    .select()
-    .single();
-  if (error) throw error;
-  if (yearNumber != null) {
-    setCached(CACHE_NS, settingsKey(yearNumber), data);
+  _settingsWritesInFlight += 1;
+  try {
+    const { data, error } = await supabase
+      .from('planner_settings')
+      .upsert(
+        { user_id: userId, year_id: yearId, ...columns },
+        { onConflict: 'user_id,year_id' },
+      )
+      .select()
+      .single();
+    if (error) throw error;
+    if (yearNumber != null) {
+      setCached(CACHE_NS, settingsKey(yearNumber), data);
+    }
+  } finally {
+    _settingsWritesInFlight -= 1;
+    _lastSettingsWriteAt = Date.now();
   }
 }
 
@@ -1094,7 +1115,9 @@ export const readTaskRows = async (
 
     const yearRow = await findYearRow(userId, yearNumber);
     if (!yearRow) {
-      setCached(CACHE_NS, cacheKey, []);
+      // Deliberately NOT cached: a transient miss here (auth/user race, year
+      // row still being created) would poison the cache with [] and every
+      // later read this session would serve "empty year" from it.
       return [];
     }
 
@@ -1731,6 +1754,33 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       // No basis → the known set is not trustworthy enough to delete on.
       if (!hasBasis) { guarded += 1; continue; }
       toDelete.push(id);
+    }
+
+    // Mass-delete circuit breaker (2026-09-08 wipe). A desired state that
+    // (a) no longer contains the permanent Inbox divider the UI always
+    // carries while the server still has one, or (b) would delete nearly
+    // every row on the server in one save, is a corrupt/empty in-memory
+    // state — a failed or empty read hydrated as "empty year" while this
+    // session's earlier bookkeeping still authorised deletes — not a user
+    // action. Keep the server's rows (drop ALL deletes, keep upserts) and
+    // let the next real read resync. Legitimate saves are unaffected: the
+    // UI cannot delete the Inbox row, and no single user action removes
+    // 80% of a populated year at once.
+    const desiredStructural = new Set();
+    for (const d of desiredRows) {
+      const k = structuralKey(d);
+      if (k) desiredStructural.add(k);
+    }
+    const inboxVanished = serverStructural.has('inbox') && !desiredStructural.has('inbox');
+    const massDelete = toDelete.length >= 5 && toDelete.length >= 0.8 * currentById.size;
+    if (toDelete.length > 0 && (inboxVanished || massDelete)) {
+      console.error('[planner-save] wipe circuit breaker: refusing deletes', {
+        wouldDelete: toDelete.length, server: currentById.size, inboxVanished, massDelete,
+      });
+      guarded += toDelete.length;
+      // Forget these ids so the refused deletes do not advance known/baseline
+      // as if they had happened; the next read re-adopts the server rows.
+      toDelete.length = 0;
     }
 
     if (guarded > 0) {

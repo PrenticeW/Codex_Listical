@@ -321,4 +321,64 @@ describe('offline pending-save replay', () => {
     await sleep(10);
     expect([...server.planner_rows.values()].filter((r) => r.year_id === 'y7').length).toBe(1);
   });
+
+  // ------------------------------------------------------------------------
+  // Wipe circuit breaker (2026-09-08): a save whose desired state lost the
+  // permanent Inbox row, or that would delete nearly every server row at
+  // once, is a corrupt/empty in-memory state (failed read hydrated as an
+  // empty year under a still-authorised session) — its deletes are refused.
+  // ------------------------------------------------------------------------
+
+  it('refuses a save that would wipe the whole year', async () => {
+    const Y = 8;
+    server.years.set('y8', { id: 'y8', user_id: 'u1', year_number: Y, start_date: '2026-06-01', total_days: 84 });
+    const { readTaskRows } = await import('../storage');
+    const ids = [];
+    for (let i = 0; i < 6; i++) {
+      const id = `aaaaaaa${i}-0000-4000-8000-00000000000${i}`;
+      ids.push(id);
+      server.planner_rows.set(id, {
+        id, user_id: 'u1', year_id: 'y8', task: `t${i}`, row_kind: 'task',
+        display_order: i, updated_at: '2026-09-01T10:00:00Z',
+        day_entries: i === 0 ? { __extra: { _isInboxRow: true } } : {},
+      });
+    }
+    await readTaskRows('project-1', Y); // real read → known ids + basis
+
+    // Corrupt/empty desired state (e.g. a failed read hydrated as "empty
+    // year"): would delete all six rows, inbox included.
+    await saveTaskRows([], 'project-1', Y);
+    await sleep(10);
+    for (const id of ids) expect(server.planner_rows.has(id)).toBe(true);
+  });
+
+  it('still allows an ordinary small delete', async () => {
+    const Y = 9;
+    server.years.set('y9', { id: 'y9', user_id: 'u1', year_number: Y, start_date: '2026-06-01', total_days: 84 });
+    const { readTaskRows } = await import('../storage');
+    const inboxId = 'bbbbbbb0-0000-4000-8000-000000000000';
+    const ids = [inboxId];
+    server.planner_rows.set(inboxId, {
+      id: inboxId, user_id: 'u1', year_id: 'y9', task: '', row_kind: 'task',
+      display_order: 0, updated_at: '2026-09-01T10:00:00Z',
+      day_entries: { __extra: { _isInboxRow: true } },
+    });
+    for (let i = 1; i < 6; i++) {
+      const id = `bbbbbbb${i}-0000-4000-8000-00000000000${i}`;
+      ids.push(id);
+      server.planner_rows.set(id, {
+        id, user_id: 'u1', year_id: 'y9', task: `t${i}`, row_kind: 'task',
+        display_order: i, updated_at: '2026-09-01T10:00:00Z', day_entries: {},
+      });
+    }
+    const rows = await readTaskRows('project-1', Y);
+    const userRows = rows.filter((r) => ids.includes(r.id));
+    expect(userRows.length).toBe(6);
+    // Delete one ordinary row, keep the rest (inbox still present).
+    const desired = userRows.filter((r) => r.id !== ids[5]);
+    await saveTaskRows(desired, 'project-1', Y);
+    await sleep(10);
+    expect(server.planner_rows.has(ids[5])).toBe(false); // legit delete landed
+    expect(server.planner_rows.has(inboxId)).toBe(true);
+  });
 });

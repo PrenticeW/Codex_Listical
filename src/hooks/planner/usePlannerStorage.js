@@ -43,6 +43,7 @@ import {
   PLANNER_ROWS_STALE_EVENT,
   peekPlannerCache,
   readPlannerSettingsRowStrict,
+  isPlannerSettingsWriteRecent,
 } from '../../utils/planner/storage';
 import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
 
@@ -322,9 +323,13 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
     // Not re-gated on stale: flipping `enabled` back on would make every
     // settings useAutoPersist write its value once. The gate only matters
     // for the mount-time cache hit; later revalidations just adopt.
-    const onStale = () => revalidate();
+    // Never revalidate over this tab's own in-flight (or just-landed)
+    // settings save: the read could return the pre-save row and revert the
+    // user's change, which the autosave would then write back.
+    const onStale = () => { if (!isPlannerSettingsWriteRecent()) revalidate(); };
     const onWake = () => {
       if (Date.now() - lastWakeAt < WAKE_MIN_GAP_MS) return;
+      if (isPlannerSettingsWriteRecent()) return;
       lastWakeAt = Date.now();
       revalidate();
     };

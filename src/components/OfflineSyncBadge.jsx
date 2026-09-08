@@ -86,7 +86,11 @@ export default function OfflineSyncBadge() {
     };
   }, []);
 
-  if (online && !showPendingPill && !synced) return null;
+  const active = !online || showPendingPill || synced;
+
+  // Keep the last label on screen while fading out so the text doesn't
+  // change mid-fade.
+  const lastLabelRef = useRef('');
 
   const label = !online
     ? pending
@@ -95,32 +99,39 @@ export default function OfflineSyncBadge() {
     : showPendingPill
       ? 'Syncing changes…'
       : 'Synced';
+  if (active) lastLabelRef.current = label;
 
+  // Sits bottom-left beside the 40px snapshot button (bottom:24/left:24 in
+  // Layout.jsx), in the same slot the snapshot toast uses. Styled to be
+  // quiet — pale, low-contrast, slow fade — so it reads as a status hint
+  // rather than an alert. Stays mounted while fading out.
   return (
     <div
       role="status"
       aria-live="polite"
       style={{
         position: 'fixed',
-        bottom: '24px',
-        left: '50%',
-        transform: 'translateX(-50%)',
+        bottom: '26px',
+        left: '76px',
         zIndex: 999997,
         pointerEvents: 'none',
-        background: '#24252B',
-        color: '#ECEAF2',
-        fontSize: '12px',
+        background: 'rgba(248, 250, 252, 0.96)',
+        color: '#334155',
+        border: '1px solid rgba(100, 116, 139, 0.25)',
+        fontSize: '13px',
         lineHeight: 1,
-        padding: '9px 14px',
+        padding: '8px 14px',
         borderRadius: '999px',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
         whiteSpace: 'nowrap',
         maxWidth: 'calc(100vw - 32px)',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
+        opacity: active ? 1 : 0,
+        transition: active ? 'opacity 0.8s ease' : 'opacity 1.5s ease',
       }}
     >
-      {label}
+      {lastLabelRef.current}
     </div>
   );
 }
