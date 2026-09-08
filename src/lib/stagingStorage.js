@@ -39,6 +39,13 @@ export function peekStagingCache(yearNumber) {
   if (!hasCached(CACHE_NS, k)) return null;
   const cached = getCached(CACHE_NS, k);
   if (!cached) return cached;
+  // Reject caches whose planTableEntries lost their metadata (e.g. a
+  // localStorage round-trip of live rows stored before the serialisation
+  // fix). Metadata-less rows make extractProjectsData see projects but ZERO
+  // subprojects, and destructive consumers (the System page subproject
+  // reconcile) then wipe task-row subproject values against that bogus
+  // list. A null here means "cold cache" — consumers wait for the real load.
+  if (!isCachedFormatValid(cached)) return null;
   // The cache stores rows in serialised form ({ cells, _rowType, ... }) so
   // localStorage round-trips keep the metadata. Deserialise here — same as
   // loadStagingState's cache hit — so consumers (TacticsPage stagingProjects,
@@ -391,7 +398,17 @@ export async function loadStagingState(yearNumber) {
       }
     }
     const result = { shortlist, archived };
-    setCached(CACHE_NS, cacheKey, result);
+    // Cache the SERIALISED form (same as saveStagingState). Caching the live
+    // deserialised rows looked fine in memory, but storageCache mirrors every
+    // setCached to localStorage via JSON.stringify, which strips the
+    // non-enumerable __rowType/__sectionType metadata — on the next page load
+    // the rehydrated cache had untagged plain-array rows, extractProjectsData
+    // found no subprojects, and the System page reconcile wiped task-row
+    // subproject labels (2026-09-08 incident).
+    setCached(CACHE_NS, cacheKey, {
+      shortlist: shortlist.map(serializeItemForCache),
+      archived: archived.map(serializeItemForCache),
+    });
     recordKnownIds(yearNumber, rows.map((r) => r.id));
     recordSystemOrders(yearNumber, rows);
     return result;

@@ -27,7 +27,7 @@ import { undoDraftYear } from '../utils/planner/undoDraftYear';
 import { revertArchive } from '../utils/planner/revertArchive';
 import { importTasksForDraftYear, hasImportedTasks } from '../utils/planner/importTasksFromYear';
 import { placeImportedTasks } from '../utils/planner/placeImportedTasks';
-import { isEditableRow } from '../utils/planner/rowTypeChecks';
+import { isEditableRow, isSpecialRow, isAnyArchiveRow } from '../utils/planner/rowTypeChecks';
 import { groupChips, chipGroupKey, chipDisplayName } from '../utils/planner/chipGroups';
 import usePlannerFilters from '../hooks/planner/usePlannerFilters';
 import { useFilteredData, useFilterValues } from '../hooks/planner/useFilteredData';
@@ -2077,6 +2077,13 @@ export default function ProjectTimePlannerV2() {
         const subs = projectKey ? projectSubprojectsMap[projectKey] : undefined;
         if (!subs || subs.includes(sub)) return row;
         changed = true;
+        // Deliberately loud: if this fires when the subproject DOES exist on
+        // the Goal page, the projectSubprojectsMap it ran against was stale
+        // or badly extracted — investigate before trusting the wipe.
+        console.warn(
+          `[subproject reconcile] clearing "${sub}" from a "${projectKey}" task row; known subprojects for that project:`,
+          subs,
+        );
         return { ...row, subproject: '' };
       });
       return changed ? next : prevData;
@@ -2782,6 +2789,31 @@ export default function ProjectTimePlannerV2() {
     });
   }, []);
 
+  // Next available inbox slot: the index of the first fully blank task row
+  // between the Inbox divider and the Archive section. Fallbacks: just above
+  // the Archive block when the inbox has no blank rows, or the end of the
+  // grid when there's no Inbox divider at all. Used by both add-task paths
+  // when no row is selected, so new tasks land in the inbox's next open row
+  // instead of at the very bottom of the grid.
+  const findInboxInsertIndex = useCallback(() => {
+    const inboxIndex = data.findIndex(r => r._isInboxRow);
+    if (inboxIndex === -1) return data.length;
+    const isBlankTaskRow = (r) =>
+      !isSpecialRow(r) &&
+      !(r.task && String(r.task).trim()) &&
+      !(r.project && String(r.project).trim()) &&
+      !(r.subproject && String(r.subproject).trim()) &&
+      (!r.status || r.status === '-') &&
+      !(r.estimate && String(r.estimate).trim()) &&
+      !Object.keys(r).some(k => k.startsWith('day-') && r[k] != null && r[k] !== '');
+    for (let i = inboxIndex + 1; i < data.length; i++) {
+      const row = data[i];
+      if (row._isArchiveRow || isAnyArchiveRow(row)) return i;
+      if (isBlankTaskRow(row)) return i;
+    }
+    return data.length;
+  }, [data]);
+
   const handleAddTasks = useCallback(() => {
     setIsListicalMenuOpen(false);
     const count = parseInt(addTasksCount, 10);
@@ -2792,8 +2824,8 @@ export default function ProjectTimePlannerV2() {
 
     // Determine insertion position
     // If a row is selected, insert after the last selected row
-    // Otherwise, insert at the end
-    let insertIndex = data.length;
+    // Otherwise, insert at the inbox's next available (blank) slot
+    let insertIndex = findInboxInsertIndex();
 
     if (selectedRows.size > 0) {
       // Find the index of the last selected row
@@ -2847,7 +2879,7 @@ export default function ProjectTimePlannerV2() {
 
     executeCommand(command);
     setAddTasksCount('');
-  }, [addTasksCount, totalDays, executeCommand, selectedRows, data]);
+  }, [addTasksCount, totalDays, executeCommand, selectedRows, data, findInboxInsertIndex]);
 
   const handleSortInbox = useCallback(() => {
     setIsListicalMenuOpen(false);
@@ -3159,7 +3191,7 @@ export default function ProjectTimePlannerV2() {
 
     executeCommand(command);
     setSelectedRows(new Set(newRows.map(r => r.id)));
-  }, [selectedRows, contextMenu.rowId, data, totalDays, executeCommand, setSelectedRows]);
+  }, [selectedRows, contextMenu.rowId, data, totalDays, executeCommand, setSelectedRows, findInboxInsertIndex]);
 
   // Duplicate all currently selected rows, inserting copies after the last selected row
   const duplicateSelectedRows = useCallback(() => {
@@ -3344,8 +3376,8 @@ export default function ProjectTimePlannerV2() {
 
   // Add tasks logic (separated from UI)
   const addTasksWithCount = useCallback((count) => {
-    // Determine insertion position
-    let insertIndex = data.length;
+    // Determine insertion position (default: inbox's next available slot)
+    let insertIndex = findInboxInsertIndex();
 
     if (selectedRows.size > 0) {
       // Find the index of the last selected row
@@ -3403,7 +3435,7 @@ export default function ProjectTimePlannerV2() {
 
     executeCommand(command);
     setSelectedRows(new Set(stampedRows.map(r => r.id)));
-  }, [selectedRows, contextMenu.rowId, data, totalDays, executeCommand, setSelectedRows]);
+  }, [selectedRows, contextMenu.rowId, data, totalDays, executeCommand, setSelectedRows, findInboxInsertIndex]);
 
   // Multi-line paste confirmed: line 1 fills the anchor Task cell and each
   // remaining line becomes a new task row inserted directly below it. Status
