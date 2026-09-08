@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { hasPendingOfflineSave } from '../utils/planner/storage';
+import {
+  showStatusPill,
+  setStickyStatusPill,
+  clearStickyStatusPill,
+} from '../lib/statusPill';
 
 /**
  * OfflineSyncBadge — small fixed pill telling the user their edits are safe
@@ -86,52 +91,29 @@ export default function OfflineSyncBadge() {
     };
   }, []);
 
-  const active = !online || showPendingPill || synced;
+  // Rendering is delegated to the shared statusPill (src/lib/statusPill.js)
+  // so this badge and the snapshot "Saving\u2026" message queue politely in the
+  // same slot instead of racing each other. Ongoing states are sticky;
+  // "Synced" is a one-off transient confirmation.
+  useEffect(() => {
+    if (!online) {
+      setStickyStatusPill(
+        pending
+          ? 'Offline. Your changes are saved and will sync when you reconnect.'
+          : 'Offline'
+      );
+    } else if (showPendingPill) {
+      setStickyStatusPill('Syncing changes\u2026');
+    } else {
+      clearStickyStatusPill();
+    }
+  }, [online, pending, showPendingPill]);
 
-  // Keep the last label on screen while fading out so the text doesn't
-  // change mid-fade.
-  const lastLabelRef = useRef('');
+  useEffect(() => {
+    if (synced) showStatusPill('Synced');
+  }, [synced]);
 
-  const label = !online
-    ? pending
-      ? 'Offline. Your changes are saved and will sync when you reconnect.'
-      : 'Offline'
-    : showPendingPill
-      ? 'Syncing changes…'
-      : 'Synced';
-  if (active) lastLabelRef.current = label;
+  useEffect(() => () => clearStickyStatusPill(), []);
 
-  // Sits bottom-left beside the 40px snapshot button (bottom:24/left:24 in
-  // Layout.jsx), in the same slot the snapshot toast uses. Styled to be
-  // quiet — pale, low-contrast, slow fade — so it reads as a status hint
-  // rather than an alert. Stays mounted while fading out.
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      style={{
-        position: 'fixed',
-        bottom: '26px',
-        left: '76px',
-        zIndex: 999997,
-        pointerEvents: 'none',
-        background: 'rgba(248, 250, 252, 0.96)',
-        color: '#334155',
-        border: '1px solid rgba(100, 116, 139, 0.25)',
-        fontSize: '13px',
-        lineHeight: 1,
-        padding: '8px 14px',
-        borderRadius: '999px',
-        boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-        whiteSpace: 'nowrap',
-        maxWidth: 'calc(100vw - 32px)',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        opacity: active ? 1 : 0,
-        transition: active ? 'opacity 0.8s ease' : 'opacity 1.5s ease',
-      }}
-    >
-      {lastLabelRef.current}
-    </div>
-  );
+  return null;
 }

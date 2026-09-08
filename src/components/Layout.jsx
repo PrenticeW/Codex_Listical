@@ -14,6 +14,7 @@ import SystemPanel from './SystemPanel';
 import PlanPanel from './PlanPanel';
 import GoalPanel from './GoalPanel';
 import { saveSiteSnapshot } from '../lib/snapshotStorage';
+import { showStatusPill } from '../lib/statusPill';
 import { applyThemeFamily } from '../lib/theme';
 import { loadThemeFamily, THEME_UPDATE_EVENT } from '../lib/themeStorage';
 
@@ -23,9 +24,10 @@ function YearKeyedOutlet() {
 }
 
 // DEBUG — remove before launch (MED-3). Manual snapshot trigger for testing.
-// Calls saveSiteSnapshot directly for the current year. Note the 25s
-// min-interval inside saveSiteSnapshot still applies: if the last snapshot
-// is under 25s old the call silently skips and no toast appears.
+// Calls saveSiteSnapshot directly for the current year. The 25s min-interval
+// inside saveSiteSnapshot still applies (an under-25s call skips the write),
+// but the pill is shown here unconditionally so the button always gives
+// visible feedback — previously a skipped save meant wait-cursor + nothing.
 function DebugSnapshotButton() {
   const { currentYear } = useYear();
   const [busy, setBusy] = useState(false);
@@ -36,6 +38,7 @@ function DebugSnapshotButton() {
       onClick={async () => {
         if (busy || currentYear == null) return;
         setBusy(true);
+        showStatusPill('Saving\u2026');
         try {
           await saveSiteSnapshot(currentYear);
         } finally {

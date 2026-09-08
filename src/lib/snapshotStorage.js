@@ -35,6 +35,7 @@
  */
 
 import { supabase } from './supabase';
+import { showStatusPill } from './statusPill';
 import { clearForYear } from './storageCache';
 import {
   loadTacticsMetrics,
@@ -57,36 +58,11 @@ const DEFAULT_PROJECT_ID = 'project-1';
 // ---------------------------------------------------------------------------
 
 function showSnapshotToast() {
-  const el = document.createElement('div');
   // Deliberately not "Saved": edits are saved continuously; a snapshot is a
-  // restore point for version history.
-  el.textContent = 'Saving…';
-  Object.assign(el.style, {
-    position:     'fixed',
-    // Bottom-left, to the right of the 40px debug snapshot button that sits
-    // at bottom:24/left:24 (Layout.jsx), vertically centred against it.
-    // Deliberately quiet: pale, low-contrast, no heavy shadow, and a slow
-    // fade in / out so it doesn't pull the eye away from the table.
-    bottom:       '26px',
-    left:         '76px',
-    zIndex:       '999999',
-    background:   'rgba(248, 250, 252, 0.96)',
-    color:        '#334155',
-    border:       '1px solid rgba(100, 116, 139, 0.25)',
-    fontSize:     '13px',
-    fontWeight:   '500',
-    padding:      '8px 14px',
-    borderRadius: '999px',
-    boxShadow:    '0 1px 4px rgba(0,0,0,0.08)',
-    opacity:      '0',
-    transition:   'opacity 0.8s ease',
-    pointerEvents:'none',
-    fontFamily:   'system-ui, sans-serif',
-  });
-  document.body.appendChild(el);
-  requestAnimationFrame(() => requestAnimationFrame(() => { el.style.opacity = '1'; }));
-  setTimeout(() => { el.style.transition = 'opacity 1.5s ease'; el.style.opacity = '0'; }, 2500);
-  setTimeout(() => { el.remove(); }, 4200);
+  // restore point for version history. Routed through the shared statusPill
+  // so it queues behind (rather than fights with) the sync badge messages
+  // that use the same bottom-left slot.
+  showStatusPill('Saving\u2026');
 }
 
 // ---------------------------------------------------------------------------
