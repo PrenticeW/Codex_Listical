@@ -247,7 +247,9 @@ export default function useRowDragSelection({
           upEvent.preventDefault();
         }
 
-        blockClickRef.current = dragThresholdCrossedRef.current;
+        // Selection is fully handled here (click or drag), so block the
+        // follow-up onClick from re-applying the same toggle and undoing it.
+        blockClickRef.current = true;
 
         // Remove event listeners immediately
         detachDragListeners();
