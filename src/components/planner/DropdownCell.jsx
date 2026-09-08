@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useAnchoredMenuPosition } from '../../hooks/planner/useAnchoredMenuPosition';
 import { ChevronDown } from 'lucide-react';
 import { getActiveStatuses, getStatusColors, getStatusLabel } from '../../lib/statusesStorage';
 import { useStatuses } from '../../hooks/useStatuses';
@@ -53,23 +54,26 @@ function DropdownCell({
     const index = ['-', ...getActiveStatuses().map((s) => s.id)].indexOf(valueToFind);
     return index === -1 ? 0 : index;
   });
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const dropdownRef = useRef(null);
   const buttonRef = useRef(null);
+  const menuRef = useRef(null);
+  const [anchorWidth, setAnchorWidth] = useState(0);
 
-  // Calculate position when dropdown opens — flip above the cell if too close to viewport bottom
-  useEffect(() => {
-    if (isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      const estimatedHeight = Math.min(DROPDOWN_OPTIONS.length * rowHeight + 8 + DROPDOWN_EXTRA_HEIGHT, 300);
-      const fitsBelow = rect.bottom + estimatedHeight < window.innerHeight - 8;
-      setDropdownPosition({
-        top: fitsBelow ? rect.bottom : rect.top - estimatedHeight,
-        left: Math.min(rect.left, window.innerWidth - rect.width - DROPDOWN_EXTRA_WIDTH - 8),
-        width: rect.width
-      });
-    }
-  }, [isOpen, rowHeight]);
+  // Track the cell width so the menu matches it.
+  useLayoutEffect(() => {
+    if (isOpen && buttonRef.current) setAnchorWidth(buttonRef.current.getBoundingClientRect().width);
+  }, [isOpen]);
+
+  // Position the portalled menu: below the cell when it fits, above otherwise,
+  // always clamped on screen and re-measured on scroll/resize.
+  const menuPos = useAnchoredMenuPosition({
+    open: isOpen,
+    anchorRef: buttonRef,
+    menuRef,
+    estimatedHeight: DROPDOWN_OPTIONS.length * rowHeight + 8 + DROPDOWN_EXTRA_HEIGHT,
+    width: anchorWidth + DROPDOWN_EXTRA_WIDTH,
+  });
+  const dropdownPosition = { top: menuPos?.top ?? 0, left: menuPos?.left ?? 0, width: anchorWidth };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -183,10 +187,14 @@ function DropdownCell({
         <ChevronDown size={14} className="flex-shrink-0" style={{ color: isPillbox && colors ? colors.text : '#9ca3af' }} />
       </button>
 
-      {isOpen && createPortal(
+      {isOpen && menuPos && createPortal(
         <div
+          ref={menuRef}
           style={{
             position: 'fixed',
+            maxHeight: `${menuPos.maxHeight}px`,
+            overflowY: 'auto',
+            boxSizing: 'border-box',
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
             width: `${dropdownPosition.width + DROPDOWN_EXTRA_WIDTH}px`,

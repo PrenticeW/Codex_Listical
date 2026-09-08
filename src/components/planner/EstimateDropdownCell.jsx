@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useAnchoredMenuPosition } from '../../hooks/planner/useAnchoredMenuPosition';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   ESTIMATE_VALUES,
@@ -177,7 +178,6 @@ function EstimateDropdownCell({
   onCancel,
   onKeyDown,
   cellFontSize,
-  rowHeight,
   autoOpen = false,
   // Multi-row wiring (estimate 'Multi', >1 scheduled date). When provided,
   // the panel edits one scheduled date's time at a time: the footer tag
@@ -246,28 +246,30 @@ function EstimateDropdownCell({
   })();
   const [selectedHour, setSelectedHour] = useState(initialStaged.hour);
   const [selectedMinute, setSelectedMinute] = useState(initialStaged.minute);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const dropdownRef = useRef(null);
   const buttonRef = useRef(null);
 
-  // Calculate position when dropdown opens — flip above the cell if too close to viewport bottom
-  useEffect(() => {
-    if (isOpen && buttonRef.current) {
-      const pz = getPageZoom();
-      const leftColH = HEADER_H + EST_HOURS.length * ROW_H + COL_PAD_Y;
-      const rightColH = HEADER_H + EST_MINUTES.length * ROW_H + COL_PAD_Y;
-      const footerH = multiMode ? FOOTER_H + 48 : FOOTER_H;
-      const estimatedHeight = Math.min((Math.max(leftColH, rightColH) + footerH + 8) * pz, 480 * pz);
-      const rect = buttonRef.current.getBoundingClientRect();
-      const panelWidth = Math.max(rect.width, 280 * pz);
-      const fitsBelow = rect.bottom + estimatedHeight < window.innerHeight - 8;
-      setDropdownPosition({
-        top: fitsBelow ? rect.bottom : rect.top - estimatedHeight,
-        left: Math.min(rect.left, window.innerWidth - panelWidth - 8),
-        width: panelWidth,
-      });
-    }
-  }, [isOpen, rowHeight, multiMode]);
+  const menuRef = useRef(null);
+  const [anchorWidth, setAnchorWidth] = useState(0);
+  useLayoutEffect(() => {
+    if (isOpen && buttonRef.current) setAnchorWidth(buttonRef.current.getBoundingClientRect().width);
+  }, [isOpen]);
+
+  // Estimated panel height (real height is measured once rendered).
+  const pzForSize = getPageZoom();
+  const leftColH = HEADER_H + EST_HOURS.length * ROW_H + COL_PAD_Y;
+  const rightColH = HEADER_H + EST_MINUTES.length * ROW_H + COL_PAD_Y;
+  const footerH = multiMode ? FOOTER_H + 48 : FOOTER_H;
+  const estimatedHeight = Math.min((Math.max(leftColH, rightColH) + footerH + 8) * pzForSize, 480 * pzForSize);
+  const panelWidth = Math.max(anchorWidth, 280 * pzForSize);
+  const menuPos = useAnchoredMenuPosition({
+    open: isOpen,
+    anchorRef: buttonRef,
+    menuRef,
+    estimatedHeight,
+    width: panelWidth,
+  });
+  const dropdownPosition = { top: menuPos?.top ?? 0, left: menuPos?.left ?? 0, width: panelWidth };
 
   // Whenever the panel opens, make sure the trigger owns keyboard focus. On
   // the System page the cell mounts already open (autoOpen) with focus left
@@ -580,8 +582,9 @@ function EstimateDropdownCell({
         />
       </button>
 
-      {isOpen && createPortal(
+      {isOpen && menuPos && createPortal(
         <div
+          ref={menuRef}
           style={{
             position: 'fixed',
             top: `${dropdownPosition.top}px`,
@@ -592,7 +595,7 @@ function EstimateDropdownCell({
             borderRadius: 6,
             boxShadow: '0 1px 0 rgba(72,50,75,0.04), 0 2px 12px rgba(72,50,75,0.10)',
             zIndex: 9999,
-            maxHeight: 'calc(480px * var(--pz))',
+            maxHeight: `min(calc(480px * var(--pz)), ${menuPos.maxHeight}px)`,
             display: 'flex',
             flexDirection: 'column',
           }}

@@ -1,5 +1,6 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useAnchoredMenuPosition } from '../../hooks/planner/useAnchoredMenuPosition';
 import { ChevronDown, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { getStatusDropdownOptions, PILLBOX_COLORS } from './DropdownCell';
 import { getStatusLabel } from '../../lib/statusesStorage';
@@ -96,7 +97,6 @@ function MultiStatusDropdownCell({
   const [hovered, setHovered] = useState(null);
   // null until measured — the panel is not rendered before then, so it
   // never paints a frame at the viewport origin (top-left flash).
-  const [panelPos, setPanelPos] = useState(null);
   const anchorRef = useRef(null);
   const closeRef = useRef(null);
 
@@ -132,24 +132,16 @@ function MultiStatusDropdownCell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusDayIndex]);
 
-  // Position the panel; flip above the cell when it won't fit below.
-  // useLayoutEffect: measure and place before the browser paints.
-  useLayoutEffect(() => {
-    if (!open) {
-      setPanelPos(null);
-      return;
-    }
-    if (anchorRef.current) {
-      const rect = anchorRef.current.getBoundingClientRect();
-      const estimatedHeight = 320 * pz;
-      const fitsBelow = rect.bottom + estimatedHeight < window.innerHeight - 8;
-      setPanelPos({
-        top: fitsBelow ? rect.bottom : rect.top - estimatedHeight,
-        left: Math.min(rect.left, window.innerWidth - PANEL_WIDTH - 8),
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  // Position the panel: below the cell when it fits, above otherwise, clamped
+  // on screen and re-measured on scroll/resize.
+  const panelRef = useRef(null);
+  const panelPos = useAnchoredMenuPosition({
+    open,
+    anchorRef,
+    menuRef: panelRef,
+    estimatedHeight: 320 * pz,
+    width: PANEL_WIDTH,
+  });
 
   // Tell the row which day cell to focus-ring: the shown instance's cell
   // while the panel is open, cleared on close/unmount. Paging via the
@@ -237,11 +229,13 @@ function MultiStatusDropdownCell({
 
       {open && panelPos && createPortal(
         <div
+          ref={panelRef}
           onMouseDown={(e) => e.stopPropagation()}
           style={{
             position: 'fixed', top: panelPos.top, left: panelPos.left, width: PANEL_WIDTH,
+            maxHeight: panelPos.maxHeight, overflowY: 'auto', boxSizing: 'border-box',
             background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 6,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, overflow: 'hidden',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, overflowX: 'hidden',
             paddingTop: 3,
           }}
         >
