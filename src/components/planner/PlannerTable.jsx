@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import TableRow from './TableRow';
 
 /**
@@ -70,6 +70,54 @@ function PlannerTable({
   weekNames,
   onWeekNameChange,
 }) {
+  // Edge auto-scroll while dragging. The browser's native drag auto-scroll
+  // doesn't kick in for this container, so we do it ourselves. Listening on
+  // the document (not the container) means the pointer can leave the table
+  // entirely and scrolling still runs — and, deliberately, scrolling only
+  // starts once the pointer is *outside* the droppable area (above the
+  // sticky header rows, below the bottom, or past either side). Dropping a
+  // row on the top or bottom visible row therefore never triggers a scroll.
+  // A rAF loop (rather than scrolling on each dragover event) gives a steady,
+  // gentle speed that ramps up the further past the edge the pointer goes.
+  useEffect(() => {
+    // Speed is time-based (px per second) rather than per event: the
+    // browser fires dragover on every mouse movement as well as a ~50ms
+    // idle tick, so a fixed per-event step made the table shoot to the top
+    // the moment the mouse wiggled. Scrolling starts once the pointer is
+    // past the edge, not in a zone inside it.
+    const SPEED = 500; // px per second
+    let lastTs = 0;
+
+    const onDragOver = (e) => {
+      const el = tableBodyRef?.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      // The month / week / date / daily / filter rows are a sticky tbody
+      // pinned to the top of the container, so the usable top edge is just
+      // below them — nothing can be dropped on the header itself.
+      const stickyTop = [...el.querySelectorAll(':scope > table > tbody')]
+        .filter((tb) => getComputedStyle(tb).position === 'sticky')
+        .reduce((h, tb) => h + tb.getBoundingClientRect().height, 0);
+      const top = rect.top + stickyTop;
+      const { clientX: x, clientY: y } = e;
+      const outside = y < top || y > rect.bottom || x < rect.left || x > rect.right;
+      if (!outside) { lastTs = 0; return; }
+      // Elapsed time since the last event, capped so the first event after
+      // a pause (or the first one past the edge) doesn't produce a big jump.
+      const now = e.timeStamp;
+      const dt = lastTs ? Math.min(now - lastTs, 100) : 16;
+      lastTs = now;
+      const step = (SPEED * dt) / 1000;
+      if (y < top) el.scrollTop -= step;
+      else if (y > rect.bottom) el.scrollTop += step;
+      if (x < rect.left) el.scrollLeft -= step;
+      else if (x > rect.right) el.scrollLeft += step;
+    };
+
+    document.addEventListener('dragover', onDragOver);
+    return () => document.removeEventListener('dragover', onDragOver);
+  }, [tableBodyRef]);
+
   return (
     <div className="flex-1 flex flex-col min-h-0 gap-4 overflow-hidden">
       <div
@@ -84,28 +132,6 @@ function PlannerTable({
         onDragOver={(e) => {
           e.preventDefault();
           e.dataTransfer.dropEffect = 'move';
-          // Edge auto-scroll while dragging (rows from the inbox into a
-          // project, cells, etc.). The browser's native drag auto-scroll
-          // doesn't kick in for this container, so the drop target stayed
-          // offscreen. dragover keeps firing (~every 50ms) while the pointer
-          // is held still, so scrolling here is enough to keep it moving.
-          const el = e.currentTarget;
-          const rect = el.getBoundingClientRect();
-          const EDGE = 60; // px from the edge where scrolling starts
-          const MAX_STEP = 24; // px per dragover event at the very edge
-          const ramp = (dist) => Math.ceil(((EDGE - dist) / EDGE) * MAX_STEP);
-          // The month / week / date / daily / filter rows are a sticky tbody
-          // pinned to the top of the container, so the usable top edge is
-          // just below them — scrolling should start as soon as the drag
-          // indicator reaches the first data row, not the top of the page.
-          const stickyTop = [...el.querySelectorAll(':scope > table > tbody')]
-            .filter((tb) => getComputedStyle(tb).position === 'sticky')
-            .reduce((h, tb) => h + tb.getBoundingClientRect().height, 0);
-          const top = rect.top + stickyTop;
-          if (e.clientY < top + EDGE) el.scrollTop -= ramp(Math.max(0, e.clientY - top));
-          else if (e.clientY > rect.bottom - EDGE) el.scrollTop += ramp(Math.max(0, rect.bottom - e.clientY));
-          if (e.clientX < rect.left + EDGE) el.scrollLeft -= ramp(Math.max(0, e.clientX - rect.left));
-          else if (e.clientX > rect.right - EDGE) el.scrollLeft += ramp(Math.max(0, rect.right - e.clientX));
         }}
       >
         <table
