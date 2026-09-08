@@ -673,6 +673,25 @@ export const resetRecurringTasks = (data, totalDays = 84, startDayIndex = 0) => 
 
       const clearedRow = { ...row, ...updates };
 
+      // Reset the time estimate back to the plan. Chip-backed rows carry the
+      // Plan page duration in _originalEstimate / _originalTimeValue (set by
+      // resetSubprojectLabels on Send to System). Logging actual time during
+      // the week overwrites estimate/timeValue, which also makes the row look
+      // hand-edited so later Sends stop updating it. Restoring the original
+      // here starts the new week on the planned time and lets the next Send
+      // apply chip changes again. Rows without a plan (created on System, no
+      // chip) and Multi rows (estimate derived from day cells) are untouched.
+      if (
+        isRecurringValue(row.recurring) &&
+        typeof row._originalEstimate === 'string' && row._originalEstimate !== '' &&
+        row.estimate !== 'Multi' && row._originalEstimate !== 'Multi'
+      ) {
+        clearedRow.estimate = row._originalEstimate;
+        if (typeof row._originalTimeValue === 'string' && row._originalTimeValue !== '') {
+          clearedRow.timeValue = row._originalTimeValue;
+        }
+      }
+
       // If the row still has scheduled instances in other weeks, recompute
       // its aggregate status from what's left instead of forcing it back to
       // Not Scheduled — otherwise a still-scheduled future instance would
