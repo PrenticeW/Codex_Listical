@@ -40,7 +40,9 @@ import {
   readWeekNames,
   saveWeekNames,
   PLANNER_START_DATE_EVENT,
+  PLANNER_ROWS_STALE_EVENT,
   peekPlannerCache,
+  readPlannerSettingsRowStrict,
 } from '../../utils/planner/storage';
 import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
 
@@ -87,6 +89,13 @@ const defaultVisibleDayColumns = (totalDays) => {
 };
 
 const todayIso = () => new Date().toISOString().split('T')[0];
+
+const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const sameSet = (a, b) => {
+  if (!(a instanceof Set) || !(b instanceof Set) || a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
+};
 
 // Initialiser helpers: each takes the cached row (or null) plus the
 // fallback default, and returns the right initial value for useState.
@@ -150,6 +159,8 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
   const initialTotalDays = initTotalDays(initialCache.yearRow);
 
   const [totalDays, setTotalDays] = useState(initialTotalDays);
+  const totalDaysRef = useRef(initialTotalDays);
+  totalDaysRef.current = totalDays;
   const [columnSizing, setColumnSizing] = useState(() =>
     initColumnSizing(initialCache.plannerSettings, initialTotalDays),
   );
@@ -259,6 +270,77 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
     return () => { cancelled = true; };
   }, [projectId, yearNumber, userId]);
 
+  // Revalidate planner_settings against the server whenever this tab may be
+  // stale. The load effect above deliberately skips the network on a cache
+  // hit, and the System page's own stale-tab refetch only covers task rows —
+  // so hidden weeks (visible_day_columns), week names and toggles could sit
+  // on a weeks-old localStorage mirror for the whole session, and the next
+  // Hide/Show Week press would write that stale map back over the server's.
+  // Runs on: a cache-hit mount, the planner-rows-stale event (tab wake after
+  // ≥60s hidden / back online), and window focus/pageshow (throttled).
+  // Values only change state when they actually differ, so a matching
+  // server row causes no re-render and no autosave. Settings autosave is
+  // held until the first revalidation settles (see settingsFresh below).
+  const [settingsFresh, setSettingsFresh] = useState(!cachedHadData);
+  const revalGen = useRef(0);
+  useEffect(() => {
+    if (yearNumber == null || userId == null) return undefined;
+    let cancelled = false;
+    const WAKE_MIN_GAP_MS = 30000;
+    let lastWakeAt = 0;
+
+    const revalidate = async () => {
+      const gen = ++revalGen.current;
+      try {
+        const row = await readPlannerSettingsRowStrict(yearNumber);
+        if (cancelled || gen !== revalGen.current) return;
+        // Server has no row yet (fresh year) — nothing to adopt; the
+        // defaults already in state are correct.
+        if (row) {
+          setVisibleDayColumns(prev => sameJson(prev, initVisibleDayColumns(row, totalDaysRef.current))
+            ? prev : initVisibleDayColumns(row, totalDaysRef.current));
+          setWeekNames(prev => sameJson(prev, initWeekNames(row)) ? prev : initWeekNames(row));
+          setShowRecurring(prev => prev === initShow(row, 'show_recurring') ? prev : initShow(row, 'show_recurring'));
+          setShowSubprojects(prev => prev === initShow(row, 'show_subprojects') ? prev : initShow(row, 'show_subprojects'));
+          setShowMaxMinRows(prev => prev === initShow(row, 'show_max_min_rows') ? prev : initShow(row, 'show_max_min_rows'));
+          setSelectedSortStatuses(prev => sameSet(prev, initSortSet(row, 'sort_statuses'))
+            ? prev : initSortSet(row, 'sort_statuses'));
+          setSelectedSortPlannerStatuses(prev => sameSet(prev, initSortSet(row, 'sort_planner_statuses'))
+            ? prev : initSortSet(row, 'sort_planner_statuses'));
+        }
+      } catch (error) {
+        // Offline / transient failure: keep whatever we have. Saves are
+        // re-enabled below so offline use still works; the next wake or
+        // reconnect triggers another attempt through planner-rows-stale.
+        console.warn('Planner settings revalidation failed', error);
+      } finally {
+        if (!cancelled && gen === revalGen.current) setSettingsFresh(true);
+      }
+    };
+
+    if (cachedHadData) revalidate();
+    // Not re-gated on stale: flipping `enabled` back on would make every
+    // settings useAutoPersist write its value once. The gate only matters
+    // for the mount-time cache hit; later revalidations just adopt.
+    const onStale = () => revalidate();
+    const onWake = () => {
+      if (Date.now() - lastWakeAt < WAKE_MIN_GAP_MS) return;
+      lastWakeAt = Date.now();
+      revalidate();
+    };
+    window.addEventListener(PLANNER_ROWS_STALE_EVENT, onStale);
+    window.addEventListener('focus', onWake);
+    window.addEventListener('pageshow', onWake);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(PLANNER_ROWS_STALE_EVENT, onStale);
+      window.removeEventListener('focus', onWake);
+      window.removeEventListener('pageshow', onWake);
+    };
+    // cachedHadData is a mount-time snapshot; deliberately not a dep.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [yearNumber, userId]);
+
   // Refresh startDate when another page (e.g. Plan's Send to System) writes
   // it externally. Only react to events for this hook's year.
   useEffect(() => {
@@ -275,19 +357,23 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
   // Auto-persist all settings, gated on isLoaded so early interactions
   // cannot be overwritten by a slow Supabase round-trip on cold cache.
   const autoOpts = { projectId, yearNumber, enabled: isLoaded };
+  // planner_settings columns additionally wait for the stale-tab
+  // revalidation above, so a cached (possibly weeks-old) settings row is
+  // never written back over the server's before it has been checked.
+  const settingsOpts = { ...autoOpts, enabled: isLoaded && settingsFresh };
   useAutoPersist(columnSizing, saveColumnSizing, {
-    ...autoOpts,
+    ...settingsOpts,
     shouldSave: (value) => Object.keys(value).length > 0,
     // Column sizing changes on every pixel during a drag. Debounce so only
     // the final resting width is written, preventing concurrent Supabase
     // writes from racing and persisting a mid-drag position instead.
     debounceMs: 600,
   });
-  useAutoPersist(sizeScale, saveSizeScale, autoOpts);
+  useAutoPersist(sizeScale, saveSizeScale, settingsOpts);
   useAutoPersist(startDate, saveStartDate, autoOpts);
-  useAutoPersist(showRecurring, saveShowRecurring, autoOpts);
-  useAutoPersist(showSubprojects, saveShowSubprojects, autoOpts);
-  useAutoPersist(showMaxMinRows, saveShowMaxMinRows, autoOpts);
+  useAutoPersist(showRecurring, saveShowRecurring, settingsOpts);
+  useAutoPersist(showSubprojects, saveShowSubprojects, settingsOpts);
+  useAutoPersist(showMaxMinRows, saveShowMaxMinRows, settingsOpts);
 
   // Sync toggle changes dispatched from GearPanel
   useEffect(() => {
@@ -300,15 +386,15 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
     window.addEventListener('planner-settings-update', handler);
     return () => window.removeEventListener('planner-settings-update', handler);
   }, [yearNumber]);
-  useAutoPersist(selectedSortStatuses, saveSortStatuses, autoOpts);
-  useAutoPersist(selectedSortPlannerStatuses, saveSortPlannerStatuses, autoOpts);
+  useAutoPersist(selectedSortStatuses, saveSortStatuses, settingsOpts);
+  useAutoPersist(selectedSortPlannerStatuses, saveSortPlannerStatuses, settingsOpts);
   useAutoPersist(taskRows, saveTaskRows, autoOpts);
   useAutoPersist(totalDays, saveTotalDays, autoOpts);
   useAutoPersist(visibleDayColumns, saveVisibleDayColumns, {
-    ...autoOpts,
+    ...settingsOpts,
     shouldSave: (value) => Object.keys(value).length > 0,
   });
-  useAutoPersist(weekNames, saveWeekNames, autoOpts);
+  useAutoPersist(weekNames, saveWeekNames, settingsOpts);
 
   return {
     columnSizing,

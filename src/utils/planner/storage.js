@@ -92,6 +92,31 @@ export function invalidateTaskRowsCache(yearNumber) {
   invalidate(CACHE_NS, taskRowsKey(yearNumber));
 }
 
+/**
+ * Drop the cached planner_settings row for a year so the next settings read
+ * hits Supabase. A cache-hit page load otherwise serves visible_day_columns
+ * (hidden weeks), week names, toggles etc. from a mirror that can be weeks
+ * old — a stale browser showed a week hidden on another device (2026-09-08).
+ */
+export function invalidatePlannerSettingsCache(yearNumber) {
+  invalidate(CACHE_NS, settingsKey(yearNumber));
+}
+
+/**
+ * Server-truth read of the planner_settings row for a year. Bypasses and
+ * refreshes the cache. Unlike the per-column readers this THROWS on failure
+ * instead of returning defaults, so a revalidation that fails (offline, auth
+ * not ready) never replaces good cached state with "everything visible".
+ * Returns null only for a genuine missing row.
+ */
+export async function readPlannerSettingsRowStrict(yearNumber) {
+  const userId = await requireUserId();
+  const yearId = await findYearId(userId, yearNumber);
+  if (!yearId) return null;
+  invalidatePlannerSettingsCache(yearNumber);
+  return readPlannerSettingsRow({ userId, yearId, yearNumber });
+}
+
 export function peekPlannerCache(yearNumber) {
   if (yearNumber == null) return { plannerSettings: null, yearRow: null, taskRows: null };
   const sk = settingsKey(yearNumber);
@@ -1418,6 +1443,7 @@ export const PLANNER_ROWS_STALE_EVENT = 'planner-rows-stale';
 export function markPlannerRowsStale(reason = 'unknown') {
   for (const yearNumber of [..._readHighWater.keys()]) {
     invalidate(CACHE_NS, taskRowsKey(yearNumber));
+    invalidate(CACHE_NS, settingsKey(yearNumber));
   }
   _readHighWater.clear();
   _serverReadYears.clear();
