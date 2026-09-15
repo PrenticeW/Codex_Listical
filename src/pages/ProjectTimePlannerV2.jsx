@@ -2057,9 +2057,21 @@ export default function ProjectTimePlannerV2() {
   // under the next subproject section. Mirrors the import-time validation in
   // importTasksFromYear.js. Archived rows are never touched (archives are a frozen
   // record of what existed at the time).
+  //
+  // System-page subprojects are first-class (2026-09-15): a label typed or
+  // created directly on this page never has a Goal entry, and the old rule
+  // ("not in the Goal list -> clear") silently wiped it on every load — the
+  // recurring "App Fixes disappeared" bug. So the wipe now needs POSITIVE
+  // evidence of a Goal-side deletion: a label is cleared only when this
+  // session has seen it IN the Goal list before and it is gone now. Labels
+  // Goal never knew about are left alone.
+  const prevGoalSubsRef = useRef(null);
   useEffect(() => {
     if (!isProjectsLoaded) return;
     if (!projectSubprojectsMap || Object.keys(projectSubprojectsMap).length === 0) return;
+    const prevMap = prevGoalSubsRef.current;
+    prevGoalSubsRef.current = projectSubprojectsMap;
+    if (!prevMap) return; // first sighting this session: nothing can have been deleted yet
     setData(prevData => {
       let changed = false;
       const next = prevData.map(row => {
@@ -2076,6 +2088,10 @@ export default function ProjectTimePlannerV2() {
         // removed projects are handled by the project-removal cleanup above.
         const subs = projectKey ? projectSubprojectsMap[projectKey] : undefined;
         if (!subs || subs.includes(sub)) return row;
+        // Clear only on a Goal-side deletion observed this session: the
+        // label must have been in the PREVIOUS Goal list for this project.
+        const prevSubs = prevMap[projectKey];
+        if (!prevSubs || !prevSubs.includes(sub)) return row;
         changed = true;
         // Deliberately loud: if this fires when the subproject DOES exist on
         // the Goal page, the projectSubprojectsMap it ran against was stale
