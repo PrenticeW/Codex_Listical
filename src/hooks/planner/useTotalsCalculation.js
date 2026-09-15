@@ -35,9 +35,19 @@ export const useProjectTotals = (computedData) => {
         return;
       }
 
-      // Reset only when we leave the project entirely
-      if (row._isInboxRow || row._isArchiveRow) {
+      // Reset only when we leave the project entirely. The Archive section
+      // header (new format) must reset too — without this, archived task
+      // rows (plain task rows flagged _isArchivedTask) get attributed to
+      // whichever live project header was seen last.
+      if (row._isInboxRow || row._isArchiveRow || row._rowType === 'archiveHeader') {
         currentProjectHeaderId = null;
+        return;
+      }
+
+      // Archived task rows carry no special _rowType, so isSpecialRow can't
+      // catch them — skip them explicitly so past weeks' Done tasks never
+      // count toward a live project's total.
+      if (row._isArchivedTask) {
         return;
       }
 
@@ -89,7 +99,11 @@ export const useDailyTotals = ({ computedData, totalDays }) => {
 
     // Sum up values from all regular task rows
     computedData.forEach((row) => {
-      // Skip special rows and project rows - only count regular task rows
+      // Skip special rows and project rows - only count regular task rows.
+      // Archived task rows ARE included here on purpose: when a week is
+      // archived its tasks keep their day values (and the live recurring
+      // rows are cleared), so counting them preserves the historical
+      // per-day totals without double counting.
       if (isSpecialRow(row)) {
         return;
       }
