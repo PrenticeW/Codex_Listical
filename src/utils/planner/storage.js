@@ -1680,9 +1680,14 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       return null;
     };
     const serverStructural = new Set();
+    const serverStructuralRows = new Map(); // structuralKey -> [server rows]
     for (const r of currentById.values()) {
       const k = structuralKey(r);
-      if (k) serverStructural.add(k);
+      if (k) {
+        serverStructural.add(k);
+        if (!serverStructuralRows.has(k)) serverStructuralRows.set(k, []);
+        serverStructuralRows.get(k).push(r);
+      }
     }
     let guarded = 0; // rows the guard refused to overwrite/delete/insert
 
@@ -1699,6 +1704,25 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
         if (!hasBasis && currentById.size > 0) {
           const k = structuralKey(d);
           if (!mintedHere.has(d.id) || (k && serverStructural.has(k))) { guarded += 1; continue; }
+        }
+        // Belt and braces (2026-09-15 duplicate-header incident): NEVER
+        // insert a second copy of a one-per-year / one-per-project
+        // structural row while the server's copy survives this save. A
+        // stale tab re-minting UUIDs for rows it lost track of is the only
+        // way to reach this, and inserting the copy corrupts the layout
+        // (two project headers, a second Inbox divider). The insert is
+        // allowed only when every server row of the same kind is being
+        // deleted in this same save (a genuine replacement).
+        {
+          const k = structuralKey(d);
+          const survivors = k ? (serverStructuralRows.get(k) || []).filter((r) =>
+            r.id !== d.id && (desiredIds.has(r.id) || !known.has(r.id) || !hasBasis)
+          ) : [];
+          if (survivors.length > 0) {
+            console.warn('[planner-save] duplicate structural row refused', { key: k, keptId: survivors[0].id });
+            guarded += 1;
+            continue;
+          }
         }
         toUpsert.push(d);
         nextBaseline.set(d.id, baselineSnap(d));
