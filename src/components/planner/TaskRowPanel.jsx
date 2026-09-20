@@ -23,7 +23,6 @@ import { fmtTimestamp } from '../../utils/fmtTimestamp';
 import { containsUrl } from '../../utils/linkify';
 import LinkedText from '../LinkedText';
 import useAddLink from '../../hooks/useAddLink';
-import { pasteKeepingLinks } from '../../utils/clipboardText';
 import { isRecurringValue } from '../../utils/planner/valueNormalizers';
 
 // ─── Design tokens (match GearPanel/SystemPanel) ─────────────────────────────
@@ -560,7 +559,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
                     placeholder="Add a note…"
                     value={notesAddLink.viewValue}
                     onChange={notesAddLink.onViewChange}
-                    onPaste={(e) => pasteKeepingLinks(e, notesAddLink.onViewChange)}
+                    onPaste={notesAddLink.onPaste}
                     onScroll={(e) => {
                       if (notesMirrorRef.current) notesMirrorRef.current.scrollTop = e.target.scrollTop;
                     }}

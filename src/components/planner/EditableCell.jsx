@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { containsUrl } from '../../utils/linkify';
-import { pasteKeepingLinks } from '../../utils/clipboardText';
 import useAddLink from '../../hooks/useAddLink';
 
 /**
@@ -145,7 +144,7 @@ function EditableCell({
         }}
         value={addLink.viewValue}
         onChange={addLink.onViewChange}
-        onPaste={(e) => pasteKeepingLinks(e, addLink.onViewChange)}
+        onPaste={addLink.onPaste}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         style={{

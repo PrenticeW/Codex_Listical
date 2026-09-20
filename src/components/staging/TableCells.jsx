@@ -226,6 +226,7 @@ export function TextInputCell({
         size={1}
         value={addLink.viewValue}
         onChange={(e) => { addLink.onViewChange(e); syncMirrorScroll(e); }}
+        onPaste={addLink.onPaste}
         onScroll={syncMirrorScroll}
         onKeyDown={(e) => { if (addLink.onKeyDown(e)) { setIsEditing(true); return; } onKeyDown?.(e); }}
         onFocus={onFocus}

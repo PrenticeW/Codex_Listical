@@ -1,6 +1,10 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import AddLinkDialog from '../components/AddLinkDialog';
 import { applyLinkToView, fromEditView, renderEditView, toEditView } from '../utils/linkEditView';
+import { pasteKeepingLinks } from '../utils/clipboardText';
+
+/** True when the pasted text is a single URL (no spaces, http(s) or www.). */
+const SINGLE_URL_RE = /^(?:https?:\/\/|www\.)\S+$/i;
 
 /** True when the event is Cmd+K (Mac) or Ctrl+K (Windows/Linux). */
 export function isAddLinkShortcut(e) {
@@ -88,7 +92,43 @@ export default function useAddLink({ inputRef, value, setValue, onCommit }) {
     />
   );
 
+  /**
+   * Paste handler for the editor. Pasting a URL over a selection turns the
+   * selected words into a link (like Docs/Notion) instead of dumping the raw
+   * URL into the text. Pasting a URL at a caret inserts it with a leading
+   * space when it would otherwise glue onto the previous word. Everything
+   * else falls through to pasteKeepingLinks (rich-clipboard link rescue).
+   */
+  const onPaste = useCallback((e) => {
+    const el = inputRef.current;
+    const cd = e?.clipboardData;
+    if (!el || !cd) return;
+    const plain = (cd.getData('text/plain') ?? '').trim();
+    if (SINGLE_URL_RE.test(plain)) {
+      const { text } = toEditView(valueRef.current ?? '');
+      const start = el.selectionStart ?? text.length;
+      const end = el.selectionEnd ?? start;
+      e.preventDefault();
+      if (end > start) {
+        // Link the selected words to the pasted URL.
+        const label = text.slice(start, end);
+        setValue(applyLinkToView(valueRef.current ?? '', start, end, label, plain));
+        const caret = start + label.trim().length;
+        requestAnimationFrame(() => { try { el.setSelectionRange(caret, caret); } catch { /* ignore */ } });
+      } else {
+        // Caret paste: keep the URL, but never glue it onto the word before.
+        const needsSpace = start > 0 && !/\s/.test(text[start - 1]);
+        const insert = (needsSpace ? ' ' : '') + plain;
+        onViewChange(text.slice(0, start) + insert + text.slice(start));
+        const caret = start + insert.length;
+        requestAnimationFrame(() => { try { el.setSelectionRange(caret, caret); } catch { /* ignore */ } });
+      }
+      return;
+    }
+    pasteKeepingLinks(e, onViewChange);
+  }, [inputRef, setValue, onViewChange]);
+
   const renderMirror = useCallback(() => renderEditView(valueRef.current ?? ''), []);
 
-  return { onKeyDown, dialog, isOpen: !!state, viewValue: view.text, onViewChange, renderMirror };
+  return { onKeyDown, onPaste, dialog, isOpen: !!state, viewValue: view.text, onViewChange, renderMirror };
 }

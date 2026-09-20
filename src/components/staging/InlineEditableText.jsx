@@ -86,6 +86,7 @@ export default function InlineEditableText({
         value={addLink.viewValue}
         maxLength={maxLength}
         onChange={addLink.onViewChange}
+        onPaste={addLink.onPaste}
         onBlur={() => { if (!addLinkOpenRef.current) commit(); }}
         onKeyDown={handleKeyDown}
         onClick={(e) => e.stopPropagation()}
