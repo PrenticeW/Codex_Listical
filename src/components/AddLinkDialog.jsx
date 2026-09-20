@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link as LinkIcon } from 'lucide-react';
 import { getPageZoom } from '../utils/pageZoom';
+import { findLinks } from '../utils/linkify';
 
 /**
  * Add link popup — opened with Cmd+K (Mac) / Ctrl+K (Windows) while editing
@@ -123,9 +124,39 @@ export default function AddLinkDialog({
 
   const canConfirm = url.trim().length > 0;
 
+  // Some sources (Google Maps "share", browser address bars with page
+  // titles) put "Name https://url" on the clipboard as one string. Keep only
+  // the URL in the LINK field; leftover words fill TEXT when it is empty.
+  const splitUrlPaste = (raw) => {
+    const found = findLinks(raw);
+    if (!found.length) return null;
+    const rest = (raw.slice(0, found[0].start) + raw.slice(found[0].end)).trim();
+    return { url: found[0].raw, rest };
+  };
+
+  const handleUrlPaste = (e) => {
+    const plain = (e.clipboardData?.getData('text/plain') ?? '').trim();
+    const split = splitUrlPaste(plain);
+    if (!split) return; // no URL in the paste — let it behave normally
+    // Pasting a link into the LINK field replaces the field, never appends.
+    e.preventDefault();
+    setUrl(split.url);
+    if (!text.trim() && split.rest) setText(split.rest);
+  };
+
   const confirm = () => {
     if (!canConfirm) return;
-    onConfirm({ text: text.trim(), url: url.trim() });
+    let cleanUrl = url.trim();
+    let label = text.trim();
+    // Backstop: if the field still holds "words + url", store only the URL.
+    if (/\s/.test(cleanUrl)) {
+      const split = splitUrlPaste(cleanUrl);
+      if (split) {
+        cleanUrl = split.url;
+        if (!label && split.rest) label = split.rest;
+      }
+    }
+    onConfirm({ text: label, url: cleanUrl });
   };
 
   const handleKeyDown = (e) => {
@@ -147,7 +178,18 @@ export default function AddLinkDialog({
       role="dialog"
       aria-label="Add link"
       onKeyDown={handleKeyDown}
+      // The card is portaled to <body>, but React bubbles its events up the
+      // COMPONENT tree — into the cell/display that opened it. Swallow every
+      // pointer interaction so a click or double-click inside the popup
+      // (e.g. double-clicking the URL to select it) never reaches the cell,
+      // which would flip it into edit mode and unmount this popup.
       onMouseDown={(e) => e.stopPropagation()}
+      onMouseUp={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onFocus={(e) => e.stopPropagation()}
+      onBlur={(e) => e.stopPropagation()}
       style={{
         position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999,
         background: '#fff', border: '1px solid #e8e8e4', borderRadius: pz(4),
@@ -189,6 +231,7 @@ export default function AddLinkDialog({
               placeholder="https://…"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
+              onPaste={handleUrlPaste}
               onFocus={urlFocus.onFocus}
               onBlur={urlFocus.onBlur}
               style={{

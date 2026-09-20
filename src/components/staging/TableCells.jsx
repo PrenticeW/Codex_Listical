@@ -178,12 +178,15 @@ export function TextInputCell({
         flex: trailing ? 1 : undefined,
         minWidth: trailing ? 0 : undefined,
       }}
-      onClick={() => setIsEditing(true)}
+      // Guard: events from the link toolbar/dialog (portaled to <body> but
+      // bubbling through the React tree) must not flip the cell into edit
+      // mode — only interactions on the display's own DOM count.
+      onClick={(e) => { if (e.currentTarget.contains(e.target)) setIsEditing(true); }}
       // Programmatic focus (usePlanTableFocus targets the data-plan-*
       // attributes) lands here when the display is shown — swap to the
       // input, which the isEditing effect then focuses for real.
       tabIndex={-1}
-      onFocus={() => setIsEditing(true)}
+      onFocus={(e) => { if (e.currentTarget.contains(e.target)) setIsEditing(true); }}
       {...dataAttributes}
     >
       <LinkedText text={value} onChange={onChange} />

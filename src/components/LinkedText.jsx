@@ -151,6 +151,9 @@ export default function LinkedText({ text, onChange }) {
           onMouseEnter={cancelHide}
           onMouseLeave={scheduleHide}
           onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
           style={{
             position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999,
             display: 'flex', alignItems: 'stretch', overflow: 'hidden',

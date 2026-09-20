@@ -11,6 +11,13 @@ const URL_REGEX = /((?:https?:\/\/|www\.)[^\s<>"']+)/gi;
 // anything with spaces, e.g. "[note](see below)", is never treated as a link.
 const MD_LINK_REGEX = /\[([^[\]\n]+)\]\(((?:https?:\/\/|www\.|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z][a-z0-9-]*(?=[/?#)]))[^\s()<>"']*)\)/gi;
 
+// Malformed markdown link whose URL slot holds extra words around a real
+// URL (see the rescue pass in findLinks). The strict MD_LINK_REGEX runs
+// first and wins; this only catches leftovers that contain an http(s)/www
+// URL somewhere inside the parens.
+const MD_RESCUE_REGEX = /\[([^[\]\n]+)\]\(([^()\n]*(?:https?:\/\/|www\.)[^()\n]*)\)/gi;
+const INNER_URL_REGEX = /(?:https?:\/\/|www\.)[^\s()<>"']+/i;
+
 // Trailing punctuation that is almost always sentence punctuation, not part
 // of the URL (e.g. "see https://foo.com." or "(https://foo.com)").
 const TRAILING_PUNCTUATION = /[.,;:!?)\]}'"]+$/;
@@ -45,6 +52,21 @@ export function findLinks(text) {
       href: toHref(m[2]),
       isMarkdown: true,
     });
+  }
+
+  // Rescue pass: a malformed "[label](junk https://url junk)" — e.g. written
+  // before paste sanitising, when a "Name https://url" clipboard landed whole
+  // in the URL slot. Treat the WHOLE bracketed run as one markdown link to
+  // the first URL inside the parens, so it displays as the label and any
+  // edit rewrites it in the clean form.
+  MD_RESCUE_REGEX.lastIndex = 0;
+  while ((m = MD_RESCUE_REGEX.exec(text)) !== null) {
+    const start = m.index;
+    const end = start + m[0].length;
+    if (links.some((l) => start < l.end && end > l.start)) continue;
+    const inner = m[2].match(INNER_URL_REGEX);
+    if (!inner) continue;
+    links.push({ start, end, raw: m[0], label: m[1], href: toHref(inner[0]), isMarkdown: true });
   }
 
   URL_REGEX.lastIndex = 0;
