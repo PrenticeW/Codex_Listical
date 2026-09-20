@@ -95,9 +95,17 @@ export const useSpreadsheetSelection = ({
     e.stopPropagation();
 
     if (e.shiftKey && anchorRow) {
-      // Shift-click: select range of rows from anchor to current
+      // Shift-click: ADD the anchor-to-current range to the existing
+      // selection (union, not replace). Replacing dropped any previously
+      // selected rows on the far side of the anchor, which broke
+      // "shift-select more rows, then drag the whole group" (rows at the
+      // far end of the preselected group became unselected).
       const range = getRowRange(anchorRow, rowId);
-      setSelectedRows(range);
+      setSelectedRows(prev => {
+        const next = new Set(prev);
+        range.forEach(id => next.add(id));
+        return next;
+      });
       setSelectedCells(new Set()); // Clear cell selections
       // Don't update anchor - keep it for next shift-click
     } else if (e.metaKey || e.ctrlKey) {
