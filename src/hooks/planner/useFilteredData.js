@@ -49,6 +49,10 @@ import { getNormalizedColumnValue } from '../../utils/planner/valueNormalizers';
 import { getMultiInstances, MULTI_STATUS_KEY_RE, isScheduledDayValue } from '../../utils/planner/multiStatus';
 import { isRecurringValue } from '../../utils/planner/valueNormalizers';
 
+// Stable default so useFilterValues callers that pass no filter state don't
+// re-memo on every render.
+const EMPTY_SET = new Set();
+
 /**
  * Custom hook for filtering planner data
  * Handles both column filters (project, status, etc.), day column filters, collapsed groups,
@@ -465,10 +469,27 @@ export const useFilteredData = ({
 /**
  * Custom hook for collecting available filter values from data
  *
+ * Excel-style cascading: each dropdown's options come from the rows that
+ * survive every OTHER active filter (never its own — otherwise you could
+ * no longer widen a filter you'd already narrowed). With no filters active
+ * this is identical to collecting from all rows.
+ *
  * @param {Array} computedData - The computed data to collect values from
+ * @param {Object} [activeFilters] - Current filter state (all optional)
  * @returns {Object} Object containing arrays of available filter values
  */
-export const useFilterValues = (computedData) => {
+export const useFilterValues = (computedData, activeFilters = {}) => {
+  const {
+    selectedProjectFilters = EMPTY_SET,
+    selectedSubprojectFilters = EMPTY_SET,
+    selectedStatusFilters = EMPTY_SET,
+    selectedRecurringFilters = EMPTY_SET,
+    selectedEstimateFilters = EMPTY_SET,
+    dayColumnFilters = EMPTY_SET,
+    coerceNumber = null,
+    totalDays = 0,
+  } = activeFilters;
+
   return useMemo(() => {
     const projects = new Set();
     const subprojects = new Set();
@@ -476,30 +497,73 @@ export const useFilterValues = (computedData) => {
     const recurring = new Set(['Recurring', 'Not Recurring']); // Fixed options
     const estimates = new Set();
 
+    // Per-category match checks, mirroring the leaf matching in
+    // useFilteredData (only the parts that apply to regular task rows —
+    // special/structural rows are skipped below anyway).
+    const matchesProject = (row) =>
+      !selectedProjectFilters.size || selectedProjectFilters.has(getNormalizedColumnValue(row, 'project'));
+    const matchesSubproject = (row) =>
+      !selectedSubprojectFilters.size || selectedSubprojectFilters.has(getNormalizedColumnValue(row, 'subproject'));
+    const matchesStatus = (row) => {
+      if (!selectedStatusFilters.size) return true;
+      if (row.estimate === 'Multi' && totalDays > 0) {
+        const instances = getMultiInstances(row, totalDays);
+        if (instances.length > 1) {
+          return instances.some(inst => selectedStatusFilters.has(inst.status));
+        }
+      }
+      return selectedStatusFilters.has(getNormalizedColumnValue(row, 'status'));
+    };
+    const matchesRecurring = (row) =>
+      !selectedRecurringFilters.size ||
+      selectedRecurringFilters.has(isRecurringValue(row.recurring) ? 'Recurring' : 'Not Recurring');
+    const matchesEstimate = (row) =>
+      !selectedEstimateFilters.size || selectedEstimateFilters.has(getNormalizedColumnValue(row, 'estimate'));
+    const matchesDayColumns = (row) => {
+      if (!dayColumnFilters.size || !coerceNumber) return true;
+      return Array.from(dayColumnFilters).every(dayColumnId => coerceNumber(row[dayColumnId]) !== null);
+    };
+
     computedData.forEach(row => {
       // Skip special rows - only collect from regular task rows
       if (isSpecialRow(row)) {
         return;
       }
 
-      // Collect values using normalized helpers
-      projects.add(getNormalizedColumnValue(row, 'project'));
-      subprojects.add(getNormalizedColumnValue(row, 'subproject'));
-      statuses.add(getNormalizedColumnValue(row, 'status'));
-      estimates.add(getNormalizedColumnValue(row, 'estimate'));
+      const okProject = matchesProject(row);
+      const okSubproject = matchesSubproject(row);
+      const okStatus = matchesStatus(row);
+      const okRecurring = matchesRecurring(row);
+      const okEstimate = matchesEstimate(row);
+      const okDays = matchesDayColumns(row);
 
-      // Multi rows: per-instance statuses are filterable too, so a status
-      // that only exists on one date (e.g. Blocked on 2/3 while the chip
-      // rests on Scheduled) still appears as a filter option.
-      if (row.estimate === 'Multi') {
-        for (const key of Object.keys(row)) {
-          const match = key.match(MULTI_STATUS_KEY_RE);
-          if (match && row[key] && isScheduledDayValue(row[`day-${match[1]}`])) {
-            statuses.add(row[key] === '-' ? 'Scheduled' : row[key]);
+      // A category's option list only takes values from rows that pass
+      // every OTHER category's active filter (its own filter is ignored).
+      if (okSubproject && okStatus && okRecurring && okEstimate && okDays) {
+        projects.add(getNormalizedColumnValue(row, 'project'));
+      }
+      if (okProject && okStatus && okRecurring && okEstimate && okDays) {
+        subprojects.add(getNormalizedColumnValue(row, 'subproject'));
+      }
+      if (okProject && okSubproject && okRecurring && okEstimate && okDays) {
+        statuses.add(getNormalizedColumnValue(row, 'status'));
+
+        // Multi rows: per-instance statuses are filterable too, so a status
+        // that only exists on one date (e.g. Blocked on 2/3 while the chip
+        // rests on Scheduled) still appears as a filter option.
+        if (row.estimate === 'Multi') {
+          for (const key of Object.keys(row)) {
+            const match = key.match(MULTI_STATUS_KEY_RE);
+            if (match && row[key] && isScheduledDayValue(row[`day-${match[1]}`])) {
+              statuses.add(row[key] === '-' ? 'Scheduled' : row[key]);
+            }
           }
+          // Unset instances read as 'Scheduled' (see getMultiInstances)
+          statuses.add('Scheduled');
         }
-        // Unset instances read as 'Scheduled' (see getMultiInstances)
-        statuses.add('Scheduled');
+      }
+      if (okProject && okSubproject && okStatus && okRecurring && okDays) {
+        estimates.add(getNormalizedColumnValue(row, 'estimate'));
       }
     });
 
@@ -510,7 +574,17 @@ export const useFilterValues = (computedData) => {
       recurringNames: Array.from(recurring).sort(),
       estimateNames: Array.from(estimates).sort(),
     };
-  }, [computedData]);
+  }, [
+    computedData,
+    selectedProjectFilters,
+    selectedSubprojectFilters,
+    selectedStatusFilters,
+    selectedRecurringFilters,
+    selectedEstimateFilters,
+    dayColumnFilters,
+    coerceNumber,
+    totalDays,
+  ]);
 };
 
 export default useFilteredData;

@@ -932,7 +932,19 @@ export default function ProjectTimePlannerV2() {
   }, []);
 
   // Collect unique values for filter dropdowns from the data
-  const { projectNames, subprojectNames, statusNames, recurringNames, estimateNames } = useFilterValues(computedData);
+  // Cascading dropdowns: each filter's options come from rows that pass all
+  // the OTHER active filters, so a second filter only offers values still
+  // visible on the table.
+  const { projectNames, subprojectNames, statusNames, recurringNames, estimateNames } = useFilterValues(computedData, {
+    selectedProjectFilters,
+    selectedSubprojectFilters,
+    selectedStatusFilters,
+    selectedRecurringFilters,
+    selectedEstimateFilters,
+    dayColumnFilters,
+    coerceNumber,
+    totalDays,
+  });
 
   // Wrap filter button click handlers with menu state (using generic hook to reduce duplication)
   const onProjectFilterButtonClick = useFilterButtonHandler(handleProjectFilterButtonClick, projectFilterMenu);
