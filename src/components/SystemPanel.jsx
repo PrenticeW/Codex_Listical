@@ -22,6 +22,7 @@ import { useLocation } from 'react-router-dom';
 import { useSystemPanel } from '../contexts/SystemPanelContext';
 import PanelLockButton from './PanelLockButton';
 import usePanelWidth from '../hooks/usePanelWidth';
+import storage from '../lib/storageService';
 import { useTaskRowPanel } from '../contexts/TaskRowPanelContext';
 import { TaskDetailContent } from './planner/TaskRowPanel';
 import { ArchiveWeekContent } from './planner/ArchiveWeekPanel';
@@ -466,22 +467,41 @@ function InsertSection() {
   );
 }
 
+// Remembers the most recent status selection used for "Move from Inbox to
+// Planner" (per user, via the storageService localStorage layer), so the
+// panel reopens pre-checked with the last-used settings.
+const SORT_INBOX_STATUSES_KEY = 'system-sort-inbox-statuses';
+
+const readSavedSortStatuses = () => {
+  const saved = storage.getJSON(SORT_INBOX_STATUSES_KEY, []);
+  if (!Array.isArray(saved)) return {};
+  const map = {};
+  saved.forEach((id) => { if (typeof id === 'string') map[id] = true; });
+  return map;
+};
+
 function SortSection() {
   const sortStatuses = useStatuses(); // active, in panel order
   const [inboxOpen, setInboxOpen] = useState(false);
-  const [checked, setChecked] = useState({});
+  const [checked, setChecked] = useState(readSavedSortStatuses);
 
-  const anyChecked = Object.values(checked).some(Boolean);
+  // Only count statuses that still exist (a remembered selection may
+  // reference a status that has since been deleted in the Status Manager).
+  const activeIds = new Set(sortStatuses.map(s => s.id));
+  const anyChecked = Object.entries(checked).some(([id, v]) => v && activeIds.has(id));
 
   const toggleStatus = (label, val) => {
     setChecked(prev => ({ ...prev, [label]: val }));
   };
 
   const handleSort = () => {
-    const statuses = Object.entries(checked).filter(([, v]) => v).map(([k]) => k);
+    const statuses = Object.entries(checked)
+      .filter(([id, v]) => v && activeIds.has(id))
+      .map(([id]) => id);
     if (statuses.length === 0) return;
     dispatchSystemAction('sortInbox', { statuses });
-    setChecked({});
+    // Keep the selection and remember it for next time instead of clearing.
+    storage.setJSON(SORT_INBOX_STATUSES_KEY, statuses);
     setInboxOpen(false);
   };
 

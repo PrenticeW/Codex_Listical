@@ -501,6 +501,16 @@ export default function ProjectRow({
           // For section and subproject header rows, render task column (E) with label
           if (!isHeader && columnId === 'task') {
             const label = isSubprojectHeader ? displayLabel : sectionLabel;
+            // Long labels may spill past the task cell across the empty
+            // recurring/estimate/timeValue cells, but never into the day
+            // columns: cap the label at the summed width of those columns
+            // (minus the cell's own padding and a small buffer before the
+            // thick timeValue/day boundary) and ellipsise past that.
+            const labelMaxWidth = ['task', 'recurring', 'estimate', 'timeValue'].reduce((sum, colId) => {
+              const column = row.getAllCells().find(c => c.column.id === colId)?.column;
+              if (!column || !column.getIsVisible()) return sum;
+              return sum + column.getSize();
+            }, 0) - 14;
             const editableColumnId = 'task';
             const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === editableColumnId;
             const isSelected = isCellSelected?.(rowId, editableColumnId);
@@ -560,9 +570,13 @@ export default function ProjectRow({
                     lineHeight: 1,
                     outline: isEditing ? '2px solid black' : 'none',
                     outlineOffset: '-2px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
+                    // Let the label spill past this cell (see labelMaxWidth
+                    // above). position + zIndex lift the whole cell above the
+                    // later sibling cells so the overflowing text isn't
+                    // painted under their backgrounds.
+                    overflow: 'visible',
+                    position: 'relative',
+                    zIndex: 1,
                   }}
                 >
                   {isEditing ? (
@@ -597,7 +611,22 @@ export default function ProjectRow({
                       }}
                     />
                   ) : (
-                    label
+                    <span
+                      style={{
+                        whiteSpace: 'nowrap',
+                        display: 'inline-block',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        maxWidth: `${labelMaxWidth}px`,
+                        // Don't let the flex parent shrink the span back to
+                        // the cell width (overflow:hidden sets its automatic
+                        // minimum size to 0) — the maxWidth above is the only
+                        // intended limit.
+                        flexShrink: 0,
+                      }}
+                    >
+                      {label}
+                    </span>
                   )}
                 </div>
               </td>

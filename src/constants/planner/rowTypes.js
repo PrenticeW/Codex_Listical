@@ -31,6 +31,8 @@ export const ESTIMATE_VALUES = [
   '8 Hours',
   '9 Hours',
   '10 Hours',
+  '11 Hours',
+  '12 Hours',
 ];
 
 // LEGACY — statuses are data-driven now (src/lib/statusesStorage.js,
