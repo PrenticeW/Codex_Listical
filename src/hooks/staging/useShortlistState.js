@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { loadStagingState, saveStagingState } from '../../lib/stagingStorage';
 import {
   buildProjectPlanSummary,
@@ -218,6 +218,26 @@ export default function useShortlistState({ currentYear, executeCommand, isCurre
   // first render, wiping out whatever the user already had.
   const [hasInitialLoaded, setHasInitialLoaded] = useState(false);
 
+  // --- Goal-loss circuit breaker (2026-09-15 "Move House vanished") -------
+  // The autosave persists the WHOLE {shortlist, archived} state, so a state
+  // that silently lost a goal (a stale cache, a partial read, a buggy
+  // updater) gets written back as truth and the goal is gone for good.
+  // Every save is therefore checked against the goal ids this session has
+  // seen: a goal may only disappear from BOTH lists when the user removed
+  // it through handleRemove this session (archiving keeps its id in
+  // `archived`, so it never reads as lost; an id minted by handleAdd this
+  // session may vanish freely — that's an undone add). Any other loss
+  // aborts the save and logs loudly, so a corrupt in-memory state can
+  // never overwrite the stored one.
+  const knownGoalIdsRef = useRef(new Set());
+  const deliberateRemovalsRef = useRef(new Set());
+  const mintedThisSessionRef = useRef(new Set());
+  // A load whose `archived` came back non-array is a malformed read, not an
+  // empty archive (loadStagingState always returns real arrays). Saving from
+  // that state would erase every archived goal, so saves are blocked for the
+  // rest of the session (2026-09-15: the archived list was found wiped).
+  const archivedLoadFailedRef = useRef(false);
+
   // Initial load (and reload on year change). Async since the Supabase port.
   useEffect(() => {
     let cancelled = false;
@@ -225,12 +245,20 @@ export default function useShortlistState({ currentYear, executeCommand, isCurre
     (async () => {
       const data = await loadStagingState(currentYear);
       if (!cancelled) {
-        setState({
-          shortlist: ensureSectionSpacerRows(normalizeLegacySeedText(
-            Array.isArray(data?.shortlist) ? data.shortlist : []
-          )),
-          archived: Array.isArray(data?.archived) ? data.archived : [],
-        });
+        const loadedShortlist = ensureSectionSpacerRows(normalizeLegacySeedText(
+          Array.isArray(data?.shortlist) ? data.shortlist : []
+        ));
+        const loadedArchived = Array.isArray(data?.archived) ? data.archived : [];
+        archivedLoadFailedRef.current = data != null && !Array.isArray(data?.archived);
+        if (archivedLoadFailedRef.current) {
+          console.error('[goal-save] archived list failed to load as an array — saves blocked this session to protect archived goals');
+        }
+        knownGoalIdsRef.current = new Set(
+          [...loadedShortlist, ...loadedArchived].map((i) => i.id)
+        );
+        deliberateRemovalsRef.current = new Set();
+        mintedThisSessionRef.current = new Set();
+        setState({ shortlist: loadedShortlist, archived: loadedArchived });
         setHasInitialLoaded(true);
       }
     })();
@@ -296,6 +324,24 @@ export default function useShortlistState({ currentYear, executeCommand, isCurre
     if (!hasInitialLoaded) return;
     if (isCurrentYearArchived) return;
     const timer = setTimeout(() => {
+      if (archivedLoadFailedRef.current) {
+        console.error('[goal-save] save skipped: archived goals failed to load this session');
+        return;
+      }
+      // Circuit breaker: never persist a state that lost a goal without a
+      // deliberate removal this session (see the refs above).
+      const currentIds = new Set([...shortlist, ...archived].map((i) => i.id));
+      const lost = [...knownGoalIdsRef.current].filter(
+        (id) =>
+          !currentIds.has(id) &&
+          !deliberateRemovalsRef.current.has(id) &&
+          !mintedThisSessionRef.current.has(id)
+      );
+      if (lost.length > 0) {
+        console.error('[goal-save] save skipped: state lost goals without a user removal', lost);
+        return;
+      }
+      knownGoalIdsRef.current = currentIds;
       const enrichedShortlist = shortlist.map((item) => {
         // Lazily mint permanent schedule-item ids (__scheduleId) before the
         // summary is built, so every persisted summary/chip id is stable.
@@ -343,6 +389,7 @@ export default function useShortlistState({ currentYear, executeCommand, isCurre
       isSimpleTable: true,
     };
 
+    mintedThisSessionRef.current.add(id);
     executeStateMutation((prev) => ({
       shortlist: [...prev.shortlist, newItem],
       archived: prev.archived,
@@ -352,6 +399,7 @@ export default function useShortlistState({ currentYear, executeCommand, isCurre
 
   // Remove item from shortlist
   const handleRemove = useCallback((id) => {
+    deliberateRemovalsRef.current.add(id);
     executeStateMutation((prev) => ({
       shortlist: prev.shortlist.filter((item) => item.id !== id),
       archived: prev.archived,

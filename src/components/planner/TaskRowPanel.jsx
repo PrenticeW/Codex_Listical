@@ -344,6 +344,15 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
     if (isEditingNotes && notesTextareaRef.current) notesTextareaRef.current.focus();
   }, [isEditingNotes]);
 
+  // The mirror only follows the textarea via onScroll; re-pin it whenever the
+  // note text or edit mode changes so a re-render never leaves it offset
+  // (offset mirror text reads as "spilling out" of the notes box).
+  useEffect(() => {
+    if (notesMirrorRef.current && notesTextareaRef.current) {
+      notesMirrorRef.current.scrollTop = notesTextareaRef.current.scrollTop;
+    }
+  }, [notes, isEditingNotes]);
+
   // Reset inner state and load fresh data whenever the selected task changes
   useEffect(() => {
     // Cancel any pending note save from the previous task
@@ -538,7 +547,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
                         fontFamily: FONT, fontSize: 13, color: C.text,
                         background: C.bgBlock, padding: '9px 11px',
                         lineHeight: 1.55, whiteSpace: 'pre-wrap',
-                        overflowWrap: 'break-word', overflow: 'hidden',
+                        overflowWrap: 'anywhere', overflow: 'hidden',
                         pointerEvents: 'none',
                       }}
                     >
@@ -547,6 +556,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
                   )}
                   <textarea
                     ref={notesTextareaRef}
+                    className="no-scrollbar"
                     placeholder="Add a note…"
                     value={notesAddLink.viewValue}
                     onChange={notesAddLink.onViewChange}
@@ -557,7 +567,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
                     onKeyDown={(e) => { notesAddLink.onKeyDown(e); }}
                     onBlur={(e) => { if (notesAddLinkOpenRef.current) return; setIsEditingNotes(false); handleNotesBlur(e); }}
                     style={{
-                      position: 'relative',
+                      position: 'relative', display: 'block',
                       width: '100%', boxSizing: 'border-box', minHeight: 360, resize: 'none',
                       border: '1px solid var(--brand-hover-bd)', borderRadius: 8,
                       fontFamily: FONT, fontSize: 13,
@@ -566,7 +576,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
                       background: containsUrl(notes) ? 'transparent' : C.bgBlock,
                       padding: '9px 11px',
                       outline: 'none', lineHeight: 1.55,
-                      whiteSpace: 'pre-wrap', overflowWrap: 'break-word',
+                      whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
                       transition: 'border-color 0.15s',
                     }}
                     onFocus={e => { e.target.style.borderColor = 'var(--brand)'; }}
