@@ -662,6 +662,11 @@ export default function ProjectRow({
             cellContent = `of ${formattedQuota}`;
           }
 
+          // These right-side cells are selectable (click or arrow keys) —
+          // render the same selection ring as ordinary cells.
+          const isGenericCellSelected = isCellSelected?.(rowId, columnId);
+          const genericSelectionEdges = getSelectionEdgeClassNames(getCellSelectionEdges?.(rowId, columnId));
+
           return (
             <td
               key={cell.id}
@@ -673,7 +678,7 @@ export default function ProjectRow({
                 userSelect: 'none',
                 boxSizing: 'border-box',
               }}
-              className="p-0"
+              className={`p-0 ${isGenericCellSelected ? `selected-cell ${genericSelectionEdges} ${hasMultiCellSelection ? 'sel-fill' : ''}` : ''}`}
               onMouseDown={(e) => {
                 if (handleCellMouseDown) handleCellMouseDown(e, rowId, columnId);
               }}

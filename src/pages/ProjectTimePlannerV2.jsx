@@ -2774,6 +2774,21 @@ export default function ProjectTimePlannerV2() {
   }, [selectedRows, data, executeCommand]);
 
   // Keyboard event handlers (undo/redo, delete, edit mode)
+  // Columns the arrow keys can visit: the standard column order minus
+  // whatever is currently hidden (recurring, subprojects, hidden day/week
+  // columns), mirroring the table's columnVisibility state below.
+  const navColumnIds = useMemo(() => allColumnIds.filter((id) => {
+    if (id === 'recurring') return showRecurring;
+    if (id === 'subproject') return showSubprojects;
+    if (id.startsWith('day-')) return visibleDayColumns[id] !== false;
+    return true;
+  }), [allColumnIds, showRecurring, showSubprojects, visibleDayColumns]);
+
+  // Arrow-key navigation scrolls via the row virtualizer, which is created
+  // further down — bridge with a ref so the hook can call it lazily.
+  const scrollToRowRef = useRef(null);
+  const scrollToRow = useCallback((idx) => scrollToRowRef.current?.(idx), []);
+
   useKeyboardHandlers({
     selectedCells,
     selectedRows,
@@ -2790,6 +2805,12 @@ export default function ProjectTimePlannerV2() {
     handleDeleteRows,
     handleCopy,
     handlePaste,
+    visibleRows: numberedData,
+    navColumnIds,
+    setSelectedCells,
+    setAnchorCell,
+    setSelectedRows,
+    scrollToRow,
   });
 
   // Listical menu handlers
@@ -3749,6 +3770,12 @@ export default function ProjectTimePlannerV2() {
   useEffect(() => {
     rowVirtualizer.measure();
   }, [rowHeight, rowVirtualizer]);
+
+  // Let arrow-key navigation (wired up before the virtualizer exists)
+  // scroll the focused row into view.
+  useEffect(() => {
+    scrollToRowRef.current = (idx) => rowVirtualizer.scrollToIndex(idx, { align: 'auto' });
+  }, [rowVirtualizer]);
 
   // Expanding a collapsed archive week near the bottom of the table used to
   // reveal its rows below the current scroll position with no view change —
