@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import { GripVertical } from 'lucide-react';
 import { TASK_ROW_DETAIL_EVENT, TASK_ROW_PANEL_CLOSE_EVENT } from '../../../contexts/TaskRowPanelContext';
 import EditableCell from '../EditableCell';
@@ -102,8 +102,6 @@ const TaskRow = React.memo(function TaskRow({
 
   // Tracks which cell the pointer is over and whether it's on the border (for drag-to-move gating)
   const cellBorderStateRef = useRef({ columnId: null, onBorder: false });
-  // React-controlled: which columnId is currently in drag-ready (border-hover) state
-  const [draggableColumnId, setDraggableColumnId] = useState(null);
   const isDropTarget = dropTargetRowId === rowId;
 
   // Get the current project value for this row to filter subprojects
@@ -257,7 +255,6 @@ const TaskRow = React.memo(function TaskRow({
 
           // Border threshold in px — pointer within this distance of any edge = grab cursor + draggable
           const BORDER_THRESHOLD = 5;
-          const isDraggableCell = draggableColumnId === columnId;
 
           return (
             <td
@@ -279,7 +276,11 @@ const TaskRow = React.memo(function TaskRow({
               onDragOver={(e) => handleCellDragOver?.(e, rowId, columnId)}
               onDragLeave={(e) => handleCellDragLeave?.(e)}
               onDrop={(e) => handleCellDrop?.(e, rowId, columnId)}
-              draggable={isDraggableCell}
+              // Always draggable: the onDragStart guard below (synchronous ref
+              // check) rejects drags that don't start on a cell border. Gating
+              // the attribute on React state made the FIRST drag fail whenever
+              // dragstart fired before the state update re-rendered.
+              draggable
               onMouseMove={(e) => {
                 if (isEditing) return;
                 const rect = e.currentTarget.getBoundingClientRect();
@@ -308,12 +309,10 @@ const TaskRow = React.memo(function TaskRow({
                 }
                 cellBorderStateRef.current = { columnId, onBorder };
                 e.currentTarget.style.cursor = onBorder ? 'grab' : 'cell';
-                setDraggableColumnId(onBorder ? columnId : null);
               }}
               onMouseLeave={(e) => {
                 cellBorderStateRef.current = { columnId: null, onBorder: false };
                 e.currentTarget.style.cursor = '';
-                setDraggableColumnId(null);
               }}
               onDragStart={(e) => {
                 if (!cellBorderStateRef.current.onBorder || cellBorderStateRef.current.columnId !== columnId) {
@@ -324,7 +323,6 @@ const TaskRow = React.memo(function TaskRow({
                 handleCellDragStart?.(e, rowId, columnId);
               }}
               onDragEnd={(e) => {
-                setDraggableColumnId(null);
                 handleCellDragEnd?.(e);
               }}
             >

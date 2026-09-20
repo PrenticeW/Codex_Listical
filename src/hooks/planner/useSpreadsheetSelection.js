@@ -93,6 +93,12 @@ export const useSpreadsheetSelection = ({
   const handleRowNumberClick = useCallback((e, rowId) => {
     e.preventDefault();
     e.stopPropagation();
+    // Pull keyboard focus out of any input/textarea (filter box, detail
+    // panel, just-finished edit). The global copy/paste handlers ignore the
+    // event while an input has focus, which made the first Cmd+C / Cmd+V
+    // after such interactions silently do nothing.
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) ae.blur();
 
     if (e.shiftKey && anchorRow) {
       // Shift-click: ADD the anchor-to-current range to the existing
@@ -144,6 +150,12 @@ export const useSpreadsheetSelection = ({
 
     // Prevent default to avoid text selection
     e.preventDefault();
+    // Pull keyboard focus out of any input/textarea (filter box, detail
+    // panel, just-finished edit). The global copy/paste handlers ignore the
+    // event while an input has focus, which made the first Cmd+C / Cmd+V
+    // after such interactions silently do nothing.
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) ae.blur();
 
     const cellKey = getCellKey(rowId, columnId);
 
