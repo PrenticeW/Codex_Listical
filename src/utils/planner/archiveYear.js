@@ -79,7 +79,19 @@ function resetRecurringTask(task) {
     if (key.startsWith('day-')) {
       resetTask[key] = '';
     }
+    // Per-instance statuses belong to the cleared day cells — stale in the
+    // new year.
+    if (key.startsWith('multiStatus-')) {
+      delete resetTask[key];
+    }
   });
+
+  // The mobile app mirrors the scheduled date into these extra_data strings
+  // (scheduleDay/scheduleWeek). With the day cells cleared they would point
+  // at last cycle's date, so the app's task sheet kept showing it — drop
+  // them so the task reads as unscheduled everywhere.
+  delete resetTask.scheduleDay;
+  delete resetTask.scheduleWeek;
 
   return resetTask;
 }

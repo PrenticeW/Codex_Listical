@@ -1194,7 +1194,7 @@ export const readTaskRows = async (
       // refresh, which also broke collapse — the week looked like it hadn't
       // taken its tasks with it.
       result = [...headers, ...taskRows];
-      if (archiveRows.length > 0) {
+      {
         // Rebuild the archive section in canonical order. Week rows live in a
         // separate table (archived_weeks) and planner_rows display_order can
         // drift (older bugs persisted scrambled orders), so instead of trusting
@@ -1202,26 +1202,52 @@ export const readTaskRows = async (
         //   archive week → its archived project headers → each header's
         //   section rows and archived tasks (kept in their stored relative
         //   order within the group).
+        //
+        // Resilience (2026-09-21 incident): the regroup must NOT require the
+        // week rows to exist. When archived_weeks rows are missing (they were
+        // once mass-deleted by a stale-tab save), the archived project groups
+        // still render, regrouped under the Archive header in stored order,
+        // instead of scrambling the whole section.
         const weekIds = new Set(archiveRows.map((w) => w.id));
-        const headerGroupIds = new Set(
-          result
-            .filter((r) => r.parentGroupId && weekIds.has(r.parentGroupId) && r.groupId)
-            .map((r) => r.groupId),
+        const archivedHeaders = result.filter(
+          (r) => r._rowType === 'archivedProjectHeader' && r.groupId,
         );
+        const headerGroupIds = new Set(archivedHeaders.map((r) => r.groupId));
         const isArchiveMember = (r) =>
-          !!r.parentGroupId && (weekIds.has(r.parentGroupId) || headerGroupIds.has(r.parentGroupId));
+          r._rowType === 'archivedProjectHeader' ||
+          (!!r.parentGroupId && (weekIds.has(r.parentGroupId) || headerGroupIds.has(r.parentGroupId)));
 
-        const remaining = result.filter((r) => !isArchiveMember(r));
+        // Keep only the FIRST Archive header row — a duplicated structural
+        // header (seen once in bad data) would otherwise split the section.
+        let seenArchiveHeader = false;
+        const remaining = result.filter((r) => {
+          if (isArchiveMember(r)) return false;
+          if (r._rowType === 'archiveHeader') {
+            if (seenArchiveHeader) return false;
+            seenArchiveHeader = true;
+          }
+          return true;
+        });
+
         const block = [];
+        const pushedHeaders = new Set();
+        const pushHeader = (header) => {
+          pushedHeaders.add(header);
+          block.push(header);
+          if (header.groupId) {
+            block.push(...result.filter((r) => r.parentGroupId === header.groupId));
+          }
+        };
         for (const week of archiveRows) {
           block.push(week);
           const weekHeaders = result.filter((r) => r.parentGroupId === week.id);
-          for (const header of weekHeaders) {
-            block.push(header);
-            if (header.groupId) {
-              block.push(...result.filter((r) => r.parentGroupId === header.groupId));
-            }
-          }
+          for (const header of weekHeaders) pushHeader(header);
+        }
+        // Orphaned archived headers (their week row is gone from
+        // archived_weeks): append after the known weeks, in stored order,
+        // each still followed by its own group's rows.
+        for (const header of archivedHeaders) {
+          if (!pushedHeaders.has(header)) pushHeader(header);
         }
 
         // Insert the rebuilt block right after the Archive header row; if it
@@ -1885,15 +1911,23 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       // Destructive part only: remove server weeks the user deleted from a
       // session that has genuinely read the server (archive revert). A stale
       // or offline session can add and update weeks but never remove them.
-      if (_serverReadYears.has(yearNumber)) {
-        const toRemove = (existingRes.data || []).filter(
-          (r) => !(r.snapshot && memorySnapIds.has(r.snapshot.id)),
-        );
-        for (const r of toRemove) {
+      //
+      // Extra guard (2026-09-21 incident): a save whose in-memory state holds
+      // ZERO archive weeks while the server holds some is never a legitimate
+      // archive revert — reverts remove one week at a time. It is a stale or
+      // partial snapshot, and letting it through mass-deleted every
+      // archived_weeks row for the year. Refuse wholesale deletion outright.
+      const staleServerWeeks = (existingRes.data || []).filter(
+        (r) => !(r.snapshot && memorySnapIds.has(r.snapshot.id)),
+      );
+      if (staleServerWeeks.length > 0 && memorySnapIds.size === 0) {
+        console.warn('[planner-save] archive deletes refused: in-memory state has no archive weeks but the server does (stale snapshot?)');
+      } else if (_serverReadYears.has(yearNumber)) {
+        for (const r of staleServerWeeks) {
           const del = await supabase.from('archived_weeks').delete().eq('id', r.id);
           if (del.error) throw del.error;
         }
-      } else if ((existingRes.data || []).some((r) => !(r.snapshot && memorySnapIds.has(r.snapshot.id)))) {
+      } else if (staleServerWeeks.length > 0) {
         console.warn('[planner-save] archive deletes skipped: year not server-read this session');
       }
     }
