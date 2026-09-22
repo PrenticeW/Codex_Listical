@@ -41,6 +41,7 @@
 
 import { supabase } from '../../lib/supabase';
 import { createInitialData } from './dataCreators';
+import { ensureOrderKeys, compareRowOrder, isValidOrderKey } from './orderKey';
 import { loadTacticsMetrics } from '../../lib/tacticsMetricsStorage';
 import { debounceSiteSnapshot } from '../../lib/snapshotStorage';
 import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
@@ -878,6 +879,8 @@ const isArchiveRow = (row) => {
 const FIRST_CLASS_KEYS = new Set([
   'id',
   'checkbox',
+  'orderKey',
+  'displayOrder',
   'project',
   'projectId',
   'subproject',
@@ -945,6 +948,10 @@ function plannerRowPayloadToDb({ row, userId, yearId, displayOrder }) {
     time_value_minutes: timeValueMinutes,
     day_entries: { __cells: dayEntries, __project: row.project ?? '', __extra: extraData },
     display_order: displayOrder,
+    // Stable per-row position (2026-09-22 reorder fix). Assigned by
+    // ensureOrderKeys in the save; display_order above is legacy, kept only
+    // for inserts so pre-fix clients still sort sensibly.
+    order_key: isValidOrderKey(row.orderKey) ? row.orderKey : null,
     // task panel fields
     notes: typeof row.notes === 'string' ? row.notes : null,
     task_created_at: row.taskCreatedAt ?? null,
@@ -963,6 +970,8 @@ function plannerRowDbToPayload(dbRow) {
   const row = {
     id: dbRow.id,
     checkbox: dbRow.checkbox === true,
+    orderKey: dbRow.order_key ?? null,
+    displayOrder: typeof dbRow.display_order === 'number' ? dbRow.display_order : 0,
     project,
     projectId: dbRow.project_id ?? null,
     subproject: dbRow.subproject_label || '',
@@ -1145,6 +1154,12 @@ export const readTaskRows = async (
     // another client (mobile) created that web hasn't refreshed in yet",
     // and "row web deleted" apart from "row deleted remotely".
     _knownRowIds.set(yearNumber, new Set((tasksRes.data || []).map((r) => r.id)));
+    _sessionOrderKeys.set(
+      yearNumber,
+      new Map((tasksRes.data || [])
+        .filter((r) => isValidOrderKey(r.order_key))
+        .map((r) => [r.id, r.order_key])),
+    );
     // Baseline for the three-way diff save: the server state these rows were
     // read as. Saves advance it only with web's own writes, so fields another
     // client changes after this read stay recognisable as remote.
@@ -1173,7 +1188,9 @@ export const readTaskRows = async (
       startDate,
     );
 
-    const taskRows = (tasksRes.data || []).map(plannerRowDbToPayload);
+    const taskRows = (tasksRes.data || [])
+      .map(plannerRowDbToPayload)
+      .sort(compareRowOrder);
     const archiveRows = (archivesRes.data || []).map(archiveRowDbToPayload);
 
     let result;
@@ -1358,7 +1375,7 @@ function stableStringify(value) {
 const DIFF_KEYS = [
   'project_id', 'parent_row_id', 'row_kind', 'checkbox', 'subproject_label',
   'status', 'task', 'recurring', 'estimate', 'time_value_minutes',
-  'day_entries', 'display_order', 'notes', 'task_created_at',
+  'day_entries', 'order_key', 'notes', 'task_created_at',
   'completion_count', 'last_completed_at', 'day_tag', 'day_tag_locked',
 ];
 
@@ -1379,6 +1396,11 @@ function plannerRowDiffers(desired, dbRow) {
 // between web's last refresh and web's next autosave read as "differs" and
 // was overwritten wholesale with web's stale copy.
 const _baselineRows = new Map(); // yearNumber -> Map<id, {DIFF_KEYS subset}>
+// Per-session order keys (2026-09-22 reorder fix): yearNumber -> Map<id, key>.
+// Seeded from every real server read, advanced by each save's ensureOrderKeys
+// pass. The save trusts THIS map over the page's row copies, so keys survive
+// page-state rebuilds and a save never re-mints keys for unmoved rows.
+const _sessionOrderKeys = new Map();
 
 function baselineSnap(dbRow) {
   const snap = {};
@@ -1658,6 +1680,25 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       return plannerRowPayloadToDb({ row: { ...row, id }, userId, yearId, displayOrder: idx });
     });
 
+    // Assign per-row order keys (2026-09-22 reorder fix). Effective key for
+    // each row: this session's map first (server truth + earlier saves this
+    // session), then whatever the payload carried (offline replay: the
+    // snapshot's keys). ensureOrderKeys then rewrites keys ONLY for rows out
+    // of place relative to the longest already-consistent run — a moved or
+    // newly inserted row gets a fresh key, an untouched row keeps its own —
+    // so this save can never flatten another device's ordering wholesale.
+    {
+      let keyMap = _sessionOrderKeys.get(yearNumber);
+      if (!keyMap) { keyMap = new Map(); _sessionOrderKeys.set(yearNumber, keyMap); }
+      const keyRows = desiredRows.map((d) => ({
+        id: d.id,
+        orderKey: keyMap.get(d.id) ?? (isValidOrderKey(d.order_key) ? d.order_key : null),
+      }));
+      ensureOrderKeys(keyRows);
+      for (const kr of keyRows) keyMap.set(kr.id, kr.orderKey);
+      for (const d of desiredRows) d.order_key = keyMap.get(d.id);
+    }
+
     const { data: currentData, error: currentErr } = await supabase
       .from('planner_rows')
       .select('*')
@@ -1720,6 +1761,10 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     const toUpsert = [];
     for (const d of desiredRows) {
       const cur = currentById.get(d.id);
+      // display_order is legacy (pre order_key clients). Never rewrite it on
+      // an existing row — order lives in order_key now; the idx stamped at
+      // payload build only seeds brand-new rows.
+      if (cur && typeof cur.display_order === 'number') d.display_order = cur.display_order;
       if (!cur) {
         // Missing from the DB. Known id → another client deleted it since we
         // last looked; do NOT resurrect it. Unknown id → a row web created.

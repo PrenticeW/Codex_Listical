@@ -61,6 +61,10 @@ Pages communicate via custom browser events. **Do not add direct imports between
 
 **Year-scoping on events:** Every year-scoped event carries `__eventYear` in `CustomEvent.detail`. Listeners short-circuit if `event.detail.__eventYear` does not match their own `currentYear`. `yearMetadataStorage` and the two theme events are intentionally not tagged (not year-scoped). Include `__eventYear` in any new year-scoped cross-page event.
 
+### Row ordering — order_key, never renumber
+
+System page row order is `planner_rows.order_key` (base-62 fractional key, byte-order/`COLLATE "C"`; see `src/utils/planner/orderKey.js`), assigned per row and rewritten only when that row moves. `display_order` is legacy: stamped on INSERT only, never updated, used only as the sort fallback for null-key rows from pre-fix clients. Never reintroduce a global renumber pass or add `display_order` back to the save's `DIFF_KEYS` — that was the cross-device "tasks jumbled" bug (2026-09-22, docs/known-issues.md).
+
 ### Year scoping
 
 All data is scoped by `yearNumber` — every storage module function takes it as a parameter and uses it to scope Supabase queries. Never read or write planning data without a yearNumber. Do not reintroduce a global tactics settings blob; all eight tactics settings are year-scoped.

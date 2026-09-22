@@ -90,6 +90,17 @@ The snapshot system (`snapshotStorage.js`) captures planner rows, archived weeks
 
 **Same day — settings revalidation vs own save race.** The Fourth-hole revalidation refetched on focus/pageshow with no guard against this tab's own in-flight settings write: tab away right after Hide Week (or during column sizing's 600ms debounce), tab back → the strict read returns the pre-save row, reverts the change, and the autosave persists the reverted value. Now every `planner_settings` write flips an in-flight/just-landed flag (`isPlannerSettingsWriteRecent`, 5s trailing window) and both `usePlannerStorage` and `useCollapsibleGroups` skip wake/stale revalidation while it is set.
 
+**Sixth hole — CLOSED with a redesign (2026-09-22): any two clients could jumble the row ORDER.** All prior guards protected row existence and content, not position. `display_order` was a global integer renumbered 0..N from each client's in-memory list on EVERY save (web) / every reorder (mobile's `computeRowOrder` "web parity" pass), and merged per-row like any other field — so a stale tab, or simply mobile and web deriving slightly different sequences, "legitimately" rewrote the whole ordering over the other device's (observed: 435-row rewrite 2026-09-21 20:21 UTC, 258-row rewrite 2026-09-22 13:21 UTC; the 13:21 one was restored from `planning_history` the same day). Fix — stable per-row order keys:
+
+| Piece | Where |
+|---|---|
+| `planner_rows.order_key` — base-62 fractional key, lexicographic (BYTE order — column is `COLLATE "C"`; JS string compare matches). Assigned once per row, rewritten ONLY when that row is moved/inserted, so a save from a client that didn't move a row can never overwrite where another client put it. | Migration `20260922000001_add_planner_order_key.sql` (**applied to live DB 2026-09-22**, backfilled from display_order) |
+| Key generation + minimal-rewrite assignment (`ensureOrderKeys`: rows on the longest already-consistent run keep their keys; only out-of-place rows are rekeyed) and the read comparator (`compareRowOrder`: key first, legacy display_order fallback for null-key rows from pre-fix clients). | `src/utils/planner/orderKey.js` (unit tests `orderKey.test.js`) |
+| Web save: `order_key` replaces `display_order` in `DIFF_KEYS` (three-way merged, so an unmoved row keeps the server's key); keys come from `_sessionOrderKeys` (seeded per real server read, advanced per save) so page-state rebuilds can't re-mint them; `display_order` is legacy — stamped only on INSERT, never rewritten on existing rows. | `storage.js` (`crossDeviceOrder.test.js` covers the invariant) |
+| Mobile: reads sort by `order_key` (`compareDbRowOrder`), `persistReorder` patches `order_key` only for displaced rows instead of renumbering `display_order` globally. | tacular-mobile `lib/orderKey.js`, `lib/plannerData.js`, `hooks/usePlannerData.js` |
+
+Do NOT reintroduce a global renumber pass, put `display_order` back into `DIFF_KEYS`, or sort by `order_key` in SQL without `COLLATE "C"`. Pre-fix clients (old PWA bundles / old mobile builds) still write `display_order`; that's harmless — new clients ignore it except as the null-key fallback. `CLIENT_BUILD` bumped to `20260922`.
+
 **Not covered:** draft and archived years skip the realtime effect, so they get no wake revalidation (mobile does not write them). The mobile app's own stale-write behaviour lives in tacular-mobile and is out of scope here.
 
 ---
