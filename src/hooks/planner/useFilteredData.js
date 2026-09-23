@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 
 // Day-of-week patterns used as a fallback when a subheader row has no stored dayTag.
 // Matches full names and common abbreviations, word-boundary aware.
@@ -85,7 +85,29 @@ export const useFilteredData = ({
   projectFilter = null,
   totalDays = 0,
 }) => {
+  // Sticky filter membership: while a given filter state stays active, any
+  // row that has matched it once is remembered here and kept visible even if
+  // an edit makes it stop matching -- so rows don't vanish mid-edit. The set
+  // resets whenever the filter state itself changes (or filters are cleared).
+  const stickyMatchesRef = useRef({ signature: null, ids: new Set() });
+
   return useMemo(() => {
+    // Reset the sticky set when the active filter state changes.
+    const filterSignature = JSON.stringify([
+      Array.from(dayColumnFilters).sort(),
+      Array.from(selectedProjectFilters).sort(),
+      Array.from(selectedSubprojectFilters).sort(),
+      Array.from(selectedStatusFilters).sort(),
+      Array.from(selectedRecurringFilters).sort(),
+      Array.from(selectedEstimateFilters).sort(),
+      dayFilter && dayFilter.size ? Array.from(dayFilter).sort() : null,
+      projectFilter || null,
+    ]);
+    if (stickyMatchesRef.current.signature !== filterSignature) {
+      stickyMatchesRef.current = { signature: filterSignature, ids: new Set() };
+    }
+    const stickyIds = stickyMatchesRef.current.ids;
+
     // Strip tombstone rows — these are internal bookkeeping only and must never render
     const visibleData = computedData.filter(row => row._rowType !== 'deletedChip');
 
@@ -271,7 +293,7 @@ export const useFilteredData = ({
     // currently active filter (project/subproject/status/recurring/estimate
     // plus the day-column numeric filter). Used only to decide whether a
     // row counts as "visible content" for its ancestor header/divider rows.
-    const leafMatchesActiveFilters = (row) => {
+    const leafMatchesFiltersNow = (row) => {
       if (!matchesProjectFilter(row)) return false;
       if (!matchesSubprojectFilter(row)) return false;
       if (!matchesStatusFilter(row)) return false;
@@ -281,6 +303,17 @@ export const useFilteredData = ({
       return Array.from(dayColumnFilters).every(dayColumnId => {
         return coerceNumber(row[dayColumnId]) !== null;
       });
+    };
+
+    // Sticky wrapper: a leaf that matches now is remembered; one that no
+    // longer matches but did earlier under this same filter state stays
+    // visible (and keeps its ancestor headers visible via the cascade).
+    const leafMatchesActiveFilters = (row) => {
+      if (leafMatchesFiltersNow(row)) {
+        if (row.id != null) stickyIds.add(row.id);
+        return true;
+      }
+      return row.id != null && stickyIds.has(row.id);
     };
 
     // Map of groupId -> direct children (rows whose parentGroupId points at it)
@@ -394,14 +427,15 @@ export const useFilteredData = ({
       }
 
       // Continue with regular filtering...
-      // Apply project/status/recurring/estimate filters first
-      if (!matchesProjectFilter(row)) return false;
-      if (!matchesSubprojectFilter(row)) return false;
-      if (!matchesStatusFilter(row)) return false;
-      if (!matchesRecurringFilter(row)) return false;
-      if (!matchesEstimateFilter(row)) return false;
-
       if (shouldBypassFilters(row)) {
+        // Structural/divider rows can still be hidden by the per-category
+        // matchers; leaf rows are handled below with sticky membership.
+        if (!matchesProjectFilter(row)) return false;
+        if (!matchesSubprojectFilter(row)) return false;
+        if (!matchesStatusFilter(row)) return false;
+        if (!matchesRecurringFilter(row)) return false;
+        if (!matchesEstimateFilter(row)) return false;
+
         // Timeline/metrics rows (month, week, day headers, daily min/max,
         // daily total, filter row) carry no filterable content of their
         // own -- always show these regardless of filter state.
@@ -438,15 +472,9 @@ export const useFilteredData = ({
         return true;
       }
 
-      // For all other rows (regular tasks, project rows), apply day column filtering
-      const hasAllFilteredValues = Array.from(dayColumnFilters).every(dayColumnId => {
-        const value = row[dayColumnId];
-        const numericValue = coerceNumber(value);
-        // Check if this column has a valid numeric value
-        return numericValue !== null;
-      });
-
-      return hasAllFilteredValues;
+      // For all other rows (regular tasks, project rows): the sticky-aware
+      // leaf check (all category filters plus the day-column numeric filter).
+      return leafMatchesActiveFilters(row);
     });
 
     return filtered;

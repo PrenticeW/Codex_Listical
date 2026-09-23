@@ -59,6 +59,7 @@ function useFilter() {
 
   return {
     selectedFilters,
+    setSelectedFilters, // raw setter — used only to restore persisted filters
     filterMenu,
     filterButtonRef,
     filterMenuRef,
@@ -104,6 +105,7 @@ export default function usePlannerFilters() {
     projectFilterMenuRef: projectFilter.filterMenuRef,
     projectFilterButtonRef: projectFilter.filterButtonRef,
     selectedProjectFilters: projectFilter.selectedFilters,
+    setSelectedProjectFilters: projectFilter.setSelectedFilters,
     handleProjectFilterSelect: projectFilter.handleFilterSelect,
     handleProjectFilterButtonClick: projectFilter.handleFilterButtonClick,
     closeProjectFilterMenu: projectFilter.closeFilterMenu,
@@ -114,6 +116,7 @@ export default function usePlannerFilters() {
     subprojectFilterMenuRef: subprojectFilter.filterMenuRef,
     subprojectFilterButtonRef: subprojectFilter.filterButtonRef,
     selectedSubprojectFilters: subprojectFilter.selectedFilters,
+    setSelectedSubprojectFilters: subprojectFilter.setSelectedFilters,
     handleSubprojectFilterSelect: subprojectFilter.handleFilterSelect,
     handleSubprojectFilterButtonClick: subprojectFilter.handleFilterButtonClick,
     closeSubprojectFilterMenu: subprojectFilter.closeFilterMenu,
@@ -124,6 +127,7 @@ export default function usePlannerFilters() {
     statusFilterMenuRef: statusFilter.filterMenuRef,
     statusFilterButtonRef: statusFilter.filterButtonRef,
     selectedStatusFilters: statusFilter.selectedFilters,
+    setSelectedStatusFilters: statusFilter.setSelectedFilters,
     handleStatusFilterSelect: statusFilter.handleFilterSelect,
     handleStatusFilterButtonClick: statusFilter.handleFilterButtonClick,
     closeStatusFilterMenu: statusFilter.closeFilterMenu,
@@ -134,6 +138,7 @@ export default function usePlannerFilters() {
     recurringFilterMenuRef: recurringFilter.filterMenuRef,
     recurringFilterButtonRef: recurringFilter.filterButtonRef,
     selectedRecurringFilters: recurringFilter.selectedFilters,
+    setSelectedRecurringFilters: recurringFilter.setSelectedFilters,
     handleRecurringFilterSelect: recurringFilter.handleFilterSelect,
     handleRecurringFilterButtonClick: recurringFilter.handleFilterButtonClick,
     closeRecurringFilterMenu: recurringFilter.closeFilterMenu,
@@ -144,6 +149,7 @@ export default function usePlannerFilters() {
     estimateFilterMenuRef: estimateFilter.filterMenuRef,
     estimateFilterButtonRef: estimateFilter.filterButtonRef,
     selectedEstimateFilters: estimateFilter.selectedFilters,
+    setSelectedEstimateFilters: estimateFilter.setSelectedFilters,
     handleEstimateFilterSelect: estimateFilter.handleFilterSelect,
     handleEstimateFilterButtonClick: estimateFilter.handleFilterButtonClick,
     closeEstimateFilterMenu: estimateFilter.closeFilterMenu,

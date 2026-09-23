@@ -85,6 +85,7 @@ import { createSortInboxCommand, createMoveSelectionCommand, getMoveSelectionSta
 import { createSortPlannerCommand } from '../utils/planner/sortPlanner';
 import { saveTaskRows, readTaskRows, invalidateTaskRowsCache, loadChipTaskNote, preloadChipTaskNotes, isTaskRowsSaveInFlight, getLastTaskRowsSaveCompletedAt, writeTaskEvent, isPlannerYearServerFresh, PLANNER_ROWS_STALE_EVENT } from '../utils/planner/storage';
 import { supabase } from '../lib/supabase';
+import { plannerFilterStorage } from '../lib/plannerFilterStorage';
 import { DEFAULT_PROJECT_ID } from '../constants/plannerStorageKeys';
 import {
   calculateWeekRange,
@@ -746,6 +747,11 @@ export default function ProjectTimePlannerV2() {
     selectedStatusFilters,
     selectedRecurringFilters,
     selectedEstimateFilters,
+    setSelectedProjectFilters,
+    setSelectedSubprojectFilters,
+    setSelectedStatusFilters,
+    setSelectedRecurringFilters,
+    setSelectedEstimateFilters,
     projectFilterMenu,
     projectFilterMenuRef,
     projectFilterButtonRef,
@@ -877,7 +883,58 @@ export default function ProjectTimePlannerV2() {
   const { undoStack, redoStack, executeCommand, undo, redo } = useCommandPattern();
 
   // Day column filters hook
-  const { dayColumnFilters, toggleDayFilter: handleDayColumnFilterToggle, isDayFiltered, clearAllDayFilters } = useDayColumnFilters();
+  const { dayColumnFilters, setDayColumnFilters, toggleDayFilter: handleDayColumnFilterToggle, isDayFiltered, clearAllDayFilters } = useDayColumnFilters();
+
+  // --- Filter persistence (plannerFilterStorage, localStorage-backed) ---
+  // Filters survive navigating away from the System page and closing the
+  // app. Restored on mount and whenever the year changes; saved on any
+  // filter change AFTER hydration (the ref guard stops the initial empty
+  // state from clobbering what was saved).
+  const filtersHydratedYearRef = useRef(null);
+  useEffect(() => {
+    const saved = plannerFilterStorage.loadFilters(currentYear);
+    setDayColumnFilters(new Set(saved.dayColumns));
+    setSelectedProjectFilters(new Set(saved.project));
+    setSelectedSubprojectFilters(new Set(saved.subproject));
+    setSelectedStatusFilters(new Set(saved.status));
+    setSelectedRecurringFilters(new Set(saved.recurring));
+    setSelectedEstimateFilters(new Set(saved.estimate));
+    setDayFilter(new Set(saved.dayTags));
+    setProjectFilter(saved.projectFilter);
+    filtersHydratedYearRef.current = currentYear;
+  }, [
+    currentYear,
+    setDayColumnFilters,
+    setSelectedProjectFilters,
+    setSelectedSubprojectFilters,
+    setSelectedStatusFilters,
+    setSelectedRecurringFilters,
+    setSelectedEstimateFilters,
+  ]);
+
+  useEffect(() => {
+    if (filtersHydratedYearRef.current !== currentYear) return;
+    plannerFilterStorage.saveFilters(currentYear, {
+      dayColumns: dayColumnFilters,
+      project: selectedProjectFilters,
+      subproject: selectedSubprojectFilters,
+      status: selectedStatusFilters,
+      recurring: selectedRecurringFilters,
+      estimate: selectedEstimateFilters,
+      dayTags: dayFilter,
+      projectFilter,
+    });
+  }, [
+    currentYear,
+    dayColumnFilters,
+    selectedProjectFilters,
+    selectedSubprojectFilters,
+    selectedStatusFilters,
+    selectedRecurringFilters,
+    selectedEstimateFilters,
+    dayFilter,
+    projectFilter,
+  ]);
 
   // Escape clears every active filter (column + day-column) in one press,
   // even while a filter menu is open. Registered in the capture phase on

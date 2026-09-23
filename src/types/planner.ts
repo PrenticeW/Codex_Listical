@@ -133,6 +133,7 @@ export interface UseCollapsibleGroupsReturn {
 
 export interface UseDayColumnFiltersReturn {
   dayColumnFilters: Set<string>;
+  setDayColumnFilters: React.Dispatch<React.SetStateAction<Set<string>>>;
   toggleDayFilter: (dayColumnId: string) => void;
   isDayFiltered: (dayColumnId: string) => boolean;
   clearAllDayFilters: () => void;

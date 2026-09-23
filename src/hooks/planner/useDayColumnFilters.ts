@@ -38,6 +38,7 @@ export default function useDayColumnFilters(): UseDayColumnFiltersReturn {
 
   return {
     dayColumnFilters,
+    setDayColumnFilters, // raw setter — used only to restore persisted filters
     toggleDayFilter,
     isDayFiltered,
     clearAllDayFilters,
