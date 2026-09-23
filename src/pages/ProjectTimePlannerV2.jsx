@@ -48,12 +48,10 @@ import PlannerTable from '../components/planner/PlannerTable';
 import FilterPanel from '../components/planner/FilterPanel';
 import ArchiveYearModal from '../components/ArchiveYearModal';
 import ContextMenu from '../components/planner/ContextMenu';
-import GroupToast from '../components/planner/GroupToast';
 import {
   getGroupSelectionState,
   buildGroupOrders,
   createGroupSelectionCommand,
-  GROUP_FIELD_LABELS,
 } from '../utils/planner/groupSelection';
 import { getActiveStatuses } from '../lib/statusesStorage';
 import MultiPasteModal from '../components/MultiPasteModal';
@@ -3336,10 +3334,6 @@ export default function ProjectTimePlannerV2() {
     [data, selectedRows]
   );
 
-  // { label, command } — command kept so the toast's Undo can check it is
-  // still the latest operation before undoing.
-  const [groupToast, setGroupToast] = useState(null);
-
   const handleGroupSelectionBy = useCallback((field) => {
     // Read-fresh-then-write: the sort is computed from current data at the
     // moment of the action and applied immediately through the same
@@ -3349,23 +3343,9 @@ export default function ProjectTimePlannerV2() {
       statuses: getActiveStatuses(),
     });
     const command = createGroupSelectionCommand({ data, selectedRows, field, orders, setData });
+    // A selection that is already grouped yields no command — nothing to do.
     if (command) executeCommand(command);
-    // Toast shows either way — a selection that is already grouped is a
-    // successful (no-op) grouping, not an error.
-    setGroupToast({ label: `Grouped by ${GROUP_FIELD_LABELS[field]}`, command });
   }, [data, selectedRows, projectSubprojectsMap, setData, executeCommand]);
-
-  const handleGroupToastUndo = useCallback(() => {
-    // Undo through the normal stack (a fresh write via the command's undo),
-    // but only while the grouping is still the top entry — if the user has
-    // done something since, the toast chip must not undo that instead.
-    if (groupToast?.command && undoStack[undoStack.length - 1] === groupToast.command) {
-      undo();
-    }
-    setGroupToast(null);
-  }, [groupToast, undoStack, undo]);
-
-  const dismissGroupToast = useCallback(() => setGroupToast(null), []);
 
   // ── Move selection to Planner (context menu + System panel) ──────────────
   // Selection-scoped version of the status sweep; same move path, so
@@ -3377,13 +3357,7 @@ export default function ProjectTimePlannerV2() {
 
   const handleMoveSelectionToPlanner = useCallback(() => {
     const result = createMoveSelectionCommand({ data, selectedRows, setData });
-    if (!result) return;
-    executeCommand(result.command);
-    // Same toast machinery as Group by — label + undo-if-still-latest.
-    setGroupToast({
-      label: `${result.movedCount} task${result.movedCount === 1 ? '' : 's'} sent to Planner`,
-      command: result.command,
-    });
+    if (result) executeCommand(result.command);
   }, [data, selectedRows, setData, executeCommand]);
 
   const handleDuplicateRow = useCallback(() => {
@@ -4076,9 +4050,6 @@ export default function ProjectTimePlannerV2() {
         moveSelection={moveSelectionState}
         onMoveToPlanner={handleMoveSelectionToPlanner}
       />
-
-      {/* Group-by confirmation toast */}
-      <GroupToast toast={groupToast} onUndo={handleGroupToastUndo} onDismiss={dismissGroupToast} />
     </div>
   );
 }
