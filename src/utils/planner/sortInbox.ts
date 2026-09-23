@@ -64,7 +64,7 @@ const collectInboxTasks = (
   data: any[],
   inboxStartIndex: number,
   inboxEndIndex: number,
-  selectedSortStatuses: Set<string>,
+  shouldMove: (row: any) => boolean,
   nicknameMap: Map<string, string>
 ): {
   generalTasksByProject: Map<string, any[]>;
@@ -83,14 +83,13 @@ const collectInboxTasks = (
       continue;
     }
 
-    // Check if this task should be sorted
-    const status = row.status || '';
-    if (!selectedSortStatuses.has(status)) {
+    // Check if this task should be moved (status filter, or row selection)
+    if (!shouldMove(row)) {
       continue;
     }
 
     // Determine target section
-    const target = getSortTarget(status);
+    const target = getSortTarget(row.status || '');
     if (!target) {
       continue;
     }
@@ -219,7 +218,7 @@ export const createSortInboxCommand = (params: {
     data,
     inboxStartIndex,
     inboxEndIndex,
-    selectedSortStatuses,
+    (row) => selectedSortStatuses.has(row.status || ''),
     nicknameMap
   );
 
@@ -243,6 +242,86 @@ export const createSortInboxCommand = (params: {
     },
     undo: () => {
       setData(oldData);
+    },
+  };
+};
+
+// ─── Move selection to Planner ───────────────────────────────────────────────
+// Selection-scoped variant of the status sweep above (implementation brief
+// move-selection-to-planner): same collect + executeSortInbox path, with
+// "is this row selected?" in place of the status filter. Header/subheader
+// and other structural rows in the selection are skipped silently (the
+// isSpecialRow check inside collectInboxTasks), as are rows whose project
+// has no live section — inherited behaviour, no new placement logic.
+// Non-contiguous selections are allowed (deliberately unlike Group
+// Selection By).
+
+const collectSelection = (data: any[], selectedRows: Set<string>) => {
+  const nicknameMap = buildNicknameMap(data);
+  const inboxStartIndex = data.findIndex(row => row._isInboxRow);
+  const archiveStartIndex = data.findIndex(row => row._isArchiveRow);
+  if (inboxStartIndex === -1) return null;
+  const inboxEndIndex = archiveStartIndex !== -1 ? archiveStartIndex : data.length;
+  return collectInboxTasks(
+    data,
+    inboxStartIndex,
+    inboxEndIndex,
+    (row) => selectedRows.has(row.id),
+    nicknameMap
+  );
+};
+
+/**
+ * How many of the currently selected rows the move would actually send to
+ * the Planner. Drives enabled/disabled state in the context menu and the
+ * System panel so the action is never offered when it would do nothing.
+ */
+export const getMoveSelectionState = (
+  data: any[],
+  selectedRows: Set<string>
+): { enabled: boolean; movableCount: number } => {
+  if (!selectedRows || selectedRows.size === 0) {
+    return { enabled: false, movableCount: 0 };
+  }
+  const collected = collectSelection(data, selectedRows);
+  const movableCount = collected ? collected.inboxTasksToMove.size : 0;
+  return { enabled: movableCount > 0, movableCount };
+};
+
+/**
+ * Create a command that moves the selected Inbox rows to their project
+ * sections in the Planner, or null when nothing would move. Same command
+ * shape as createSortInboxCommand: execute files the rows via
+ * executeSortInbox, undo restores the pre-move snapshot; the debounced
+ * save diffs either state as a fresh write, so ordering follows the
+ * order_key rules with no extra work here.
+ */
+export const createMoveSelectionCommand = (params: {
+  data: any[];
+  selectedRows: Set<string>;
+  setData: React.Dispatch<React.SetStateAction<any[]>>;
+}): { command: { execute: () => void; undo: () => void }; movedCount: number } | null => {
+  const { data, selectedRows, setData } = params;
+  if (!selectedRows || selectedRows.size === 0) return null;
+
+  const collected = collectSelection(data, selectedRows);
+  if (!collected || collected.inboxTasksToMove.size === 0) return null;
+
+  const { generalTasksByProject, unscheduledTasksByProject, inboxTasksToMove } = collected;
+  const oldData = [...data];
+  const tasksToMove = new Set(inboxTasksToMove);
+
+  return {
+    movedCount: tasksToMove.size,
+    command: {
+      execute: () => {
+        setData(prevData =>
+          executeSortInbox(prevData, generalTasksByProject, unscheduledTasksByProject, tasksToMove)
+        );
+      },
+      undo: () => {
+        setData(oldData);
+      },
     },
   };
 };

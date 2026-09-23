@@ -487,6 +487,19 @@ function SortSection() {
   const [inboxOpen, setInboxOpen] = useState(false);
   const [checked, setChecked] = useState(readSavedSortStatuses);
 
+  // Selection-scoped move (implementation brief move-selection-to-planner):
+  // enabled state is derived on the System page and carried on the
+  // selection broadcast, same as the Group Selection By card.
+  const [moveState, setMoveState] = useState({ hasSelection: false, enabled: false });
+  useEffect(() => {
+    const handler = (e) => setMoveState({
+      hasSelection: e.detail?.hasSelection ?? false,
+      enabled: e.detail?.moveToPlanner?.enabled ?? false,
+    });
+    window.addEventListener(SYSTEM_PANEL_SELECTION_EVENT, handler);
+    return () => window.removeEventListener(SYSTEM_PANEL_SELECTION_EVENT, handler);
+  }, []);
+
   // Only count statuses that still exist (a remembered selection may
   // reference a status that has since been deleted in the Status Manager).
   const activeIds = new Set(sortStatuses.map(s => s.id));
@@ -541,11 +554,34 @@ function SortSection() {
               ))}
             </div>
             <div style={{ marginTop: 10 }}>
-              <FilterActionBtn label="Sort" onClick={handleSort} disabled={!anyChecked} />
+              {/* Relabelled from "Sort" — nothing sorts, rows are moved
+                  (interim wording per brief, may be refined later) */}
+              <FilterActionBtn label="Move statuses to Planner" onClick={handleSort} disabled={!anyChecked} />
             </div>
           </div>
         )}
       </div>
+
+      {/* Move selection to Planner — the by-hand counterpart to the
+          by-status card above. Greyed, never hidden, when there is no
+          movable selection. */}
+      {!moveState.enabled && (
+        <div style={{ marginTop: 8 }}>
+          <GroupNotice>Select rows to move</GroupNotice>
+        </div>
+      )}
+      <ActionBtn
+        icon={
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M2 10.5V7a2 2 0 012-2h6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M7.5 2.5L10 5 7.5 7.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        }
+        label="Move selection to Planner"
+        disabled={!moveState.enabled}
+        onClick={() => dispatchSystemAction('moveSelectionToPlanner')}
+        style={{ marginBottom: 0, marginTop: moveState.enabled ? 8 : 0 }}
+      />
     </div>
   );
 }

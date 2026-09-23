@@ -210,6 +210,8 @@ export default function ContextMenu({
   onPaste,
   groupSelection,
   onGroupBy,
+  moveSelection,
+  onMoveToPlanner,
 }) {
   if (!contextMenu.isOpen) return null;
 
@@ -248,7 +250,7 @@ export default function ContextMenu({
   const showGroupSection = hasSelectedRows && typeof onGroupBy === 'function';
   // Header (optional) + 2 insert rows (single-row context) + divider + duplicate + delete
   // + group-by section (divider + header + optional hint + 3 options).
-  const MENU_HEIGHT = (hasSelectedRows ? 28 : 0) + (showInsertRows ? 68 : 0) + 68
+  const MENU_HEIGHT = (hasSelectedRows ? 28 : 0) + (showInsertRows ? 68 : 0) + 68 + 38
     + (showGroupSection ? 160 + (groupSelection?.hint ? 22 : 0) : 0);
   const clampedLeft = Math.min(x, window.innerWidth - MENU_WIDTH - 8);
   const fitsBelow = y + MENU_HEIGHT < window.innerHeight - 8;
@@ -279,6 +281,11 @@ export default function ContextMenu({
           <div style={DIVIDER} />
         </>
       )}
+      <MenuItem
+        label="Move to Planner"
+        disabled={!moveSelection?.enabled}
+        onClick={() => handleAction(onMoveToPlanner)}
+      />
       <MenuItem label={`Duplicate ${rowLabel}`} onClick={() => handleAction(onDuplicateRow)} />
       <MenuItem
         label={`Delete ${rowLabel}`}

@@ -83,7 +83,7 @@ import {
   handlePasteOperation,
 } from '../utils/planner/clipboardOperations';
 import { getClipboardTextWithLinks } from '../utils/clipboardText';
-import { createSortInboxCommand } from '../utils/planner/sortInbox';
+import { createSortInboxCommand, createMoveSelectionCommand, getMoveSelectionState } from '../utils/planner/sortInbox';
 import { createSortPlannerCommand } from '../utils/planner/sortPlanner';
 import { saveTaskRows, readTaskRows, invalidateTaskRowsCache, loadChipTaskNote, preloadChipTaskNotes, isTaskRowsSaveInFlight, getLastTaskRowsSaveCompletedAt, writeTaskEvent, isPlannerYearServerFresh, PLANNER_ROWS_STALE_EVENT } from '../utils/planner/storage';
 import { supabase } from '../lib/supabase';
@@ -3367,6 +3367,25 @@ export default function ProjectTimePlannerV2() {
 
   const dismissGroupToast = useCallback(() => setGroupToast(null), []);
 
+  // ── Move selection to Planner (context menu + System panel) ──────────────
+  // Selection-scoped version of the status sweep; same move path, so
+  // placement, ordering and sync behaviour are inherited (see sortInbox.ts).
+  const moveSelectionState = useMemo(
+    () => getMoveSelectionState(data, selectedRows),
+    [data, selectedRows]
+  );
+
+  const handleMoveSelectionToPlanner = useCallback(() => {
+    const result = createMoveSelectionCommand({ data, selectedRows, setData });
+    if (!result) return;
+    executeCommand(result.command);
+    // Same toast machinery as Group by — label + undo-if-still-latest.
+    setGroupToast({
+      label: `${result.movedCount} task${result.movedCount === 1 ? '' : 's'} sent to Planner`,
+      command: result.command,
+    });
+  }, [data, selectedRows, setData, executeCommand]);
+
   const handleDuplicateRow = useCallback(() => {
     setIsListicalMenuOpen(false);
 
@@ -3619,6 +3638,7 @@ export default function ProjectTimePlannerV2() {
       if (action === 'showWeek') { handleShowWeek(); return; }
       if (action === 'archiveWeek') { expandNextArchiveRef.current = true; handleArchiveWeek(); return; }
       if (action === 'groupSelection' && e.detail.field) { handleGroupSelectionBy(e.detail.field); return; }
+      if (action === 'moveSelectionToPlanner') { handleMoveSelectionToPlanner(); return; }
       if (action === 'undo') { undo(); return; }
       if (action === 'redo') { redo(); return; }
       if (action === 'zoomIn') { increaseSize(); return; }
@@ -3684,7 +3704,7 @@ export default function ProjectTimePlannerV2() {
     };
     window.addEventListener(SYSTEM_PANEL_ACTION_EVENT, handler);
     return () => window.removeEventListener(SYSTEM_PANEL_ACTION_EVENT, handler);
-  }, [addTasksWithCount, addLabelsWithCount, addWeeksWithCount, removeWeek, duplicateSelectedRows, handleGroupSelectionBy, handleHideWeek, handleShowWeek, handleArchiveWeek, undo, redo, increaseSize, decreaseSize, data, setData, executeCommand, handleEditComplete]);
+  }, [addTasksWithCount, addLabelsWithCount, addWeeksWithCount, removeWeek, duplicateSelectedRows, handleGroupSelectionBy, handleMoveSelectionToPlanner, handleHideWeek, handleShowWeek, handleArchiveWeek, undo, redo, increaseSize, decreaseSize, data, setData, executeCommand, handleEditComplete]);
 
   // After a panel-triggered archive, expand the archive row and all of its
   // project groups (archived weeks always start unfurled), then scroll to
@@ -3723,9 +3743,10 @@ export default function ProjectTimePlannerV2() {
       detail: {
         hasSelection: selectedRows.size > 0,
         groupBy: { enabled: groupSelectionState.enabled, hint: groupSelectionState.hint },
+        moveToPlanner: { enabled: moveSelectionState.enabled },
       },
     }));
-  }, [selectedRows, groupSelectionState]);
+  }, [selectedRows, groupSelectionState, moveSelectionState]);
 
   // Broadcast page scale to SystemPanel
   useEffect(() => {
@@ -4052,6 +4073,8 @@ export default function ProjectTimePlannerV2() {
         onPaste={handlePaste}
         groupSelection={groupSelectionState}
         onGroupBy={handleGroupSelectionBy}
+        moveSelection={moveSelectionState}
+        onMoveToPlanner={handleMoveSelectionToPlanner}
       />
 
       {/* Group-by confirmation toast */}
