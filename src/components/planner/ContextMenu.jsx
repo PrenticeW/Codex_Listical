@@ -1,4 +1,6 @@
 import React from 'react';
+import { Folder, CornerDownRight, CheckCircle } from 'lucide-react';
+import { GROUP_FIELD_LABELS } from '../../utils/planner/groupSelection';
 
 /**
  * Context menu for spreadsheet cells and rows.
@@ -35,36 +37,105 @@ const DANGER_BG = 'rgba(221,44,44,0.07)';
 const DANGER_BD = 'rgba(221,44,44,0.35)';
 const INK_MUTE = '#616161';
 
-function MenuItem({ label, onClick, danger, hint, style }) {
+function MenuItem({ label, onClick, danger, hint, icon, disabled, style }) {
   const [hovered, setHovered] = React.useState(false);
+  const hov = hovered && !disabled;
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         width: '100%', padding: '9px 11px', marginBottom: 4,
         background: danger
-          ? (hovered ? DANGER_BG : 'transparent')
-          : (hovered ? 'var(--brand-hover-bg)' : 'transparent'),
+          ? (hov ? DANGER_BG : 'transparent')
+          : (hov ? 'var(--brand-hover-bg)' : 'transparent'),
         border: `1px solid ${danger
-          ? (hovered ? DANGER_BD : 'transparent')
-          : (hovered ? 'var(--brand-hover-bd)' : 'transparent')}`,
-        cursor: 'pointer', textAlign: 'left',
+          ? (hov ? DANGER_BD : 'transparent')
+          : (hov ? 'var(--brand-hover-bd)' : 'transparent')}`,
+        cursor: disabled ? 'not-allowed' : 'pointer', textAlign: 'left',
         fontFamily: FONT, fontSize: 'calc(13px * var(--pz))', fontWeight: 400,
-        color: danger ? DANGER : (hovered ? 'var(--brand-deep)' : INK_MUTE),
+        color: disabled ? '#9E9E9E' : danger ? DANGER : (hov ? 'var(--brand-deep)' : INK_MUTE),
+        opacity: disabled ? 0.42 : 1,
         borderRadius: 8,
         transition: 'border-color 0.15s, color 0.15s, background 0.15s',
         ...style,
       }}
     >
-      <span>{label}</span>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+        {icon}
+        {label}
+      </span>
       {hint && (
         <span style={{ fontSize: 'calc(11px * var(--pz))', color: '#9E9E9E', fontFamily: MONO, marginLeft: 12 }}>{hint}</span>
       )}
     </button>
+  );
+}
+
+// Section header for the GROUP SELECTION BY block (design bundle frame 1).
+function SectionHeader({ children }) {
+  return (
+    <div style={{
+      fontSize: 'calc(9px * var(--pz))', fontWeight: 700, letterSpacing: '.1em',
+      textTransform: 'uppercase', color: '#9E9E9E',
+      fontFamily: MONO, marginBottom: 8, paddingBottom: 6,
+      borderBottom: '1px solid rgba(200,174,198,0.35)',
+    }}>
+      {children}
+    </div>
+  );
+}
+
+// Single hint line under the section header — rendered once, never repeated
+// per option (design bundle frames 2–3).
+function SectionHint({ children }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6,
+      padding: '0 11px', marginBottom: 7,
+      fontFamily: MONO, fontSize: 'calc(9.5px * var(--pz))', fontWeight: 500,
+      letterSpacing: '.04em', color: '#9E9E9E',
+    }}>
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
+        <circle cx="5" cy="5" r="4.4" stroke="currentColor" strokeWidth="1" />
+        <path d="M5 4.4v2.4" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+        <circle cx="5" cy="3" r="0.55" fill="currentColor" />
+      </svg>
+      <span>{children}</span>
+    </div>
+  );
+}
+
+const GROUP_ICON_PROPS = { size: 13, strokeWidth: 1.2, style: { flexShrink: 0 } };
+const GROUP_OPTIONS = [
+  { field: 'project', icon: <Folder {...GROUP_ICON_PROPS} /> },
+  { field: 'subproject', icon: <CornerDownRight {...GROUP_ICON_PROPS} /> },
+  { field: 'status', icon: <CheckCircle {...GROUP_ICON_PROPS} /> },
+];
+
+// GROUP SELECTION BY — one-shot reorder of the selected rows (see
+// utils/planner/groupSelection.js for the rules; docs: group-by handoff).
+function GroupSelectionSection({ groupSelection, onGroupBy, onClose }) {
+  const { enabled = {}, hint = null } = groupSelection || {};
+  return (
+    <>
+      <div style={DIVIDER} />
+      <SectionHeader>Group selection by</SectionHeader>
+      {hint && <SectionHint>{hint}</SectionHint>}
+      {GROUP_OPTIONS.map(({ field, icon }, i) => (
+        <MenuItem
+          key={field}
+          label={GROUP_FIELD_LABELS[field]}
+          icon={icon}
+          disabled={!enabled[field]}
+          onClick={() => { onGroupBy(field); onClose(); }}
+          style={i === GROUP_OPTIONS.length - 1 ? { marginBottom: 0 } : undefined}
+        />
+      ))}
+    </>
   );
 }
 
@@ -137,6 +208,8 @@ export default function ContextMenu({
   onInsertLabelRows,
   onCopy,
   onPaste,
+  groupSelection,
+  onGroupBy,
 }) {
   if (!contextMenu.isOpen) return null;
 
@@ -172,7 +245,11 @@ export default function ContextMenu({
   const MENU_WIDTH = 240;
   // Header (optional) + 2 insert rows (single-row context) + divider + duplicate + delete,
   // or just header + duplicate + delete (multi-row context).
-  const MENU_HEIGHT = (hasSelectedRows ? 28 : 0) + (showInsertRows ? 68 : 0) + 68;
+  const showGroupSection = hasSelectedRows && typeof onGroupBy === 'function';
+  // Header (optional) + 2 insert rows (single-row context) + divider + duplicate + delete
+  // + group-by section (divider + header + optional hint + 3 options).
+  const MENU_HEIGHT = (hasSelectedRows ? 28 : 0) + (showInsertRows ? 68 : 0) + 68
+    + (showGroupSection ? 160 + (groupSelection?.hint ? 22 : 0) : 0);
   const clampedLeft = Math.min(x, window.innerWidth - MENU_WIDTH - 8);
   const fitsBelow = y + MENU_HEIGHT < window.innerHeight - 8;
   const clampedTop = fitsBelow ? y : Math.max(8, y - MENU_HEIGHT);
@@ -207,8 +284,15 @@ export default function ContextMenu({
         label={`Delete ${rowLabel}`}
         danger
         onClick={() => handleAction(onDeleteRows)}
-        style={{ marginBottom: 0 }}
+        style={{ marginBottom: showGroupSection ? 4 : 0 }}
       />
+      {showGroupSection && (
+        <GroupSelectionSection
+          groupSelection={groupSelection}
+          onGroupBy={onGroupBy}
+          onClose={onClose}
+        />
+      )}
     </div>
   );
 }

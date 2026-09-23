@@ -48,6 +48,14 @@ import PlannerTable from '../components/planner/PlannerTable';
 import FilterPanel from '../components/planner/FilterPanel';
 import ArchiveYearModal from '../components/ArchiveYearModal';
 import ContextMenu from '../components/planner/ContextMenu';
+import GroupToast from '../components/planner/GroupToast';
+import {
+  getGroupSelectionState,
+  buildGroupOrders,
+  createGroupSelectionCommand,
+  GROUP_FIELD_LABELS,
+} from '../utils/planner/groupSelection';
+import { getActiveStatuses } from '../lib/statusesStorage';
 import MultiPasteModal from '../components/MultiPasteModal';
 import useContextMenu from '../hooks/planner/useContextMenu';
 import { createInitialData, ensureDailyTotalRow } from '../utils/planner/dataCreators';
@@ -3321,6 +3329,44 @@ export default function ProjectTimePlannerV2() {
     setSelectedRows(new Set(duplicatedRows.map(r => r.id)));
   }, [selectedRows, data, executeCommand, setSelectedRows]);
 
+  // ── Group selection by (context menu + System panel card) ────────────────
+  // One-shot reorder of the selected span — see utils/planner/groupSelection.js.
+  const groupSelectionState = useMemo(
+    () => getGroupSelectionState(data, selectedRows),
+    [data, selectedRows]
+  );
+
+  // { label, command } — command kept so the toast's Undo can check it is
+  // still the latest operation before undoing.
+  const [groupToast, setGroupToast] = useState(null);
+
+  const handleGroupSelectionBy = useCallback((field) => {
+    // Read-fresh-then-write: the sort is computed from current data at the
+    // moment of the action and applied immediately through the same
+    // setData + command path as a manual drag-reorder. Never defer it.
+    const orders = buildGroupOrders({
+      projectSubprojectsMap,
+      statuses: getActiveStatuses(),
+    });
+    const command = createGroupSelectionCommand({ data, selectedRows, field, orders, setData });
+    if (command) executeCommand(command);
+    // Toast shows either way — a selection that is already grouped is a
+    // successful (no-op) grouping, not an error.
+    setGroupToast({ label: `Grouped by ${GROUP_FIELD_LABELS[field]}`, command });
+  }, [data, selectedRows, projectSubprojectsMap, setData, executeCommand]);
+
+  const handleGroupToastUndo = useCallback(() => {
+    // Undo through the normal stack (a fresh write via the command's undo),
+    // but only while the grouping is still the top entry — if the user has
+    // done something since, the toast chip must not undo that instead.
+    if (groupToast?.command && undoStack[undoStack.length - 1] === groupToast.command) {
+      undo();
+    }
+    setGroupToast(null);
+  }, [groupToast, undoStack, undo]);
+
+  const dismissGroupToast = useCallback(() => setGroupToast(null), []);
+
   const handleDuplicateRow = useCallback(() => {
     setIsListicalMenuOpen(false);
 
@@ -3572,6 +3618,7 @@ export default function ProjectTimePlannerV2() {
       if (action === 'hideWeek') { handleHideWeek(); return; }
       if (action === 'showWeek') { handleShowWeek(); return; }
       if (action === 'archiveWeek') { expandNextArchiveRef.current = true; handleArchiveWeek(); return; }
+      if (action === 'groupSelection' && e.detail.field) { handleGroupSelectionBy(e.detail.field); return; }
       if (action === 'undo') { undo(); return; }
       if (action === 'redo') { redo(); return; }
       if (action === 'zoomIn') { increaseSize(); return; }
@@ -3637,7 +3684,7 @@ export default function ProjectTimePlannerV2() {
     };
     window.addEventListener(SYSTEM_PANEL_ACTION_EVENT, handler);
     return () => window.removeEventListener(SYSTEM_PANEL_ACTION_EVENT, handler);
-  }, [addTasksWithCount, addLabelsWithCount, addWeeksWithCount, removeWeek, duplicateSelectedRows, handleHideWeek, handleShowWeek, handleArchiveWeek, undo, redo, increaseSize, decreaseSize, data, setData, executeCommand, handleEditComplete]);
+  }, [addTasksWithCount, addLabelsWithCount, addWeeksWithCount, removeWeek, duplicateSelectedRows, handleGroupSelectionBy, handleHideWeek, handleShowWeek, handleArchiveWeek, undo, redo, increaseSize, decreaseSize, data, setData, executeCommand, handleEditComplete]);
 
   // After a panel-triggered archive, expand the archive row and all of its
   // project groups (archived weeks always start unfurled), then scroll to
@@ -3673,9 +3720,12 @@ export default function ProjectTimePlannerV2() {
   // Broadcast row selection state to SystemPanel
   useEffect(() => {
     window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_SELECTION_EVENT, {
-      detail: { hasSelection: selectedRows.size > 0 },
+      detail: {
+        hasSelection: selectedRows.size > 0,
+        groupBy: { enabled: groupSelectionState.enabled, hint: groupSelectionState.hint },
+      },
     }));
-  }, [selectedRows]);
+  }, [selectedRows, groupSelectionState]);
 
   // Broadcast page scale to SystemPanel
   useEffect(() => {
@@ -4000,7 +4050,12 @@ export default function ProjectTimePlannerV2() {
         onInsertLabelRows={addLabelsWithCount}
         onCopy={handleCopy}
         onPaste={handlePaste}
+        groupSelection={groupSelectionState}
+        onGroupBy={handleGroupSelectionBy}
       />
+
+      {/* Group-by confirmation toast */}
+      <GroupToast toast={groupToast} onUndo={handleGroupToastUndo} onDismiss={dismissGroupToast} />
     </div>
   );
 }

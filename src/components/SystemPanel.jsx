@@ -35,6 +35,8 @@ import {
   readShowSubprojects,
   readShowMaxMinRows,
 } from '../utils/planner/storage';
+import { Folder, CornerDownRight, CheckCircle } from 'lucide-react';
+import { GROUP_FIELD_LABELS } from '../utils/planner/groupSelection';
 
 // Cross-component action event — consumed by ProjectTimePlannerV2
 export const SYSTEM_PANEL_ACTION_EVENT = 'system-panel-action';
@@ -567,6 +569,101 @@ function StatusesSection({ onOpenStatuses }) {
   );
 }
 
+// ─── Group Selection By ──────────────────────────────────────────────────────
+// One-shot reorder of the currently selected rows (design bundle
+// design_handoff_group_by; logic in utils/planner/groupSelection.js). The
+// card only mirrors state computed by ProjectTimePlannerV2 — it is present
+// for discoverability and acts on the current selection via the shared
+// action event, exactly like the row-gutter context menu.
+
+const GROUP_PANEL_ICON = { size: 13, strokeWidth: 1.2, style: { flexShrink: 0 } };
+const GROUP_PANEL_OPTIONS = [
+  { field: 'project', icon: <Folder {...GROUP_PANEL_ICON} /> },
+  { field: 'subproject', icon: <CornerDownRight {...GROUP_PANEL_ICON} /> },
+  { field: 'status', icon: <CheckCircle {...GROUP_PANEL_ICON} /> },
+];
+
+// AB ghost row (13px), per the bundle — deliberately lighter than ActionBtn.
+function GroupOptionRow({ icon, label, disabled, onClick }) {
+  const [hov, setHov] = useState(false);
+  const active = hov && !disabled;
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 9,
+        width: '100%', padding: '9px 11px', marginBottom: 4,
+        background: active ? 'var(--brand-hover-bg)' : 'transparent',
+        border: `1px solid ${active ? 'var(--brand-hover-bd)' : 'transparent'}`,
+        borderRadius: 8, textAlign: 'left',
+        fontFamily: FONT, fontSize: 13, fontWeight: 400,
+        color: disabled ? '#9E9E9E' : active ? 'var(--brand-deep)' : '#616161',
+        opacity: disabled ? 0.42 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+      }}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+// Grey notice block ("Select rows to group" / blocking hint) — grey out,
+// never hide (design decision).
+function GroupNotice({ children }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 7,
+      background: '#F5F6FA', border: `1px solid ${C.border}`,
+      borderRadius: 7, padding: '7px 11px', marginBottom: 8,
+      fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
+      fontSize: 10.5, fontWeight: 500, color: '#9E9E9E',
+    }}>
+      <svg width="11" height="11" viewBox="0 0 13 13" fill="none" style={{ flexShrink: 0 }}>
+        <path d="M1.5 3h10M1.5 6.5h10M1.5 10h6.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      </svg>
+      <span>{children}</span>
+    </div>
+  );
+}
+
+function GroupSection() {
+  const [selection, setSelection] = useState({ hasSelection: false, groupBy: null });
+
+  useEffect(() => {
+    const handler = (e) => setSelection({
+      hasSelection: e.detail?.hasSelection ?? false,
+      groupBy: e.detail?.groupBy ?? null,
+    });
+    window.addEventListener(SYSTEM_PANEL_SELECTION_EVENT, handler);
+    return () => window.removeEventListener(SYSTEM_PANEL_SELECTION_EVENT, handler);
+  }, []);
+
+  const { hasSelection, groupBy } = selection;
+  const enabled = (hasSelection && groupBy?.enabled) || {};
+  const notice = !hasSelection ? 'Select rows to group' : groupBy?.hint || null;
+
+  return (
+    <div style={BENTO_CARD}>
+      <SectionLabel>Group Selection By</SectionLabel>
+      {notice && <GroupNotice>{notice}</GroupNotice>}
+      {GROUP_PANEL_OPTIONS.map(({ field, icon }) => (
+        <GroupOptionRow
+          key={field}
+          icon={icon}
+          label={GROUP_FIELD_LABELS[field]}
+          disabled={!enabled[field]}
+          onClick={() => dispatchSystemAction('groupSelection', { field })}
+        />
+      ))}
+    </div>
+  );
+}
+
 function ArchiveSection() {
   const [archiveFlash, flashArchive] = useConfirmFlash();
   const [hideFlash, flashHide] = useConfirmFlash();
@@ -1008,6 +1105,7 @@ export default function SystemPanel() {
             >
               <InsertSection />
               <SortSection />
+              <GroupSection />
               <StatusesSection onOpenStatuses={() => { closePanel(); setStatusesOpen(true); }} />
               <ArchiveSection />
               <PlanSection />
