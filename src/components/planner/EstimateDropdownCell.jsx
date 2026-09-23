@@ -685,7 +685,7 @@ function EstimateDropdownCell({
                   width: multiMode ? '100%' : 'auto',
                 }}
               >
-                Confirm
+                Enter
               </button>
             </div>
           </div>
