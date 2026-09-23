@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { BrandLoaderScreen } from './BrandLoader';
 
 /**
  * PublicRoute Component
@@ -12,17 +13,7 @@ export default function PublicRoute({ children }) {
 
   // Show loading state while checking authentication
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style={{ animation:'spin 1s linear infinite', margin:'0 auto 16px' }}>
-            <circle cx="12" cy="12" r="10" stroke="color-mix(in srgb, var(--th-44) 15%, transparent)" strokeWidth="2.5"/>
-            <path d="M22 12a10 10 0 0 0-10-10" stroke="var(--brand-deep)" strokeWidth="2.5" strokeLinecap="round"/>
-          </svg>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
+    return <BrandLoaderScreen />;
   }
 
   // Redirect to home if already authenticated

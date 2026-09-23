@@ -5,6 +5,7 @@ import { getContrastTextColor } from '../utils/colorUtils';
 import { gridSvgLayer, useThemeVersion } from '../utils/themeBackground';
 import { SquarePlus } from 'lucide-react';
 import { GOAL_PANEL_ACTION_EVENT, GOAL_PANEL_STATE_EVENT, GOAL_PANEL_SELECTION_EVENT, GOAL_PANEL_ROW_SELECTION_EVENT } from '../components/GoalPanel';
+import { BrandLoaderScreen } from '../components/BrandLoader';
 import { useYear } from '../contexts/YearContext';
 import { useAuth } from '../contexts/AuthContext';
 import NavigationBar from '../components/planner/NavigationBar';
@@ -1012,17 +1013,7 @@ export default function StagingPageV2() {
 
   // Wait for auth to complete before rendering content that depends on user-scoped data
   if (isAuthLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="text-center">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style={{ animation:'spin 1s linear infinite', margin:'0 auto 16px' }}>
-            <circle cx="12" cy="12" r="10" stroke="color-mix(in srgb, var(--th-44) 15%, transparent)" strokeWidth="2.5"/>
-            <path d="M22 12a10 10 0 0 0-10-10" stroke="var(--brand-deep)" strokeWidth="2.5" strokeLinecap="round"/>
-          </svg>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
+    return <BrandLoaderScreen />;
   }
 
   // Render the simple table (unified row rendering)

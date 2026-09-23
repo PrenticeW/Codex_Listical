@@ -6,6 +6,7 @@ import {
   setCurrentYear as setCurrentYearStorage,
 } from '../lib/yearMetadataStorage';
 import { supabase } from '../lib/supabase';
+import { BrandLoaderScreen } from '../components/BrandLoader';
 import { maybeSnapshotOnSessionStart } from '../lib/snapshotStorage';
 
 /**
@@ -144,11 +145,7 @@ export function YearProvider({ children }) {
   // Mid-session refreshes (isLoading=true but metadata exists) keep children
   // mounted so persistent components like GearPanel aren't torn down.
   if (!metadata) {
-    return (
-      <div className="flex items-center justify-center min-h-screen text-stone-500">
-        Loading…
-      </div>
-    );
+    return <BrandLoaderScreen />;
   }
 
   const value = {

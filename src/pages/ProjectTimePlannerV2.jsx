@@ -10,6 +10,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Archive } from 'lucide-react';
 import { useYear } from '../contexts/YearContext';
 import usePlannerStorage from '../hooks/planner/usePlannerStorage';
+import { BrandLoaderOverlay } from '../components/BrandLoader';
 import usePageSize, { usePageScaleVar } from '../hooks/usePageSize';
 import usePanelInset from '../hooks/usePanelInset';
 import usePlannerColumns from '../hooks/planner/usePlannerColumns';
@@ -891,6 +892,15 @@ export default function ProjectTimePlannerV2() {
   // filter change AFTER hydration (the ref guard stops the initial empty
   // state from clobbering what was saved).
   const filtersHydratedYearRef = useRef(null);
+  // The save effect below runs in the same commit as this restore effect —
+  // BEFORE the restored values have landed in state — so its first firing
+  // after a hydration sees the stale (empty) filters and would wipe the
+  // saved entry. skipNextFilterSaveRef makes it skip exactly that one
+  // firing; the restore always creates fresh Set objects, so the effect
+  // re-fires with the hydrated values right after and saving resumes.
+  // (Without this, StrictMode's dev double-mount deleted saved filters on
+  // every refresh: wiped by run one's save, re-read as empty by run two.)
+  const skipNextFilterSaveRef = useRef(false);
   useEffect(() => {
     const saved = plannerFilterStorage.loadFilters(currentYear);
     setDayColumnFilters(new Set(saved.dayColumns));
@@ -902,6 +912,7 @@ export default function ProjectTimePlannerV2() {
     setDayFilter(new Set(saved.dayTags));
     setProjectFilter(saved.projectFilter);
     filtersHydratedYearRef.current = currentYear;
+    skipNextFilterSaveRef.current = true;
   }, [
     currentYear,
     setDayColumnFilters,
@@ -914,6 +925,10 @@ export default function ProjectTimePlannerV2() {
 
   useEffect(() => {
     if (filtersHydratedYearRef.current !== currentYear) return;
+    if (skipNextFilterSaveRef.current) {
+      skipNextFilterSaveRef.current = false;
+      return;
+    }
     plannerFilterStorage.saveFilters(currentYear, {
       dayColumns: dayColumnFilters,
       project: selectedProjectFilters,
@@ -3925,6 +3940,10 @@ export default function ProjectTimePlannerV2() {
       backgroundPosition: '-1px -1px',
       backgroundAttachment: 'fixed',
     }}>
+      {/* Brand loading overlay: covers the page on a cold-cache load until
+          the planner rows have hydrated, then fades out over the full table
+          (no-op on a warm cache, where storageLoaded starts true). */}
+      <BrandLoaderOverlay active={!storageLoaded} />
       {/* Nav bar — always visible at top */}
       <div className="sticky top-0 z-20 px-4 pt-4 pb-4 shrink-0" style={{ background: 'transparent' }}>
         <NavigationBar
