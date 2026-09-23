@@ -55,6 +55,10 @@ export function getGroupSelectionState(data, selectedRows) {
   }
   if (indices.length === 0) return blockedAll(null);
 
+  // Grouping a single row is a no-op — grey the actions out until the
+  // selection has something to reorder.
+  if (indices.length === 1) return blockedAll('Select at least two rows');
+
   if (indices.some((i) => !isDraggableRow(data[i]))) {
     return blockedAll('Deselect header rows');
   }

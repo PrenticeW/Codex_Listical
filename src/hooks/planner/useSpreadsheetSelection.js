@@ -100,16 +100,70 @@ export const useSpreadsheetSelection = ({
     const ae = document.activeElement;
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) ae.blur();
 
-    if (e.shiftKey && anchorRow) {
-      // Shift-click: ADD the anchor-to-current range to the existing
-      // selection (union, not replace). Replacing dropped any previously
-      // selected rows on the far side of the anchor, which broke
-      // "shift-select more rows, then drag the whole group" (rows at the
-      // far end of the preselected group became unselected).
-      const range = getRowRange(anchorRow, rowId);
+    const anchorIndex = anchorRow ? data.findIndex(r => r.id === anchorRow) : -1;
+    if (e.shiftKey && !e.metaKey && !e.ctrlKey && (anchorIndex === -1 || selectedRows.size === 0)) {
+      // Shift held but there's no usable starting point (nothing currently
+      // selected, or the anchor row no longer exists after an edit or a
+      // group/sort reorder): treat it as a fresh single-row selection
+      // instead of resurrecting a stale range.
+      setSelectedRows(new Set([rowId]));
+      setSelectedCells(new Set());
+      setAnchorRow(rowId);
+      setEditingCell(null);
+      return;
+    }
+
+    if (e.shiftKey && anchorIndex !== -1) {
+      // Shift-click: resize the contiguous selected block containing the
+      // anchor so it runs to the clicked row, REPLACING that block rather
+      // than unioning forever. The previous fix (plain union, anchor never
+      // moved) meant selections only ever grew — and once a group/sort
+      // reorder moved rows under a stale anchor, a single shift-click
+      // merged in a huge anchor-to-row span, sometimes most of the table.
+      // Block-replace keeps that fix's intended behaviour (clicking past
+      // the far side of the block still extends it outward, see below)
+      // without the accumulation.
+      const clickedIndex = data.findIndex(r => r.id === rowId);
+      if (clickedIndex === -1) {
+        // Clicked a row that isn't in the raw data array (structural /
+        // computed rows) — same fresh single-select a plain click gives it.
+        setSelectedRows(new Set([rowId]));
+        setSelectedCells(new Set());
+        setAnchorRow(rowId);
+        setEditingCell(null);
+        return;
+      }
+
+      // Contiguous run of selected rows around the anchor — the block this
+      // shift-click resizes. Rows selected elsewhere (cmd-click) are left
+      // untouched.
+      let blockStart = anchorIndex;
+      let blockEnd = anchorIndex;
+      if (selectedRows.has(anchorRow)) {
+        while (blockStart > 0 && selectedRows.has(data[blockStart - 1].id)) blockStart--;
+        while (blockEnd < data.length - 1 && selectedRows.has(data[blockEnd + 1].id)) blockEnd++;
+      }
+
+      // Clicking above the block keeps its bottom edge; clicking below
+      // keeps its top edge (so "select 5-10, shift-click 3" still gives
+      // 3-10). Clicking inside the block shrinks it to anchor-to-click.
+      let start;
+      let end;
+      if (clickedIndex < blockStart) {
+        start = clickedIndex;
+        end = blockEnd;
+      } else if (clickedIndex > blockEnd) {
+        start = blockStart;
+        end = clickedIndex;
+      } else {
+        start = Math.min(anchorIndex, clickedIndex);
+        end = Math.max(anchorIndex, clickedIndex);
+      }
+
       setSelectedRows(prev => {
         const next = new Set(prev);
-        range.forEach(id => next.add(id));
+        for (let i = blockStart; i <= blockEnd; i++) next.delete(data[i].id);
+        for (let i = start; i <= end; i++) next.add(data[i].id);
         return next;
       });
       setSelectedCells(new Set()); // Clear cell selections
@@ -134,7 +188,7 @@ export const useSpreadsheetSelection = ({
       setAnchorRow(rowId); // Set as anchor for shift-click
     }
     setEditingCell(null);
-  }, [anchorRow, getRowRange, setSelectedRows, setSelectedCells, setAnchorRow, setEditingCell]);
+  }, [anchorRow, data, selectedRows, setSelectedRows, setSelectedCells, setAnchorRow, setEditingCell]);
 
   // Cell interaction handlers
   const handleCellMouseDown = useCallback((e, rowId, columnId) => {
