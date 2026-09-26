@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { UseDragAndDropRowsReturn, PlannerRow, Command } from '../../types/planner';
 import { getArchiveInsertContext } from '../../utils/planner/archiveHelpers';
+import { assignParentGroupIds } from './useParentGroupAssignment';
 
 const isPinnedHeader = (row: PlannerRow | undefined): boolean => !!row && !!(
   row._isMonthRow || row._isWeekRow || row._isDayRow ||
@@ -274,7 +275,15 @@ export default function useDragAndDropRows({
     // Create reorder command
     const reorderCommand: Command = {
       execute: () => {
-        setData(prevData => restampDraggedRows(moveRows(prevData, draggedIndices, insertAt)));
+        // Re-parent by landing position (same rule as the mount-time repair in
+        // assignParentGroupIds): a task dropped under a General/Unscheduled
+        // section row or a different subproject adopts that context's groupId.
+        // Without this, a Plan-chip task kept its 'chip-…' parentGroupId after
+        // the drop, and the chip reconcile effect (ProjectTimePlannerV2 step 4)
+        // classified it as a misplaced chip-block row and spliced it back above
+        // the first section row — the drop visibly "popped" somewhere else, and
+        // chip-backed tasks could never be filed under General/Unscheduled.
+        setData(prevData => assignParentGroupIds(restampDraggedRows(moveRows(prevData, draggedIndices, insertAt))));
         if (nextProjectOrder && onProjectOrderChange) onProjectOrderChange(nextProjectOrder);
       },
       undo: () => {
