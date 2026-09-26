@@ -1458,8 +1458,14 @@ export default function ProjectTimePlannerV2() {
       const currentHasArchiveHeader = newData.some(row => row._rowType === 'archiveHeader');
       const currentHasInboxRow = newData.some(row => row._isInboxRow);
 
-      // If both exist, nothing more to do
-      if (currentHasInboxRow && currentHasArchiveHeader) return newData;
+      // If both exist, nothing more to do. Return prevData (not the fresh
+      // newData copy) when nothing actually changed — this effect now runs
+      // on every data replacement (deps include `data`), and returning a new
+      // array reference for a no-op would loop the effect forever.
+      if (currentHasInboxRow && currentHasArchiveHeader) {
+        const unchanged = !needsRepair && newData.length === base.length;
+        return unchanged ? prevData : newData;
+      }
 
       // Create "Inbox" divider row (if it doesn't exist)
       if (!currentHasInboxRow) {
@@ -1521,7 +1527,7 @@ export default function ProjectTimePlannerV2() {
 
       return newData;
     });
-  }, [totalDays]); // Run once on mount and when totalDays changes
+  }, [totalDays, data]); // Self-healing (2026-09-26): re-runs whenever the data array is replaced (initial async load, stale-tab revalidation refetch), since those replacements drop injected structure. Idempotent — returns prevData unchanged when nothing is missing.
 
   // Insert project rows into data structure
   useEffect(() => {
@@ -1702,7 +1708,7 @@ export default function ProjectTimePlannerV2() {
       const withStructure = injectProjectStructure(prevData);
       return pendingImport ? placeImportedTasks(withStructure, pendingImport) : withStructure;
     });
-  }, [projects, projectNamesMap, projectTaglinesMap, totalDays, isCurrentYearDraft, sentToSystem, isProjectsLoaded, importTick, setData]);
+  }, [projects, projectNamesMap, projectTaglinesMap, totalDays, isCurrentYearDraft, sentToSystem, isProjectsLoaded, importTick, setData, data]); // data: self-healing re-injection (2026-09-26 cold-cache incident) — EVERY wholesale data replacement (initial async load, stale-tab revalidation refetch) drops the injected structure, so re-run on data change; injectProjectStructure is idempotent and returns prevData untouched when no headers are missing.
 
   // Keep project blocks in the order given by projects.system_order
   // (`projects` from useProjectsData is already sorted by it). Covers reorders
@@ -1744,7 +1750,7 @@ export default function ProjectTimePlannerV2() {
         ...prevData.slice(regionEnd),
       ];
     });
-  }, [projects, isProjectsLoaded, hasSystemOrder]);
+  }, [projects, isProjectsLoaded, hasSystemOrder, storageLoaded]);
 
   // Create subprojectHeader rows from Tactics chips
   useEffect(() => {
@@ -2138,7 +2144,7 @@ export default function ProjectTimePlannerV2() {
   // findIndex(projectHeader) lookup to fail silently. Removing only with a replacement signal.
   // (Previously guarded by a 50 ms setTimeout; no longer needed because the functional updater
   // form guarantees project injection's setData is applied before this one in the same flush.)
-  }, [tacticsChips, totalDays, isCurrentYearDraft, sentToSystem, projects, importTick]);
+  }, [tacticsChips, totalDays, isCurrentYearDraft, sentToSystem, projects, importTick, data]); // data: see project-structure effect above
 
   // Reconcile task-row subproject values against the current Goal page subproject
   // lists. When a subproject is deleted on the Goal page, live task rows that still

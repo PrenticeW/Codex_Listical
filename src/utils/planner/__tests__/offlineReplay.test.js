@@ -65,6 +65,7 @@ function tableQuery(table) {
 }
 
 vi.mock('../../../lib/supabase', () => ({
+  CLIENT_BUILD: '20260926',
   supabase: {
     from: (table) => tableQuery(table),
     auth: {

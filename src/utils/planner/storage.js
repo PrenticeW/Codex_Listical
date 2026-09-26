@@ -39,7 +39,7 @@
  * signature.
  */
 
-import { supabase } from '../../lib/supabase';
+import { supabase, CLIENT_BUILD } from '../../lib/supabase';
 import { createInitialData } from './dataCreators';
 import { ensureOrderKeys, compareRowOrder, isValidOrderKey } from './orderKey';
 import { loadTacticsMetrics } from '../../lib/tacticsMetricsStorage';
@@ -1574,6 +1574,8 @@ export const saveTaskRows = (
       ...bookkeeping,
       seq,
       queuedAt: Date.now(),
+      // Replay refuses records from other builds (plannerOffline.js).
+      clientBuild: CLIENT_BUILD,
     });
   });
   return _enqueueTaskRowsSave(taskRows, yearNumber, seq, bookkeeping);

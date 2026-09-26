@@ -16,7 +16,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // auto-update reloads it (2026-08-28 stale-browser overwrite). Bump the
 // value when save-path semantics change in a way old clients must not mix
 // with.
-export const CLIENT_BUILD = '20260922';
+export const CLIENT_BUILD = '20260926';
 
 // Create a typed Supabase client
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {

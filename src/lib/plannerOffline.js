@@ -27,7 +27,7 @@
 // UI: subscribe via the 'planner-offline-pending' window event (detail:
 // { pending, __eventYear }) or poll hasPendingOfflineSave().
 
-import { supabase } from './supabase';
+import { supabase, CLIENT_BUILD } from './supabase';
 import { onSessionReset } from './storageCache';
 
 const DB_NAME = 'listical-offline';
@@ -256,6 +256,17 @@ export async function replayPendingSaves() {
       const queuedAt = typeof payload?.queuedAt === 'number' ? payload.queuedAt : null;
       if (queuedAt === null || Date.now() - queuedAt > PENDING_MAX_AGE_MS) {
         console.warn('[plannerOffline] discarding stale pending save', { yearNumber, queuedAt });
+        await clearPendingState(uid, yearNumber);
+        continue;
+      }
+      // A pending record written by a DIFFERENT build is discarded, never
+      // replayed (2026-09-26 incident: pre-gate production builds could not
+      // save at all, so browsers accumulated pending records of broken
+      // partial states; replaying them under a new build that PASSES the
+      // write gate would persist the mess). Cross-build pendings are
+      // suspect by construction — save-path semantics may have changed.
+      if (payload?.clientBuild !== CLIENT_BUILD) {
+        console.warn('[plannerOffline] discarding pending save from another build', { yearNumber, build: payload?.clientBuild ?? 'none' });
         await clearPendingState(uid, yearNumber);
         continue;
       }

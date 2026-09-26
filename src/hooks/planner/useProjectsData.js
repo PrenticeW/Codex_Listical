@@ -107,6 +107,12 @@ export function extractProjectsData(shortlist) {
     const projectKey = nickname || fullProjectName;
 
     if (projectKey && projectKey !== '-' && item.addedToPlan === true) {
+      // Duplicate guard (2026-09-26): two staging rows sharing a nickname
+      // (a restore once left two MOVE HOUSE project rows) would list the key
+      // twice, and the System page's structure injector then inserted the
+      // project block twice with IDENTICAL row ids — duplicate React keys,
+      // ghost overlapping rows. First row wins; later duplicates are skipped.
+      if (projects.includes(projectKey)) return;
       projects.push(projectKey);
       projectSubprojectsMap[projectKey] = ['-'];
 
