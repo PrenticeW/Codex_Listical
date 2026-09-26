@@ -97,18 +97,26 @@ export default function useComputedDataV2({
         const hasLiveKeys = Object.keys(row).some(
           (key) => MULTI_STATUS_KEY_RE.test(key) && !staleMultiKeys.includes(key),
         );
-        const prevKey = row.id ? prevFilledDays.get(row.id) : undefined;
-        if (isManual && !hasLiveKeys && prevKey !== undefined) {
+        if (isManual && !hasLiveKeys) {
           const instances = getMultiInstances(row, totalDays);
           if (instances.length > 1) {
-            const prevSet = new Set(prevKey === '' ? [] : prevKey.split(',').map(Number));
-            const preExisting = instances.filter((inst) => prevSet.has(inst.dayIndex));
-            // Only a genuine transition: some instances are old, some new.
-            if (preExisting.length > 0 && preExisting.length < instances.length) {
-              seededMultiKeys = {};
-              for (const inst of preExisting) {
-                seededMultiKeys[multiStatusKey(inst.dayIndex)] = row.status as string;
-              }
+            const prevKey = row.id ? prevFilledDays.get(row.id) : undefined;
+            // Which instances inherit the manual status: the ones the
+            // previous render already knew about (a transition mid-session —
+            // the genuinely new day stays 'Scheduled'). With no usable
+            // snapshot (first compute after load — e.g. a second entry was
+            // added on mobile, which stores no per-instance keys), ALL
+            // instances inherit it: the stored aggregate was the manual
+            // status, so preserving it beats resetting to 'Scheduled'.
+            let targets = instances;
+            if (prevKey !== undefined) {
+              const prevSet = new Set(prevKey === '' ? [] : prevKey.split(',').map(Number));
+              const preExisting = instances.filter((inst) => prevSet.has(inst.dayIndex));
+              if (preExisting.length > 0) targets = preExisting;
+            }
+            seededMultiKeys = {};
+            for (const inst of targets) {
+              seededMultiKeys[multiStatusKey(inst.dayIndex)] = row.status as string;
             }
           }
         }
