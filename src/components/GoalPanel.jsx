@@ -820,7 +820,7 @@ function GoalSection({ goal, onOpenColour }) {
   if (!goal) {
     return (
       <div style={BENTO_CARD}>
-        <SectionLabel action={<PanelLockButton size="sm" />}>Goal Info</SectionLabel>
+        <SectionLabel>Goal Info</SectionLabel>
         <p style={{ fontFamily: FONT, fontSize: 13, color: C.textFaint, fontStyle: 'italic' }}>
           Click a goal to select it
         </p>
@@ -868,7 +868,7 @@ function GoalSection({ goal, onOpenColour }) {
   return (
     <div>
     <div style={BENTO_CARD}>
-      <SectionLabel action={<PanelLockButton size="sm" />}>Goal Info</SectionLabel>
+      <SectionLabel>Goal Info</SectionLabel>
 
       {/* Colour */}
       <FieldRow label="Colour">
@@ -1218,6 +1218,10 @@ export default function GoalPanel() {
       {/* Scrollable content + pinned footer */}
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingTop: 20, paddingBottom: 24 }}>
+          {/* Panel lock sits above the bento cards, not inside Goal Info */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 11px', marginBottom: 7 }}>
+            <PanelLockButton size="sm" />
+          </div>
           <GoalSection goal={selectedGoal} onOpenColour={() => setColourViewOpen(true)} />
           <RowSection row={selectedRow} />
         </div>

@@ -1308,10 +1308,10 @@ function ScheduleView({ scheduleData, onDragStartRef, onAddChipRef, onBack, view
 
 // ─── Update section (always visible in main view) ─────────────────────────────
 
-function UpdateSection({ isUpToDate, onSendToSystem, showLock = false }) {
+function UpdateSection({ isUpToDate, onSendToSystem }) {
   return (
     <div style={BENTO_CARD}>
-      <SectionLabel action={showLock ? <PanelLockButton size="sm" /> : null}>Update</SectionLabel>
+      <SectionLabel>Update</SectionLabel>
       {isUpToDate ? (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
@@ -1641,7 +1641,13 @@ function MainView({
       )}
       {/* Scrollable body */}
       <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', paddingTop: hasChip ? 8 : 20, paddingBottom: 8 }}>
-        <UpdateSection isUpToDate={isUpToDate} onSendToSystem={onSendToSystem} showLock={!hasChip} />
+        {/* Panel lock sits above the bento cards, not inside Update */}
+        {!hasChip && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 11px', marginBottom: 7 }}>
+            <PanelLockButton size="sm" />
+          </div>
+        )}
+        <UpdateSection isUpToDate={isUpToDate} onSendToSystem={onSendToSystem} />
         {!hasChip ? (
           <>
             <ScheduleLinkSection onViewSchedule={onViewSchedule} onAddChip={onAddChip} />

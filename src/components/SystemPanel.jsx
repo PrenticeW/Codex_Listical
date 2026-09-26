@@ -89,18 +89,69 @@ const BENTO_CARD = {
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
 
-function SectionLabel({ children, action }) {
+
+// ─── Collapsible bento cards ─────────────────────────────────────────────────
+// Each System panel section collapses; open/closed state is remembered per
+// user via the storageService localStorage layer (UI preference, not
+// year-scoped). Missing key = open.
+const SYSTEM_PANEL_OPEN_SECTIONS_KEY = 'system-panel-open-sections';
+
+const readOpenSections = () => {
+  const saved = storage.getJSON(SYSTEM_PANEL_OPEN_SECTIONS_KEY, {});
+  return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+};
+
+function CollapsibleCard({ id, title, style, children }) {
+  const [open, setOpen] = useState(() => readOpenSections()[id] !== false);
+  const [hov, setHov] = useState(false);
+
+  const toggle = () => {
+    setOpen((v) => {
+      const next = !v;
+      storage.setJSON(SYSTEM_PANEL_OPEN_SECTIONS_KEY, {
+        ...readOpenSections(),
+        [id]: next,
+      });
+      return next;
+    });
+  };
+
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-      fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
-      textTransform: 'uppercase', color: 'var(--brand-ink)',
-      paddingBottom: 9, borderBottom: '1px solid var(--brand-bd)',
-      marginBottom: 11,
-      fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
-    }}>
-      <span>{children}</span>
-      {action}
+    <div style={{ ...BENTO_CARD, ...style }}>
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        onMouseEnter={() => setHov(true)}
+        onMouseLeave={() => setHov(false)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+          width: 'calc(100% + 32px)', padding: '15px 16px', background: hov ? 'var(--brand-hover-bg)' : 'none',
+          border: 'none', borderRadius: open ? '11px 11px 0 0' : 11,
+          cursor: 'pointer', textAlign: 'left',
+          fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
+          textTransform: 'uppercase', color: hov ? 'var(--brand-deep)' : 'var(--brand-ink)',
+          margin: '-15px -16px',
+          paddingBottom: open ? 9 : 15,
+          borderBottom: open ? '1px solid var(--brand-bd)' : '1px solid transparent',
+          marginBottom: open ? 11 : -15,
+          fontFamily: "'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace",
+          transition: 'margin-bottom 0.15s, padding-bottom 0.15s, background 0.15s, color 0.15s',
+        }}
+      >
+        <span>{title}</span>
+        <svg
+          width="9" height="9" viewBox="0 0 10 10" fill="none"
+          style={{
+            flexShrink: 0,
+            transform: open ? 'rotate(0deg)' : 'rotate(-90deg)',
+            transition: 'transform 0.15s',
+          }}
+        >
+          <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && children}
     </div>
   );
 }
@@ -340,7 +391,6 @@ function InsertSection() {
   const [taskCount, setTaskCount] = useState('');
   const [labelCount, setLabelCount] = useState('');
   const [weekCount, setWeekCount] = useState('');
-  const [dupFlash, flashDup] = useConfirmFlash();
   const [hasSelection, setHasSelection] = useState(false);
 
   useEffect(() => {
@@ -360,8 +410,7 @@ function InsertSection() {
   };
 
   return (
-    <div style={BENTO_CARD}>
-      <SectionLabel action={<PanelLockButton size="sm" />}>Insert</SectionLabel>
+    <CollapsibleCard id="insert" title="Insert">
 
       {/* Insert task rows — row-dependent */}
       <div style={{
@@ -447,25 +496,10 @@ function InsertSection() {
         }
         label="Remove week"
         onClick={() => dispatchSystemAction('removeWeek')}
-        style={{ marginBottom: 8 }}
-      />
-
-      {/* Duplicate rows — row-dependent */}
-      <ActionBtn
-        icon={
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-            <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
-            <rect x="7" y="7" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
-            <path d="M4 4h2v2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" opacity="0.4"/>
-          </svg>
-        }
-        label="Duplicate rows"
-        disabled={!hasSelection}
-        onClick={() => { dispatchSystemAction('duplicateRow'); flashDup(); }}
-        rightSlot={<CheckBadge visible={dupFlash} />}
         style={{ marginBottom: 0 }}
       />
-    </div>
+
+    </CollapsibleCard>
   );
 }
 
@@ -482,7 +516,7 @@ const readSavedSortStatuses = () => {
   return map;
 };
 
-function SortSection() {
+function ArrangeSection() {
   const sortStatuses = useStatuses(); // active, in panel order
   const [inboxOpen, setInboxOpen] = useState(false);
   const [checked, setChecked] = useState(readSavedSortStatuses);
@@ -491,14 +525,24 @@ function SortSection() {
   // enabled state is derived on the System page and carried on the
   // selection broadcast, same as the Group Selection By card.
   const [moveState, setMoveState] = useState({ hasSelection: false, enabled: false });
+  const [groupState, setGroupState] = useState({ hasSelection: false, groupBy: null });
   useEffect(() => {
-    const handler = (e) => setMoveState({
-      hasSelection: e.detail?.hasSelection ?? false,
-      enabled: e.detail?.moveToPlanner?.enabled ?? false,
-    });
+    const handler = (e) => {
+      setMoveState({
+        hasSelection: e.detail?.hasSelection ?? false,
+        enabled: e.detail?.moveToPlanner?.enabled ?? false,
+      });
+      setGroupState({
+        hasSelection: e.detail?.hasSelection ?? false,
+        groupBy: e.detail?.groupBy ?? null,
+      });
+    };
     window.addEventListener(SYSTEM_PANEL_SELECTION_EVENT, handler);
     return () => window.removeEventListener(SYSTEM_PANEL_SELECTION_EVENT, handler);
   }, []);
+
+  const groupEnabled = (groupState.hasSelection && groupState.groupBy?.enabled) || {};
+  const groupNotice = groupState.hasSelection ? groupState.groupBy?.hint || null : null;
 
   // Only count statuses that still exist (a remembered selection may
   // reference a status that has since been deleted in the Status Manager).
@@ -521,8 +565,7 @@ function SortSection() {
   };
 
   return (
-    <div style={BENTO_CARD}>
-      <SectionLabel>Sort</SectionLabel>
+    <CollapsibleCard id="arrange" title="Arrange">
 
       <div style={{
         border: `1px solid ${C.border}`, borderRadius: 10,
@@ -535,7 +578,7 @@ function SortSection() {
               <path d="M1 3h11M3 6.5h7M5 10h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
             </svg>
           }
-          label="Move from Inbox to Planner"
+          label="Move Statuses to Planner"
           expanded={inboxOpen}
           onToggle={() => setInboxOpen(v => !v)}
         />
@@ -554,9 +597,7 @@ function SortSection() {
               ))}
             </div>
             <div style={{ marginTop: 10 }}>
-              {/* Relabelled from "Sort" — nothing sorts, rows are moved
-                  (interim wording per brief, may be refined later) */}
-              <FilterActionBtn label="Move statuses to Planner" onClick={handleSort} disabled={!anyChecked} />
+              <FilterActionBtn label="Move" onClick={handleSort} disabled={!anyChecked} />
             </div>
           </div>
         )}
@@ -565,11 +606,6 @@ function SortSection() {
       {/* Move selection to Planner — the by-hand counterpart to the
           by-status card above. Greyed, never hidden, when there is no
           movable selection. */}
-      {!moveState.enabled && (
-        <div style={{ marginTop: 8 }}>
-          <GroupNotice>Select rows to move</GroupNotice>
-        </div>
-      )}
       <ActionBtn
         icon={
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -580,16 +616,57 @@ function SortSection() {
         label="Move selection to Planner"
         disabled={!moveState.enabled}
         onClick={() => dispatchSystemAction('moveSelectionToPlanner')}
-        style={{ marginBottom: 0, marginTop: moveState.enabled ? 8 : 0 }}
+        style={{ marginBottom: 8, marginTop: 8 }}
       />
-    </div>
+
+      {/* Group Selection By — merged into this card (design cleanup,
+          2026-09-26). Logic in utils/planner/groupSelection.js; the card
+          only mirrors state broadcast by ProjectTimePlannerV2. */}
+      {groupNotice && <GroupNotice>{groupNotice}</GroupNotice>}
+      {GROUP_PANEL_OPTIONS.map(({ field, icon }, i) => (
+        <ActionBtn
+          key={field}
+          icon={icon}
+          label={`Group Selection by ${GROUP_FIELD_LABELS[field]}`}
+          disabled={!groupEnabled[field]}
+          onClick={() => dispatchSystemAction('groupSelection', { field })}
+          style={i === GROUP_PANEL_OPTIONS.length - 1 ? { marginBottom: 0 } : undefined}
+        />
+      ))}
+    </CollapsibleCard>
   );
 }
 
 function StatusesSection({ onOpenStatuses }) {
+  const { currentYear } = useYear();
+
+  // Row-visibility toggles (formerly the Appearance card). Initialise from
+  // the in-memory cache for instant rendering on panel open; saves flow
+  // through the same planner-settings-update event ProjectTimePlannerV2
+  // already listens to.
+  const cached = () => peekPlannerCache(currentYear).plannerSettings;
+  const [showRecurring,    setShowRecurring]    = useState(() => { const r = cached(); return r ? r.show_recurring    !== false : true; });
+  const [showSubprojects,  setShowSubprojects]  = useState(() => { const r = cached(); return r ? r.show_subprojects  !== false : true; });
+  const [showMinMax,       setShowMinMax]       = useState(() => { const r = cached(); return r ? r.show_max_min_rows !== false : true; });
+
+  // Async refresh in case the cache was empty or stale
+  useEffect(() => {
+    readShowRecurring(undefined, currentYear).then(v   => setShowRecurring(v));
+    readShowSubprojects(undefined, currentYear).then(v => setShowSubprojects(v));
+    readShowMaxMinRows(undefined, currentYear).then(v  => setShowMinMax(v));
+  }, [currentYear]);
+
+  const dispatchUpdate = (patch) => {
+    window.dispatchEvent(new CustomEvent(PLANNER_SETTINGS_UPDATE_EVENT, {
+      detail: { ...patch, __eventYear: currentYear },
+    }));
+  };
+
+  const rowStyle  = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 };
+  const labelStyle = { fontFamily: FONT, fontSize: 13, color: C.textDim };
+
   return (
-    <div style={BENTO_CARD}>
-      <SectionLabel>Statuses</SectionLabel>
+    <CollapsibleCard id="manage" title="Manage">
       <ActionBtn
         icon={
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -599,9 +676,21 @@ function StatusesSection({ onOpenStatuses }) {
         }
         label="Manage statuses"
         onClick={onOpenStatuses}
-        style={{ marginBottom: 0 }}
+        style={{ marginBottom: 10 }}
       />
-    </div>
+      <div style={rowStyle}>
+        <span style={labelStyle}>Show recurring</span>
+        <Toggle checked={showRecurring} onChange={val => { setShowRecurring(val); dispatchUpdate({ showRecurring: val }); }} />
+      </div>
+      <div style={rowStyle}>
+        <span style={labelStyle}>Show subprojects</span>
+        <Toggle checked={showSubprojects} onChange={val => { setShowSubprojects(val); dispatchUpdate({ showSubprojects: val }); }} />
+      </div>
+      <div style={{ ...rowStyle, marginBottom: 0 }}>
+        <span style={labelStyle}>Show max/min hours</span>
+        <Toggle checked={showMinMax} onChange={val => { setShowMinMax(val); dispatchUpdate({ showMaxMinRows: val }); }} />
+      </div>
+    </CollapsibleCard>
   );
 }
 
@@ -618,35 +707,6 @@ const GROUP_PANEL_OPTIONS = [
   { field: 'subproject', icon: <CornerDownRight {...GROUP_PANEL_ICON} /> },
   { field: 'status', icon: <CheckCircle {...GROUP_PANEL_ICON} /> },
 ];
-
-// AB ghost row (13px), per the bundle — deliberately lighter than ActionBtn.
-function GroupOptionRow({ icon, label, disabled, onClick }) {
-  const [hov, setHov] = useState(false);
-  const active = hov && !disabled;
-  return (
-    <button
-      type="button"
-      onClick={disabled ? undefined : onClick}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 9,
-        width: '100%', padding: '9px 11px', marginBottom: 4,
-        background: active ? 'var(--brand-hover-bg)' : 'transparent',
-        border: `1px solid ${active ? 'var(--brand-hover-bd)' : 'transparent'}`,
-        borderRadius: 8, textAlign: 'left',
-        fontFamily: FONT, fontSize: 13, fontWeight: 400,
-        color: disabled ? '#9E9E9E' : active ? 'var(--brand-deep)' : '#616161',
-        opacity: disabled ? 0.42 : 1,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        transition: 'border-color 0.15s, color 0.15s, background 0.15s',
-      }}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-}
 
 // Grey notice block ("Select rows to group" / blocking hint) — grey out,
 // never hide (design decision).
@@ -667,47 +727,13 @@ function GroupNotice({ children }) {
   );
 }
 
-function GroupSection() {
-  const [selection, setSelection] = useState({ hasSelection: false, groupBy: null });
-
-  useEffect(() => {
-    const handler = (e) => setSelection({
-      hasSelection: e.detail?.hasSelection ?? false,
-      groupBy: e.detail?.groupBy ?? null,
-    });
-    window.addEventListener(SYSTEM_PANEL_SELECTION_EVENT, handler);
-    return () => window.removeEventListener(SYSTEM_PANEL_SELECTION_EVENT, handler);
-  }, []);
-
-  const { hasSelection, groupBy } = selection;
-  const enabled = (hasSelection && groupBy?.enabled) || {};
-  const notice = !hasSelection ? 'Select rows to group' : groupBy?.hint || null;
-
-  return (
-    <div style={BENTO_CARD}>
-      <SectionLabel>Group Selection By</SectionLabel>
-      {notice && <GroupNotice>{notice}</GroupNotice>}
-      {GROUP_PANEL_OPTIONS.map(({ field, icon }) => (
-        <GroupOptionRow
-          key={field}
-          icon={icon}
-          label={GROUP_FIELD_LABELS[field]}
-          disabled={!enabled[field]}
-          onClick={() => dispatchSystemAction('groupSelection', { field })}
-        />
-      ))}
-    </div>
-  );
-}
-
 function ArchiveSection() {
   const [archiveFlash, flashArchive] = useConfirmFlash();
   const [hideFlash, flashHide] = useConfirmFlash();
   const [showPrevFlash, flashShowPrev] = useConfirmFlash();
 
   return (
-    <div style={BENTO_CARD}>
-      <SectionLabel>Archive</SectionLabel>
+    <CollapsibleCard id="archive" title="Archive">
 
       <ActionBtn
         icon={
@@ -746,7 +772,7 @@ function ArchiveSection() {
         rightSlot={<CheckBadge visible={showPrevFlash} />}
         style={{ marginBottom: 0 }}
       />
-    </div>
+    </CollapsibleCard>
   );
 }
 
@@ -806,8 +832,7 @@ function PlanSection() {
   const [goalOpen, setGoalOpen] = useState(false);
 
   return (
-    <div style={BENTO_CARD}>
-      <SectionLabel>Plan</SectionLabel>
+    <CollapsibleCard id="plan" title="Plan">
 
       {/* Filter by day */}
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden', marginBottom: 8 }}>
@@ -908,7 +933,7 @@ function PlanSection() {
           </div>
         )}
       </div>
-    </div>
+    </CollapsibleCard>
   );
 }
 
@@ -950,8 +975,7 @@ function ButtonPair({ left, right }) {
 
 function PageSection() {
   return (
-    <div style={{ ...BENTO_CARD, margin: '11px 11px 11px' }}>
-      <SectionLabel>Page</SectionLabel>
+    <CollapsibleCard id="page" title="Page" style={{ margin: '11px 11px 11px' }}>
 
       <ButtonPair
         left={{
@@ -975,58 +999,11 @@ function PageSection() {
           onClick: () => dispatchSystemAction('redo'),
         }}
       />
-    </div>
+    </CollapsibleCard>
   );
 }
 
 
-// ─── Appearance (moved from the gear menu's "System page settings") ──────────
-// Row-visibility toggles for the System page. Saves flow through the same
-// planner-settings-update event ProjectTimePlannerV2 already listens to.
-
-function AppearanceSection() {
-  const { currentYear } = useYear();
-
-  // Initialise from in-memory cache for instant rendering on panel open
-  const cached = () => peekPlannerCache(currentYear).plannerSettings;
-  const [showRecurring,    setShowRecurring]    = useState(() => { const r = cached(); return r ? r.show_recurring    !== false : true; });
-  const [showSubprojects,  setShowSubprojects]  = useState(() => { const r = cached(); return r ? r.show_subprojects  !== false : true; });
-  const [showMinMax,       setShowMinMax]       = useState(() => { const r = cached(); return r ? r.show_max_min_rows !== false : true; });
-
-  // Async refresh in case the cache was empty or stale
-  useEffect(() => {
-    readShowRecurring(undefined, currentYear).then(v   => setShowRecurring(v));
-    readShowSubprojects(undefined, currentYear).then(v => setShowSubprojects(v));
-    readShowMaxMinRows(undefined, currentYear).then(v  => setShowMinMax(v));
-  }, [currentYear]);
-
-  const dispatchUpdate = (patch) => {
-    window.dispatchEvent(new CustomEvent(PLANNER_SETTINGS_UPDATE_EVENT, {
-      detail: { ...patch, __eventYear: currentYear },
-    }));
-  };
-
-  const rowStyle  = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 };
-  const labelStyle = { fontFamily: FONT, fontSize: 13, color: C.textDim };
-
-  return (
-    <div style={BENTO_CARD}>
-      <SectionLabel>Appearance</SectionLabel>
-      <div style={rowStyle}>
-        <span style={labelStyle}>Show recurring</span>
-        <Toggle checked={showRecurring} onChange={val => { setShowRecurring(val); dispatchUpdate({ showRecurring: val }); }} />
-      </div>
-      <div style={rowStyle}>
-        <span style={labelStyle}>Show subprojects</span>
-        <Toggle checked={showSubprojects} onChange={val => { setShowSubprojects(val); dispatchUpdate({ showSubprojects: val }); }} />
-      </div>
-      <div style={{ ...rowStyle, marginBottom: 0 }}>
-        <span style={labelStyle}>Show max/min hours</span>
-        <Toggle checked={showMinMax} onChange={val => { setShowMinMax(val); dispatchUpdate({ showMaxMinRows: val }); }} />
-      </div>
-    </div>
-  );
-}
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
@@ -1139,13 +1116,15 @@ export default function SystemPanel() {
               className="no-scrollbar"
               style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingTop: 20, paddingBottom: 24 }}
             >
+              {/* Panel lock sits above the bento cards, not inside Insert */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 11px', marginBottom: 7 }}>
+                <PanelLockButton size="sm" />
+              </div>
               <InsertSection />
-              <SortSection />
-              <GroupSection />
-              <StatusesSection onOpenStatuses={() => { closePanel(); setStatusesOpen(true); }} />
+              <ArrangeSection />
               <ArchiveSection />
               <PlanSection />
-              <AppearanceSection />
+              <StatusesSection onOpenStatuses={() => { closePanel(); setStatusesOpen(true); }} />
             </div>
             <div style={{ flexShrink: 0, borderTop: '1px solid var(--brand-bd)' }}>
               <PageSection />
