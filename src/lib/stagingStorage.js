@@ -335,18 +335,129 @@ function dispatchStagingEvent(payload, yearNumber) {
 
 // --- public read API ---------------------------------------------------
 
+// Stale-while-revalidate for the staging cache (2026-09-26, "newly added
+// subprojects disappearing"). The cache used to be served forever: a browser
+// whose localStorage mirror predated a change made on another device NEVER
+// saw it (the web has no realtime subscription on `projects`, unlike the
+// mobile app), so subprojects added elsewhere were missing from the System
+// dropdowns — and a Goal-page autosave hydrated from that stale cache wrote
+// the old plan_table_entries back over the DB, deleting them for real.
+// Cache hits now kick off a throttled background re-fetch; when the server
+// state differs from the cache, the cache is refreshed and the staging
+// event fires so open consumers (useProjectsData etc.) re-render.
+const REVALIDATE_MIN_INTERVAL_MS = 10_000;
+const _lastRevalidateAt = new Map(); // yearNumber -> timestamp
+
+function scheduleStagingRevalidate(yearNumber) {
+  if (yearNumber == null || typeof window === 'undefined') return;
+  const now = Date.now();
+  if (now - (_lastRevalidateAt.get(yearNumber) || 0) < REVALIDATE_MIN_INTERVAL_MS) return;
+  _lastRevalidateAt.set(yearNumber, now);
+  // Serialise on the save queue so a revalidate can never interleave with a
+  // diff-save's read-diff-write cycle (it would otherwise race the save and
+  // could stamp pre-save server state back into the cache).
+  const run = async () => {
+    try {
+      const cacheKey = stagingKey(yearNumber);
+      const before = getCached(CACHE_NS, cacheKey);
+      // recordIds: false — known-project ids must only ever reflect state a
+      // tab has actually loaded into a page. Marking background-fetched rows
+      // as "seen" would let a Goal-page save DELETE rows its in-memory state
+      // never contained.
+      const result = await fetchStagingStateFromServer(yearNumber, { recordIds: false });
+      if (!result) return;
+      const after = getCached(CACHE_NS, cacheKey);
+      if (before && after && stableStringify(before) === stableStringify(after)) return;
+      dispatchStagingEvent({ shortlist: result.shortlist, archived: result.archived }, yearNumber);
+    } catch (error) {
+      console.error('Staging revalidate failed', error);
+    }
+  };
+  _stagingSaveQueue = _stagingSaveQueue.then(run, run);
+}
+
+// The long-open-tab case: nothing above fires while a tab sits idle on the
+// System page for days. Revalidate every year loaded this session whenever
+// the tab regains visibility.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    for (const yearNumber of _knownProjectIds.keys()) {
+      scheduleStagingRevalidate(yearNumber);
+    }
+  });
+}
+
+/**
+ * Fetch a year's rows straight from Supabase, refresh the cache, and return
+ * the deserialised `{ shortlist, archived }` (empty arrays when the year
+ * doesn't exist). Shared by loadStagingState (cache miss / fresh) and the
+ * background revalidate.
+ */
+async function fetchStagingStateFromServer(yearNumber, { recordIds = true } = {}) {
+  const userId = await requireUserId();
+  const cacheKey = stagingKey(yearNumber);
+  const yearId = await findYearId(userId, yearNumber);
+  if (!yearId) {
+    const empty = { shortlist: [], archived: [] };
+    setCached(CACHE_NS, cacheKey, empty);
+    if (recordIds) recordKnownIds(yearNumber, []);
+    return empty;
+  }
+
+  const { data, error } = await supabase
+    .from('projects')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('year_id', yearId)
+    .order('display_order', { ascending: true });
+  if (error) throw error;
+
+  const rows = data ?? [];
+  const shortlist = [];
+  const archived = [];
+  for (const row of rows) {
+    const item = dbRowToItem(row);
+    if (row.is_archived) {
+      archived.push(item);
+    } else {
+      shortlist.push(item);
+    }
+  }
+  // Cache the SERIALISED form (same as saveStagingState). Caching the live
+  // deserialised rows looked fine in memory, but storageCache mirrors every
+  // setCached to localStorage via JSON.stringify, which strips the
+  // non-enumerable __rowType/__sectionType metadata — on the next page load
+  // the rehydrated cache had untagged plain-array rows, extractProjectsData
+  // found no subprojects, and the System page reconcile wiped task-row
+  // subproject labels (2026-09-08 incident).
+  setCached(CACHE_NS, cacheKey, {
+    shortlist: shortlist.map(serializeItemForCache),
+    archived: archived.map(serializeItemForCache),
+  });
+  if (recordIds) recordKnownIds(yearNumber, rows.map((r) => r.id));
+  recordSystemOrders(yearNumber, rows);
+  return { shortlist, archived };
+}
+
 /**
  * Load the shortlist + archived items for a year.
  * Returns `{ shortlist: [], archived: [] }` when there's no data.
  *
+ * Pass `{ fresh: true }` to bypass the cache and read straight from
+ * Supabase — the Goal page's writer hook (useShortlistState) does this so
+ * a full-state autosave can never be built on a stale cache and clobber
+ * changes made on another device.
+ *
  * @param {number} yearNumber
+ * @param {{ fresh?: boolean }} [options]
  * @returns {Promise<{ shortlist: object[], archived: object[] }>}
  */
-export async function loadStagingState(yearNumber) {
+export async function loadStagingState(yearNumber, { fresh = false } = {}) {
   try {
-    const userId = await requireUserId();
+    await requireUserId();
     const cacheKey = stagingKey(yearNumber);
-    if (hasCached(CACHE_NS, cacheKey)) {
+    if (!fresh && hasCached(CACHE_NS, cacheKey)) {
       const cached = getCached(CACHE_NS, cacheKey);
       if (isCachedFormatValid(cached)) {
         // Cache entries are in the serialised { cells, _rowType, … } form —
@@ -356,6 +467,8 @@ export async function loadStagingState(yearNumber) {
         recordKnownIds(yearNumber, [
           ...(cached.shortlist ?? []), ...(cached.archived ?? []),
         ].map((item) => item?.id).filter(Boolean));
+        // Serve the cache now, check the server in the background.
+        scheduleStagingRevalidate(yearNumber);
         return {
           shortlist: (cached.shortlist ?? []).map(deserializeItemFromCache),
           archived: (cached.archived ?? []).map(deserializeItemFromCache),
@@ -370,48 +483,7 @@ export async function loadStagingState(yearNumber) {
       invalidate(CACHE_NS, cacheKey);
     }
 
-    const yearId = await findYearId(userId, yearNumber);
-    if (!yearId) {
-      const empty = { shortlist: [], archived: [] };
-      setCached(CACHE_NS, cacheKey, empty);
-      recordKnownIds(yearNumber, []);
-      return empty;
-    }
-
-    const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('year_id', yearId)
-      .order('display_order', { ascending: true });
-    if (error) throw error;
-
-    const rows = data ?? [];
-    const shortlist = [];
-    const archived = [];
-    for (const row of rows) {
-      const item = dbRowToItem(row);
-      if (row.is_archived) {
-        archived.push(item);
-      } else {
-        shortlist.push(item);
-      }
-    }
-    const result = { shortlist, archived };
-    // Cache the SERIALISED form (same as saveStagingState). Caching the live
-    // deserialised rows looked fine in memory, but storageCache mirrors every
-    // setCached to localStorage via JSON.stringify, which strips the
-    // non-enumerable __rowType/__sectionType metadata — on the next page load
-    // the rehydrated cache had untagged plain-array rows, extractProjectsData
-    // found no subprojects, and the System page reconcile wiped task-row
-    // subproject labels (2026-09-08 incident).
-    setCached(CACHE_NS, cacheKey, {
-      shortlist: shortlist.map(serializeItemForCache),
-      archived: archived.map(serializeItemForCache),
-    });
-    recordKnownIds(yearNumber, rows.map((r) => r.id));
-    recordSystemOrders(yearNumber, rows);
-    return result;
+    return await fetchStagingStateFromServer(yearNumber);
   } catch (error) {
     console.error('Failed to read staging shortlist', error);
     return { shortlist: [], archived: [] };

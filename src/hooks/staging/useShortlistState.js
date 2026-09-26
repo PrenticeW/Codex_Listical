@@ -243,7 +243,15 @@ export default function useShortlistState({ currentYear, executeCommand, isCurre
     let cancelled = false;
     setHasInitialLoaded(false);
     (async () => {
-      const data = await loadStagingState(currentYear);
+      // fresh: true — this hook is the WRITER: its debounced autosave
+      // persists the whole {shortlist, archived} state, so hydrating from a
+      // stale cache (e.g. another device added a subproject since this
+      // browser last fetched) would write the old plan_table_entries back
+      // over the DB and delete those changes for real. Always hydrate the
+      // writer straight from the server (2026-09-26 "newly added
+      // subprojects disappearing" fix, part 2 — part 1 is the
+      // stale-while-revalidate in stagingStorage.js).
+      const data = await loadStagingState(currentYear, { fresh: true });
       if (!cancelled) {
         const loadedShortlist = ensureSectionSpacerRows(normalizeLegacySeedText(
           Array.isArray(data?.shortlist) ? data.shortlist : []
