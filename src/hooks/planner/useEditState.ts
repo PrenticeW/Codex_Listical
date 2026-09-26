@@ -3,7 +3,7 @@ import type { UseEditStateReturn, CellReference, PlannerRow, Command } from '../
 import { parseEstimateLabelToMinutes, formatMinutesToHHmm, ESTIMATE_VALUES } from '../../constants/planner/rowTypes';
 import { forEachDayColumn, isDayColumn, getDayIndexFromColumnId } from '../../utils/planner/dayColumnHelpers';
 import { writeTaskEvent } from '../../utils/planner/storage';
-import { MULTI_STATUS_KEY_RE, deriveMultiRowStatus, multiStatusKey } from '../../utils/planner/multiStatus';
+import { MULTI_STATUS_KEY_RE, deriveMultiRowStatus, multiStatusKey, getMultiInstances } from '../../utils/planner/multiStatus';
 import { TASK_ROW_DETAIL_UPDATE_EVENT, TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
 import { isRecurringValue } from '../../utils/planner/valueNormalizers';
 
@@ -36,6 +36,46 @@ function getScheduleOnTimeUpdates(
   if (!row || !isDayColumn(columnId)) return null;
   if ((newValue ?? '').toString().trim() === '') return null;
   const oldStatus = row.status || '';
+
+  // Single→multi transition (2026-09-26 "adding a second entry resets the
+  // existing status"): when this edit gives the row a second scheduled
+  // instance and no per-instance statuses exist yet, seed them — the
+  // pre-existing instance(s) inherit the row's current status, the newly
+  // added date starts 'Scheduled'. Without this, the aggregate derives from
+  // unset keys (all defaulting to 'Scheduled') and a manual status like
+  // In Progress / Done on the original entry is lost. Runs before the
+  // KEEP_ON_TIME_ADDED early-outs so Done / Accounted rows keep their
+  // finished instance too.
+  {
+    const dayIndex = getDayIndexFromColumnId(columnId);
+    if (dayIndex !== null) {
+      const nextRow = { ...row, [columnId]: newValue } as PlannerRow;
+      const instances = getMultiInstances(nextRow, totalDays);
+      const hasExistingKeys = instances.some(
+        (inst) => inst.dayIndex !== dayIndex && (row as any)[multiStatusKey(inst.dayIndex)],
+      );
+      if (instances.length > 1 && !hasExistingKeys) {
+        // Statuses worth carrying onto the pre-existing instance: anything
+        // except the auto-assigned placeholders.
+        const inherit = (oldStatus && oldStatus !== '-' && oldStatus !== 'Not Scheduled')
+          ? oldStatus
+          : 'Scheduled';
+        const execute: Record<string, unknown> = {};
+        const undo: Record<string, unknown> = {};
+        for (const inst of instances) {
+          const key = multiStatusKey(inst.dayIndex);
+          execute[key] = inst.dayIndex === dayIndex ? 'Scheduled' : inherit;
+          undo[key] = (row as any)[key];
+        }
+        const newStatus = deriveMultiRowStatus(
+          { ...nextRow, ...execute } as PlannerRow, totalDays,
+        ) ?? oldStatus;
+        execute.status = newStatus;
+        undo.status = oldStatus;
+        return { execute, undo };
+      }
+    }
+  }
 
   if (row.estimate === 'Multi') {
     const dayIndex = getDayIndexFromColumnId(columnId);

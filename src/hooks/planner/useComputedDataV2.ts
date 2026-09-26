@@ -17,7 +17,7 @@ import { getEstimateWithHabitCheck } from './useHabitPatternDetection';
 import { assignParentGroupIds } from './useParentGroupAssignment';
 import { writeTaskEvent } from '../../utils/planner/storage';
 import { TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
-import { MULTI_STATUS_KEY_RE, isScheduledDayValue, deriveMultiRowStatus } from '../../utils/planner/multiStatus';
+import { MULTI_STATUS_KEY_RE, isScheduledDayValue, deriveMultiRowStatus, getMultiInstances, multiStatusKey } from '../../utils/planner/multiStatus';
 import { KEEP_ON_TIME_ADDED } from './useEditState';
 import { isRecurringValue } from '../../utils/planner/valueNormalizers';
 
@@ -81,11 +81,45 @@ export default function useComputedDataV2({
         }
       }
 
+      // Single→multi transition safety net (2026-09-26 "adding a second
+      // entry resets the existing status"): edits through useEditState seed
+      // per-instance statuses at the moment the second entry is typed, but
+      // paste / drag-fill paths bypass it. When a row now has ≥2 scheduled
+      // instances, NO per-instance keys yet, a manual row status, and the
+      // previous render's filled-days snapshot identifies which day(s)
+      // existed before, seed the pre-existing instance(s) with that status
+      // so the aggregate below derives from it instead of resetting
+      // everything to 'Scheduled'.
+      let seededMultiKeys: Record<string, string> | null = null;
+      {
+        const isManual = row.status && row.status !== '-'
+          && row.status !== 'Not Scheduled' && row.status !== 'Scheduled';
+        const hasLiveKeys = Object.keys(row).some(
+          (key) => MULTI_STATUS_KEY_RE.test(key) && !staleMultiKeys.includes(key),
+        );
+        const prevKey = row.id ? prevFilledDays.get(row.id) : undefined;
+        if (isManual && !hasLiveKeys && prevKey !== undefined) {
+          const instances = getMultiInstances(row, totalDays);
+          if (instances.length > 1) {
+            const prevSet = new Set(prevKey === '' ? [] : prevKey.split(',').map(Number));
+            const preExisting = instances.filter((inst) => prevSet.has(inst.dayIndex));
+            // Only a genuine transition: some instances are old, some new.
+            if (preExisting.length > 0 && preExisting.length < instances.length) {
+              seededMultiKeys = {};
+              for (const inst of preExisting) {
+                seededMultiKeys[multiStatusKey(inst.dayIndex)] = row.status as string;
+              }
+            }
+          }
+        }
+      }
+      const rowForAggregate = seededMultiKeys ? { ...row, ...seededMultiKeys } : row;
+
       // Aggregate status for Multi rows, derived from per-instance statuses
       // (first non-terminal instance, else the last). The multi dropdown owns
       // per-date statuses, so the manual/auto logic below is skipped for
       // these rows. Null when the row has < 2 scheduled instances.
-      const multiAggregateStatus = deriveMultiRowStatus(row, totalDays);
+      const multiAggregateStatus = deriveMultiRowStatus(rowForAggregate, totalDays);
 
       // Auto-update status based on task content and day columns
       let status = row.status;
@@ -162,6 +196,7 @@ export default function useComputedDataV2({
 
       const computedRow: PlannerRow = {
         ...row,
+        ...(seededMultiKeys ?? {}),
         estimate,
         timeValue,
         status,
@@ -210,7 +245,9 @@ export default function useComputedDataV2({
         row.timeValue !== computed.timeValue ||
         row._originalEstimate !== computed._originalEstimate ||
         // Stale multiStatus-<i> keys stripped in the compute step
-        Object.keys(row).some(key => MULTI_STATUS_KEY_RE.test(key) && !(key in computed))
+        Object.keys(row).some(key => MULTI_STATUS_KEY_RE.test(key) && !(key in computed)) ||
+        // multiStatus-<i> keys seeded at the single→multi transition
+        Object.keys(computed).some(key => MULTI_STATUS_KEY_RE.test(key) && !(key in row))
       );
     });
 
@@ -264,6 +301,15 @@ export default function useComputedDataV2({
           for (const key of Object.keys(updatedRow)) {
             if (MULTI_STATUS_KEY_RE.test(key) && !(key in computed)) {
               delete updatedRow[key];
+            }
+          }
+
+          // Copy over multiStatus-<i> keys the compute step seeded at the
+          // single→multi transition, so the inherited instance status
+          // persists to storage.
+          for (const key of Object.keys(computed)) {
+            if (MULTI_STATUS_KEY_RE.test(key) && !(key in row)) {
+              updatedRow[key] = (computed as any)[key];
             }
           }
 
