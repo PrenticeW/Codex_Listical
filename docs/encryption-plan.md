@@ -1,6 +1,16 @@
 # Encryption plan — application-level encryption of user content
 
-Status: **agreed, not yet implemented** (2026-09-30). Read alongside `docs/compliance.md`.
+Status: **Phase 1 live in production** (deployed 2026-09-30; branch `encryption` in both repos). Read alongside `docs/compliance.md`.
+
+## Progress log
+
+- **2026-09-30 — Phase 1 built and deployed.**
+  - `user_keys` table live (RLS enabled, no policies, client privileges revoked; service role only).
+  - `data-key` Edge Function deployed (v2) with `TACULAR_MASTER_KEY` secret set; master key also in the password manager. CORS gotcha found and fixed: the client sends `x-tacular-client` on every request, so Edge Function CORS `Access-Control-Allow-Headers` must include it (fixed in `data-key` and `_shared/cors.ts`; without it the browser kills `functions.invoke` at preflight and no request ever appears).
+  - Web: `src/lib/crypto.js` (WebCrypto AES-256-GCM, enc1 format, graceful plaintext fallback) + AuthContext key fetch on sign-in / clear on sign-out (memory + sessionStorage). 10-case vitest suite. Verified end to end in the browser: key fetched and cached, wrapped DEK row minted.
+  - Mobile (tacular-mobile, branch `encryption`): `lib/crypto.js` mirror using `react-native-quick-crypto` **>=1.0.0 only** (0.7.x truncates keys at the first NUL byte, GHSA-wrf3-fwx3-8jrv — never downgrade); DEK cached in memory + expo-secure-store; App.js key fetch/clear wired. Extra fallback: a build without the native module runs in plaintext mode, so the branch is safe to ship before a dev-client rebuild. npm + pod install done; **dev client rebuild still pending**.
+  - Note: the `data-key` function keeps its CORS headers inlined (matching `_shared/cors.ts`) so it deploys as a single bundle; keep the two in sync.
+- **Next session:** observe Phase 1 in prod for a few days, then Phase 2 (decrypt-on-read in all storage modules, both clients — a no-op on plaintext, so no mobile-release dependency). The mobile dev-client build with the crypto module must be shipped before ANY table flips to encrypt-on-write in Phase 3.
 
 ## Goal and honest claim
 
