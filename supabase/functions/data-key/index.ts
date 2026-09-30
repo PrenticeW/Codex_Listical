@@ -10,7 +10,14 @@
 // here as "no encryption today" — the app must keep working in plaintext.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+
+// Inlined (matches _shared/cors.ts) so the function deploys as a single
+// bundle from the dashboard/MCP as well as via the CLI.
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
 
 const te = new TextEncoder();
 
