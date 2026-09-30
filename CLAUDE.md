@@ -94,3 +94,4 @@ See `docs/year-flow.md` for the full spec. Key rule: only one draft year may exi
 - `docs/known-issues.md` — bug list, dead code, do-not-touch notes
 - `docs/compliance.md` — GDPR, age requirements, RLS rules
 - `docs/year-flow.md` — draft year lifecycle and archive flow
+- `docs/encryption-plan.md` — application-level encryption design and migration phases

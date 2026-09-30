@@ -3,6 +3,7 @@ import { setCurrentUserId, getCurrentUserId, clearUserKeys } from '../lib/storag
 import useAsyncHandler from '../hooks/common/useAsyncHandler';
 import { supabase } from '../lib/supabase';
 import { loadStatuses } from '../lib/statusesStorage';
+import { initDataKey, clearDataKey } from '../lib/crypto';
 
 /**
  * AuthContext
@@ -66,6 +67,10 @@ export function AuthProvider({ children }) {
           // Warm the statuses registry (chips/dropdowns/sorting read it
           // synchronously — docs/STATUS_MANAGER_SPEC.md). Fire and forget.
           loadStatuses();
+          // Fetch the per-user data key (docs/encryption-plan.md, Phase 1).
+          // Fire and forget: if the key service is down the app runs
+          // exactly as today, in plaintext.
+          initDataKey(currentSession.user.id);
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
@@ -92,6 +97,9 @@ export function AuthProvider({ children }) {
           setSession(currentSession);
           setIsAuthenticated(true);
           setCurrentUserId(currentSession.user.id);
+          // Fire-and-forget data-key fetch; no-op if already cached
+          // (docs/encryption-plan.md, Phase 1).
+          initDataKey(currentSession.user.id);
         } else {
           // Clean up user-scoped localStorage before dropping the user id,
           // so per-user data does not accumulate as orphans on shared devices.
@@ -100,6 +108,8 @@ export function AuthProvider({ children }) {
           if (previousUserId) {
             clearUserKeys(previousUserId);
           }
+          // Drop the cached data key on sign-out (docs/encryption-plan.md).
+          clearDataKey(previousUserId);
 
           setUser(null);
           setSession(null);
