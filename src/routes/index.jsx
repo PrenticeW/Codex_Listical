@@ -12,6 +12,7 @@ import StagingPageV2 from '../pages/StagingPageV2';
 import TacticsPage from '../pages/TacticsPage';
 import AccountSettingsPage from '../pages/AccountSettingsPage';
 import NotFoundPage from '../pages/NotFoundPage';
+import DataPolicyPage from '../pages/DataPolicyPage';
 
 /**
  * Application Routes Configuration
@@ -51,6 +52,11 @@ export const router = createBrowserRouter([
   {
     path: '/account-deleted',
     element: <AccountDeletedPage />,
+  },
+  // Fully public (readable signed in or out) — no PublicRoute wrapper.
+  {
+    path: '/data-policy',
+    element: <DataPolicyPage />,
   },
 
   // Protected routes (require authentication)

@@ -291,3 +291,86 @@
 .auth-rule { height: 1px; background: rgba(130,155,210,0.25); margin: 0 0 20px; }
 
 .auth-centered { text-align: center; }
+
+/* Data policy page — long-form text inside the auth card. Scoped under
+   .auth-policy so it can't affect the form pages. */
+.auth-policy { text-align: left; }
+.auth-policy h1 {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+  margin: 0 0 4px;
+  color: var(--ink);
+}
+.auth-policy-updated {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 22px;
+}
+.auth-policy h2 {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 14px;
+  margin: 26px 0 8px;
+  color: var(--ink);
+}
+.auth-policy p,
+.auth-policy li {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--ink-soft, var(--ink));
+  margin: 0 0 10px;
+}
+.auth-policy ul {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+.auth-policy li { margin-bottom: 6px; }
+.auth-policy a {
+  color: var(--brand-deep);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+/* Back button — compact variant of .auth-btn-secondary (applied together
+   with it in markup): auto width and tighter padding, everything else
+   (border, hover, type) inherited from the shared auth button style. */
+.auth-policy-back {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  margin-bottom: 18px;
+}
+
+/* Theme-neutral auth chrome — pre-auth pages always present the default
+   (blue) brand family, regardless of any per-account theme applied to
+   :root by applyThemeFamily(). Pinning the five theme *inputs* here means
+   every derived var (--brand-deep, --th-header-text, …) resolves against
+   these inside .auth-stage, matching the hard-coded blue grid stroke in
+   the stage's SVG background. Keep in sync with the :root defaults in
+   src/index.css. */
+.auth-stage {
+  --th-68: hsl(220, 62%, 68%);
+  --th-60: hsl(220, 62%, 60%);
+  --th-52: hsl(220, 62%, 52%);
+  --th-44: hsl(220, 62%, 44%);
+  --th-sel:      hsl(25, 78%, 52%);
+  --th-sel-base: hsl(25, 78%, 60%);
+
+  /* Derived vars are resolved where they're declared (:root), so pinning
+     the inputs above isn't enough — re-declare the derived brand roles
+     here so they resolve against the pinned steps. Formulas copied from
+     src/index.css; keep in sync. */
+  --brand:          var(--th-60);
+  --brand-deep:     var(--th-44);
+  --brand-tint:     color-mix(in srgb, var(--th-60) 12%, white);
+  --brand-ink:      color-mix(in srgb, var(--th-44) 78%, black);
+  --brand-bd:       color-mix(in srgb, var(--th-60) 18%, transparent);
+  --brand-hover-bg: color-mix(in srgb, var(--th-44) 6%, transparent);
+  --brand-hover-bd: color-mix(in srgb, var(--th-44) 22%, transparent);
+}

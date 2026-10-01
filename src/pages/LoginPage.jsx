@@ -144,7 +144,14 @@ export default function LoginPage() {
   return (
     <AuthShell
       eyebrow="Auth · Sign In"
-      footer={<AuthFooterText prompt="Don't have an account?" linkTo="/signup" linkLabel="Create an account" />}
+      footer={(
+        <>
+          <AuthFooterText prompt="Don't have an account?" linkTo="/signup" linkLabel="Create an account" />
+          <span className="auth-footer-tray-text" style={{ display: 'block', marginTop: 8 }}>
+            <AuthFooterText prompt="Read our" linkTo="/data-policy" linkLabel="Privacy & Data Policy" />
+          </span>
+        </>
+      )}
     >
       <AuthErrorBanner>{error}</AuthErrorBanner>
 
