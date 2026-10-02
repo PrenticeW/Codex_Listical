@@ -265,10 +265,9 @@ const ENCRYPT_WRITE_TABLES = new Set([
   'tactics_custom_projects', // flipped 2026-10-02 — web-only table
   'archived_weeks', // flipped 2026-10-02 — web-only; snapshot_enc sibling column
   'site_snapshots', // flipped 2026-10-02 — web-only; goal/plan/system_enc sibling columns
-  // 'projects', // DO NOT flip until the mobile build that decrypts
-  //             // plan_table_entries_enc is verified on the simulator and
-  //             // shipped, and enforce_min_client_build is bumped
-  //             // (docs/encryption-plan.md, projects prerequisites).
+  'projects', // flipped 2026-10-02 — 20261002 TestFlight build confirmed on
+  //          // the phone, enforce_min_client_build raised to '20261002'
+  //          // (migration 20261002000005); plan_table_entries → _enc sibling.
 ]);
 
 /** True when writes to `table` should encrypt (and a key is loaded). */

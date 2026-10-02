@@ -11,6 +11,11 @@ Status: **Phase 3 in progress — 6 of 9 tables flipped on web; remaining: proje
   - **DEPLOY PREREQUISITE: add `TACULAR_MASTER_KEY` to the Vercel project env vars (value from the password manager) before or with the next deploy.** Without it, plaintext accounts still export; an account with any enc1 data gets a clean 500 instead of a ciphertext export.
   - KNOWN GAP from the task_events flip is hereby closed (pending deploy + env var).
 
+- **2026-10-02 (evening, later) — TestFlight build CONFIRMED on the phone; gate opened.**
+  - Migration `20261002000005_raise_min_client_build_20261002.sql` applied to prod: `enforce_min_client_build` now requires `'20261002'`.
+  - `'projects'` uncommented in web ENCRYPT_WRITE_TABLES. Vitest 189/189.
+  - Remaining: web deploy (Prentice), then the live probe — edit one project tagline on web → phone renders it → planning_history.previous_data shows enc1 on the next project edit. Then planner_rows LAST.
+
 - **2026-10-02 (evening) — projects flip staged; waiting on the TestFlight build.**
   - Simulator check PASSED (app loads with crypto module, projects/subprojects/headers render). Along the way found and fixed an unrelated regression from the additive-day-funnels change: SystemScreen's dAnyFilterActive still tested `dWeekViewDayFilter !== null` after the filter became an array, so it was ALWAYS true and project headers followed the hidden toggle — flat list. Fixed to `.length > 0`.
   - CLIENT_BUILD bumped to '20261002' in BOTH repos (mobile lib/supabase.js, web src/lib/supabase.ts). TestFlight build submitted with the header fix + bump; NOT yet installed on the phone.
