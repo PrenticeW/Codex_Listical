@@ -1,6 +1,6 @@
 # Encryption plan — application-level encryption of user content
 
-Status: **Phase 3 in progress — chip_task_notes + task_events flipped to encrypt-on-write on web (built, awaiting deploy)**. Work now on `main` in both repos. Read alongside `docs/compliance.md`.
+Status: **Phase 3 in progress — 4 of 9 tables flipped on web: chip_task_notes, task_events, tactics_chips, tactics_custom_projects**. Work now on `main` in both repos. Read alongside `docs/compliance.md`.
 
 ## Progress log
 
@@ -12,8 +12,10 @@ Status: **Phase 3 in progress — chip_task_notes + task_events flipped to encry
   - Vitest: 181/181 passing (2 new flag tests). Supabase checked: user_keys has 1 wrapped DEK, zero enc1 values anywhere pre-flip.
   - Live-test finding: `chip_task_notes` is effectively DORMANT — a chip task row's synthetic `chip-task-` id is replaced by a UUID at first save, after which notes route to `planner_rows.notes` (TaskRowPanel passes `selectedTask.id`). The table only catches notes typed before the first save; its 1 row is from June. Flip kept (harmless, correct); live verification moved to task_events.
   - `task_events` flipped on web same day: mobile only INSERTS into task_events (outbox → sendTaskEventNow), never reads, so old mobile builds can neither show garbage nor break — their plaintext events coexist by design. Web write paths covered: `writeTaskEvent` (storage.js) and `restoreTaskEvents` (snapshotStorage.js re-encrypts the plaintext held in snapshots). Reads already decrypt since Phase 2.
+  - Later same day — tactics_chips + tactics_custom_projects flipped (both web-only; mobile has zero references). Write paths: tacticsStorage replace-the-layer save (display_label / label encrypted after row mapping, in-memory cache keeps plaintext payloads) and snapshotStorage restoreCustomProjects. Also fixed a MISSED chip_task_notes write path: snapshotStorage restoreChipNotes now encrypts too. Lesson for remaining tables: grep snapshotStorage for restore-side inserts on every flip.
+  - Remaining tables: projects (mobile READS — gated on simulator decrypt check + enforce_min_client_build bump; plan_table_entries needs its _enc sibling column), archived_weeks + site_snapshots (web-only, need _enc text columns for the jsonb fields), planning_history (trigger-written — becomes encrypted automatically once projects' values are enc1; verify, nothing to build), planner_rows LAST (diff/baseline/offline machinery).
   - KNOWN GAP until the export decryption lands: `api/export-data.ts` does not yet decrypt server-side, so exports will contain `enc1:` strings for encrypted task_events fields. Must be fixed before the pilot (plan § Knock-ons).
-  - Verify after deploy: change a status on web → new task_events row shows `enc1:` old/new values in SQL → Status History panel still renders plaintext. Mobile dev-client rebuild still pending (2026-10-02 red screen on the pre-crypto simulator build confirms current builds lack the native module); it gates the tables mobile READS (planner_rows, projects, tactics_*, chip note... n/a) — next candidates after task_events need that build.
+  - Verify after deploy: change a status on web → new task_events row shows `enc1:` old/new values in SQL → Status History panel still renders plaintext. Mobile dev-client rebuild DONE (built after Phase 2, includes the quick-crypto pods from Phase 1; the 2026-10-02 red screen was an older pre-crypto simulator binary). Remaining before flipping tables mobile reads (planner_rows, projects): a quick simulator check that the build decrypts, bump enforce_min_client_build, and ship each mobile-side flag flip as a normal app update.
 
 - **2026-10-02 — Pre-step + Phase 2 (decrypt-on-read) built.**
   - Backup tables `planner_rows_backup_20260719` and `planner_rows_ghost_backup_20260921` exported to `db-exports/` (625 + 30 rows, JSON) and dropped from Supabase.

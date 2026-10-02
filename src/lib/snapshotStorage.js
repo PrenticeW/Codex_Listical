@@ -562,14 +562,16 @@ async function restoreCustomProjects(customProjects, yearNumber) {
       .eq('is_sent', false);
     if (deleteError) throw deleteError;
     if (customProjects.length > 0) {
-      const rows = customProjects.map((cp) => ({
+      // Phase 3: snapshots hold plaintext; re-encrypt at the write boundary.
+      const enc = encryptWritesEnabled('tactics_custom_projects');
+      const rows = await Promise.all(customProjects.map(async (cp) => ({
         user_id: userId,
         year_id: yearId,
         is_sent: false,
         external_id: cp.id,
-        label: cp.label,
+        label: enc ? await encryptField(cp.label) : cp.label,
         color: cp.color,
-      }));
+      })));
       const { error: insertError } = await supabase
         .from('tactics_custom_projects')
         .insert(rows);
@@ -618,12 +620,14 @@ async function restoreChipNotes(chipNotes, yearNumber) {
 
     // Re-insert the captured notes (skip if empty — confirmed no notes at snapshot time).
     if (chipNotes.length > 0) {
-      const rows = chipNotes.map((n) => ({
+      // Phase 3: snapshots hold plaintext; re-encrypt at the write boundary.
+      const enc = encryptWritesEnabled('chip_task_notes');
+      const rows = await Promise.all(chipNotes.map(async (n) => ({
         user_id: userId,
         chip_id: n.chipId,
-        note: n.note,
+        note: enc ? await encryptField(n.note) : n.note,
         updated_at: new Date().toISOString(),
-      }));
+      })));
       const { error: insertError } = await supabase
         .from('chip_task_notes')
         .insert(rows);

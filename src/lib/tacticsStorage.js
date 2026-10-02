@@ -41,7 +41,7 @@
 
 import { supabase } from './supabase';
 import { getCached, hasCached, setCached, onSessionReset } from './storageCache';
-import { decryptRows } from './crypto';
+import { decryptRows, encryptField, encryptWritesEnabled } from './crypto';
 import { debounceSiteSnapshot } from './snapshotStorage';
 
 // --- cache namespacing -------------------------------------------------
@@ -700,12 +700,27 @@ async function writeChipsLayerInner({ userId, yearId, yearNumber, isSent, payloa
     if (r.error) throw r.error;
   }
 
-  const chipRows = projectChips
+  let chipRows = projectChips
     .filter((c) => c && typeof c.id === 'string')
     .map((c) => chipPayloadToRow(c, { userId, yearId, isSent, chipTimeOverrides }));
-  const customRows = customProjects
+  let customRows = customProjects
     .filter((c) => c && typeof c.id === 'string')
     .map((c) => customProjectPayloadToRow(c, { userId, yearId, isSent }));
+
+  // Phase 3: encrypt content fields at the write boundary (in-memory cache
+  // below stores the plaintext payloads, so app state is unaffected).
+  if (encryptWritesEnabled('tactics_chips')) {
+    chipRows = await Promise.all(chipRows.map(async (r) => ({
+      ...r,
+      display_label: await encryptField(r.display_label),
+    })));
+  }
+  if (encryptWritesEnabled('tactics_custom_projects')) {
+    customRows = await Promise.all(customRows.map(async (r) => ({
+      ...r,
+      label: await encryptField(r.label),
+    })));
+  }
 
   const insertOps = [];
   if (chipRows.length > 0) {
