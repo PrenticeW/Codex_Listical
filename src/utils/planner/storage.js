@@ -942,7 +942,15 @@ function plannerRowPayloadToDb({ row, userId, yearId, displayOrder }) {
     id: rowId,
     user_id: userId,
     year_id: yearId,
-    project_id: (typeof row.projectId === 'string' && row.projectId) ? row.projectId : null,
+    // Stable project id — but never for a plain task row whose project cell
+    // is empty: paths that clear the visible project (keyboard clear, paste
+    // of blanks) historically left projectId behind, and the mobile app's
+    // project_id fallback then kept showing the removed project
+    // (2026-10-02 incident). Structural rows (_rowType set) keep their id —
+    // they legitimately carry project_id with an empty __project.
+    project_id: (typeof row.projectId === 'string' && row.projectId &&
+      (row._rowType || (typeof row.project === 'string' && row.project.trim() && row.project !== '-')))
+      ? row.projectId : null,
     parent_row_id: null,
     row_kind: 'task',
     checkbox: row.checkbox === true || row.checkbox === 'true' || row.checkbox === 1 || row.checkbox === 'on',
@@ -1852,6 +1860,35 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
         const own = keyMap.get(d.id) ?? (isValidOrderKey(d.order_key) ? d.order_key : null);
         return { id: d.id, orderKey: own };
       });
+      // Structural-row self-heal (2026-10-02 incident): intent-gating keeps
+      // the server's key even when it is nonsense — the Inbox divider once
+      // carried a key that sorted it AFTER the whole archive block, so the
+      // mobile app (which trusts raw key order positionally) absorbed every
+      // inbox row into the last project section and stamped that project's
+      // id onto them. Structural rows (headers, section rows, the Inbox
+      // divider, archive chrome) are web-injected chrome, not user-dragged
+      // content, so cross-device drag intent never applies to them: when a
+      // structural row's kept key doesn't sort between its rendered
+      // neighbours' keys, drop it and let assignMissingKeys re-key it in
+      // place. Task rows are never touched here.
+      {
+        const valid = keyRows.map((r) => (isValidOrderKey(r.orderKey) ? r.orderKey : null));
+        for (let i = 0; i < keyRows.length; i += 1) {
+          if (valid[i] === null) continue;
+          const extra = desiredRows[i].day_entries?.__extra || {};
+          const structural = Boolean(extra._rowType || extra._isInboxRow || extra._isArchiveRow);
+          if (!structural) continue;
+          let p = i - 1;
+          while (p >= 0 && valid[p] === null) p -= 1;
+          let nx = i + 1;
+          while (nx < keyRows.length && valid[nx] === null) nx += 1;
+          const before = p >= 0 ? valid[p] : null;
+          const after = nx < keyRows.length ? valid[nx] : null;
+          if ((before !== null && valid[i] <= before) || (after !== null && valid[i] >= after)) {
+            keyRows[i].orderKey = null;
+          }
+        }
+      }
       assignMissingKeys(keyRows);
       for (const kr of keyRows) keyMap.set(kr.id, kr.orderKey);
       for (const d of desiredRows) d.order_key = keyMap.get(d.id);

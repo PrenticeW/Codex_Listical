@@ -70,6 +70,17 @@ export const useKeyboardHandlers = ({
   // through a header row (which only has its single name cell) returns to
   // the same column on the far side.
   const lastDataColumnIdRef = useRef(null);
+  // Rows whose stable project id a project-column clear should also clear —
+  // task rows only; structural rows keep the projectId the structure
+  // injector gave them (mirrors useEditState's isProjectCellEdit guard).
+  // Without this, Delete/Backspace clearing wiped the visible project
+  // (day_entries.__project) but left project_id behind, and the mobile
+  // app's project_id fallback kept showing the project (2026-10-02 incident).
+  const canClearProjectId = (row) =>
+    row?._rowType !== 'projectHeader' &&
+    row?._rowType !== 'projectGeneral' &&
+    row?._rowType !== 'projectUnscheduled';
+
   // Delete/clear cells handler
   const handleCellsDelete = useCallback((e) => {
     e.preventDefault();
@@ -87,6 +98,9 @@ export const useKeyboardHandlers = ({
         allColumnIds.forEach(columnId => {
           rowOldValues.set(columnId, row[columnId] || '');
         });
+        if (canClearProjectId(row)) {
+          rowOldValues.set('projectId', row.projectId ?? null);
+        }
 
         oldValues.set(rowId, rowOldValues);
       });
@@ -101,6 +115,9 @@ export const useKeyboardHandlers = ({
               allColumnIds.forEach(columnId => {
                 rowUpdates[columnId] = '';
               });
+              // Clearing the row clears the project column, so the stable
+              // project id must go with it (see canClearProjectId above).
+              if (canClearProjectId(row)) rowUpdates.projectId = null;
               return { ...row, ...rowUpdates };
             }
             return row;
@@ -146,6 +163,9 @@ export const useKeyboardHandlers = ({
         oldValues.set(rowId, new Map());
       }
       oldValues.get(rowId).set(columnId, row[columnId] || '');
+      if (columnId === 'project' && canClearProjectId(row)) {
+        oldValues.get(rowId).set('projectId', row.projectId ?? null);
+      }
     });
 
     // Create command for delete operation
@@ -159,6 +179,9 @@ export const useKeyboardHandlers = ({
             const [rowId, columnId] = cellKey.split('|');
             if (row.id === rowId && columnId !== 'rowNum') {
               rowUpdates[columnId] = '';
+              if (columnId === 'project' && canClearProjectId(row)) {
+                rowUpdates.projectId = null;
+              }
               hasUpdates = true;
             }
           });

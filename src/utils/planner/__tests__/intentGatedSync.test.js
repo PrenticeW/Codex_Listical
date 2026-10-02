@@ -85,7 +85,7 @@ vi.mock('../../../lib/plannerOffline', () => ({
   hasPendingOfflineSave: () => false,
 }));
 
-const { saveTaskRows, markRowsMoved } = await import('../storage');
+const { saveTaskRows, markRowsMoved, readTaskRows } = await import('../storage');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const A = 'aaaaaaaa-1111-4111-8111-111111111111';
@@ -172,6 +172,39 @@ describe('structural identity adoption + intent-gated ordering', () => {
     await saveTaskRows([row(C, 'c', 0), row(A, 'a', 1), row(B, 'b', 2)], 'p', 24);
     await sleep(10);
     expect([serverKey(A), serverKey(B), serverKey(C)]).toEqual(keys);
+  });
+
+  it('re-keys a structural row whose server key sorts it outside its rendered position', async () => {
+    // 2026-10-02 incident: the Inbox divider carried an order_key that sorted
+    // it after the whole archive block, so the mobile app absorbed the inbox
+    // into the last project section. Structural rows are web-injected chrome,
+    // so an out-of-place key is healed on save; task-row keys stay untouched.
+    server.years.set('y26', { id: 'y26', user_id: 'u1', year_number: 26, start_date: '2026-06-01', total_days: 84 });
+    const DIV = 'dddddddd-4444-4444-8444-444444444444';
+    const mkServerTask = (id, task, key, displayOrder) => ({
+      id, user_id: 'u1', year_id: 'y26', project_id: null,
+      row_kind: 'task', checkbox: false, subproject_label: '', status: '-',
+      task, recurring: '', estimate: '', time_value_minutes: 0,
+      day_entries: { __cells: {}, __project: '', __extra: {} },
+      display_order: displayOrder, order_key: key, created_at: '2026-09-01T00:00:00Z',
+    });
+    server.planner_rows.set(A, mkServerTask(A, 'a', 'BV', 0));
+    server.planner_rows.set(B, mkServerTask(B, 'b', 'CV', 2));
+    // Divider keyed way past both neighbours.
+    server.planner_rows.set(DIV, {
+      ...mkServerTask(DIV, '', 'ZZ', 1),
+      day_entries: { __cells: {}, __project: '', __extra: { _isInboxRow: true } },
+    });
+    const clientDivider = { id: 'inbox-row', _isInboxRow: true, task: '', status: '', timeValue: 0 };
+    // Read first so the save has a server basis (unrestricted mode).
+    await readTaskRows('p', 26);
+    // Rendered order: a, divider, b — nothing moved by the user.
+    await saveTaskRows([row(A, 'a', 0), clientDivider, row(B, 'b', 2)], 'p', 26);
+    await sleep(10);
+    expect(serverKey(A)).toBe('BV');
+    expect(serverKey(B)).toBe('CV');
+    const divKey = serverKey(DIV);
+    expect(divKey > 'BV' && divKey < 'CV').toBe(true);
   });
 
   it('markRowsMoved persists exactly the moved row, between its new neighbours', async () => {
