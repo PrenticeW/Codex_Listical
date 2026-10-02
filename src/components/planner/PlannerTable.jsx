@@ -197,12 +197,17 @@ function PlannerTable({
               // Matches the parent panel's rounded-lg (8px) so this pinned,
               // square-cornered block doesn't visually square off the
               // panel's top corners once it's stuck flush against them.
-              // overflow: hidden clips its own row backgrounds to that
-              // curve too -- same pattern used for the sticky header on
-              // the Plan page (TacticsPage.jsx).
+              // overflow clips its own row backgrounds to that curve too --
+              // same pattern used for the sticky header on the Plan page
+              // (TacticsPage.jsx). MUST be 'clip', not 'hidden': hidden
+              // makes this tbody a scroll container, which captures the
+              // position: sticky gutter cells inside it (the Filter row's
+              // "#" cell) so they stop sticking to the real horizontal
+              // scroller and slide off with the content instead. clip
+              // clips identically but creates no scroll container.
               borderTopLeftRadius: 8,
               borderTopRightRadius: 8,
-              overflow: 'hidden',
+              overflow: 'clip',
             }}
           >
             {table.getRowModel().rows.slice(0, 8).map((row, index) => {
