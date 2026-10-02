@@ -93,10 +93,28 @@ describe('exportCrypto', () => {
     await expect(decryptExportData(data, async () => null)).rejects.toThrow(/no data key/);
   });
 
-  it('fails loudly on ciphertext in an unmapped location (sweep)', async () => {
-    const data = { years: [{ label: encText(dek, 'sneaky') }] };
-    await expect(decryptExportData(data, async () => dek)).rejects.toThrow(/still contains/);
-    expect(findEncryptedLeftovers(data)).toEqual(['years[0].label']);
+  it('decrypts ciphertext nested inside plaintext jsonb (deep pass)', async () => {
+    const data = {
+      site_snapshots: [
+        {
+          id: 's',
+          goal: {},
+          plan: { customProjects: [{ label: encText(dek, 'Side quests') }], other: 1 },
+          system: {},
+        },
+      ],
+      years: [{ label: encText(dek, 'unmapped column') }],
+    };
+    await decryptExportData(data, async () => dek);
+    expect(data.site_snapshots[0].plan.customProjects[0].label).toBe('Side quests');
+    expect(data.years[0].label).toBe('unmapped column');
+    expect(findEncryptedLeftovers(data)).toEqual([]);
+  });
+
+  it('fails loudly when a nested value cannot be decrypted', async () => {
+    const otherKey = randomBytes(32);
+    const data = { years: [{ label: encText(otherKey, 'wrong key') }] };
+    await expect(decryptExportData(data, async () => dek)).rejects.toThrow();
   });
 
   it('covers every table/field in the encryption plan', () => {

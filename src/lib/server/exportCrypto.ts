@@ -182,6 +182,37 @@ export async function decryptExportData(
     }
   }
 
+  // Deep pass: decrypt any enc1: string the field map did not reach — e.g.
+  // ciphertext nested inside plaintext jsonb (seen 2026-10-02: three
+  // site_snapshots rows captured between the tactics_custom_projects flip
+  // and the snapshot-capture decrypt fix held enc1 customProjects labels
+  // inside their plaintext `plan` jsonb). Every encrypted value in this
+  // user's data uses the same DEK, so a nested hit is decryptable in place.
+  for (const rows of Object.values(data)) {
+    const stack: unknown[] = [rows];
+    while (stack.length > 0) {
+      const node = stack.pop();
+      if (Array.isArray(node)) {
+        for (let i = 0; i < node.length; i++) {
+          if (isEncryptedValue(node[i])) {
+            node[i] = decryptValue(await requireDek(), node[i] as string);
+          } else if (node[i] && typeof node[i] === 'object') {
+            stack.push(node[i]);
+          }
+        }
+      } else if (node && typeof node === 'object') {
+        const obj = node as Record<string, unknown>;
+        for (const k of Object.keys(obj)) {
+          if (isEncryptedValue(obj[k])) {
+            obj[k] = decryptValue(await requireDek(), obj[k] as string);
+          } else if (obj[k] && typeof obj[k] === 'object') {
+            stack.push(obj[k]);
+          }
+        }
+      }
+    }
+  }
+
   // Sweep: no ciphertext may leave the building.
   const leftovers = findEncryptedLeftovers(data);
   if (leftovers.length > 0) {
