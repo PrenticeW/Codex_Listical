@@ -116,7 +116,7 @@ function frameAt(elapsed) {
   return { morph, dotAngle, flip, ink: mixInk(at(idx), at(idx + 1), fade) };
 }
 
-export function BrandLoader({ size = 160 }) {
+function BrandLoaderMark({ size = 160 }) {
   const svgRef = useRef(null);
 
   useEffect(() => {
@@ -182,6 +182,27 @@ export function BrandLoader({ size = 160 }) {
       </g>
     </svg>
   );
+}
+
+/**
+ * Public loader. `appearDelay` (ms) keeps fast loads clean: until the delay
+ * passes, an empty spacer of the same size holds the layout, and the
+ * animated mark mounts only once loading has demonstrably taken a while —
+ * so the shared clock (and the 1.5s calm stage) starts from the moment the
+ * mark is actually seen. Default 0: full-screen gates show immediately,
+ * since a blank field is worse than the mark.
+ */
+export function BrandLoader({ size = 160, appearDelay = 0 }) {
+  const [visible, setVisible] = useState(appearDelay <= 0);
+
+  useEffect(() => {
+    if (appearDelay <= 0) { setVisible(true); return undefined; }
+    const t = setTimeout(() => setVisible(true), appearDelay);
+    return () => clearTimeout(t);
+  }, [appearDelay]);
+
+  if (!visible) return <div style={{ width: size, height: size }} aria-hidden="true" />;
+  return <BrandLoaderMark size={size} />;
 }
 
 /**

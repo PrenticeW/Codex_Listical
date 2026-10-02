@@ -10,6 +10,10 @@ import AuthShell, { AuthField, AuthErrorBanner, AuthSpinnerLabel, AuthFooterText
 
 const AGE_BLOCK_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+// Invitation-only mode (SEEDS pilot, 2026-10-02). The full signup UI below is
+// kept intact — flip this to true to re-enable public registrations.
+const SIGNUPS_ENABLED = false;
+
 // Helper to check if user is blocked from signup attempts
 function isAgeBlocked() {
   const blockData = getAgeBlockTimestamp();
@@ -216,6 +220,28 @@ export default function SignupPage() {
         </p>
         <p style={{ fontSize: 13, color: 'var(--ink-mute)', lineHeight: 1.5, textAlign: 'center', margin: 0 }}>
           It should arrive within a minute or two — check spam if not.
+        </p>
+      </AuthShell>
+    );
+  }
+
+  // Invitation-only: show the notice instead of the signup UI (which stays
+  // below, untouched, for when SIGNUPS_ENABLED flips back on).
+  if (!SIGNUPS_ENABLED) {
+    return (
+      <AuthShell
+        eyebrow="Auth · Invitation Only"
+        footer={<AuthFooterText prompt="Already have an account?" linkTo="/login" linkLabel="Sign in" />}
+      >
+        <p className="auth-subtitle">
+          Tacular is currently accepting users
+          <br />
+          by invitation only.
+        </p>
+        <p className="auth-subtitle" style={{ marginTop: 16 }}>
+          Questions?
+          <br />
+          <a className="auth-link-btn" href="mailto:hello@tacular.app">hello@tacular.app</a>
         </p>
       </AuthShell>
     );

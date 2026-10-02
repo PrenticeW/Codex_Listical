@@ -12,11 +12,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import useConfirmKeys from '../../hooks/useConfirmKeys';
 import { createPortal } from 'react-dom';
-import { Loader } from 'lucide-react';
-import { loadSiteSnapshots, restoreSiteSnapshot } from '../../lib/snapshotStorage';
+import { loadSiteSnapshotList, loadSiteSnapshotById, restoreSiteSnapshot } from '../../lib/snapshotStorage';
 import { useYear } from '../../contexts/YearContext';
 import { useNavigate } from 'react-router-dom';
 import { fmtTimestamp as formatTimestamp } from '../../utils/fmtTimestamp';
+import BrandLoader from '../BrandLoader';
 
 const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const MONO = "'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace";
@@ -156,7 +156,7 @@ export default function VersionHistoryPanel({ onClose }) {
     setIsLoading(true);
     setError(null);
     try {
-      const rows = await loadSiteSnapshots(currentYear);
+      const rows = await loadSiteSnapshotList(currentYear);
       setSnapshots(rows);
     } catch {
       setError('Could not load version history. Please try again.');
@@ -177,7 +177,8 @@ export default function VersionHistoryPanel({ onClose }) {
     if (!confirmTarget) return;
     setIsRestoring(true);
     try {
-      await restoreSiteSnapshot(confirmTarget, currentYear);
+      const full = await loadSiteSnapshotById(confirmTarget.id);
+      await restoreSiteSnapshot(full, currentYear);
       setConfirmTarget(null);
       onClose();
       navigate('/');
@@ -233,12 +234,8 @@ export default function VersionHistoryPanel({ onClose }) {
         {/* Body */}
         <div style={{ flex:1, overflowY:'auto' }}>
           {isLoading && (
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:'40px 16px', color:'#9E9E9E' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ marginRight:8, animation:'spin 1s linear infinite' }}>
-                <circle cx="12" cy="12" r="10" stroke="rgba(0,0,0,0.1)" strokeWidth="2.5"/>
-                <path d="M22 12a10 10 0 0 0-10-10" stroke="#9E9E9E" strokeWidth="2.5" strokeLinecap="round"/>
-              </svg>
-              <span style={{ fontSize:13 }}>Loading history…</span>
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10, padding:'48px 16px' }}>
+              <BrandLoader size={56} appearDelay={300} />
             </div>
           )}
 

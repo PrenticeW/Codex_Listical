@@ -146,7 +146,7 @@ export default function LoginPage() {
       eyebrow="Auth · Sign In"
       footer={(
         <>
-          <AuthFooterText prompt="Don't have an account?" linkTo="/signup" linkLabel="Create an account" />
+          <AuthFooterText prompt="Don't have an account?" linkTo="/signup" linkLabel="Click here" />
           <span className="auth-footer-tray-text" style={{ display: 'block', marginTop: 8 }}>
             <AuthFooterText prompt="Read our" linkTo="/data-policy" linkLabel="Privacy & Data Policy" />
           </span>

@@ -748,6 +748,50 @@ async function buildSnapshotInsertRow(userId, yearNumber, goal, plan, system) {
  * @param {number} yearNumber
  * @returns {Promise<Array>}
  */
+/**
+ * Lightweight listing for the version-history UIs: metadata only, no
+ * payloads. The full snapshot (goal/plan/system, megabytes once a year has
+ * real data) is fetched one at a time via loadSiteSnapshotById when the
+ * user actually restores — fetching and decrypting all 50 payloads just to
+ * render a list of timestamps is what made the panel take ages to open.
+ */
+export async function loadSiteSnapshotList(yearNumber) {
+  if (yearNumber == null) return [];
+  try {
+    const userId = await requireUserId();
+    const { data, error } = await supabase
+      .from('site_snapshots')
+      .select('id, year_number, created_at')
+      .eq('user_id', userId)
+      .eq('year_number', yearNumber)
+      .order('created_at', { ascending: false })
+      .limit(SNAPSHOT_CAP);
+    if (error) throw error;
+    return data ?? [];
+  } catch (err) {
+    console.error('loadSiteSnapshotList failed', err);
+    throw err;
+  }
+}
+
+/** Fetch and decrypt one full snapshot, for restore. */
+export async function loadSiteSnapshotById(id) {
+  const userId = await requireUserId();
+  const { data, error } = await supabase
+    .from('site_snapshots')
+    .select('id, year_number, created_at, goal, plan, system, goal_enc, plan_enc, system_enc')
+    .eq('user_id', userId)
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return {
+    ...data,
+    goal:   await decryptJsonPreferEnc(data.goal_enc,   data.goal),
+    plan:   await decryptJsonPreferEnc(data.plan_enc,   data.plan),
+    system: await decryptJsonPreferEnc(data.system_enc, data.system),
+  };
+}
+
 export async function loadSiteSnapshots(yearNumber) {
   if (yearNumber == null) return [];
 

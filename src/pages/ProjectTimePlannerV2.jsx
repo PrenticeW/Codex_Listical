@@ -1413,6 +1413,17 @@ export default function ProjectTimePlannerV2() {
       let needsRepair = false;
       const repaired = prevData.map(row => {
         if (row._chipId) return row;
+        // Archive linkage is NEVER stripped here (2026-10-02 incident): an
+        // archived header's parentGroupId points at its archive week row's
+        // id, and on a mount where archived_weeks snapshots failed to
+        // decrypt (data key not ready) those week rows hydrate under
+        // fallback ids — the real ids look "gone" for one render, and
+        // stripping then persisted the orphaning on the next autosave,
+        // scattering every archive week from its project rows. The storage
+        // read path owns archive regrouping (and self-heals lost links);
+        // this repair is for live-section rows only.
+        if (typeof row.parentGroupId === 'string' && row.parentGroupId.startsWith('archive-week-')) return row;
+        if (row._rowType && String(row._rowType).startsWith('archived')) return row;
         if (row.parentGroupId && !validGroupIds.has(row.parentGroupId)) {
           needsRepair = true;
           const { parentGroupId: _removed, ...rest } = row;

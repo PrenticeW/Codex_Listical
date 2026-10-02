@@ -21,7 +21,7 @@ import usePanelWidth from '../hooks/usePanelWidth';
 import usePageSize from '../hooks/usePageSize';
 import { useAuth } from '../contexts/AuthContext';
 import { useYear } from '../contexts/YearContext';
-import { loadSiteSnapshots, restoreSiteSnapshot } from '../lib/snapshotStorage';
+import { restoreSiteSnapshot, loadSiteSnapshotList, loadSiteSnapshotById } from '../lib/snapshotStorage';
 import { fmtTimestamp } from '../utils/fmtTimestamp';
 import { createDraftYearFromActive } from '../utils/planner/createDraftYear';
 import { undoDraftYear } from '../utils/planner/undoDraftYear';
@@ -39,6 +39,7 @@ import { ColourPicker as ColourMixer } from './GoalPanel';
 import { applyThemeFamily, colourToThemeKey, familyDisplayName, themeSwatch, DEFAULT_THEME_FAMILY } from '../lib/theme';
 import { loadThemeFamily, saveThemeFamily } from '../lib/themeStorage';
 import { downloadDataExport } from '../lib/api/dataExport';
+import BrandLoader from './BrandLoader';
 
 // Dispatched by GearPanel so TacticsPage can sync state without a double-save
 export const GEAR_TACTICS_SETTINGS_EVENT = 'gear-tactics-settings-update';
@@ -1066,10 +1067,14 @@ function AccountSection({ onClose }) {
               onMouseLeave={() => setDownloadHov(false)}
               style={bentoBtnStyle(downloadHov, isExporting)}
             >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M6 1.5v6M3.5 5.5L6 8l2.5-2.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M2 8.5v1a1 1 0 001 1h6a1 1 0 001-1v-1" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-              </svg>
+              {isExporting ? (
+                <BrandLoader size={14} appearDelay={300} />
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M6 1.5v6M3.5 5.5L6 8l2.5-2.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M2 8.5v1a1 1 0 001 1h6a1 1 0 001-1v-1" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+                </svg>
+              )}
               {isExporting ? 'Preparing export…' : 'Download my data'}
             </button>
             {exportError && (
@@ -1509,7 +1514,7 @@ function HistoryView({ onBack, isActive, use24Hour }) {
     setIsLoading(true);
     setError(null);
     try {
-      const rows = await loadSiteSnapshots(currentYear);
+      const rows = await loadSiteSnapshotList(currentYear);
       setSnapshots(rows);
     } catch {
       setError('Could not load version history.');
@@ -1527,7 +1532,8 @@ function HistoryView({ onBack, isActive, use24Hour }) {
     if (!confirmTarget) return;
     setIsRestoring(true);
     try {
-      await restoreSiteSnapshot(confirmTarget, currentYear);
+      const full = await loadSiteSnapshotById(confirmTarget.id);
+      await restoreSiteSnapshot(full, currentYear);
       setConfirmTarget(null);
       onBack();
       navigate('/');
@@ -1563,8 +1569,8 @@ function HistoryView({ onBack, isActive, use24Hour }) {
       {/* List */}
       <div style={{ padding: '0 28px 40px 22px' }}>
         {isLoading && (
-          <div style={{ padding: '32px 0', textAlign: 'center', color: C.textFaint, fontSize: 13 }}>
-            Loading...
+          <div style={{ padding: '32px 0', display: 'flex', justifyContent: 'center' }}>
+            <BrandLoader size={56} appearDelay={300} />
           </div>
         )}
 

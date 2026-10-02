@@ -40,7 +40,7 @@
  */
 
 import { supabase, CLIENT_BUILD } from '../../lib/supabase';
-import { decryptRows, encryptField, encryptJson, encryptWritesEnabled, decryptJsonPreferEnc } from '../../lib/crypto';
+import { decryptRows, encryptField, encryptJson, encryptWritesEnabled, decryptJsonPreferEnc, hasDataKey, isEncrypted } from '../../lib/crypto';
 import { createInitialData } from './dataCreators';
 import { ensureOrderKeys, assignMissingKeys, compareRowOrder, isValidOrderKey } from './orderKey';
 import { loadTacticsMetrics } from '../../lib/tacticsMetricsStorage';
@@ -1256,6 +1256,41 @@ export const readTaskRows = async (
         const archivedHeaders = result.filter(
           (r) => r._rowType === 'archivedProjectHeader' && r.groupId,
         );
+        // Self-heal lost week linkage (2026-10-02 incident): a mount that
+        // hydrated archive weeks under fallback ids (snapshot decrypt not
+        // ready) let the page's structural repair strip parentGroupId from
+        // every archived header, and the save persisted it. The link is
+        // recoverable: the archive handler mints the week id and the batch's
+        // header groupIds from Date.now() in the same tick, so both embed
+        // the same archive moment. Re-parent any header whose parentGroupId
+        // is missing (or points at no known week/group) to the week whose
+        // id-embedded timestamp is the latest one at-or-before the header's
+        // batch timestamp (60s grace for clock order). The restored link
+        // rides __extra on the next save, making the repair permanent.
+        {
+          const tsOfWeek = (w) => {
+            const m = /^archive-week-(\d{10,})-/.exec(String(w.id || ''));
+            return m ? Number(m[1]) : null;
+          };
+          const weeksWithTs = archiveRows
+            .map((w) => ({ w, ts: tsOfWeek(w) }))
+            .filter((e) => e.ts !== null)
+            .sort((a, b) => a.ts - b.ts);
+          if (weeksWithTs.length > 0) {
+            const knownParents = new Set([...weekIds, ...result.map((r) => r.groupId).filter(Boolean)]);
+            for (const header of archivedHeaders) {
+              if (header.parentGroupId && knownParents.has(header.parentGroupId)) continue;
+              const m = /-group-(\d{10,})-/.exec(String(header.groupId));
+              if (!m) continue;
+              const batchTs = Number(m[1]);
+              let best = null;
+              for (const e of weeksWithTs) {
+                if (e.ts <= batchTs + 60000) best = e; else break;
+              }
+              if (best) header.parentGroupId = best.w.id;
+            }
+          }
+        }
         const headerGroupIds = new Set(archivedHeaders.map((r) => r.groupId));
         const isArchiveMember = (r) =>
           r._rowType === 'archivedProjectHeader' ||
@@ -2078,6 +2113,48 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
             if (uuid === d.id) synMap.set(synthetic, survivor.id);
           }
         }
+      }
+    }
+
+    // Keyless-blank guard (2026-10-02 blanking incident): a client that has
+    // no data key cannot have decrypted an encrypted task, so a desired ''
+    // over an enc1: server value can only be a failed hydration, never the
+    // user clearing text they could see. Keep the server's value row by row.
+    if (!hasDataKey()) {
+      for (let i = toUpsert.length - 1; i >= 0; i -= 1) {
+        const d = toUpsert[i];
+        const cur = currentById.get(d.id);
+        if (cur && isEncrypted(cur.task) && (d.task ?? '') === '') {
+          toUpsert.splice(i, 1);
+          nextBaseline.set(d.id, baselineSnap(cur));
+          guarded += 1;
+        }
+      }
+    }
+
+    // Content-wipe circuit breaker (2026-10-02 blanking incident, sibling of
+    // the mass-delete breaker above). A save that overwrites the task text
+    // of many rows with empty strings is a corrupt in-memory state — a tab
+    // whose module graph or decryption broke mid-load rendered rows it
+    // couldn't populate and is now diffing that emptiness against the
+    // server. No user action blanks 5+ task cells in one save. A state
+    // corrupt enough to do that cannot be trusted for ANY of its writes or
+    // deletes, so refuse the whole save: no upserts, no deletes, no
+    // baseline/known advancement, no cache or offline-snapshot refresh —
+    // the next real read resyncs from the server. The pending-save record
+    // for this seq is cleared so the corrupt payload does not replay.
+    {
+      let blankedTasks = 0;
+      for (const d of toUpsert) {
+        const cur = currentById.get(d.id);
+        if (cur && (cur.task ?? '') !== '' && (d.task ?? '') === '') blankedTasks += 1;
+      }
+      if (blankedTasks >= 5) {
+        console.error('[planner-save] content-wipe circuit breaker: refusing save', {
+          blankedTasks, upserts: toUpsert.length, deletes: toDelete.length, server: currentById.size,
+        });
+        if (seq === _pendingSaveSeq) clearPendingState(userId, yearNumber);
+        return;
       }
     }
 

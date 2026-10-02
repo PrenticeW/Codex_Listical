@@ -1,5 +1,27 @@
 # Known Issues and Dead Code
 
+## 2026-10-02 — archive weeks orphaned from their project rows, fixed
+
+Symptom: on the System page every archive week header sat childless at the top
+of the Archive section, with all archived project headers (and their section
+rows) grouped beneath. Cause chain: the archived_weeks encryption flip
+(snapshot ciphertext in snapshot_enc, `{}` placeholder in snapshot) meant a
+mount whose data key wasn't ready hydrated the week rows under fallback ids
+(`archive-week-<N>`); the on-mount structural repair in ProjectTimePlannerV2
+then saw every archived header's parentGroupId pointing at a "missing"
+groupId and stripped it, and the next autosave persisted the orphaning
+(Year 9: 44 headers, one bulk save).
+
+Fixes: (1) the mount repair now never touches archive linkage (rows whose
+parentGroupId starts with `archive-week-`, or whose _rowType starts with
+`archived`); (2) the storage read regroup self-heals a header with a
+missing/unknown parentGroupId by re-parenting it to the week whose
+id-embedded Date.now() timestamp is the latest at-or-before the header's
+`-group-<ts>-` batch timestamp — both ids are minted in the same archive
+handler tick, so the batch timestamp identifies the week. The restored link
+rides __extra on the next save, making the heal permanent. Reload any tab
+that was open before the fix so it drops the stripped in-memory state.
+
 ## 2026-10-02 — duplicate structure + cross-device jumbling, root-cause fix
 
 **Symptom (recurring):** duplicate project headers, General/Unscheduled rows, chip subheaders and chip task rows after using two machines (batches created 09-08, 09-15, 09-26, 10-01); rows reshuffled ("jumbled") after switching machines.

@@ -1,6 +1,6 @@
 # Encryption plan — application-level encryption of user content
 
-Status: **Phase 3 in progress — 6 of 9 tables flipped on web; remaining: projects, planner_rows (planning_history inherits from projects)**. Work now on `main` in both repos. Read alongside `docs/compliance.md`.
+Status: **Phase 3 COMPLETE — all 9 tables encrypt on write (planner_rows flipped + live-probed 2026-10-02; planning_history verified enc1 via the trigger). Phase 4 backfill DROPPED by decision — legacy plaintext rows stay. Remaining: ship the mobile JS update (plannerApi encrypt boundary), Phase 5 tidy items, compliance/privacy wording.** Work on `main` in both repos. Read alongside `docs/compliance.md`.
 
 ## Progress log
 
@@ -11,7 +11,8 @@ Status: **Phase 3 in progress — 6 of 9 tables flipped on web; remaining: proje
   - Flags FLIPPED in code on both sides: web ENCRYPT_WRITE_TABLES += 'planner_rows'; mobile ENCRYPT_WRITE_TABLES gets its first entry ('planner_rows'). Mobile `encryptWritesEnabled` still requires the native module, so a crypto-less build degrades to plaintext writes. NOTE: mobile `sendTaskEventNow` still writes task_events plaintext by design (web reads decrypt both) — add 'task_events' to the mobile set in a later release if desired.
   - Vitest 190/190 (crypto flag test updated: planner_rows now expected true, planner_settings as the never-encrypted example).
   - Deletion purge (plan § Knock-ons): migration `20261002000006_purge_user_keys_history_statuses.sql` redefines `purge_user_data` adding `user_keys` (crypto-shredding), `planning_history` (swept twice — the planner_rows delete trigger writes tombstones mid-purge) and `statuses` — the verify script was already failing on all three. `verify-export-tables.mjs` now reads the purge list from the LATEST migration defining the function and documents the three as purged-not-exported (statuses flagged for an Art. 20 revisit). Script passes. APPLIED to prod 2026-10-02 19:48 UK via the SQL editor (function comment verified); not in the Supabase migration-history table.
-  - REMAINING for sign-off (after web deploy + mobile update ship): live probe — edit a task name and a note on web → enc1 in SQL → phone renders both → one airplane-mode offline edit replays correctly → planning_history.previous_data shows enc1 old values (table 9, verify only).
+  - **Live probe (19:52–19:57 UK, web deployed): ALL PASSED — planner_rows SIGNED OFF, Phase 3 complete.** (1) task+note edit on web → row fully enc1 in SQL, older rows plaintext beside it; (2) phone renders both from ciphertext; (3) offline edit (web, DevTools offline) replayed on reconnect as a fully encrypted upsert; (4) planning_history.previous_data: edits to pre-flip rows capture the last plaintext generation (expected), every subsequent edit captures enc1 old values — table 9 verified via the trigger, nothing built.
+  - Purge migration applied to prod 19:48 UK via SQL editor (see entry below). STILL TO SHIP: the mobile JS update (encryptPlannerWrite boundary + flag) — until then phone-side planner_rows writes stay plaintext, which is the supported mixed state.
 
 - **2026-10-02 (decision) — Phase 4 backfill DROPPED; plaintext legacy data stays.**
   - Prentice: own historical data doesn't need encrypting — the goal is new user data going forward. All 9 tables encrypting on write (once planner_rows flips) achieves that: every new account, including the SEEDS pilot cohort, is encrypted from first write.
