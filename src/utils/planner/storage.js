@@ -2090,9 +2090,23 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     console.log('[planner-save] diff', { upsert: toUpsert.length, delete: toDelete.length, server: currentById.size });
 
     if (toUpsert.length > 0) {
+      // Phase 3 (planner_rows flip): encrypt content fields at the Supabase
+      // boundary, AFTER the three-way diff and baseline bookkeeping above —
+      // baselines/_sessionOrderKeys/known-id sets all snapshot PLAINTEXT.
+      // Encrypt onto copies so toUpsert's plaintext objects (already
+      // captured by nextBaseline via baselineSnap) are never mutated.
+      let upsertRows = toUpsert;
+      if (encryptWritesEnabled('planner_rows')) {
+        upsertRows = await Promise.all(toUpsert.map(async (d) => ({
+          ...d,
+          task: await encryptField(d.task ?? ''),
+          notes: d.notes == null ? null : await encryptField(d.notes),
+          subproject_label: await encryptField(d.subproject_label ?? ''),
+        })));
+      }
       const { error: upsertErr } = await supabase
         .from('planner_rows')
-        .upsert(toUpsert, { onConflict: 'id' });
+        .upsert(upsertRows, { onConflict: 'id' });
       if (upsertErr) throw upsertErr;
     }
     if (toDelete.length > 0) {
@@ -2398,9 +2412,14 @@ export const saveTaskNote = async (taskId, noteText) => {
   }
   try {
     const userId = await requireUserId();
+    // Phase 3 (planner_rows flip): encrypt at the write boundary. The task
+    // panel keeps plaintext in memory; readTaskRows decrypts on read.
+    const storedNote = (noteText != null && encryptWritesEnabled('planner_rows'))
+      ? await encryptField(noteText)
+      : (noteText ?? null);
     const { error } = await supabase
       .from('planner_rows')
-      .update({ notes: noteText ?? null })
+      .update({ notes: storedNote })
       .eq('id', taskId)
       .eq('user_id', userId);
     if (error) throw error;

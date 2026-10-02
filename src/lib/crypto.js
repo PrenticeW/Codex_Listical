@@ -268,6 +268,10 @@ const ENCRYPT_WRITE_TABLES = new Set([
   'projects', // flipped 2026-10-02 — 20261002 TestFlight build confirmed on
   //          // the phone, enforce_min_client_build raised to '20261002'
   //          // (migration 20261002000005); plan_table_entries → _enc sibling.
+  'planner_rows', // flipped 2026-10-02 — LAST table. task/notes/
+  //              // subproject_label encrypted at the Supabase boundary only,
+  //              // AFTER the three-way diff (baselines stay plaintext).
+  //              // Mobile flips in the same release (mobile crypto.js).
 ]);
 
 /** True when writes to `table` should encrypt (and a key is loaded). */

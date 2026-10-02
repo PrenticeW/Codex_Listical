@@ -22,11 +22,23 @@ const migrationsDir = join(root, 'supabase', 'migrations');
 
 // ─── Documented, intentional differences ─────────────────────────────────────
 
-// Purged on deletion but never exported (internal bookkeeping / hash-only).
+// Purged on deletion but never exported (internal bookkeeping / hash-only /
+// deliberately excluded from the export).
 const INTERNAL_NOT_EXPORTED = new Set([
   'deletion_rate_limits',
   'export_rate_limits',
   'deletion_audit_log',
+  // Wrapped per-user data key (encryption plan). MUST NOT be exported —
+  // it is key material, not user content; purged (crypto-shredding) on
+  // deletion (20261002000006).
+  'user_keys',
+  // Trigger-written previous-version history of planner_rows. Deliberately
+  // absent from EXPORT_TABLES (docs/encryption-plan.md — the live rows are
+  // exported; history is an internal undo/audit mirror). Purged on deletion.
+  'planning_history',
+  // User status config (labels/colours). Purged on deletion; not currently
+  // exported — low-sensitivity config, but revisit for Art. 20 completeness.
+  'statuses',
 ]);
 
 // Exported via a dedicated profiles query (keys on id, not user_id).
@@ -52,13 +64,24 @@ const exportTables = new Set(
 
 // ─── 2. Purge list ───────────────────────────────────────────────────────────
 
-const purgeSql = readFileSync(
-  join(migrationsDir, '20260801000001_complete_deletion_purge.sql'),
-  'utf8'
-);
+// The purge function is redefined over time (CREATE OR REPLACE); the LATEST
+// migration that defines purge_user_data is the live definition, so read the
+// table list from that one only.
+const purgeFiles = readdirSync(migrationsDir)
+  .filter(f => f.endsWith('.sql'))
+  .sort()
+  .filter(f =>
+    /FUNCTION public\.purge_user_data/.test(readFileSync(join(migrationsDir, f), 'utf8'))
+  );
+if (purgeFiles.length === 0) {
+  console.error('FAIL: no migration defines purge_user_data');
+  process.exit(1);
+}
+const purgeSql = readFileSync(join(migrationsDir, purgeFiles[purgeFiles.length - 1]), 'utf8');
 const purgeTables = new Set(
   [...purgeSql.matchAll(/table_name := '([a-z_]+)'/g)].map(m => m[1])
 );
+console.log(`Purge list read from: ${purgeFiles[purgeFiles.length - 1]}`);
 
 // ─── 3. Tables created in migrations with a user_id column ───────────────────
 

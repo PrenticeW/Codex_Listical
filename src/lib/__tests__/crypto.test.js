@@ -103,7 +103,8 @@ describe('with a key', () => {
 
   it('encryptWritesEnabled gates on table AND loaded key', async () => {
     expect(encryptWritesEnabled('chip_task_notes')).toBe(true); // key loaded in beforeEach
-    expect(encryptWritesEnabled('planner_rows')).toBe(false); // not flipped yet
+    expect(encryptWritesEnabled('planner_rows')).toBe(true); // flipped 2026-10-02 (last table)
+    expect(encryptWritesEnabled('planner_settings')).toBe(false); // never encrypted (config)
     clearDataKey(USER);
     expect(encryptWritesEnabled('chip_task_notes')).toBe(false); // no key => plaintext writes
     expect(await initDataKey(USER)).toBe(true); // restore for later tests
