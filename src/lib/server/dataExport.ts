@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../../types/supabase';
+import { decryptExportData, loadUserDek } from './exportCrypto.js';
 
 /**
  * GDPR data export (UK GDPR Art. 15 access / Art. 20 portability).
@@ -203,6 +204,13 @@ export async function exportUserData(userId: string): Promise<DataExportResult> 
       }
       data[table] = rows;
     }
+
+    // Decrypt every encrypted field server-side (encryption plan § Knock-ons):
+    // Art. 15/20 require an intelligible copy, so enc1: ciphertext must never
+    // ship. The DEK is fetched lazily — plaintext-only accounts export even
+    // without TACULAR_MASTER_KEY — and any undecryptable value fails the
+    // whole export rather than leaking ciphertext silently.
+    await decryptExportData(data, () => loadUserDek(adminClient, userId));
 
     return {
       success: true,
