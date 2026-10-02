@@ -2424,15 +2424,17 @@ export const writeTaskEvent = async (taskId, { field, oldValue, newValue, note =
   try {
     const userId = await requireUserId();
 
+    // Phase 3: encrypt content fields at the write boundary.
+    const enc = encryptWritesEnabled('task_events');
     const { error } = await supabase
       .from('task_events')
       .insert({
         task_id: taskId,
         user_id: userId,
         field,
-        old_value: oldValue ?? null,
-        new_value: newValue,
-        note: note ?? null,
+        old_value: enc ? await encryptField(oldValue ?? null) : (oldValue ?? null),
+        new_value: enc ? await encryptField(newValue) : newValue,
+        note: enc ? await encryptField(note ?? null) : (note ?? null),
       });
     if (error) throw error;
 

@@ -245,6 +245,7 @@ export async function decryptJson(stored) {
  */
 const ENCRYPT_WRITE_TABLES = new Set([
   'chip_task_notes', // flipped 2026-10-02 — web-only table, 1 row
+  'task_events', // flipped 2026-10-02 — mobile only INSERTS (plaintext OK), never reads
 ]);
 
 /** True when writes to `table` should encrypt (and a key is loaded). */

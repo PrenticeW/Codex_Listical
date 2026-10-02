@@ -35,7 +35,7 @@
  */
 
 import { supabase } from './supabase';
-import { decryptRows, decryptJson } from './crypto';
+import { decryptRows, decryptJson, encryptField, encryptWritesEnabled } from './crypto';
 import { showStatusPill } from './statusPill';
 import { clearForYear } from './storageCache';
 import {
@@ -455,15 +455,17 @@ async function restoreTaskEvents(taskEvents, taskRows) {
     if (deleteError) throw deleteError;
 
     if (taskEvents.length > 0) {
-      const rows = taskEvents.map((e) => ({
+      // Phase 3: snapshots hold plaintext; re-encrypt at the write boundary.
+      const enc = encryptWritesEnabled('task_events');
+      const rows = await Promise.all(taskEvents.map(async (e) => ({
         user_id: userId,
         task_id: e.task_id,
         field: e.field,
-        old_value: e.old_value,
-        new_value: e.new_value,
-        note: e.note,
+        old_value: enc ? await encryptField(e.old_value) : e.old_value,
+        new_value: enc ? await encryptField(e.new_value) : e.new_value,
+        note: enc ? await encryptField(e.note) : e.note,
         changed_at: e.changed_at,
-      }));
+      })));
       const { error: insertError } = await supabase
         .from('task_events')
         .insert(rows);
