@@ -235,3 +235,19 @@ export async function decryptJson(stored) {
     return null;
   }
 }
+
+/**
+ * Phase 3 — encrypt-on-write, per table (docs/encryption-plan.md).
+ * A table listed here has its content fields encrypted at the Supabase
+ * write boundary (storage modules only, same rule as always). Rollback =
+ * remove the table from this set and redeploy; already-encrypted rows
+ * keep reading fine via decryptField, and writes revert to plaintext.
+ */
+const ENCRYPT_WRITE_TABLES = new Set([
+  'chip_task_notes', // flipped 2026-10-02 — web-only table, 1 row
+]);
+
+/** True when writes to `table` should encrypt (and a key is loaded). */
+export function encryptWritesEnabled(table) {
+  return ENCRYPT_WRITE_TABLES.has(table) && cachedKey !== null;
+}

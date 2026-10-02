@@ -40,7 +40,7 @@
  */
 
 import { supabase, CLIENT_BUILD } from '../../lib/supabase';
-import { decryptRows } from '../../lib/crypto';
+import { decryptRows, encryptField, encryptWritesEnabled } from '../../lib/crypto';
 import { createInitialData } from './dataCreators';
 import { ensureOrderKeys, assignMissingKeys, compareRowOrder, isValidOrderKey } from './orderKey';
 import { loadTacticsMetrics } from '../../lib/tacticsMetricsStorage';
@@ -2304,9 +2304,16 @@ export const preloadChipTaskNotes = async () => {
       if (note) toMigrate.push({ user_id: userId, chip_id: chipId, note, updated_at: new Date().toISOString() });
     }
     if (toMigrate.length > 0) {
+      // Phase 3: encrypt at the write boundary (cache keeps plaintext).
+      let migrateRows = toMigrate;
+      if (encryptWritesEnabled('chip_task_notes')) {
+        migrateRows = await Promise.all(
+          toMigrate.map(async (row) => ({ ...row, note: await encryptField(row.note) }))
+        );
+      }
       const { error: migrateError } = await supabase
         .from('chip_task_notes')
-        .upsert(toMigrate, { onConflict: 'user_id,chip_id' });
+        .upsert(migrateRows, { onConflict: 'user_id,chip_id' });
       if (!migrateError) {
         for (const row of toMigrate) {
           chipNotesCache.set(row.chip_id, row.note);
@@ -2331,10 +2338,14 @@ export const saveChipTaskNote = async (taskId, noteText) => {
   try {
     const userId = await requireUserId();
     if (noteText) {
+      // Phase 3: encrypt at the write boundary (cache keeps plaintext).
+      const storedNote = encryptWritesEnabled('chip_task_notes')
+        ? await encryptField(noteText)
+        : noteText;
       const { error } = await supabase
         .from('chip_task_notes')
         .upsert(
-          { user_id: userId, chip_id: chipId, note: noteText, updated_at: new Date().toISOString() },
+          { user_id: userId, chip_id: chipId, note: storedNote, updated_at: new Date().toISOString() },
           { onConflict: 'user_id,chip_id' }
         );
       if (error) throw error;

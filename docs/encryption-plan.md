@@ -1,8 +1,16 @@
 # Encryption plan — application-level encryption of user content
 
-Status: **Phase 2 (decrypt-on-read) built, awaiting deploy** (deployed 2026-09-30; branch `encryption` in both repos). Read alongside `docs/compliance.md`.
+Status: **Phase 3 started — chip_task_notes flipped to encrypt-on-write (built, awaiting deploy)**. Work now on `main` in both repos. Read alongside `docs/compliance.md`.
 
 ## Progress log
+
+- **2026-10-02 (pm) — Phase 3 step 1: `chip_task_notes` encrypt-on-write built.**
+  - Per-table write flag added to both crypto.js files: `ENCRYPT_WRITE_TABLES` set + `encryptWritesEnabled(table)` (requires a loaded key; mobile additionally requires the native module). Rollback = remove the table from the set and redeploy.
+  - Web set contains `chip_task_notes` (web-only table — mobile neither reads nor writes it, so this step has NO mobile-build dependency). Mobile set stays EMPTY until the dev client ships with react-native-quick-crypto and `enforce_min_client_build` is bumped.
+  - Web storage.js: both write paths (`saveChipTaskNote` upsert and the localStorage migration upsert in `preloadChipTaskNotes`) encrypt `note` at the Supabase boundary; the in-memory cache keeps plaintext.
+  - Pre-flip plaintext backup of the table (1 row) exported to `db-exports/chip_task_notes_pre_phase3_20261002.json`.
+  - Vitest: 181/181 passing (2 new flag tests). Supabase checked: user_keys has 1 wrapped DEK, zero enc1 values anywhere pre-flip.
+  - Verify after deploy: edit a chip note on web → row shows `enc1:` in SQL → note still renders on web after reload. Then next table `task_events` (check mobile read/write surface first — mobile dev-client rebuild still pending; a 2026-10-02 red screen on the pre-crypto simulator build confirms current builds lack the native module).
 
 - **2026-10-02 — Pre-step + Phase 2 (decrypt-on-read) built.**
   - Backup tables `planner_rows_backup_20260719` and `planner_rows_ghost_backup_20260921` exported to `db-exports/` (625 + 30 rows, JSON) and dropped from Supabase.

@@ -24,8 +24,7 @@ import {
   encryptField,
   decryptField,
   encryptJson,
-  decryptJson,
-} from '../crypto';
+  decryptJson, encryptWritesEnabled} from '../crypto';
 
 const USER = 'user-1';
 const DEK_B64 = Buffer.from(new Uint8Array(32).fill(7)).toString('base64');
@@ -100,6 +99,14 @@ describe('with a key', () => {
     const obj = { legacy: true };
     expect(await decryptJson(obj)).toBe(obj);
     expect(await decryptJson(null)).toBe(null);
+  });
+
+  it('encryptWritesEnabled gates on table AND loaded key', async () => {
+    expect(encryptWritesEnabled('chip_task_notes')).toBe(true); // key loaded in beforeEach
+    expect(encryptWritesEnabled('planner_rows')).toBe(false); // not flipped yet
+    clearDataKey(USER);
+    expect(encryptWritesEnabled('chip_task_notes')).toBe(false); // no key => plaintext writes
+    expect(await initDataKey(USER)).toBe(true); // restore for later tests
   });
 
   it('clearDataKey returns the module to fallback mode', async () => {
