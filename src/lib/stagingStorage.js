@@ -21,6 +21,14 @@ import { supabase } from './supabase';
 import { defineRowMetadata } from '../utils/staging/planTableHelpers';
 import { getCached, hasCached, setCached, invalidate, onSessionReset } from './storageCache';
 import { debounceSiteSnapshot } from './snapshotStorage';
+import { decryptRows } from './crypto';
+
+// Phase 2 (decrypt-on-read, docs/encryption-plan.md): the encrypted columns
+// of `projects`. Every row fetched from Supabase goes through decryptRows
+// with these BEFORE caching, diffing, or mapping — a no-op while the data
+// is still plaintext.
+const PROJECT_ENC_TEXT = ['text', 'project_name', 'project_nickname', 'project_tagline'];
+const PROJECT_ENC_JSON = ['plan_table_entries'];
 
 export const STAGING_STORAGE_EVENT = 'staging-state-update';
 
@@ -413,7 +421,7 @@ async function fetchStagingStateFromServer(yearNumber, { recordIds = true } = {}
     .order('display_order', { ascending: true });
   if (error) throw error;
 
-  const rows = data ?? [];
+  const rows = await decryptRows(data ?? [], PROJECT_ENC_TEXT, PROJECT_ENC_JSON);
   const shortlist = [];
   const archived = [];
   for (const row of rows) {
@@ -573,7 +581,13 @@ async function _saveStagingStateImpl(payload, yearNumber) {
       .eq('year_id', yearId);
     if (existingErr) throw existingErr;
 
-    const currentById = new Map((existingRows ?? []).map((r) => [r.id, r]));
+    // Decrypt before diffing so stagingRowDiffers always compares
+    // plaintext-to-plaintext (desired rows are plaintext until Phase 3
+    // encrypts at the write boundary). No-op on plaintext rows.
+    const decryptedExisting = await decryptRows(
+      existingRows ?? [], PROJECT_ENC_TEXT, PROJECT_ENC_JSON,
+    );
+    const currentById = new Map(decryptedExisting.map((r) => [r.id, r]));
     // Fallback (save before any load this pageload — shouldn't happen, since
     // autosave requires hydration): treat the server's rows as known, which
     // reduces to last-writer-wins for deletes but still never resurrects.

@@ -177,6 +177,39 @@ export async function decryptField(value) {
 }
 
 /**
+ * Decrypt the named fields of one DB row. `textFields` go through
+ * decryptField, `jsonFields` through decryptJson. Plaintext rows are
+ * returned as the SAME object (no copy), so callers that compare row
+ * identity or stringify for diffs see no change until encrypted data
+ * actually exists. Phase 2 (decrypt-on-read): storage modules call this on
+ * every row fetched from Supabase, immediately after the fetch and before
+ * any caching, diff baselining, or mapping to app payloads.
+ */
+export async function decryptRow(row, textFields = [], jsonFields = []) {
+  if (!row || typeof row !== 'object') return row;
+  let out = null;
+  for (const f of textFields) {
+    if (isEncrypted(row[f])) {
+      out = out || { ...row };
+      out[f] = await decryptField(row[f]);
+    }
+  }
+  for (const f of jsonFields) {
+    if (isEncrypted(row[f])) {
+      out = out || { ...row };
+      out[f] = await decryptJson(row[f]);
+    }
+  }
+  return out || row;
+}
+
+/** decryptRow over an array. Non-arrays pass through unchanged. */
+export async function decryptRows(rows, textFields = [], jsonFields = []) {
+  if (!Array.isArray(rows)) return rows;
+  return Promise.all(rows.map((r) => decryptRow(r, textFields, jsonFields)));
+}
+
+/**
  * Encrypt a JSON-serialisable payload into a single `enc1:` string.
  * Fallback: with no key loaded, returns the payload unchanged (caller
  * stores it as before).

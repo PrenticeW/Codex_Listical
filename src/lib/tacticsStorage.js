@@ -41,6 +41,7 @@
 
 import { supabase } from './supabase';
 import { getCached, hasCached, setCached, onSessionReset } from './storageCache';
+import { decryptRows } from './crypto';
 import { debounceSiteSnapshot } from './snapshotStorage';
 
 // --- cache namespacing -------------------------------------------------
@@ -557,8 +558,10 @@ async function fetchChipsLayerFromDb({ userId, yearId, isSent }) {
   if (customRes.error) throw customRes.error;
   if (versionRes?.error) throw versionRes.error;
 
-  const chipRows = chipsRes.data || [];
-  const customRows = customRes.data || [];
+  // Phase 2 (decrypt-on-read, docs/encryption-plan.md): decrypt the
+  // encrypted columns before any mapping/caching. No-op on plaintext.
+  const chipRows = await decryptRows(chipsRes.data || [], ['display_label']);
+  const customRows = await decryptRows(customRes.data || [], ['label']);
 
   let result;
   if (chipRows.length === 0 && customRows.length === 0) {

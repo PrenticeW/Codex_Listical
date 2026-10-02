@@ -33,3 +33,6 @@ dist-ssr
 # Supabase (if using local development)
 .supabase
 .vercel
+
+# Local database exports (contain real user data — never commit)
+db-exports/

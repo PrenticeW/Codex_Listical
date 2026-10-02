@@ -40,6 +40,7 @@
  */
 
 import { supabase, CLIENT_BUILD } from '../../lib/supabase';
+import { decryptRows } from '../../lib/crypto';
 import { createInitialData } from './dataCreators';
 import { ensureOrderKeys, assignMissingKeys, compareRowOrder, isValidOrderKey } from './orderKey';
 import { loadTacticsMetrics } from '../../lib/tacticsMetricsStorage';
@@ -62,6 +63,11 @@ import {
   replayPendingSaves,
   scheduleOfflineRetry,
 } from '../../lib/plannerOffline';
+
+// Phase 2 (decrypt-on-read, docs/encryption-plan.md): the encrypted text
+// columns of planner_rows. archived_weeks.snapshot (jsonb) is handled via
+// decryptRows' jsonFields argument at its read sites.
+const PLANNER_ROW_ENC_TEXT = ['task', 'notes', 'subproject_label'];
 
 export { DEFAULT_PROJECT_ID };
 export { hasPendingOfflineSave } from '../../lib/plannerOffline';
@@ -1149,32 +1155,42 @@ export const readTaskRows = async (
     if (tasksRes.error) throw tasksRes.error;
     if (archivesRes.error) throw archivesRes.error;
 
+    // Phase 2 (decrypt-on-read, docs/encryption-plan.md): decrypt BEFORE
+    // any bookkeeping, so the diff baselines (_baselineRows) snapshot
+    // PLAINTEXT values — desired rows stay plaintext until Phase 3 encrypts
+    // at the write boundary, and a baseline of ciphertext would make every
+    // row look remotely-changed. No-op while data is plaintext.
+    const taskData = await decryptRows(
+      tasksRes.data || [], PLANNER_ROW_ENC_TEXT,
+    );
+    const archiveData = await decryptRows(archivesRes.data || [], [], ['snapshot']);
+
     // Record which planner_rows ids this client has seen server-side. The
     // diff-based save uses this to tell "row web created" apart from "row
     // another client (mobile) created that web hasn't refreshed in yet",
     // and "row web deleted" apart from "row deleted remotely".
-    _knownRowIds.set(yearNumber, new Set((tasksRes.data || []).map((r) => r.id)));
+    _knownRowIds.set(yearNumber, new Set(taskData.map((r) => r.id)));
     _sessionOrderKeys.set(
       yearNumber,
-      new Map((tasksRes.data || [])
+      new Map(taskData
         .filter((r) => isValidOrderKey(r.order_key))
         .map((r) => [r.id, r.order_key])),
     );
     // Baseline for the three-way diff save: the server state these rows were
     // read as. Saves advance it only with web's own writes, so fields another
     // client changes after this read stay recognisable as remote.
-    _baselineRows.set(yearNumber, new Map((tasksRes.data || []).map((r) => [r.id, baselineSnap(r)])));
+    _baselineRows.set(yearNumber, new Map(taskData.map((r) => [r.id, baselineSnap(r)])));
     // High-water mark of this read: the newest planner_rows.updated_at the
     // server showed us. Any server row newer than this at save time was
     // written by another client after this read (clock-skew free — both
     // sides are server timestamps). Also marks the year as server-read this
     // session (see isPlannerYearServerFresh).
-    _readHighWater.set(yearNumber, maxUpdatedAt(tasksRes.data || []));
+    _readHighWater.set(yearNumber, maxUpdatedAt(taskData));
     _serverReadYears.add(yearNumber);
 
     const totalDays = yearRow.total_days || DEFAULT_TOTAL_DAYS;
     const startDate = yearRow.start_date || todayIso();
-    const taskCount = (tasksRes.data || []).length;
+    const taskCount = taskData.length;
 
     // Build the eight calendar header rows from scratch. createInitialData
     // produces both headers and a configurable number of blank rows; we
@@ -1188,10 +1204,10 @@ export const readTaskRows = async (
       startDate,
     );
 
-    const taskRows = (tasksRes.data || [])
+    const taskRows = taskData
       .map(plannerRowDbToPayload)
       .sort(compareRowOrder);
-    const archiveRows = (archivesRes.data || []).map(archiveRowDbToPayload);
+    const archiveRows = archiveData.map(archiveRowDbToPayload);
 
     let result;
     if (taskCount === 0 && archiveRows.length === 0) {
@@ -1697,7 +1713,11 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       .eq('user_id', userId)
       .eq('year_id', yearId);
     if (currentErr) throw currentErr;
-    const currentById = new Map((currentData || []).map((r) => [r.id, r]));
+    // Phase 2: decrypt before the three-way diff / structural adoption, so
+    // the save always compares plaintext-to-plaintext (desired rows stay
+    // plaintext until Phase 3 encrypts at the write boundary).
+    const decryptedCurrent = await decryptRows(currentData || [], PLANNER_ROW_ENC_TEXT);
+    const currentById = new Map(decryptedCurrent.map((r) => [r.id, r]));
 
     // Structural identity (2026-10-02; extends the 2026-09-15 guard's key).
     // One canonical key per one-per-year / one-per-project / one-per-chip
@@ -1743,7 +1763,7 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     // project rows) — the copy every client converges on.
     const serverRowByStructKey = new Map();
     {
-      const byCreated = [...(currentData || [])].sort((a, b) =>
+      const byCreated = [...decryptedCurrent].sort((a, b) =>
         String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')));
       for (const r of byCreated) {
         const extra = r?.day_entries?.__extra || {};
@@ -2072,8 +2092,11 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
         .eq('user_id', userId)
         .eq('year_id', yearId);
       if (existingRes.error) throw existingRes.error;
+      // Phase 2: snapshot may be an enc1 string once Phase 3+ lands; the
+      // snapId match below needs the decrypted object. No-op on plaintext.
+      const existingArchived = await decryptRows(existingRes.data || [], [], ['snapshot']);
       const existingBySnapId = new Map(
-        (existingRes.data || [])
+        existingArchived
           .filter((r) => r.snapshot && typeof r.snapshot.id === 'string')
           .map((r) => [r.snapshot.id, r]),
       );
@@ -2226,9 +2249,10 @@ export const preloadChipTaskNotes = async () => {
       .eq('user_id', userId);
     if (error) throw error;
 
-    // Populate cache from Supabase.
+    // Populate cache from Supabase (Phase 2: decrypt-on-read).
+    const noteRows = await decryptRows(data || [], ['note']);
     chipNotesCache.clear();
-    for (const row of data) {
+    for (const row of noteRows) {
       chipNotesCache.set(row.chip_id, row.note || null);
     }
 
@@ -2432,7 +2456,8 @@ export const readTaskEvents = async (taskId) => {
       .eq('user_id', userId)
       .order('changed_at', { ascending: false });
     if (error) throw error;
-    return data ?? [];
+    // Phase 2: decrypt-on-read for the three encrypted task_events columns.
+    return decryptRows(data ?? [], ['old_value', 'new_value', 'note']);
   } catch (error) {
     console.error('Failed to read task events', error);
     return [];

@@ -35,6 +35,7 @@
  */
 
 import { supabase } from './supabase';
+import { decryptRows, decryptJson } from './crypto';
 import { showStatusPill } from './statusPill';
 import { clearForYear } from './storageCache';
 import {
@@ -238,7 +239,8 @@ async function captureTaskEvents(taskRows) {
       .eq('user_id', userId)
       .in('task_id', taskIds);
     if (error) throw error;
-    return data ?? [];
+    // Phase 2 (decrypt-on-read): snapshots must capture plaintext values.
+    return decryptRows(data ?? [], ['old_value', 'new_value', 'note']);
   } catch {
     return null;
   }
@@ -312,7 +314,8 @@ async function captureCustomProjects(yearNumber) {
       .eq('year_id', yearId)
       .eq('is_sent', false);
     if (error) throw error;
-    return (data ?? []).map((r) => ({ id: r.external_id, label: r.label, color: r.color }));
+    const rows = await decryptRows(data ?? [], ['label']); // Phase 2 decrypt-on-read
+    return rows.map((r) => ({ id: r.external_id, label: r.label, color: r.color }));
   } catch {
     return null;
   }
@@ -349,7 +352,8 @@ async function captureChipNotes(yearNumber) {
       .in('chip_id', chipIds);
     if (noteError) throw noteError;
 
-    return (noteRows ?? []).map((r) => ({ chipId: r.chip_id, note: r.note }));
+    const decrypted = await decryptRows(noteRows ?? [], ['note']); // Phase 2 decrypt-on-read
+    return decrypted.map((r) => ({ chipId: r.chip_id, note: r.note }));
   } catch {
     return null;
   }
@@ -732,7 +736,15 @@ export async function loadSiteSnapshots(yearNumber) {
       .limit(SNAPSHOT_CAP);
 
     if (error) throw error;
-    return data ?? [];
+    // Phase 2 (decrypt-on-read): once Phase 3+ stores goal/plan/system as
+    // enc1 strings, decryptJson restores the objects; today it is a no-op
+    // on the plaintext jsonb values.
+    return Promise.all((data ?? []).map(async (row) => ({
+      ...row,
+      goal: await decryptJson(row.goal),
+      plan: await decryptJson(row.plan),
+      system: await decryptJson(row.system),
+    })));
   } catch (err) {
     console.error('loadSiteSnapshots failed', err);
     return [];

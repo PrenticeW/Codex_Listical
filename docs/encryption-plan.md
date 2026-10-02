@@ -1,9 +1,16 @@
 # Encryption plan — application-level encryption of user content
 
-Status: **Phase 1 live in production** (deployed 2026-09-30; branch `encryption` in both repos). Read alongside `docs/compliance.md`.
+Status: **Phase 2 (decrypt-on-read) built, awaiting deploy** (deployed 2026-09-30; branch `encryption` in both repos). Read alongside `docs/compliance.md`.
 
 ## Progress log
 
+- **2026-10-02 — Pre-step + Phase 2 (decrypt-on-read) built.**
+  - Backup tables `planner_rows_backup_20260719` and `planner_rows_ghost_backup_20260921` exported to `db-exports/` (625 + 30 rows, JSON) and dropped from Supabase.
+  - `decryptRow`/`decryptRows` helpers added to both crypto.js files (plaintext rows returned as the SAME object, so identity/diff behaviour is unchanged until encrypted data exists).
+  - Web: every Supabase read of an encrypted table now decrypts at the fetch boundary, before caching/baselining — stagingStorage (projects, incl. the diff-save's existing-rows read), tacticsStorage (tactics_chips, tactics_custom_projects), planner storage.js (planner_rows reads in readTaskRows AND the save's currentData/structural pass, archived_weeks snapshot reads, chip_task_notes preload, task_events read), snapshotStorage (captureTaskEvents/CustomProjects/ChipNotes decrypt so snapshots store plaintext; loadSiteSnapshots runs goal/plan/system through decryptJson ready for the _enc columns).
+  - Mobile plannerApi.js: fetchProjects, fetchPlannerRows, fetchRow, upsertRowPayload's returned row all decrypt at the boundary. Realtime handlers only trigger refetches, so no change there.
+  - `planning_history` has no client reads (trigger-written) — nothing to do for it in Phase 2.
+  - Web vitest suite: 179/179 passing. Next: observe in prod, verify offline replay + exports + cross-page events on real data, then Phase 3 (encrypt-on-write per table, starting chip_task_notes). Mobile dev-client rebuild with react-native-quick-crypto still pending and blocks Phase 3.
 - **2026-09-30 — Phase 1 built and deployed.**
   - `user_keys` table live (RLS enabled, no policies, client privileges revoked; service role only).
   - `data-key` Edge Function deployed (v2) with `TACULAR_MASTER_KEY` secret set; master key also in the password manager. CORS gotcha found and fixed: the client sends `x-tacular-client` on every request, so Edge Function CORS `Access-Control-Allow-Headers` must include it (fixed in `data-key` and `_shared/cors.ts`; without it the browser kills `functions.invoke` at preflight and no request ever appears).
