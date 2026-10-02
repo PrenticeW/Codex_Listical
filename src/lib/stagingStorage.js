@@ -21,7 +21,7 @@ import { supabase } from './supabase';
 import { defineRowMetadata } from '../utils/staging/planTableHelpers';
 import { getCached, hasCached, setCached, invalidate, onSessionReset } from './storageCache';
 import { debounceSiteSnapshot } from './snapshotStorage';
-import { decryptRows } from './crypto';
+import { decryptRows, decryptJsonPreferEnc, encryptField, encryptJson, encryptWritesEnabled } from './crypto';
 
 // Phase 2 (decrypt-on-read, docs/encryption-plan.md): the encrypted columns
 // of `projects`. Every row fetched from Supabase goes through decryptRows
@@ -29,6 +29,44 @@ import { decryptRows } from './crypto';
 // is still plaintext.
 const PROJECT_ENC_TEXT = ['text', 'project_name', 'project_nickname', 'project_tagline'];
 const PROJECT_ENC_JSON = ['plan_table_entries'];
+
+// Phase 3 (projects flip): plan_table_entries ciphertext lives in the
+// sibling text column plan_table_entries_enc; the jsonb column holds an []
+// placeholder when encrypted. Reads prefer the _enc value (no-op on
+// plaintext rows), so every fetched row goes through this AFTER decryptRows.
+async function decryptProjectRows(rows) {
+  const decrypted = await decryptRows(rows ?? [], PROJECT_ENC_TEXT, PROJECT_ENC_JSON);
+  return Promise.all(decrypted.map(async (r) => {
+    if (r && r.plan_table_entries_enc != null) {
+      return {
+        ...r,
+        plan_table_entries: await decryptJsonPreferEnc(
+          r.plan_table_entries_enc, r.plan_table_entries,
+        ),
+      };
+    }
+    return r;
+  }));
+}
+
+// Phase 3 (projects flip): encrypt a desired DB row at the Supabase write
+// boundary — ONLY after the plaintext diff (stagingRowDiffers must always
+// compare plaintext-to-plaintext). With the flag off, plan_table_entries_enc
+// is nulled so rollback keeps one source of truth.
+async function encryptProjectRowForWrite(row) {
+  if (!encryptWritesEnabled('projects')) {
+    return { ...row, plan_table_entries_enc: null };
+  }
+  return {
+    ...row,
+    text: await encryptField(row.text ?? ''),
+    project_name: row.project_name == null ? null : await encryptField(row.project_name),
+    project_nickname: row.project_nickname == null ? null : await encryptField(row.project_nickname),
+    project_tagline: row.project_tagline == null ? null : await encryptField(row.project_tagline),
+    plan_table_entries_enc: await encryptJson(row.plan_table_entries ?? []),
+    plan_table_entries: [],
+  };
+}
 
 export const STAGING_STORAGE_EVENT = 'staging-state-update';
 
@@ -421,7 +459,7 @@ async function fetchStagingStateFromServer(yearNumber, { recordIds = true } = {}
     .order('display_order', { ascending: true });
   if (error) throw error;
 
-  const rows = await decryptRows(data ?? [], PROJECT_ENC_TEXT, PROJECT_ENC_JSON);
+  const rows = await decryptProjectRows(data ?? []);
   const shortlist = [];
   const archived = [];
   for (const row of rows) {
@@ -584,9 +622,7 @@ async function _saveStagingStateImpl(payload, yearNumber) {
     // Decrypt before diffing so stagingRowDiffers always compares
     // plaintext-to-plaintext (desired rows are plaintext until Phase 3
     // encrypts at the write boundary). No-op on plaintext rows.
-    const decryptedExisting = await decryptRows(
-      existingRows ?? [], PROJECT_ENC_TEXT, PROJECT_ENC_JSON,
-    );
+    const decryptedExisting = await decryptProjectRows(existingRows ?? []);
     const currentById = new Map(decryptedExisting.map((r) => [r.id, r]));
     // Fallback (save before any load this pageload — shouldn't happen, since
     // autosave requires hydration): treat the server's rows as known, which
@@ -623,9 +659,11 @@ async function _saveStagingStateImpl(payload, yearNumber) {
     }
 
     if (toUpsert.length > 0) {
+      // Phase 3: encrypt AFTER the plaintext diff, at the write boundary.
+      const encryptedUpserts = await Promise.all(toUpsert.map(encryptProjectRowForWrite));
       const { error: upsertErr } = await supabase
         .from('projects')
-        .upsert(toUpsert, { onConflict: 'id' });
+        .upsert(encryptedUpserts, { onConflict: 'id' });
       if (upsertErr) throw upsertErr;
     }
 
@@ -744,9 +782,13 @@ export async function saveProjectTagline(projectId, tagline, yearNumber) {
 
   try {
     const userId = await requireUserId();
+    // Phase 3: encrypt at the write boundary (no-op with the flag off).
+    const stored = (value && encryptWritesEnabled('projects'))
+      ? await encryptField(value)
+      : (value || null);
     const { error } = await supabase
       .from('projects')
-      .update({ project_tagline: value || null })
+      .update({ project_tagline: stored })
       .eq('user_id', userId)
       .eq('id', projectId);
     if (error) throw error;
