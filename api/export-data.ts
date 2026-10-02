@@ -57,7 +57,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `attachment; filename="Tacular-data-export-${date}.json"`
     );
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).send(JSON.stringify(result.payload, null, 2));
+    // Compact JSON: pretty-printing quadrupled a 44 MB export to 190 MB
+    // (2026-10-02). Machine-readable is what Art. 20 asks for.
+    return res.status(200).send(JSON.stringify(result.payload));
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.error('[export-data] Unexpected error:', message);
