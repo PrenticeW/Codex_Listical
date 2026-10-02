@@ -1,5 +1,15 @@
 # Known Issues and Dead Code
 
+## 2026-10-02 — duplicate structure + cross-device jumbling, root-cause fix
+
+**Symptom (recurring):** duplicate project headers, General/Unscheduled rows, chip subheaders and chip task rows after using two machines (batches created 09-08, 09-15, 09-26, 10-01); rows reshuffled ("jumbled") after switching machines.
+
+**Causes found:** (1) a client whose IndexedDB bookkeeping was missing/stale re-minted UUIDs for synthetic-id structural rows and the save planned a wholesale replace; the wipe circuit breaker then refused the deletes but KEPT the inserts — full duplicate set beside the originals. `structuralKey` also didn't cover subprojectHeader/chip rows at all. (2) `ensureOrderKeys`' LIS pass judged "out of place" against the saving client's own in-memory sequence, so a stale machine's first save rewrote keys for rows the other machine had moved.
+
+**Fixes:** identity adoption (save fetches server rows first and adopts the existing row per structural key before minting), extended `structuralKey`, breaker drops replacement inserts with refused deletes, unique index `planner_rows_structural_uniq` as DB backstop; intent-gated ordering (`markRowsMoved` + `assignMissingKeys`, web and mobile — see CLAUDE.md). Tests: `intentGatedSync.test.js`. Data deduped+merged by SQL (134 rows, keepers kept merged cells/completions/notes).
+
+**Residual:** an OLD build in a still-open tab hitting the unique index gets a failing save (retry loop) instead of a duplicate — hard-refresh fixes it. Simultaneous reorder of the SAME rows on two machines resolves per-row last-writer.
+
 ## Do not make worse
 
 | Issue | Detail |

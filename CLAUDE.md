@@ -61,9 +61,13 @@ Pages communicate via custom browser events. **Do not add direct imports between
 
 **Year-scoping on events:** Every year-scoped event carries `__eventYear` in `CustomEvent.detail`. Listeners short-circuit if `event.detail.__eventYear` does not match their own `currentYear`. `yearMetadataStorage` and the two theme events are intentionally not tagged (not year-scoped). Include `__eventYear` in any new year-scoped cross-page event.
 
-### Row ordering — order_key, never renumber
+### Row ordering — order_key, intent-gated, never renumber
 
-System page row order is `planner_rows.order_key` (base-62 fractional key, byte-order/`COLLATE "C"`; see `src/utils/planner/orderKey.js`), assigned per row and rewritten only when that row moves. `display_order` is legacy: stamped on INSERT only, never updated, used only as the sort fallback for null-key rows from pre-fix clients. Never reintroduce a global renumber pass or add `display_order` back to the save's `DIFF_KEYS` — that was the cross-device "tasks jumbled" bug (2026-09-22, docs/known-issues.md).
+System page row order is `planner_rows.order_key` (base-62 fractional key, byte-order/`COLLATE "C"`; see `src/utils/planner/orderKey.js`), assigned per row and rewritten ONLY for rows registered as user-moved (`plannerStorage.markRowsMoved`, called by the drag/sort/move handlers) or rows with no valid key (2026-10-02 intent gating; `assignMissingKeys`). An unmoved row always keeps the SERVER's key — a stale client must never "correct" another device's ordering (the old LIS pass in `ensureOrderKeys` did exactly that; do not reintroduce it in the save). Any NEW code path that repositions existing rows must call `markRowsMoved` with the moved ids, or the move won't persist. Mobile parity: `persistReorder(projects, inbox, movedIds)` in tacular-mobile. `display_order` is legacy: stamped on INSERT only, never updated, sort fallback for null-key rows. Never reintroduce a global renumber pass or add `display_order` back to the save's `DIFF_KEYS` — that was the cross-device "tasks jumbled" bug (2026-09-22, docs/known-issues.md).
+
+### Structural row identity — server-side, never re-mint
+
+Every one-per-year / one-per-project / one-per-chip row (Inbox divider, Archive header, project header/General/Unscheduled, chip group headers, chip task rows, deletedChip tombstones) has a structural key (`structuralKey` in `src/utils/planner/storage.js`). The save resolves a synthetic client id by ADOPTING the server row with the same key before ever minting a UUID (2026-10-02 duplicate-structure fix), and a unique Postgres index (`planner_rows_structural_uniq`) backstops it. If you add a new structural row type, add it to `structuralKey`, `clientStructuralKeys`, AND the index expression, or two machines will duplicate it. The wipe circuit breaker drops replacement inserts together with the deletes it refuses — never let a save half-apply a replacement.
 
 ### Year scoping
 

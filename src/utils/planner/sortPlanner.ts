@@ -192,8 +192,9 @@ export const createSortPlannerCommand = (params: {
   data: any[];
   selectedSortStatuses: Set<string>;
   setData: React.Dispatch<React.SetStateAction<any[]>>;
+  onRowsMoved?: (rowIds: string[]) => void;
 }): { execute: () => void; undo: () => void } | null => {
-  const { data, selectedSortStatuses, setData } = params;
+  const { data, selectedSortStatuses, setData, onRowsMoved } = params;
 
   // Early exit if no statuses are selected
   if (selectedSortStatuses.size === 0) {
@@ -241,9 +242,11 @@ export const createSortPlannerCommand = (params: {
       setData(prevData => {
         return executeSortPlanner(prevData, generalTasksByProject, unscheduledTasksByProject, tasksToMove);
       });
+      if (onRowsMoved) onRowsMoved([...tasksToMove]);
     },
     undo: () => {
       setData(oldData);
+      if (onRowsMoved) onRowsMoved([...tasksToMove]);
     },
   };
 };

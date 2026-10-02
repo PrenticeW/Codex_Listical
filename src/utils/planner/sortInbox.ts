@@ -191,8 +191,9 @@ export const createSortInboxCommand = (params: {
   data: any[];
   selectedSortStatuses: Set<string>;
   setData: React.Dispatch<React.SetStateAction<any[]>>;
+  onRowsMoved?: (rowIds: string[]) => void;
 }): { execute: () => void; undo: () => void } | null => {
-  const { data, selectedSortStatuses, setData } = params;
+  const { data, selectedSortStatuses, setData, onRowsMoved } = params;
 
   // Early exit if no statuses are selected
   if (selectedSortStatuses.size === 0) {
@@ -239,9 +240,11 @@ export const createSortInboxCommand = (params: {
       setData(prevData => {
         return executeSortInbox(prevData, generalTasksByProject, unscheduledTasksByProject, tasksToMove);
       });
+      if (onRowsMoved) onRowsMoved([...tasksToMove]);
     },
     undo: () => {
       setData(oldData);
+      if (onRowsMoved) onRowsMoved([...tasksToMove]);
     },
   };
 };
@@ -300,8 +303,9 @@ export const createMoveSelectionCommand = (params: {
   data: any[];
   selectedRows: Set<string>;
   setData: React.Dispatch<React.SetStateAction<any[]>>;
+  onRowsMoved?: (rowIds: string[]) => void;
 }): { command: { execute: () => void; undo: () => void }; movedCount: number } | null => {
-  const { data, selectedRows, setData } = params;
+  const { data, selectedRows, setData, onRowsMoved } = params;
   if (!selectedRows || selectedRows.size === 0) return null;
 
   const collected = collectSelection(data, selectedRows);
@@ -318,9 +322,11 @@ export const createMoveSelectionCommand = (params: {
         setData(prevData =>
           executeSortInbox(prevData, generalTasksByProject, unscheduledTasksByProject, tasksToMove)
         );
+        if (onRowsMoved) onRowsMoved([...tasksToMove]);
       },
       undo: () => {
         setData(oldData);
+        if (onRowsMoved) onRowsMoved([...tasksToMove]);
       },
     },
   };

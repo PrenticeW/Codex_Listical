@@ -41,7 +41,7 @@
 
 import { supabase, CLIENT_BUILD } from '../../lib/supabase';
 import { createInitialData } from './dataCreators';
-import { ensureOrderKeys, compareRowOrder, isValidOrderKey } from './orderKey';
+import { ensureOrderKeys, assignMissingKeys, compareRowOrder, isValidOrderKey } from './orderKey';
 import { loadTacticsMetrics } from '../../lib/tacticsMetricsStorage';
 import { debounceSiteSnapshot } from '../../lib/snapshotStorage';
 import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
@@ -1402,6 +1402,22 @@ const _baselineRows = new Map(); // yearNumber -> Map<id, {DIFF_KEYS subset}>
 // page-state rebuilds and a save never re-mints keys for unmoved rows.
 const _sessionOrderKeys = new Map();
 
+// Rows the USER moved this session (2026-10-02 intent-gated ordering).
+// yearNumber -> Set<client row id>. The save only rewrites order_key for
+// rows in this set (and rows with no valid key); every other row keeps the
+// SERVER's key, so a stale machine can never silently undo another
+// machine's reordering. Registered by the drag-and-drop drop/undo handlers
+// and by the chip-sync repositioning pass; captured (and cleared) with the
+// save's bookkeeping so offline replays re-apply the move exactly once.
+const _movedRowIds = new Map();
+
+export function markRowsMoved(yearNumber, ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return;
+  let set = _movedRowIds.get(yearNumber);
+  if (!set) { set = new Set(); _movedRowIds.set(yearNumber, set); }
+  for (const id of ids) if (id != null) set.add(id);
+}
+
 function baselineSnap(dbRow) {
   const snap = {};
   for (const key of DIFF_KEYS) snap[key] = dbRow[key] ?? null;
@@ -1585,11 +1601,18 @@ export const saveTaskRows = (
 // high-water mark (ISO string, '' for an empty year) or null when this
 // session has no server basis for the year at all.
 function captureBookkeeping(yearNumber) {
+  // movedIds is consumed on capture: the save that carries it writes the
+  // moved rows' new keys (which then persist via the server/session maps),
+  // so later saves must not treat the rows as freshly moved.
+  const moved = _movedRowIds.get(yearNumber);
+  const movedIds = moved ? [...moved] : [];
+  if (moved) moved.clear();
   return {
     knownIds: [...(_knownRowIds.get(yearNumber) || [])],
     synIds: [...(_syntheticRowIds.get(yearNumber) || new Map())],
     baseline: [...(_baselineRows.get(yearNumber) || new Map())],
     basedOnAt: _readHighWater.has(yearNumber) ? _readHighWater.get(yearNumber) : null,
+    movedIds,
   };
 }
 
@@ -1664,6 +1687,80 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
         if (!synMap.has(synthetic)) synMap.set(synthetic, uuid);
       }
     }
+    // Server rows are fetched BEFORE synthetic-id resolution (2026-10-02
+    // duplicate-structure fix): a synthetic id with no live mapping adopts
+    // the server's existing row of the same structural identity instead of
+    // minting a fresh UUID that would insert a second copy beside it.
+    const { data: currentData, error: currentErr } = await supabase
+      .from('planner_rows')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('year_id', yearId);
+    if (currentErr) throw currentErr;
+    const currentById = new Map((currentData || []).map((r) => [r.id, r]));
+
+    // Structural identity (2026-10-02; extends the 2026-09-15 guard's key).
+    // One canonical key per one-per-year / one-per-project / one-per-chip
+    // row: the Inbox divider, the Archive header, project header / General /
+    // Unscheduled rows, chip group headers, chip task rows, and deletedChip
+    // tombstones. Two machines computing the same key converge on one row.
+    const structuralKey = (dbRow) => {
+      const extra = dbRow?.day_entries?.__extra || {};
+      if (extra._isInboxRow) return 'inbox';
+      const t = extra._rowType;
+      if (t === 'archiveHeader') return 'archive';
+      if (t === 'projectHeader' || t === 'projectUnscheduled' || t === 'projectGeneral') {
+        return `${t}:${dbRow.project_id ?? extra.projectNickname ?? ''}`;
+      }
+      if (t === 'subprojectHeader' && (extra._chipGroupKey || extra._chipId)) {
+        return `chipHeader:${extra._chipGroupKey ?? extra._chipId}`;
+      }
+      if (t === 'projectTask' && extra._chipId) return `chipTask:${extra._chipId}`;
+      if (t === 'deletedChip') return `tombstone:${extra._chipGroupKey ?? extra._chipId ?? ''}`;
+      return null;
+    };
+    // Client-row mirror of structuralKey, returning every key variant the
+    // row could be known by on the server (project rows match by project_id
+    // AND by nickname — older server rows may lack project_id).
+    const clientStructuralKeys = (row) => {
+      if (row._isInboxRow) return ['inbox'];
+      const t = row._rowType;
+      if (t === 'archiveHeader') return ['archive'];
+      if (t === 'projectHeader' || t === 'projectUnscheduled' || t === 'projectGeneral') {
+        const keys = [];
+        if (row.projectId) keys.push(`${t}:${row.projectId}`);
+        if (row.projectNickname) keys.push(`${t}:${row.projectNickname}`);
+        return keys;
+      }
+      if (t === 'subprojectHeader' && (row._chipGroupKey || row._chipId)) {
+        return [`chipHeader:${row._chipGroupKey ?? row._chipId}`];
+      }
+      if (t === 'projectTask' && row._chipId) return [`chipTask:${row._chipId}`];
+      if (t === 'deletedChip') return [`tombstone:${row._chipGroupKey ?? row._chipId ?? ''}`];
+      return [];
+    };
+    // Oldest server row per structural key (plus the nickname variant for
+    // project rows) — the copy every client converges on.
+    const serverRowByStructKey = new Map();
+    {
+      const byCreated = [...(currentData || [])].sort((a, b) =>
+        String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')));
+      for (const r of byCreated) {
+        const extra = r?.day_entries?.__extra || {};
+        const keys = [];
+        const k = structuralKey(r);
+        if (k) keys.push(k);
+        const t = extra._rowType;
+        if ((t === 'projectHeader' || t === 'projectUnscheduled' || t === 'projectGeneral')
+            && r.project_id && extra.projectNickname) {
+          keys.push(`${t}:${extra.projectNickname}`);
+        }
+        for (const key of keys) {
+          if (!serverRowByStructKey.has(key)) serverRowByStructKey.set(key, r);
+        }
+      }
+    }
+
     // UUIDs minted in THIS save (synthetic ids nobody mapped before — not
     // this session, not the snapshot, not the pending record). Only these
     // are provably rows web just created; a mapping adopted from persisted
@@ -1672,42 +1769,58 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     const desiredRows = persistedTaskRows.map((row, idx) => {
       let id = row.id;
       if (!(typeof id === 'string' && UUID_RE.test(id))) {
-        if (!synMap.has(id)) {
-          const uuid = crypto.randomUUID();
-          synMap.set(id, uuid);
-          mintedHere.add(uuid);
+        // Resolve the synthetic id. A persisted mapping that no longer
+        // points at a live server row is re-resolved — it may describe a
+        // row another client deleted and re-created under a new UUID.
+        const mapped = synMap.get(id);
+        const mappedLive = mapped != null && currentById.has(mapped);
+        if (!mapped || !mappedLive) {
+          let adopted = null;
+          for (const k of clientStructuralKeys(row)) {
+            const existing = serverRowByStructKey.get(k);
+            if (existing) { adopted = existing.id; break; }
+          }
+          if (adopted) {
+            synMap.set(id, adopted);
+          } else if (!mapped) {
+            const uuid = crypto.randomUUID();
+            synMap.set(id, uuid);
+            mintedHere.add(uuid);
+          }
         }
         id = synMap.get(id);
       }
       return plannerRowPayloadToDb({ row: { ...row, id }, userId, yearId, displayOrder: idx });
     });
 
-    // Assign per-row order keys (2026-09-22 reorder fix). Effective key for
-    // each row: this session's map first (server truth + earlier saves this
-    // session), then whatever the payload carried (offline replay: the
-    // snapshot's keys). ensureOrderKeys then rewrites keys ONLY for rows out
-    // of place relative to the longest already-consistent run — a moved or
-    // newly inserted row gets a fresh key, an untouched row keeps its own —
-    // so this save can never flatten another device's ordering wholesale.
+    // Assign per-row order keys — intent-gated (2026-10-02, replacing the
+    // 2026-09-22 LIS pass). The old pass judged "out of place" against THIS
+    // client's in-memory sequence, so a machine opened with a stale picture
+    // rewrote keys for rows another machine had moved — the cross-device
+    // "jumbled rows" bug. Now a row's key is only ever rewritten when (a)
+    // the user moved it on this client (bookkeeping.movedIds, registered by
+    // the drop handlers) or (b) it has no valid key yet / duplicates another
+    // key. Every other row keeps the SERVER's current key, falling back to
+    // the session map and then the payload for rows the server doesn't have.
     {
       let keyMap = _sessionOrderKeys.get(yearNumber);
       if (!keyMap) { keyMap = new Map(); _sessionOrderKeys.set(yearNumber, keyMap); }
-      const keyRows = desiredRows.map((d) => ({
-        id: d.id,
-        orderKey: keyMap.get(d.id) ?? (isValidOrderKey(d.order_key) ? d.order_key : null),
-      }));
-      ensureOrderKeys(keyRows);
+      const movedIds = new Set();
+      if (Array.isArray(bookkeeping?.movedIds)) {
+        for (const mid of bookkeeping.movedIds) movedIds.add(synMap.get(mid) ?? mid);
+      }
+      const keyRows = desiredRows.map((d) => {
+        if (movedIds.has(d.id)) return { id: d.id, orderKey: null }; // rekey between new neighbours
+        const serverKey = currentById.get(d.id)?.order_key;
+        if (isValidOrderKey(serverKey)) return { id: d.id, orderKey: serverKey };
+        const own = keyMap.get(d.id) ?? (isValidOrderKey(d.order_key) ? d.order_key : null);
+        return { id: d.id, orderKey: own };
+      });
+      assignMissingKeys(keyRows);
       for (const kr of keyRows) keyMap.set(kr.id, kr.orderKey);
       for (const d of desiredRows) d.order_key = keyMap.get(d.id);
     }
 
-    const { data: currentData, error: currentErr } = await supabase
-      .from('planner_rows')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('year_id', yearId);
-    if (currentErr) throw currentErr;
-    const currentById = new Map((currentData || []).map((r) => [r.id, r]));
     const desiredIds = new Set(desiredRows.map((r) => r.id));
     // Fallback (save before any read this pageload — shouldn't happen, since
     // autosave requires hydration): treat the server's rows as known, which
@@ -1734,20 +1847,12 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       ? (typeof bookkeeping.basedOnAt === 'string' ? bookkeeping.basedOnAt : null)
       : (_readHighWater.has(yearNumber) ? _readHighWater.get(yearNumber) : null);
     const hasBasis = basedOnAt !== null;
-    // Structural rows (Inbox divider, Archive header, project headers) exist
-    // once per year / per project. With no server basis we cannot tell "web
-    // just created this one" from "the cache lost the id of the one the
-    // server already has" — both get a freshly minted UUID — so never insert
-    // a structural row whose kind is already on the server.
-    const structuralKey = (dbRow) => {
-      const extra = dbRow?.day_entries?.__extra || {};
-      if (extra._isInboxRow) return 'inbox';
-      if (extra._rowType === 'archiveHeader') return 'archive';
-      if (extra._rowType === 'projectHeader' || extra._rowType === 'projectUnscheduled' || extra._rowType === 'projectGeneral') {
-        return `${extra._rowType}:${dbRow.project_id ?? extra.projectNickname ?? ''}`;
-      }
-      return null;
-    };
+    // Structural rows exist once per year / per project / per chip. With no
+    // server basis we cannot tell "web just created this one" from "the
+    // cache lost the id of the one the server already has" — so never
+    // insert a structural row whose kind is already on the server.
+    // (structuralKey itself is defined above, next to the identity
+    // adoption that uses it.)
     const serverStructural = new Set();
     const serverStructuralRows = new Map(); // structuralKey -> [server rows]
     for (const r of currentById.values()) {
@@ -1878,6 +1983,26 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       // Forget these ids so the refused deletes do not advance known/baseline
       // as if they had happened; the next read re-adopts the server rows.
       toDelete.length = 0;
+      // Half-applied replacement guard (2026-10-02 duplicate incident): with
+      // the deletes refused, any INSERT that was only allowed as a
+      // replacement of a structural row must not land either — it would sit
+      // beside the kept copy (duplicate headers / chips). Drop those inserts
+      // and point their synthetic ids back at the surviving server row.
+      for (let i = toUpsert.length - 1; i >= 0; i -= 1) {
+        const d = toUpsert[i];
+        if (currentById.has(d.id)) continue; // update, not insert
+        const k = structuralKey(d);
+        if (!k) continue;
+        const survivor = serverRowByStructKey.get(k);
+        if (survivor && survivor.id !== d.id) {
+          toUpsert.splice(i, 1);
+          nextBaseline.delete(d.id);
+          guarded += 1;
+          for (const [synthetic, uuid] of synMap) {
+            if (uuid === d.id) synMap.set(synthetic, survivor.id);
+          }
+        }
+      }
     }
 
     if (guarded > 0) {

@@ -84,6 +84,41 @@ export function backfillKey(index) {
 // increasing subsequence of existing valid keys keep theirs; everything else
 // (new rows, moved rows, invalid/duplicate keys) gets a fresh key between its
 // kept neighbours. Mutates rows in place; returns the ids whose key changed.
+// Fill keys ONLY for rows that need one (null/invalid key, or a duplicate of
+// a key already seen), keeping every other row's key exactly as given. Used
+// by the intent-gated save (2026-10-02): unmoved rows carry the SERVER's key
+// and must never be rewritten; moved/new rows carry null and are keyed
+// between their kept neighbours. When the neighbours' keys are inverted
+// (this client's sequence is stale around the gap), the run is keyed after
+// its predecessor (open-ended) rather than throwing.
+export function assignMissingKeys(rows) {
+  const changed = [];
+  const n = rows.length;
+  const seen = new Set();
+  const needsKey = new Array(n).fill(false);
+  for (let i = 0; i < n; i += 1) {
+    const k = rows[i].orderKey;
+    if (!isValidOrderKey(k) || seen.has(k)) needsKey[i] = true;
+    else seen.add(k);
+  }
+  let i = 0;
+  while (i < n) {
+    if (!needsKey[i]) { i += 1; continue; }
+    let j = i;
+    while (j < n && needsKey[j]) j += 1;
+    const before = i > 0 ? rows[i - 1].orderKey : null;
+    let after = j < n ? rows[j].orderKey : null;
+    if (before !== null && after !== null && before >= after) after = null;
+    const fresh = keysBetween(before, after, j - i);
+    for (let k = i; k < j; k += 1) {
+      rows[k].orderKey = fresh[k - i];
+      changed.push(rows[k].id);
+    }
+    i = j;
+  }
+  return changed;
+}
+
 export function ensureOrderKeys(rows) {
   const changed = [];
   const n = rows.length;

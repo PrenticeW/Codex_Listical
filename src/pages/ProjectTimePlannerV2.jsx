@@ -84,7 +84,7 @@ import {
 import { getClipboardTextWithLinks } from '../utils/clipboardText';
 import { createSortInboxCommand, createMoveSelectionCommand, getMoveSelectionState } from '../utils/planner/sortInbox';
 import { createSortPlannerCommand } from '../utils/planner/sortPlanner';
-import { saveTaskRows, readTaskRows, invalidateTaskRowsCache, loadChipTaskNote, preloadChipTaskNotes, isTaskRowsSaveInFlight, getLastTaskRowsSaveCompletedAt, writeTaskEvent, isPlannerYearServerFresh, PLANNER_ROWS_STALE_EVENT } from '../utils/planner/storage';
+import { saveTaskRows, markRowsMoved, readTaskRows, invalidateTaskRowsCache, loadChipTaskNote, preloadChipTaskNotes, isTaskRowsSaveInFlight, getLastTaskRowsSaveCompletedAt, writeTaskEvent, isPlannerYearServerFresh, PLANNER_ROWS_STALE_EVENT } from '../utils/planner/storage';
 import { supabase } from '../lib/supabase';
 import { plannerFilterStorage } from '../lib/plannerFilterStorage';
 import { DEFAULT_PROJECT_ID } from '../constants/plannerStorageKeys';
@@ -1958,6 +1958,9 @@ export default function ProjectTimePlannerV2() {
             while (insertAt < working.length && working[insertAt]._rowType === 'projectTask' && working[insertAt].parentGroupId === taskRow.parentGroupId) insertAt++;
             working.splice(insertAt, 0, taskRow);
           });
+          // Re-parenting repositions these rows — register for the
+          // intent-gated order_key save (idempotent under strict mode).
+          markRowsMoved(currentYear, moved.map(r => r.id));
         }
 
         // --- Step 3: refresh header labels (respecting user edits) ---
@@ -2007,6 +2010,10 @@ export default function ProjectTimePlannerV2() {
             if (misplaced.length > 0) {
               changed = true;
               const rows = misplaced.map(idx => reordered[idx]);
+              // Repositioning is a move: register it so the intent-gated
+              // save persists the new order_key (idempotent Set add, safe
+              // under React strict-mode double-invoke of this updater).
+              markRowsMoved(currentYear, rows.map(r => r.id));
               for (let k = misplaced.length - 1; k >= 0; k--) reordered.splice(misplaced[k], 1);
               const newFirstSectionIdx = reordered.findIndex((r, idx) => idx > i && sectionRowTypes.has(r._rowType));
               reordered.splice(newFirstSectionIdx !== -1 ? newFirstSectionIdx : i + 1, 0, ...rows);
@@ -2627,6 +2634,9 @@ export default function ProjectTimePlannerV2() {
     selectedRows,
     executeCommand,
     onProjectOrderChange: handleProjectOrderChange,
+    // Intent-gated ordering (2026-10-02): only rows registered here get
+    // their order_key rewritten on save; see plannerStorage.markRowsMoved.
+    onRowsMoved: (ids) => markRowsMoved(currentYear, ids),
   });
 
   // Note: Old drag and drop handlers removed - now using useDragAndDropRows hook
@@ -3021,12 +3031,13 @@ export default function ProjectTimePlannerV2() {
       data,
       selectedSortStatuses,
       setData,
+      onRowsMoved: (ids) => markRowsMoved(currentYear, ids),
     });
 
     if (command) {
       executeCommand(command);
     }
-  }, [data, selectedSortStatuses, executeCommand]);
+  }, [data, selectedSortStatuses, executeCommand, currentYear]);
 
   const handleSortPlanner = useCallback(() => {
     setIsListicalMenuOpen(false);
@@ -3035,12 +3046,13 @@ export default function ProjectTimePlannerV2() {
       data,
       selectedSortStatuses: selectedSortPlannerStatuses,
       setData,
+      onRowsMoved: (ids) => markRowsMoved(currentYear, ids),
     });
 
     if (command) {
       executeCommand(command);
     }
-  }, [data, selectedSortPlannerStatuses, executeCommand]);
+  }, [data, selectedSortPlannerStatuses, executeCommand, currentYear]);
 
   const handleArchiveWeek = useCallback(() => {
     setIsListicalMenuOpen(false);
@@ -3434,9 +3446,9 @@ export default function ProjectTimePlannerV2() {
   );
 
   const handleMoveSelectionToPlanner = useCallback(() => {
-    const result = createMoveSelectionCommand({ data, selectedRows, setData });
+    const result = createMoveSelectionCommand({ data, selectedRows, setData, onRowsMoved: (ids) => markRowsMoved(currentYear, ids) });
     if (result) executeCommand(result.command);
-  }, [data, selectedRows, setData, executeCommand]);
+  }, [data, selectedRows, setData, executeCommand, currentYear]);
 
   const handleDuplicateRow = useCallback(() => {
     setIsListicalMenuOpen(false);

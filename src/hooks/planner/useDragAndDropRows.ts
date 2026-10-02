@@ -98,6 +98,9 @@ function moveRows(prevData: PlannerRow[], draggedIndices: number[], insertAt: nu
  * @param onProjectOrderChange - Called with the ordered project ids after a
  *   project block move (and with the previous order on undo) so the caller
  *   can persist it
+ * @param onRowsMoved - Called with the moved row ids on every drop (and on
+ *   its undo) so the caller can register them for intent-gated order_key
+ *   persistence (plannerStorage.markRowsMoved)
  * @returns Object with drag state and handler functions
  */
 export default function useDragAndDropRows({
@@ -106,12 +109,14 @@ export default function useDragAndDropRows({
   selectedRows,
   executeCommand,
   onProjectOrderChange,
+  onRowsMoved,
 }: {
   data: PlannerRow[];
   setData: React.Dispatch<React.SetStateAction<PlannerRow[]>>;
   selectedRows: Set<string>;
   executeCommand: (command: Command) => void;
   onProjectOrderChange?: (orderedProjectIds: string[]) => void;
+  onRowsMoved?: (rowIds: string[]) => void;
 }): UseDragAndDropRowsReturn {
   const [draggedRowId, setDraggedRowId] = useState<string[] | null>(null);
   const [dropTargetRowId, setDropTargetRowId] = useState<string | null>(null);
@@ -284,6 +289,7 @@ export default function useDragAndDropRows({
         // the first section row — the drop visibly "popped" somewhere else, and
         // chip-backed tasks could never be filed under General/Unscheduled.
         setData(prevData => assignParentGroupIds(restampDraggedRows(moveRows(prevData, draggedIndices, insertAt))));
+        if (onRowsMoved) onRowsMoved(draggedRowIds);
         if (nextProjectOrder && onProjectOrderChange) onProjectOrderChange(nextProjectOrder);
       },
       undo: () => {
@@ -310,6 +316,8 @@ export default function useDragAndDropRows({
 
           return newData;
         });
+        // Undo is a move too — the restored positions must persist.
+        if (onRowsMoved) onRowsMoved(draggedRowIds);
         if (previousProjectOrder && onProjectOrderChange) onProjectOrderChange(previousProjectOrder);
       }
     };

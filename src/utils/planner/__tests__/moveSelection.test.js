@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 
 // statusesStorage pulls in the supabase client; stub the pieces sortInbox
 // uses so the test runs without a network-capable environment.
-vi.mock('../../../lib/supabase', () => ({ supabase: {} }));
+vi.mock('../../../lib/supabase', () => ({
+  CLIENT_BUILD: 'test-build', supabase: {} }));
 vi.mock('../../../lib/storageCache', () => ({
   getCached: () => null,
   setCached: () => {},
