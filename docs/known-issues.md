@@ -10,6 +10,8 @@
 
 **Residual:** an OLD build in a still-open tab hitting the unique index gets a failing save (retry loop) instead of a duplicate — hard-refresh fixes it. Simultaneous reorder of the SAME rows on two machines resolves per-row last-writer.
 
+**Follow-up (2026-10-02 PM, sync stall):** the NEW build also looped. In-memory state hydrated before the SQL dedupe still carried both duplicate copies; identity adoption resolved both to the same surviving server UUID, so one upsert batch held the same id twice → Postgres 21000 ("ON CONFLICT DO UPDATE command cannot affect row a second time") → the whole save (including the user's actual edit) failed and the offline retry replayed the identical payload forever — lingering "Syncing changes…", edits reverted on reload. Fix: the save now drops duplicate resolved ids from the payload (first copy wins; `seenDesiredIds` in `_saveTaskRowsImpl`). Regression test in `duplicateStructural.test.js`, whose Supabase mock now rejects duplicate-id upserts like Postgres.
+
 ## Do not make worse
 
 | Issue | Detail |

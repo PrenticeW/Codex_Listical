@@ -1766,7 +1766,18 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     // are provably rows web just created; a mapping adopted from persisted
     // state describes a row that may already be on the server.
     const mintedHere = new Set();
-    const desiredRows = persistedTaskRows.map((row, idx) => {
+    // Resolved-id dedupe (2026-10-02 sync-stall fix). When the in-memory
+    // state still carries duplicate structural copies (hydrated before the
+    // server-side dedupe ran), two client rows resolve to the SAME adopted
+    // server UUID. Sending both in one upsert makes Postgres reject the
+    // whole batch with 21000 ("ON CONFLICT DO UPDATE command cannot affect
+    // row a second time"), and the offline retry then replays the identical
+    // payload forever — the lingering "Syncing changes…" stall. Keep the
+    // first copy per resolved id and drop the rest from this save; the next
+    // realtime read collapses the client-side duplicates.
+    const seenDesiredIds = new Set();
+    const desiredRows = [];
+    persistedTaskRows.forEach((row, idx) => {
       let id = row.id;
       if (!(typeof id === 'string' && UUID_RE.test(id))) {
         // Resolve the synthetic id. A persisted mapping that no longer
@@ -1790,7 +1801,12 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
         }
         id = synMap.get(id);
       }
-      return plannerRowPayloadToDb({ row: { ...row, id }, userId, yearId, displayOrder: idx });
+      if (seenDesiredIds.has(id)) {
+        console.warn('[planner-save] dropped duplicate resolved row from save payload', { id });
+        return;
+      }
+      seenDesiredIds.add(id);
+      desiredRows.push(plannerRowPayloadToDb({ row: { ...row, id }, userId, yearId, displayOrder: idx }));
     });
 
     // Assign per-row order keys — intent-gated (2026-10-02, replacing the

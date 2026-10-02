@@ -49,6 +49,13 @@ function tableQuery(table) {
           Object.entries(st.filters).every(([k, v]) => r[k] === v));
         resolve({ data: rows, error: null });
       } else if (st.op === 'upsert' || st.op === 'insert') {
+        // Postgres-faithful: one command may not affect the same row twice
+        // (error 21000, the 2026-10-02 sync-stall bug's failure mode).
+        const ids = st.payload.map((r) => r.id);
+        if (st.op === 'upsert' && new Set(ids).size !== ids.length) {
+          resolve({ data: null, error: { code: '21000', message: 'ON CONFLICT DO UPDATE command cannot affect row a second time' } });
+          return;
+        }
         for (const r of st.payload) t.set(r.id, { ...(t.get(r.id) || {}), ...r });
         resolve({ data: st.payload, error: null });
       } else {
@@ -176,6 +183,32 @@ describe('duplicate structural row guard (2026-09-15 incident)', () => {
     expect(headers.map((r) => r.id)).toEqual([H1]); // duplicate refused
     expect(server.planner_rows.has(H2)).toBe(false);
     expect(server.planner_rows.has(T1)).toBe(true); // ordinary rows still land
+  });
+
+  it('collapses duplicate structural copies into one upsert row instead of tripping 21000 (2026-10-02 sync stall)', async () => {
+    // Server already holds the single deduped header (post-migration).
+    server.planner_rows.set(H1, {
+      id: H1, user_id: 'u1', year_id: 'y1', project_id: 'p1', row_kind: 'task',
+      display_order: 0, status: '-', task: '',
+      day_entries: { __cells: {}, __project: 'MH', __extra: { _rowType: 'projectHeader', projectNickname: 'MH' } },
+      updated_at: new Date().toISOString(),
+    });
+    await readTaskRows('project-1', 1);
+    // In-memory state hydrated BEFORE the dedupe still carries TWO copies of
+    // the header under synthetic (non-UUID) ids. Both adopt H1 by structural
+    // key; without the resolved-id dedupe the upsert payload holds H1 twice
+    // and Postgres rejects the whole batch with 21000 — the save then loops
+    // forever and the user's edit never lands.
+    await saveTaskRows([
+      headerPayload('syn-header-a', 'p1', 'MH'),
+      headerPayload('syn-header-b', 'p1', 'MH'),
+      taskPayload(T1, 'the edit that must land'),
+    ], 'project-1', 1);
+    await sleep(10);
+
+    expect(structuralHeaders('p1').map((r) => r.id)).toEqual([H1]); // still one copy
+    expect(server.planner_rows.has(T1)).toBe(true); // the user's edit landed
+    expect(idb.has('pending:u1:1')).toBe(false); // save confirmed, no stuck pending record
   });
 
   it('still inserts the first header for a genuinely new project', async () => {
