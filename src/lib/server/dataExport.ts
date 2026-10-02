@@ -183,8 +183,17 @@ export async function exportUserData(userId: string): Promise<DataExportResult> 
 
     // Every user_id-keyed table, across all years, paged so large accounts
     // are never silently truncated by PostgREST's default row cap.
+    // Paging is ordered by id — range() without an order is unstable and can
+    // duplicate or skip rows between pages. Tables whose rows carry large
+    // jsonb blobs use a small page size: a 1000-row page of site_snapshots
+    // (~82 kB/row) exceeded the Postgres statement timeout (seen 2026-10-02).
     const PAGE_SIZE = 1000;
+    const HEAVY_TABLE_PAGE_SIZE: Partial<Record<(typeof EXPORT_TABLES)[number], number>> = {
+      site_snapshots: 20,
+      archived_weeks: 50,
+    };
     for (const table of EXPORT_TABLES) {
+      const pageSize = HEAVY_TABLE_PAGE_SIZE[table] ?? PAGE_SIZE;
       const rows: unknown[] = [];
       let from = 0;
       // eslint-disable-next-line no-constant-condition
@@ -193,14 +202,15 @@ export async function exportUserData(userId: string): Promise<DataExportResult> 
           .from(table as string)
           .select('*')
           .eq('user_id', userId)
-          .range(from, from + PAGE_SIZE - 1);
+          .order('id', { ascending: true })
+          .range(from, from + pageSize - 1);
 
         if (error) {
           return { success: false, error: `Failed to export ${table}: ${error.message}` };
         }
         rows.push(...(page ?? []));
-        if (!page || page.length < PAGE_SIZE) break;
-        from += PAGE_SIZE;
+        if (!page || page.length < pageSize) break;
+        from += pageSize;
       }
       data[table] = rows;
     }
