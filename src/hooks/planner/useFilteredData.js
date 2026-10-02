@@ -300,7 +300,8 @@ export const useFilteredData = ({
       if (!matchesRecurringFilter(row)) return false;
       if (!matchesEstimateFilter(row)) return false;
       if (!dayFilterActive) return true;
-      return Array.from(dayColumnFilters).every(dayColumnId => {
+      // Additive (OR): a row matches if it has a value on ANY selected day.
+      return Array.from(dayColumnFilters).some(dayColumnId => {
         return coerceNumber(row[dayColumnId]) !== null;
       });
     };
@@ -549,7 +550,7 @@ export const useFilterValues = (computedData, activeFilters = {}) => {
       !selectedEstimateFilters.size || selectedEstimateFilters.has(getNormalizedColumnValue(row, 'estimate'));
     const matchesDayColumns = (row) => {
       if (!dayColumnFilters.size || !coerceNumber) return true;
-      return Array.from(dayColumnFilters).every(dayColumnId => coerceNumber(row[dayColumnId]) !== null);
+      return Array.from(dayColumnFilters).some(dayColumnId => coerceNumber(row[dayColumnId]) !== null);
     };
 
     computedData.forEach(row => {
