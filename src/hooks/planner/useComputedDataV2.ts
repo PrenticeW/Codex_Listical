@@ -97,7 +97,7 @@ export default function useComputedDataV2({
         const hasLiveKeys = Object.keys(row).some(
           (key) => MULTI_STATUS_KEY_RE.test(key) && !staleMultiKeys.includes(key),
         );
-        if (isManual && !hasLiveKeys) {
+        if (estimate === 'Multi' && isManual && !hasLiveKeys) {
           const instances = getMultiInstances(row, totalDays);
           if (instances.length > 1) {
             const prevKey = row.id ? prevFilledDays.get(row.id) : undefined;
@@ -127,7 +127,16 @@ export default function useComputedDataV2({
       // (first non-terminal instance, else the last). The multi dropdown owns
       // per-date statuses, so the manual/auto logic below is skipped for
       // these rows. Null when the row has < 2 scheduled instances.
-      const multiAggregateStatus = deriveMultiRowStatus(rowForAggregate, totalDays);
+      // Gate on the SAME condition the status cell uses to render the multi
+      // dropdown (isMultiStatusRow: estimate === 'Multi', i.e. 2+ instances
+      // in one week). deriveMultiRowStatus alone fires at 2+ instances
+      // ANYWHERE in the year, so a weekly-recurring row with entries in two
+      // different weeks got aggregate-locked to 'Scheduled' while showing
+      // the plain dropdown — every manual status pick silently reverted
+      // (2026-10-02, chip rows after the duplicate-row merge).
+      const multiAggregateStatus = estimate === 'Multi'
+        ? deriveMultiRowStatus(rowForAggregate, totalDays)
+        : null;
 
       // Auto-update status based on task content and day columns
       let status = row.status;
