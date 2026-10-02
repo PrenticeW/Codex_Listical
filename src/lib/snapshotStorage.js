@@ -35,7 +35,7 @@
  */
 
 import { supabase } from './supabase';
-import { decryptRows, decryptJson, encryptField, encryptWritesEnabled } from './crypto';
+import { decryptRows, decryptJson, encryptField, encryptJson, encryptWritesEnabled, decryptJsonPreferEnc } from './crypto';
 import { showStatusPill } from './statusPill';
 import { clearForYear } from './storageCache';
 import {
@@ -701,13 +701,7 @@ export async function saveSiteSnapshot(yearNumber) {
     // Insert the snapshot row.
     const { error: insertError } = await supabase
       .from('site_snapshots')
-      .insert({
-        user_id: userId,
-        year_number: yearNumber,
-        goal:   goal   ?? {},
-        plan:   plan   ?? {},
-        system: system ?? {},
-      });
+      .insert(await buildSnapshotInsertRow(userId, yearNumber, goal, plan, system));
 
     if (insertError) throw insertError;
 
@@ -719,6 +713,32 @@ export async function saveSiteSnapshot(yearNumber) {
     // not interrupt a normal save.
     console.error('saveSiteSnapshot failed', err);
   }
+}
+
+/**
+ * Builds the site_snapshots insert row. Phase 3: when the flag is on, the
+ * three page payloads are encrypted into the _enc sibling columns and the
+ * NOT NULL jsonb columns get {} placeholders.
+ */
+async function buildSnapshotInsertRow(userId, yearNumber, goal, plan, system) {
+  if (encryptWritesEnabled('site_snapshots')) {
+    return {
+      user_id: userId,
+      year_number: yearNumber,
+      goal: {}, plan: {}, system: {},
+      goal_enc:   await encryptJson(goal   ?? {}),
+      plan_enc:   await encryptJson(plan   ?? {}),
+      system_enc: await encryptJson(system ?? {}),
+    };
+  }
+  return {
+    user_id: userId,
+    year_number: yearNumber,
+    goal:   goal   ?? {},
+    plan:   plan   ?? {},
+    system: system ?? {},
+    goal_enc: null, plan_enc: null, system_enc: null,
+  };
 }
 
 /**
@@ -735,7 +755,7 @@ export async function loadSiteSnapshots(yearNumber) {
     const userId = await requireUserId();
     const { data, error } = await supabase
       .from('site_snapshots')
-      .select('id, year_number, created_at, goal, plan, system')
+      .select('id, year_number, created_at, goal, plan, system, goal_enc, plan_enc, system_enc')
       .eq('user_id', userId)
       .eq('year_number', yearNumber)
       .order('created_at', { ascending: false })
@@ -745,11 +765,12 @@ export async function loadSiteSnapshots(yearNumber) {
     // Phase 2 (decrypt-on-read): once Phase 3+ stores goal/plan/system as
     // enc1 strings, decryptJson restores the objects; today it is a no-op
     // on the plaintext jsonb values.
+    // Phase 3: ciphertext lives in the _enc sibling columns; prefer them.
     return Promise.all((data ?? []).map(async (row) => ({
       ...row,
-      goal: await decryptJson(row.goal),
-      plan: await decryptJson(row.plan),
-      system: await decryptJson(row.system),
+      goal:   await decryptJsonPreferEnc(row.goal_enc,   row.goal),
+      plan:   await decryptJsonPreferEnc(row.plan_enc,   row.plan),
+      system: await decryptJsonPreferEnc(row.system_enc, row.system),
     })));
   } catch (err) {
     console.error('loadSiteSnapshots failed', err);
@@ -810,13 +831,7 @@ export async function maybeSnapshotOnSessionStart(yearNumber) {
 
     const { error: insertError } = await supabase
       .from('site_snapshots')
-      .insert({
-        user_id: userId,
-        year_number: yearNumber,
-        goal:   goal   ?? {},
-        plan:   plan   ?? {},
-        system: system ?? {},
-      });
+      .insert(await buildSnapshotInsertRow(userId, yearNumber, goal, plan, system));
 
     if (insertError) throw insertError;
 

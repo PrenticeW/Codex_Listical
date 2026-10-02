@@ -237,6 +237,21 @@ export async function decryptJson(stored) {
 }
 
 /**
+ * Jsonb sibling-column read (Phase 3, docs/encryption-plan.md): the three
+ * jsonb tables store ciphertext in a nullable `_enc` text column beside the
+ * NOT NULL jsonb column (which holds a {} placeholder when encrypted).
+ * Prefer the _enc value when present and decryptable; otherwise fall back
+ * to the plaintext jsonb value.
+ */
+export async function decryptJsonPreferEnc(encValue, plainValue) {
+  if (isEncrypted(encValue)) {
+    const decrypted = await decryptJson(encValue);
+    if (decrypted !== null) return decrypted;
+  }
+  return plainValue;
+}
+
+/**
  * Phase 3 — encrypt-on-write, per table (docs/encryption-plan.md).
  * A table listed here has its content fields encrypted at the Supabase
  * write boundary (storage modules only, same rule as always). Rollback =
@@ -248,6 +263,8 @@ const ENCRYPT_WRITE_TABLES = new Set([
   'task_events', // flipped 2026-10-02 — mobile only INSERTS (plaintext OK), never reads
   'tactics_chips', // flipped 2026-10-02 — web-only table
   'tactics_custom_projects', // flipped 2026-10-02 — web-only table
+  'archived_weeks', // flipped 2026-10-02 — web-only; snapshot_enc sibling column
+  'site_snapshots', // flipped 2026-10-02 — web-only; goal/plan/system_enc sibling columns
 ]);
 
 /** True when writes to `table` should encrypt (and a key is loaded). */

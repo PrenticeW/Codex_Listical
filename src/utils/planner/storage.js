@@ -40,7 +40,7 @@
  */
 
 import { supabase, CLIENT_BUILD } from '../../lib/supabase';
-import { decryptRows, encryptField, encryptWritesEnabled } from '../../lib/crypto';
+import { decryptRows, encryptField, encryptJson, encryptWritesEnabled, decryptJsonPreferEnc } from '../../lib/crypto';
 import { createInitialData } from './dataCreators';
 import { ensureOrderKeys, assignMissingKeys, compareRowOrder, isValidOrderKey } from './orderKey';
 import { loadTacticsMetrics } from '../../lib/tacticsMetricsStorage';
@@ -1171,7 +1171,10 @@ export const readTaskRows = async (
     const taskData = await decryptRows(
       tasksRes.data || [], PLANNER_ROW_ENC_TEXT,
     );
-    const archiveData = await decryptRows(archivesRes.data || [], [], ['snapshot']);
+    const archiveData = await Promise.all((archivesRes.data || []).map(async (r) => ({
+      ...r,
+      snapshot: await decryptJsonPreferEnc(r.snapshot_enc, r.snapshot),
+    })));
 
     // Record which planner_rows ids this client has seen server-side. The
     // diff-based save uses this to tell "row web created" apart from "row
@@ -2125,13 +2128,17 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     {
       const existingRes = await supabase
         .from('archived_weeks')
-        .select('id, week_number, snapshot')
+        .select('id, week_number, snapshot, snapshot_enc')
         .eq('user_id', userId)
         .eq('year_id', yearId);
       if (existingRes.error) throw existingRes.error;
-      // Phase 2: snapshot may be an enc1 string once Phase 3+ lands; the
-      // snapId match below needs the decrypted object. No-op on plaintext.
-      const existingArchived = await decryptRows(existingRes.data || [], [], ['snapshot']);
+      // Phase 3: snapshot ciphertext lives in snapshot_enc (jsonb column is
+      // a {} placeholder); the snapId matching below needs the decrypted
+      // object. No-op on plaintext rows.
+      const existingArchived = await Promise.all((existingRes.data || []).map(async (r) => ({
+        ...r,
+        snapshot: await decryptJsonPreferEnc(r.snapshot_enc, r.snapshot),
+      })));
       const existingBySnapId = new Map(
         existingArchived
           .filter((r) => r.snapshot && typeof r.snapshot.id === 'string')
@@ -2141,6 +2148,15 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       const memorySnapIds = new Set();
       for (const { row, weekNumber } of archiveRowsToWrite) {
         const dbRow = archiveRowPayloadToDb({ row, userId, yearId, weekNumber });
+        // Phase 3: snapshot ciphertext goes in snapshot_enc; the NOT NULL
+        // jsonb column gets a {} placeholder. With the flag off, write
+        // plaintext and clear snapshot_enc so there is one source of truth.
+        if (encryptWritesEnabled('archived_weeks')) {
+          dbRow.snapshot_enc = await encryptJson(dbRow.snapshot);
+          dbRow.snapshot = {};
+        } else {
+          dbRow.snapshot_enc = null;
+        }
         const snapId = typeof row.id === 'string' ? row.id : null;
         if (snapId) memorySnapIds.add(snapId);
         const existing = snapId ? existingBySnapId.get(snapId) : null;
@@ -2165,7 +2181,7 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       // archive revert — reverts remove one week at a time. It is a stale or
       // partial snapshot, and letting it through mass-deleted every
       // archived_weeks row for the year. Refuse wholesale deletion outright.
-      const staleServerWeeks = (existingRes.data || []).filter(
+      const staleServerWeeks = existingArchived.filter(
         (r) => !(r.snapshot && memorySnapIds.has(r.snapshot.id)),
       );
       if (staleServerWeeks.length > 0 && memorySnapIds.size === 0) {
