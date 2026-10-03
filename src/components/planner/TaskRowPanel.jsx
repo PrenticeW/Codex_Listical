@@ -523,8 +523,19 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
 
   // Map DB event rows to HistoryEntry props (status + notes events)
   const statusEvents = events
-    .filter(ev => ev.field === 'status' || ev.field === 'notes')
-    .map(ev => ev.field === 'notes'
+    .filter(ev => ev.field === 'status' || ev.field === 'notes' || ev.field === 'time')
+    .map(ev => ev.field === 'time'
+      ? {
+          // One grey chip, e.g. "Time 0.30 \u2192 2.50" (H.MM convention).
+          // Unknown labels fall back to the neutral chip, same as notes.
+          status: (ev.old_value || '').trim()
+            ? `Time ${ev.old_value} \u2192 ${(ev.new_value || '').trim() || '-'}`
+            : `Time set ${(ev.new_value || '').trim() || '-'}`,
+          fromStatus: null,
+          time: fmtTimestamp(ev.changed_at, { use24Hour }),
+          note: null,
+        }
+      : ev.field === 'notes'
       ? {
           // Rendered through the same chip component; unknown labels fall
           // back to the neutral grey chip (matches the Created pill).
@@ -651,9 +662,9 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
 
             {notesAddLink.dialog}
 
-            {/* Status history preview */}
+            {/* Task history preview */}
             <div style={{ ...BENTO_CARD, marginBottom: 0 }}>
-              <SectionLabel>Status History</SectionLabel>
+              <SectionLabel>Task History</SectionLabel>
               <ActionBtn
                 icon={<HistoryIcon />}
                 label={`See ${statusEvents.length > 0 ? `${statusEvents.length} ` : ''}change${statusEvents.length === 1 ? '' : 's'}`}
@@ -682,7 +693,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
               overflowY: 'auto', overflowX: 'hidden', padding: '15px 16px',
             }}
           >
-            <SectionLabel>Status History</SectionLabel>
+            <SectionLabel>Task History</SectionLabel>
             {statusEvents.length === 0 ? (
               <div style={{ fontSize: 12, color: C.textFaint, fontStyle: 'italic', paddingTop: 4 }}>
                 No history yet.

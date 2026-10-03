@@ -2642,7 +2642,7 @@ export const saveTaskNote = async (taskId, noteText) => {
  *
  * @param {string}  taskId     - UUID of the planner_row
  * @param {object}  payload
- * @param {string}  payload.field      - 'status' | 'task_name' | 'notes'
+ * @param {string}  payload.field      - 'status' | 'task_name' | 'notes' | 'time'
  * @param {string|null} payload.oldValue  - previous value (null on first set)
  * @param {string}  payload.newValue   - new value
  * @param {string|null} [payload.note] - optional user note (Blocked, On Hold)

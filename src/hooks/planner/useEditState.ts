@@ -319,6 +319,19 @@ export default function useEditState({
 
         executeCommand(command);
 
+        // Log the time change (H.MM convention, e.g. '2.50' = 2h50m).
+        if (row?.id && formatted !== oldTimeValue) {
+          writeTaskEvent(rowId, {
+            field: 'time',
+            oldValue: oldTimeValue,
+            newValue: formatted,
+          }).then(() => {
+          window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
+            detail: { taskId: rowId },
+          }));
+        });
+        }
+
         if (row?.id && scheduleUpdates && scheduleUpdates.execute.status !== (row.status || '')) {
           writeTaskEvent(rowId, {
             field: 'status',
@@ -460,6 +473,20 @@ export default function useEditState({
       };
 
       executeCommand(command);
+
+      // Log the time change (H.MM convention).
+      if (row?.id) {
+        writeTaskEvent(rowId, {
+          field: 'time',
+          oldValue: oldValue || '0.00',
+          newValue: newValue || '0.00',
+        }).then(() => {
+          window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
+            detail: { taskId: rowId },
+          }));
+        });
+      }
+
       setEditingCell(null);
       setEditValue('');
       return;
@@ -532,6 +559,21 @@ export default function useEditState({
       };
 
       executeCommand(command);
+
+      // Log the time change (H.MM convention). Switching to 'Multi' is
+      // skipped — per-instance times are logged as their day cells are set.
+      if (row?.id && newValue !== 'Multi' && newTimeValue !== oldTimeValue) {
+        writeTaskEvent(rowId, {
+          field: 'time',
+          oldValue: oldTimeValue,
+          newValue: newTimeValue,
+        }).then(() => {
+          window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
+            detail: { taskId: rowId },
+          }));
+        });
+      }
+
       setEditingCell(null);
       setEditValue('');
       return;
@@ -637,6 +679,23 @@ export default function useEditState({
         oldValue: oldValue || null,
         newValue,
       });
+    } else if (isDayColumn(columnId) && row?.id) {
+      // Multi rows (and non-numeric fallthrough): log per-day time edits
+      // when either side looks like a time value (H.MM convention).
+      const timeRe = /^\d+(\.\d{1,2})?$/;
+      const oldV = (oldValue ?? '').toString().trim();
+      const newV = (newValue ?? '').toString().trim();
+      if (oldV !== newV && (timeRe.test(oldV) || timeRe.test(newV))) {
+        writeTaskEvent(rowId, {
+          field: 'time',
+          oldValue: oldV || null,
+          newValue: newV,
+        }).then(() => {
+          window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
+            detail: { taskId: rowId },
+          }));
+        });
+      }
     }
 
     // When a recurring task is marked Done, optimistically update completionCount and
