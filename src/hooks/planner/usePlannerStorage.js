@@ -152,10 +152,16 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
   // give the real data on the very first render. If nothing is cached,
   // they fall back to defaults and the async load swaps them in shortly.
   const initialCache = peekPlannerCache(yearNumber);
-  const cachedHadData =
-    initialCache.plannerSettings != null ||
-    initialCache.yearRow != null ||
-    initialCache.taskRows != null;
+  // The warm-cache fast path is only safe when the TASK ROWS are cached.
+  // Settings and the year row survive invalidations that drop only the
+  // rows cache (invalidateTaskRowsCache from the realtime subscription /
+  // mobile writes), and treating any cached slice as "had data" made
+  // isLoaded start true with zero rows: the loading screen never showed,
+  // the async load was skipped, and the page rendered every task as
+  // unscheduled as if the account were empty (2026-10-03). Rows present
+  // is the gate; cached settings slices still make the async load's other
+  // reads resolve instantly.
+  const cachedHadData = Array.isArray(initialCache.taskRows);
 
   const initialTotalDays = initTotalDays(initialCache.yearRow);
 
@@ -319,7 +325,10 @@ export default function usePlannerStorage({ projectId = DEFAULT_PROJECT_ID, year
       }
     };
 
-    if (cachedHadData) revalidate();
+    // Keyed on cached SETTINGS (not the rows gate above): a mount that
+    // serves cached planner_settings must still check them against the
+    // server even when the rows cache was invalidated separately.
+    if (initialCache.plannerSettings != null) revalidate();
     // Not re-gated on stale: flipping `enabled` back on would make every
     // settings useAutoPersist write its value once. The gate only matters
     // for the mount-time cache hit; later revalidations just adopt.
