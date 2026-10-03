@@ -40,7 +40,7 @@
  */
 
 import { supabase, CLIENT_BUILD } from '../../lib/supabase';
-import { decryptRows, encryptField, encryptJson, encryptWritesEnabled, decryptJsonPreferEnc, hasDataKey, isEncrypted } from '../../lib/crypto';
+import { decryptRows, encryptField, encryptJson, encryptWritesEnabled, decryptJsonPreferEnc, hasDataKey, isEncrypted, initDataKey } from '../../lib/crypto';
 import { createInitialData } from './dataCreators';
 import { ensureOrderKeys, assignMissingKeys, compareRowOrder, isValidOrderKey } from './orderKey';
 import { loadTacticsMetrics } from '../../lib/tacticsMetricsStorage';
@@ -1024,17 +1024,28 @@ function archiveRowPayloadToDb({ row, userId, yearId, weekNumber }) {
     total_minutes: typeof row.totalMinutes === 'number' ? row.totalMinutes : null,
     daily_min_minutes: Array.isArray(row.dailyMinMinutes) ? row.dailyMinMinutes : [],
     daily_max_minutes: Array.isArray(row.dailyMaxMinutes) ? row.dailyMaxMinutes : [],
-    snapshot: row,
+    // __decryptFailed is session-state (the read marks weeks it could not
+    // decrypt), never content — strip it so it can't be persisted.
+    snapshot: (() => { const { __decryptFailed, ...snap } = row; return snap; })(),
   };
 }
 
 function archiveRowDbToPayload(dbRow) {
   const snapshot = dbRow.snapshot && typeof dbRow.snapshot === 'object' ? dbRow.snapshot : {};
-  return {
+  const payload = {
     ...snapshot,
     id: snapshot.id || `archive-week-${dbRow.week_number}`,
     archiveWeekLabel: dbRow.week_range_label || snapshot.archiveWeekLabel || '',
   };
+  // Snapshot ciphertext present but undecryptable (missing or late data
+  // key): the id above is a lossy fallback — archived headers reference the
+  // ORIGINAL minted week id via parentGroupId, so grouping can't be trusted
+  // and this state must never be written back (2026-10-03 archive-churn
+  // incident, docs/known-issues.md). The flag rides in the row itself so it
+  // survives the IndexedDB snapshot and gates replayed offline saves too;
+  // saveTaskRows checks it before touching anything archive-shaped.
+  if (dbRow.__snapshotDecryptFailed === true) payload.__decryptFailed = true;
+  return payload;
 }
 
 // Convert the Plan page's "H.MM" hours representation (number like 1.3 or
@@ -1168,13 +1179,26 @@ export const readTaskRows = async (
     // PLAINTEXT values — desired rows stay plaintext until Phase 3 encrypts
     // at the write boundary, and a baseline of ciphertext would make every
     // row look remotely-changed. No-op while data is plaintext.
+    // Login's initDataKey is fire-and-forget, so a read racing it would
+    // decrypt-fail and hydrate `{}` fallbacks (the 2026-10-03 archive-churn
+    // incident). Await it here — a no-op once the key is cached, and never
+    // throws (plaintext mode when the key service is down).
+    await initDataKey(userId);
     const taskData = await decryptRows(
       tasksRes.data || [], PLANNER_ROW_ENC_TEXT,
     );
-    const archiveData = await Promise.all((archivesRes.data || []).map(async (r) => ({
-      ...r,
-      snapshot: await decryptJsonPreferEnc(r.snapshot_enc, r.snapshot),
-    })));
+    const archiveData = await Promise.all((archivesRes.data || []).map(async (r) => {
+      const snapshot = await decryptJsonPreferEnc(r.snapshot_enc, r.snapshot);
+      // decryptJsonPreferEnc returns the plaintext column VALUE (same
+      // reference) when the _enc value exists but would not decrypt — on a
+      // Phase 3 row that plaintext is the `{}` placeholder, i.e. the week's
+      // snapshot (and its minted id) is lost to this session.
+      const __snapshotDecryptFailed = isEncrypted(r.snapshot_enc) && snapshot === r.snapshot;
+      if (__snapshotDecryptFailed) {
+        console.warn('[planner-read] archived week snapshot failed to decrypt; archive is read-only this session', { weekNumber: r.week_number });
+      }
+      return { ...r, snapshot, __snapshotDecryptFailed };
+    }));
 
     // Record which planner_rows ids this client has seen server-side. The
     // diff-based save uses this to tell "row web created" apart from "row
@@ -1729,6 +1753,18 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       persistedTaskRows.push(row);
     }
 
+    // Archive integrity gate (2026-10-03 incident): any week row hydrated
+    // from a failed snapshot decrypt means the in-memory archive — week
+    // ids, grouping, ordering — is a lossy reconstruction. A save from this
+    // state inserted duplicate weeks under fallback ids and then deleted
+    // the real ones as "stale", churning the archive on every save cycle.
+    // While the flag is up, nothing archive-shaped is written: the
+    // archived_weeks layer is skipped wholesale and archive-member
+    // planner_rows are held back from upserts AND deletes below.
+    const archiveDecryptFailed = archiveRowsToWrite.some(
+      ({ row }) => row && row.__decryptFailed === true,
+    );
+
     // Diff-based save (replaced the delete-all-then-reinsert pattern,
     // 2026-07-19). Rewriting every row from web's in-memory snapshot erased
     // any write another client (mobile) made since web's last refresh — a
@@ -2069,6 +2105,41 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       toDelete.push(id);
     }
 
+    // Archive integrity gate, planner_rows side (see archiveDecryptFailed
+    // above): with an undecryptable week in memory, the archive section was
+    // rebuilt around fallback ids — hold back every write and delete that
+    // touches an archive-member row, and roll their baselines back to the
+    // server's copy so the next (healthy) save diffs correctly.
+    if (archiveDecryptFailed) {
+      const isArchiveMemberDb = (r) => {
+        const extra = r?.day_entries?.__extra || {};
+        return (typeof extra._rowType === 'string' && extra._rowType.startsWith('archivedProject'))
+          || extra._isArchivedTask === true
+          || (typeof extra.archiveWeekLabel === 'string' && extra.archiveWeekLabel.length > 0);
+      };
+      let held = 0;
+      for (let i = toUpsert.length - 1; i >= 0; i -= 1) {
+        const d = toUpsert[i];
+        if (!isArchiveMemberDb(d)) continue;
+        const cur = currentById.get(d.id);
+        if (cur) nextBaseline.set(d.id, baselineSnap(cur));
+        else nextBaseline.delete(d.id);
+        toUpsert.splice(i, 1);
+        held += 1;
+      }
+      for (let i = toDelete.length - 1; i >= 0; i -= 1) {
+        const cur = currentById.get(toDelete[i]);
+        if (cur && isArchiveMemberDb(cur)) {
+          toDelete.splice(i, 1);
+          held += 1;
+        }
+      }
+      if (held > 0) {
+        guarded += held;
+        console.warn('[planner-save] archive gate held back archive-member rows (snapshot decrypt failed)', { held });
+      }
+    }
+
     // Mass-delete circuit breaker (2026-09-08 wipe). A desired state that
     // (a) no longer contains the permanent Inbox divider the UI always
     // carries while the server still has one, or (b) would delete nearly
@@ -2216,10 +2287,19 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     // insert/update cannot wipe weeks this session has never seen. Deleting
     // server weeks absent from memory (archive revert) stays behind the
     // server-read gate.
-    {
+    //
+    // Archive integrity gate (2026-10-03): a session holding a week whose
+    // snapshot failed to decrypt carries fallback week ids. Its upserts
+    // would land as DUPLICATE weeks (fallback id matches nothing in
+    // existingBySnapId) and its memorySnapIds would mark every REAL week
+    // stale for deletion — the exact production churn. Skip the layer
+    // entirely; the archive is read-only until a read decrypts cleanly.
+    if (archiveDecryptFailed) {
+      console.warn('[planner-save] archived_weeks writes skipped: a week snapshot failed to decrypt this session');
+    } else {
       const existingRes = await supabase
         .from('archived_weeks')
-        .select('id, week_number, snapshot, snapshot_enc')
+        .select('id, week_number, week_range_label, snapshot, snapshot_enc')
         .eq('user_id', userId)
         .eq('year_id', yearId);
       if (existingRes.error) throw existingRes.error;
@@ -2239,6 +2319,7 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       const memorySnapIds = new Set();
       for (const { row, weekNumber } of archiveRowsToWrite) {
         const dbRow = archiveRowPayloadToDb({ row, userId, yearId, weekNumber });
+        const plainSnapshot = dbRow.snapshot; // pre-encryption, for the no-op check
         // Phase 3: snapshot ciphertext goes in snapshot_enc; the NOT NULL
         // jsonb column gets a {} placeholder. With the flag off, write
         // plaintext and clear snapshot_enc so there is one source of truth.
@@ -2252,6 +2333,17 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
         if (snapId) memorySnapIds.add(snapId);
         const existing = snapId ? existingBySnapId.get(snapId) : null;
         if (existing) {
+          // Skip the write when nothing changed. The old unconditional
+          // update re-encrypted and rewrote every week on EVERY save,
+          // churning updated_at/archived_at across devices for no reason.
+          const unchanged =
+            existing.week_number === dbRow.week_number
+            && (existing.week_range_label ?? null) === (dbRow.week_range_label ?? null)
+            && stableStringify(existing.snapshot ?? null) === stableStringify(plainSnapshot ?? null);
+          if (unchanged) continue;
+          // An update is an edit to an EXISTING archive — keep the original
+          // archive timestamp rather than restamping it.
+          delete dbRow.archived_at;
           const upd = await supabase
             .from('archived_weeks')
             .update(dbRow)

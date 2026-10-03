@@ -1,5 +1,15 @@
 # Known Issues and Dead Code
 
+## 2026-10-03 — archive churn after weekly archive: duplicate weeks + real weeks deleted, code fixed, DATA RECOVERY PENDING
+
+**Symptom (production, live):** the most recent archive kept changing on every save cycle — archived project rows reorganising, projects losing the rows they were archived with. `archived_weeks` rows for the current year were being rewritten every ~20s (fresh `archived_at`), and 54 of the user's 64 `archivedProjectHeader` rows no longer pointed at any live week id.
+
+**Cause chain:** the 2026-10-02 `archived_weeks` encryption flip + a session that can't decrypt (data key missing, or the read racing login's fire-and-forget `initDataKey`). `decryptJsonPreferEnc` falls back SILENTLY to the plaintext column — now a `{}` placeholder — so the week's minted id is lost and `archiveRowDbToPayload` substitutes `archive-week-<N>`. The save then (a) found no `existingBySnapId` match for the fallback ids → INSERTED duplicate weeks, and (b) saw none of the REAL weeks' snap ids in memory → deleted them all as "stale" (the 2026-09-21 guard only refuses when memory holds ZERO weeks). Each device flip re-minted the layer. The unconditional per-save `archived_weeks` update also rewrote/re-encrypted every week on every save, restamping `archived_at`.
+
+**Fixes (2026-10-03):** (1) `readTaskRows` awaits `initDataKey(userId)` before decrypting, and marks every week whose `snapshot_enc` would not decrypt with `__decryptFailed` (the flag rides in the row, so the IndexedDB snapshot and replayed offline saves stay gated). (2) Archive integrity gate in `saveTaskRows`: while ANY in-memory week is `__decryptFailed`, the entire `archived_weeks` layer is skipped and archive-member `planner_rows` (archivedProject*, `_isArchivedTask`, week rows) are held back from upserts AND deletes — the archive is read-only for that session. (3) `archived_weeks` updates are now skipped when nothing changed, and a real update no longer restamps `archived_at`. Regression test: `archiveDecryptGate.test.js` (end-to-end read→save with a genuinely undecryptable snapshot).
+
+**Data recovery still TODO:** the current year's six `archived_weeks` snapshots now carry fallback ids (`archive-week-1`…`archive-week-6`) while the surviving headers reference the original minted ids — and header↔week grouping for the mangled saves needs reconstructing (headers were re-parented/orphaned, not deleted; the row data is intact). Recovery must run client-side (snapshots decrypt with the per-user key): group orphaned headers by their id-embedded batch timestamps, zip with weeks in `week_number` order, rewrite `snapshot.id` or the headers' `parentGroupId` to match. Close any pre-fix tabs first — an old build will keep churning until it reloads.
+
 ## 2026-10-02 — archive weeks orphaned from their project rows, fixed
 
 Symptom: on the System page every archive week header sat childless at the top
