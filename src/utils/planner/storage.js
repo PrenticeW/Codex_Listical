@@ -1806,8 +1806,24 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     // row: the Inbox divider, the Archive header, project header / General /
     // Unscheduled rows, chip group headers, chip task rows, and deletedChip
     // tombstones. Two machines computing the same key converge on one row.
+    // Archived copies are NOT structural (2026-10-03 gym-rows incident):
+    // an archived snapshot of a chip task keeps _rowType 'projectTask' and
+    // its _chipId, and archived custom subproject rows keep their original
+    // _rowType — so without this guard the live row and EVERY weekly
+    // archived copy share one structural key, adoption collapses them onto
+    // one row, and the save deletes the archived copies as absent. The DB
+    // index planner_rows_structural_uniq carries the same exclusion.
+    const isArchivedCopy = (extra) => {
+      if (extra._isArchivedTask === true || String(extra._isArchivedTask) === 'true') return true;
+      const t = extra._rowType;
+      if (typeof t === 'string' && t.startsWith('archived')) return true;
+      const parent = extra.parentGroupId;
+      return typeof parent === 'string'
+        && (parent.startsWith('archived-') || parent.startsWith('archive-week-'));
+    };
     const structuralKey = (dbRow) => {
       const extra = dbRow?.day_entries?.__extra || {};
+      if (isArchivedCopy(extra)) return null;
       if (extra._isInboxRow) return 'inbox';
       const t = extra._rowType;
       if (t === 'archiveHeader') return 'archive';
@@ -1825,6 +1841,7 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     // row could be known by on the server (project rows match by project_id
     // AND by nickname — older server rows may lack project_id).
     const clientStructuralKeys = (row) => {
+      if (isArchivedCopy(row)) return []; // archived copies are never structural
       if (row._isInboxRow) return ['inbox'];
       const t = row._rowType;
       if (t === 'archiveHeader') return ['archive'];
