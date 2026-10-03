@@ -629,7 +629,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
             )}
             {selectedTask?.taskCreatedAt && (
               <CreatedEntry
-                date={new Date(selectedTask.taskCreatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                date={`${new Date(selectedTask.taskCreatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, ${new Date(selectedTask.taskCreatedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: !use24Hour })}`}
                 agePill={getAgePill(selectedTask.taskCreatedAt)}
               />
             )}

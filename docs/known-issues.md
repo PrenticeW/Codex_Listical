@@ -1,5 +1,17 @@
 # Known Issues and Dead Code
 
+## 2026-10-03 — status history detaches when rows are recovered under new ids (57 events re-pointed)
+
+**Symptom:** task panel shows "No history yet" (only the created date) on rows that were recovered after a data loss. `task_events` is keyed by `planner_rows.id`; any recovery that re-creates a row under a fresh UUID orphans its whole event history. The events are never deleted (the task_id FK/CASCADE was dropped in `20260617000002_task_events_soft_fk.sql`) — they just point at a dead id.
+
+**Found 2026-10-03:** 497 orphaned events total. 269 are chip-task events under non-UUID ids (expected — chip rows have no planner_rows record; the panel reads those by chip id and they still resolve). 228 events across 60 UUIDs belonged to rows deleted and re-created in the 2026-09-05 and 2026-10-02 cleanups/recoveries.
+
+**Repaired:** 57 events re-pointed by SQL to the current rows, matched via each deleted row's last `planning_history` version where the old task name matched exactly one live row (15 mappings; both old "Practice" ids merged onto the one current recurring row, which is correct).
+
+**Left orphaned (171 UUID events):** names matching zero live rows (e.g. "Nurture F&F"), names matching several (only archived chip copies — "Haircut", "Build time", "Test Tacular" — re-pointing onto an arbitrary archive copy would be wrong), rows deleted before the 2026-08-27 planning_history trigger existed (mostly July), and post-encryption rows whose history names are `enc1:` ciphertext (client-side key needed to match).
+
+**Rule for any future recovery:** restore rows with their ORIGINAL ids (as the 2026-09-26 site_snapshots rebuild did), or re-point `task_events.task_id` as part of the recovery. A recovery that mints new ids silently detaches status history.
+
 ## 2026-10-03 — archive churn after weekly archive: duplicate weeks + real weeks deleted, code fixed, DATA RECOVERY PENDING
 
 **Symptom (production, live):** the most recent archive kept changing on every save cycle — archived project rows reorganising, projects losing the rows they were archived with. `archived_weeks` rows for the current year were being rewritten every ~20s (fresh `archived_at`), and 54 of the user's 64 `archivedProjectHeader` rows no longer pointed at any live week id.
