@@ -22,6 +22,7 @@
  */
 
 import { ARCHIVE_ROW_TYPES } from '../../constants/planner/rowTypes';
+import { computeArchiveTotals } from '../../hooks/planner/useArchiveTotals';
 
 export const AREA_ORDER = ['personal', 'social', 'growth', 'duties'];
 
@@ -42,22 +43,6 @@ const DATE_RANGE_PREFIX_RE = /^([A-Za-z]{3,9}\.?\s?\d{1,2}\s*[-–—]\s*[A-Za-z
 // Round to whole minutes (not 0.1h — 7h05m must stay 7h05m, not become 7.1h).
 const roundMin = (v) => Math.round(v * 60) / 60;
 
-// Day entries are HH.mm encoded ("2.30" = 2h30m), the same convention as
-// timeValue (see useTotalsCalculation / useArchiveTotals). Convert each
-// entry to minutes before summing, then return decimal hours — reading the
-// raw value with parseFloat would count 2.30 as 2.3h instead of 2.5h.
-const sumRowDayEntries = (row) => {
-  let totalMinutes = 0;
-  for (const [key, value] of Object.entries(row)) {
-    if (!key.startsWith('day-')) continue;
-    const n = parseFloat(value);
-    if (!Number.isFinite(n)) continue;
-    const hours = Math.floor(n);
-    const mins = Math.round((n - hours) * 100);
-    totalMinutes += hours * 60 + mins;
-  }
-  return totalMinutes / 60;
-};
 
 // "Year X, Week Y" → { yearPart: "Year X", weekPart: "Week Y" }
 const splitWeekLabel = (label = '') => {
@@ -89,19 +74,21 @@ const projectKeysOf = (header, projectIdByNickname) => {
   return keys;
 };
 
-// All archived project headers under one archive week, each with the summed
-// day-entry hours of the rows hanging under its group (archived tasks +
-// section rows; section rows carry no day values so they contribute 0).
-const projectEntriesForWeek = (data, archiveWeekId) => {
+// All archived project headers under one archive week, each with the hours
+// the archive TABLE shows for it. Sourced from computeArchiveTotals (the
+// same timeValue-based, status-filtered sum the archived project rows
+// render) rather than re-deriving from day-* cells — the two algorithms
+// disagreed whenever an archived task carried logged time in timeValue
+// without matching day-cell placement, which underreported projects in the
+// panel while the row stayed right (2026-10-03, "Plan SC" mismatch).
+const projectEntriesForWeek = (data, archiveWeekId, projectTotals) => {
   const headers = data.filter(
     (r) =>
       r._rowType === ARCHIVE_ROW_TYPES.ARCHIVED_PROJECT_HEADER &&
       r.parentGroupId === archiveWeekId,
   );
   return headers.map((header) => {
-    const hours = data
-      .filter((r) => r.parentGroupId === header.groupId)
-      .reduce((sum, r) => sum + sumRowDayEntries(r), 0);
+    const hours = hhmmToDecimalHours(projectTotals[header.id] || '0.00');
     return { header, hours: roundMin(hours) };
   });
 };
@@ -135,7 +122,7 @@ const parseQuota = (raw) => {
 export function buildArchiveWeekPanelData(
   data,
   archiveRowId,
-  { projectInfoById = new Map(), projectIdByNickname = new Map() } = {},
+  { projectInfoById = new Map(), projectIdByNickname = new Map(), totalDays = 84 } = {},
 ) {
   const weeks = data.filter((r) => r._rowType === ARCHIVE_ROW_TYPES.ARCHIVE_WEEK);
   const index = weeks.findIndex((r) => r.id === archiveRowId);
@@ -145,13 +132,18 @@ export function buildArchiveWeekPanelData(
   const prevRow = index > 0 ? weeks[index - 1] : null;
   const nextRow = index < weeks.length - 1 ? weeks[index + 1] : null;
 
-  const entries = projectEntriesForWeek(data, row.id);
+  // One shared source of truth with the archive table rows (see
+  // projectEntriesForWeek). weekTotals also covers snapshots parented
+  // directly to the week (no matching archived project header).
+  const { projectTotals, weekTotals } = computeArchiveTotals(data, totalDays);
+
+  const entries = projectEntriesForWeek(data, row.id, projectTotals);
 
   // Previous week's hours, registered under every identity each header has,
   // so lookups succeed across mixed-era rows (id vs nickname keyed).
   const prevByKey = new Map();
   if (prevRow) {
-    for (const e of projectEntriesForWeek(data, prevRow.id)) {
+    for (const e of projectEntriesForWeek(data, prevRow.id, projectTotals)) {
       for (const key of projectKeysOf(e.header, projectIdByNickname)) {
         if (!prevByKey.has(key)) prevByKey.set(key, e.hours);
       }
@@ -177,6 +169,23 @@ export function buildArchiveWeekPanelData(
       area: header.archivedArea ?? null,
     };
   });
+
+  // Hours the table attributes to the week but to no archived project
+  // header (snapshots "parked" under the week row itself). Surface them so
+  // the panel's week total matches the archive row's total.
+  const weekHours = hhmmToDecimalHours(weekTotals[row.id]?.totalHours || '0.00');
+  const filedHours = projects.reduce((s, p) => s + (p.current || 0), 0);
+  const unfiledHours = roundMin(Math.max(0, weekHours - filedHours));
+  if (unfiledHours >= 1 / 60) {
+    projects.push({
+      name: 'Unfiled',
+      color: 'var(--n-slate)',
+      last: null,
+      current: unfiledHours,
+      quota: null,
+      area: null,
+    });
+  }
 
   // Group current hours by frozen area; missing/unknown area → Unassigned.
   const areaTotals = new Map();

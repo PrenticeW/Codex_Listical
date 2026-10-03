@@ -1115,12 +1115,13 @@ export default function ProjectTimePlannerV2() {
     const week = buildArchiveWeekPanelData(data, panelTask.id, {
       projectInfoById,
       projectIdByNickname,
+      totalDays,
     });
     if (!week) return;
     window.dispatchEvent(new CustomEvent(SYSTEM_PANEL_ARCHIVE_WEEK_EVENT, {
       detail: { week },
     }));
-  }, [panelTask, data, projectInfoById, projectIdByNickname]);
+  }, [panelTask, data, projectInfoById, projectIdByNickname, totalDays]);
 
   // Keep latestVisibleDayColumnsRef in sync so the event handler can always read
   // the current pole-position without needing to be in its dep array.
