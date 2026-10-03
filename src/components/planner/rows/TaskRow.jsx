@@ -25,7 +25,7 @@ import { isRecurringValue } from '../../../utils/planner/valueNormalizers';
 const isCheckedCellValue = (columnId, value) =>
   columnId === 'recurring'
     ? isRecurringValue(value)
-    : isCheckedCellValue(columnId, value);
+    : value === 'true' || value === true;
 
 // Commit in the column's canonical vocabulary: 'Recurring'/'Not Recurring'
 // for the recurring column (matches the chip-sync canonical), 'true'/'false'
