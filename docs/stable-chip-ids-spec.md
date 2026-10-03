@@ -111,6 +111,8 @@ fragility until touched. ⚠ Additional accepted cost found in review: `chipDisp
 store — those prefs silently reset when a chip's id changes form, same class as
 `chipTimeOverrides` self-healing on the next send.
 
+DECISION 2026-10-03: hard cutover ruled out. Sole current user; new accounts and new years start clean (UUID ids minted from first autosave), the owner's next year begins in a few weeks, and `createDraftYear.js` verified to preserve `scheduleId` on draft copies (~line 117). Remaining legacy positional ids in the current year ride the lazy path until the year is retired. The paragraph below is kept for reference only — do not build it.
+
 Only if a hard cutover is later wanted: a one-time per-account routine must rewrite, for
 each year and BOTH `is_sent` layers, `tactics_chips.chip_id` (and `-extra-` derivatives),
 `chip_task_notes.chip_id`, and `_chipId` inside `planner_rows.day_entries.__extra` —
