@@ -21,8 +21,13 @@ function CheckboxCell({
   // Parse initial value - accept boolean, string "true"/"false", or empty string
   const parseValue = (val) => {
     if (typeof val === 'boolean') return val;
-    if (val === 'true' || val === '1') return true;
-    if (val === 'false' || val === '0' || val === '' || val === null || val === undefined) return false;
+    if (val === null || val === undefined) return false;
+    const v = String(val).trim().toLowerCase();
+    // 'recurring' / 'not recurring': the recurring column's other stored
+    // vocabulary (see docs/known-issues.md). Without it, opening a
+    // 'Recurring' cell rendered unchecked and Enter silently committed
+    // false, flipping genuinely recurring rows off.
+    if (v === 'true' || v === '1' || v === 'recurring') return true;
     return false;
   };
 

@@ -14,6 +14,27 @@ import { getSelectionEdgeClassNames } from '../../../utils/planner/selectionEdge
 import LinkedText from '../../LinkedText';
 import MultiStatusDropdownCell from '../MultiStatusDropdownCell';
 import { isMultiStatusRow, getMultiInstances, getCurrentInstanceIndex } from '../../../utils/planner/multiStatus';
+import { isRecurringValue } from '../../../utils/planner/valueNormalizers';
+
+// The recurring column is stored in two vocabularies ('Recurring'/'Not
+// Recurring' from chip sync and the task panel, 'true'/'false' from this
+// grid's checkbox — see docs/known-issues.md), so the checkbox must read it
+// through isRecurringValue or chip rows render unchecked while the archive
+// still treats them as recurring. The plain checkbox column keeps strict
+// 'true' semantics.
+const isCheckedCellValue = (columnId, value) =>
+  columnId === 'recurring'
+    ? isRecurringValue(value)
+    : isCheckedCellValue(columnId, value);
+
+// Commit in the column's canonical vocabulary: 'Recurring'/'Not Recurring'
+// for the recurring column (matches the chip-sync canonical), 'true'/'false'
+// for the checkbox column. Accepts either vocabulary in.
+const toCommittedCellValue = (columnId, checkedish) => {
+  const on = checkedish === true || isRecurringValue(checkedish) || checkedish === 'true';
+  if (columnId === 'recurring') return on ? 'Recurring' : 'Not Recurring';
+  return on ? 'true' : 'false';
+};
 
 /**
  * TaskRow Component
@@ -371,10 +392,13 @@ const TaskRow = React.memo(function TaskRow({
               >
                 {isEditing ? (
                   columnId === 'checkbox' || columnId === 'recurring' ? (
+                    /* Normalize in ('Recurring' must open checked, not reset
+                       to false on Enter) and commit in the column's canonical
+                       vocabulary. */
                     <CheckboxCell
-                      initialValue={editValue}
-                      onComplete={(newValue) => handleEditComplete(rowId, columnId, newValue)}
-                      onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, currentValue)}
+                      initialValue={isCheckedCellValue(columnId, editValue) ? 'true' : 'false'}
+                      onComplete={(newValue) => handleEditComplete(rowId, columnId, toCommittedCellValue(columnId, newValue))}
+                      onKeyDown={(e, currentValue) => handleEditKeyDown(e, rowId, columnId, toCommittedCellValue(columnId, currentValue))}
                       cellFontSize={cellFontSize}
                       rowHeight={rowHeight}
                     />
@@ -454,7 +478,7 @@ const TaskRow = React.memo(function TaskRow({
                     <div
                       className="w-full h-full flex items-center justify-center"
                       style={{
-                        backgroundColor: (value === 'true' || value === true)
+                        backgroundColor: isCheckedCellValue(columnId, value)
                           ? '#d4ecbc'
                           : 'transparent',
                       }}
@@ -462,7 +486,7 @@ const TaskRow = React.memo(function TaskRow({
                       {/* Hidden input for copy/paste compatibility */}
                       <input
                         type="text"
-                        value={(value === 'true' || value === true) ? 'true' : 'false'}
+                        value={isCheckedCellValue(columnId, value) ? 'true' : 'false'}
                         readOnly
                         style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px' }}
                         tabIndex={-1}
@@ -472,7 +496,7 @@ const TaskRow = React.memo(function TaskRow({
                       <div
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleEditComplete(rowId, columnId, (!(value === 'true' || value === true)).toString());
+                          handleEditComplete(rowId, columnId, toCommittedCellValue(columnId, !isCheckedCellValue(columnId, value)));
                         }}
                         className="flex items-center justify-center cursor-pointer"
                         style={{
@@ -484,14 +508,14 @@ const TaskRow = React.memo(function TaskRow({
                           height: `${Math.max(12, Math.round(rowHeight * (2 / 3)))}px`,
                           minWidth: `${Math.max(12, Math.round(rowHeight * (2 / 3)))}px`,
                           minHeight: `${Math.max(12, Math.round(rowHeight * (2 / 3)))}px`,
-                          backgroundColor: (value === 'true' || value === true) ? '#276436' : 'white',
+                          backgroundColor: isCheckedCellValue(columnId, value) ? '#276436' : 'white',
                           // 1px border -- 2px read as a thick ring around
                           // unchecked boxes.
-                          border: `1px solid ${(value === 'true' || value === true) ? '#276436' : 'var(--th-gutter-line)'}`,
+                          border: `1px solid ${isCheckedCellValue(columnId, value) ? '#276436' : 'var(--th-gutter-line)'}`,
                           borderRadius: '3px',
                         }}
                       >
-                        {(value === 'true' || value === true) && (
+                        {isCheckedCellValue(columnId, value) && (
                           <svg
                             width={`${Math.max(8, Math.round(rowHeight * (2 / 3)) - 4)}`}
                             height={`${Math.max(8, Math.round(rowHeight * (2 / 3)) - 4)}`}

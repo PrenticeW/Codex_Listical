@@ -43,6 +43,7 @@ import { supabase, CLIENT_BUILD } from '../../lib/supabase';
 import { decryptRows, encryptField, encryptJson, encryptWritesEnabled, decryptJsonPreferEnc, hasDataKey, isEncrypted, initDataKey } from '../../lib/crypto';
 import { createInitialData } from './dataCreators';
 import { ensureOrderKeys, assignMissingKeys, compareRowOrder, isValidOrderKey } from './orderKey';
+import { isRecurringValue } from './valueNormalizers';
 import { loadTacticsMetrics } from '../../lib/tacticsMetricsStorage';
 import { debounceSiteSnapshot } from '../../lib/snapshotStorage';
 import { DEFAULT_PROJECT_ID } from '../../constants/plannerStorageKeys';
@@ -957,7 +958,15 @@ function plannerRowPayloadToDb({ row, userId, yearId, displayOrder }) {
     subproject_label: typeof row.subproject === 'string' ? row.subproject : '',
     status: typeof row.status === 'string' ? row.status : '-',
     task: typeof row.task === 'string' ? row.task : '',
-    recurring: typeof row.recurring === 'string' ? row.recurring : '',
+    // Canonicalise the recurring vocabulary at the write boundary
+    // (2026-10-03, docs/known-issues.md): the column historically held
+    // 'true'/'false' alongside 'Recurring'/'Not Recurring', and the mixed
+    // spellings are what let the grid checkbox decouple from the archive's
+    // recurring semantics. Every save now converges a row to the canonical
+    // spelling; '' stays '' (unset) so untouched rows don't churn.
+    recurring: (typeof row.recurring === 'string' && row.recurring.trim() !== '')
+      ? (isRecurringValue(row.recurring) ? 'Recurring' : 'Not Recurring')
+      : '',
     estimate: typeof row.estimate === 'string' ? row.estimate : '',
     time_value_minutes: timeValueMinutes,
     day_entries: { __cells: dayEntries, __project: row.project ?? '', __extra: extraData },

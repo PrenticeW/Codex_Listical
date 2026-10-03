@@ -84,3 +84,35 @@ describe("rows stamped recurring 'false' by the mobile app", () => {
     expect(out.filter(r => r.task === 'Build time' && r._isArchivedTask)).toHaveLength(1);
   });
 });
+
+describe('recurring rows with a sweep status but no hours anywhere (2026-10-03)', () => {
+  const weekId = 'archive-week-y';
+  const base = [
+    { id: 'hdr', _rowType: 'projectHeader', projectNickname: 'FINANCES', groupId: 'g1' },
+    { id: 'archHdr', _rowType: 'archiveHeader' },
+    { id: weekId, _rowType: 'archiveWeek', archiveWeekLabel: 'Year 5, Week 2' },
+    { id: 'ah', _rowType: 'archivedProjectHeader', projectNickname: 'FINANCES', groupId: 'ag1', parentGroupId: weekId },
+    { id: 'ag', _rowType: 'archivedProjectGeneral', projectNickname: 'FINANCES', parentGroupId: 'ag1' },
+    { id: 'au', _rowType: 'archivedProjectUnscheduled', projectNickname: 'FINANCES', parentGroupId: 'ag1' },
+  ];
+
+  it('recurring Accounted with no day values: snapshotted AND reset in place', () => {
+    const task = { id: 't10', project: 'FINANCES', task: 'Bookkeeping', status: 'Accounted', recurring: 'Recurring' };
+    const out = run([...base, task], weekId);
+    const live = out.find(r => r.id === 't10');
+    const snaps = out.filter(r => r.task === 'Bookkeeping' && r.id !== 't10');
+    expect(snaps).toHaveLength(1);                   // archive copy keeps the record
+    expect(snaps[0].status).toBe('Accounted');
+    expect(live).toBeDefined();                      // live row stays in the planner...
+    expect(live.status).toBe('Not Scheduled');       // ...but its status is reset
+  });
+
+  it('recurring Done scheduled only in a DIFFERENT week: left completely alone', () => {
+    const task = { id: 't11', project: 'FINANCES', task: 'Other week', status: 'Done', recurring: 'true', 'day-20': '1.00' };
+    const out = run([...base, task], weekId);
+    const live = out.find(r => r.id === 't11');
+    expect(live.status).toBe('Done');                // other week's instance untouched
+    expect(live['day-20']).toBe('1.00');
+    expect(out.filter(r => r.task === 'Other week')).toHaveLength(1); // no snapshot
+  });
+});

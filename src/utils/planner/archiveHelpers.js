@@ -657,12 +657,18 @@ export const resetRecurringTasks = (data, totalDays = 84, startDayIndex = 0) => 
     if ((isRecurringValue(row.recurring) || taskHasDayOutsideRange(row, startDayIndex, totalDays)) &&
         isArchiveSweepStatus(row.status)) {
       // Was this task actually scheduled within the week being archived? If
-      // not, its Done/Abandoned status belongs to an instance in a different
-      // week and must be left alone — clearing the full 84-day span here
-      // would otherwise wipe scheduled/Done instances sitting in other,
-      // not-yet-archived weeks (the same class of bug as the task-collection
-      // scoping above).
-      if (!taskHasScheduledDayInRange(row, startDayIndex, totalDays)) return row;
+      // it is scheduled only in a DIFFERENT week, its Done/Abandoned status
+      // belongs to that week's instance and must be left alone — clearing the
+      // full 84-day span here would otherwise wipe scheduled/Done instances
+      // sitting in other, not-yet-archived weeks (the same class of bug as
+      // the task-collection scoping above). A task with no day value ANYWHERE
+      // is different: it has no week of its own, it was just snapshotted into
+      // this archive (isTaskInArchivedWeek treats unscheduled rows as
+      // in-week), so its status must still be reset here or a recurring
+      // Accounted/Done row with no hours logged stays marked in the live
+      // planner after the archive (2026-10-03).
+      if (!taskHasScheduledDayInRange(row, startDayIndex, totalDays) &&
+          taskHasAnyScheduledDay(row, totalDays)) return row;
 
       const updates = {};
       // Clear only this week's day entries (and their per-instance status)
