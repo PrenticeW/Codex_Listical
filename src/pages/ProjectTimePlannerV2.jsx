@@ -2691,7 +2691,11 @@ export default function ProjectTimePlannerV2() {
     const tsvData = handleCopyOperation({
       selectedRows,
       selectedCells,
-      data,
+      // Resolve the selection against the FILTERED row set, not the full
+      // dataset: with a status/day filter active the selection can still
+      // reference hidden rows (e.g. a range or select-all made earlier),
+      // and copying those picked up tasks that aren't on screen.
+      data: filteredData,
       allColumnIds,
       editingCell,
       lastCopiedColumnsRef,
@@ -2700,7 +2704,7 @@ export default function ProjectTimePlannerV2() {
     if (tsvData) {
       navigator.clipboard.writeText(tsvData);
     }
-  }, [selectedCells, selectedRows, data, editingCell, allColumnIds]);
+  }, [selectedCells, selectedRows, filteredData, editingCell, allColumnIds]);
 
   const handlePaste = useCallback((e) => {
     // Don't intercept paste while editing a cell — let the native input handle it

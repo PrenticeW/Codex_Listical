@@ -17,7 +17,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import PanelLockButton from '../PanelLockButton';
 import { PILLBOX_COLORS } from './DropdownCell';
 import { getStatusLabel } from '../../lib/statusesStorage';
-import { saveTaskNote, readTaskEvents } from '../../utils/planner/storage';
+import { saveTaskNote, readTaskEvents, writeTaskEvent } from '../../utils/planner/storage';
 import { TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT } from '../../contexts/TaskRowPanelContext';
 import { fmtTimestamp } from '../../utils/fmtTimestamp';
 import { containsUrl } from '../../utils/linkify';
@@ -338,6 +338,10 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
   // only shows the labels, so blur must save from here, not e.target.value.
   const notesRef = React.useRef('');
   notesRef.current = notes;
+  // Note text as of the last written 'notes' history event (or panel open).
+  // Compared at commit points (blur / add-link confirm) so one editing
+  // session produces one history entry, not one per debounced save.
+  const noteEventBaselineRef = React.useRef('');
 
   useEffect(() => {
     if (isEditingNotes && notesTextareaRef.current) notesTextareaRef.current.focus();
@@ -352,6 +356,11 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
     }
   }, [notes, isEditingNotes]);
 
+  // Id of the task whose notes are currently in `notes` state — lets the
+  // task-change effect (and unmount) flush a pending notes history event for
+  // the PREVIOUS task, covering exits that never blur the textarea.
+  const notesTaskIdRef = React.useRef(null);
+
   // Reset inner state and load fresh data whenever the selected task changes
   useEffect(() => {
     // Cancel any pending note save from the previous task
@@ -359,17 +368,38 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
       clearTimeout(noteSaveDebounceRef.current);
       noteSaveDebounceRef.current = null;
     }
+    // The previous task's debounced save was just cancelled — persist its
+    // latest text and log the history event before switching away.
+    if (notesTaskIdRef.current && notesTaskIdRef.current !== selectedTask?.id) {
+      const prevId = notesTaskIdRef.current;
+      if ((notesRef.current ?? '') !== (noteEventBaselineRef.current ?? '')) {
+        persistNote(prevId, notesRef.current);
+        logNoteEventIfChanged(prevId);
+      }
+    }
+    notesTaskIdRef.current = selectedTask?.id ?? null;
     setShowHistory(false);
     setIsEditingNotes(false);
     if (selectedTask) {
       setRecurringActive(isRecurringValue(selectedTask.recurring));
       setNotes(selectedTask.notes ?? '');
+      noteEventBaselineRef.current = selectedTask.notes ?? '';
       readTaskEvents(selectedTask.id).then(setEvents);
     } else {
       setNotes('');
+      noteEventBaselineRef.current = '';
       setEvents([]);
     }
   }, [selectedTask?.id]);
+
+  // Flush a pending notes event when the panel unmounts without a blur.
+  useEffect(() => () => {
+    const id = notesTaskIdRef.current;
+    if (id && (notesRef.current ?? '') !== (noteEventBaselineRef.current ?? '')) {
+      persistNote(id, notesRef.current);
+      logNoteEventIfChanged(id);
+    }
+  }, []);
 
   // Reload events (and sync recurring state) when status or recurring changes on the same task
   useEffect(() => {
@@ -398,6 +428,24 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
     }));
   }, []);
 
+  // Write one 'notes' history event when the committed note text differs
+  // from the baseline captured at panel open / last event.
+  const logNoteEventIfChanged = useCallback((taskId) => {
+    const current = notesRef.current ?? '';
+    const baseline = noteEventBaselineRef.current ?? '';
+    if (!taskId || current === baseline) return;
+    noteEventBaselineRef.current = current;
+    writeTaskEvent(taskId, {
+      field: 'notes',
+      oldValue: baseline || null,
+      newValue: current,
+    }).then(() => {
+      window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_RELOAD_HISTORY_EVENT, {
+        detail: { taskId },
+      }));
+    });
+  }, []);
+
   const handleNotesChange = useCallback((e) => {
     const noteText = e.target.value;
     setNotes(noteText);
@@ -417,7 +465,12 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
     // Confirm closes the editor so the note shows the clickable link.
     onCommit: (next) => {
       if (noteSaveDebounceRef.current) { clearTimeout(noteSaveDebounceRef.current); noteSaveDebounceRef.current = null; }
-      if (selectedTask?.id) persistNote(selectedTask.id, next);
+      if (selectedTask?.id) {
+        persistNote(selectedTask.id, next);
+        // notesRef may not have re-rendered yet — sync it before comparing.
+        notesRef.current = next;
+        logNoteEventIfChanged(selectedTask.id);
+      }
       setIsEditingNotes(false);
     },
   });
@@ -432,8 +485,9 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
     }
     if (selectedTask?.id) {
       persistNote(selectedTask.id, notesRef.current);
+      logNoteEventIfChanged(selectedTask.id);
     }
-  }, [selectedTask?.id, persistNote]);
+  }, [selectedTask?.id, persistNote, logNoteEventIfChanged]);
 
   function toggleRecurring() {
     const next = !recurringActive;
@@ -467,15 +521,26 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
     );
   }
 
-  // Map DB event rows to HistoryEntry props (status events only)
+  // Map DB event rows to HistoryEntry props (status + notes events)
   const statusEvents = events
-    .filter(ev => ev.field === 'status')
-    .map(ev => ({
-      status: ev.new_value,
-      fromStatus: ev.old_value || null,
-      time: fmtTimestamp(ev.changed_at, { use24Hour }),
-      note: ev.note || null,
-    }));
+    .filter(ev => ev.field === 'status' || ev.field === 'notes')
+    .map(ev => ev.field === 'notes'
+      ? {
+          // Rendered through the same chip component; unknown labels fall
+          // back to the neutral grey chip (matches the Created pill).
+          status: !(ev.old_value || '').trim() ? 'Notes added'
+            : !(ev.new_value || '').trim() ? 'Notes removed'
+            : 'Notes updated',
+          fromStatus: null,
+          time: fmtTimestamp(ev.changed_at, { use24Hour }),
+          note: null,
+        }
+      : {
+          status: ev.new_value,
+          fromStatus: ev.old_value || null,
+          time: fmtTimestamp(ev.changed_at, { use24Hour }),
+          note: ev.note || null,
+        });
 
   return (
     // Inner slide: 200% wide (two 50% panes), clips via parent overflow:hidden.
