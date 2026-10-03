@@ -432,9 +432,16 @@ export default function ProjectTimePlannerV2() {
   // used the cached rows). On a cold miss this effect fires when the load
   // resolves and swaps in the real data.
   const dataHydrated = useRef(Array.isArray(taskRows) && taskRows.length > 0);
+  // Mirrors dataHydrated as state so the loading overlay can wait for the
+  // render that actually PAINTS the hydrated rows. Gating the overlay on
+  // storageLoaded alone started the fade one render before setData swapped
+  // the rows in, flashing the blank all-unscheduled skeleton mid-fade as if
+  // the account were empty (2026-10-03). setDataReady lands in the same
+  // commit as setData, so the fade begins over the real table.
+  const [dataReady, setDataReady] = useState(dataHydrated.current);
   useEffect(() => {
     if (!storageLoaded) return;
-    if (dataHydrated.current) return;
+    if (dataHydrated.current) { setDataReady(true); return; }
     dataHydrated.current = true;
     if (Array.isArray(taskRows) && taskRows.length > 0) {
       // Backfills a missing Daily Total row for accounts whose saved data
@@ -442,6 +449,7 @@ export default function ProjectTimePlannerV2() {
       // matters (it silently breaks the "8 pinned rows" sticky-header slice).
       setData(ensureDailyTotalRow(taskRows));
     }
+    setDataReady(true);
   }, [storageLoaded, taskRows, setData]);
 
   // Save data to storage when it changes (debounced).
@@ -3971,9 +3979,10 @@ export default function ProjectTimePlannerV2() {
       backgroundAttachment: 'fixed',
     }}>
       {/* Brand loading overlay: covers the page on a cold-cache load until
-          the planner rows have hydrated, then fades out over the full table
-          (no-op on a warm cache, where storageLoaded starts true). */}
-      <BrandLoaderOverlay active={!storageLoaded} />
+          the planner rows have hydrated AND been committed to the table
+          (dataReady), then fades out over the fully-rendered content
+          (no-op on a warm cache, where both start true). */}
+      <BrandLoaderOverlay active={!storageLoaded || !dataReady} />
       {/* Nav bar — always visible at top */}
       <div className="sticky top-0 z-20 px-4 pt-4 pb-4 shrink-0" style={{ background: 'transparent' }}>
         <NavigationBar
