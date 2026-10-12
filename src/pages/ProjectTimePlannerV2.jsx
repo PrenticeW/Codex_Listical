@@ -84,7 +84,7 @@ import {
 import { getClipboardTextWithLinks } from '../utils/clipboardText';
 import { createSortInboxCommand, createMoveSelectionCommand, getMoveSelectionState } from '../utils/planner/sortInbox';
 import { createSortPlannerCommand } from '../utils/planner/sortPlanner';
-import { saveTaskRows, markRowsMoved, readTaskRows, invalidateTaskRowsCache, loadChipTaskNote, preloadChipTaskNotes, isTaskRowsSaveInFlight, getLastTaskRowsSaveCompletedAt, writeTaskEvent, isPlannerYearServerFresh, PLANNER_ROWS_STALE_EVENT } from '../utils/planner/storage';
+import { saveTaskRows, markRowsMoved, markRowsDeleted, readTaskRows, invalidateTaskRowsCache, loadChipTaskNote, preloadChipTaskNotes, isTaskRowsSaveInFlight, getLastTaskRowsSaveCompletedAt, writeTaskEvent, isPlannerYearServerFresh, PLANNER_ROWS_STALE_EVENT } from '../utils/planner/storage';
 import { supabase } from '../lib/supabase';
 import { plannerFilterStorage } from '../lib/plannerFilterStorage';
 import { DEFAULT_PROJECT_ID } from '../constants/plannerStorageKeys';
@@ -1469,6 +1469,10 @@ export default function ProjectTimePlannerV2() {
             if (!row.id) row.id = 'archive-header';
             return true;
           }
+          // Removing a duplicate archive header is a deliberate cleanup —
+          // register intent so the save may delete the server copy
+          // (intent-gated deletes, 2026-10-12; idempotent under strict mode).
+          if (row.id) markRowsDeleted(currentYear, [row.id]);
           return false; // Remove all other archive headers
         }
         return true;
@@ -1602,13 +1606,22 @@ export default function ProjectTimePlannerV2() {
             const t = row._rowType || '';
             return t.toLowerCase().startsWith('archive') || !!row.archiveWeekLabel;
           };
+          const removedRowIds = [];
           filteredData = prevData.filter(row => {
-            if (isArchived(row)) return true;
-            if (row._rowType === 'projectHeader' && removedProjects.includes(row.projectNickname)) return false;
-            if (row.parentGroupId && removedGroupIds.has(row.parentGroupId)) return false;
-            if (row.projectNickname && removedSet.has(row.projectNickname)) return false;
-            return true;
+            const keep = (() => {
+              if (isArchived(row)) return true;
+              if (row._rowType === 'projectHeader' && removedProjects.includes(row.projectNickname)) return false;
+              if (row.parentGroupId && removedGroupIds.has(row.parentGroupId)) return false;
+              if (row.projectNickname && removedSet.has(row.projectNickname)) return false;
+              return true;
+            })();
+            if (!keep) removedRowIds.push(row.id);
+            return keep;
           });
+          // Removing a project from the plan deletes its System rows —
+          // register the intent so the save may delete them (intent-gated
+          // deletes, 2026-10-12; idempotent under strict mode).
+          markRowsDeleted(currentYear, removedRowIds);
         }
 
         // Find the last existing project header to insert new ones after it
@@ -1796,14 +1809,18 @@ export default function ProjectTimePlannerV2() {
         // or its whole group (header tombstone) is gone from Plan, remove
         // it — so a chip added back later respawns its row, even if it
         // reuses a legacy positional id.
+        const prunedTombstoneIds = [];
         const pruned = prevData.filter(row => {
           if (row._rowType !== 'deletedChip') return true;
           const alive = row._chipGroupKey
             ? groups.has(row._chipGroupKey)
             : currentChipIds.has(row._chipId);
-          if (!alive) changed = true;
+          if (!alive) { changed = true; prunedTombstoneIds.push(row.id); }
           return alive;
         });
+        // Spent tombstones are deleted rows — register intent for the save
+        // (intent-gated deletes, 2026-10-12; idempotent under strict mode).
+        markRowsDeleted(currentYear, prunedTombstoneIds);
 
         // --- Step 0: re-link rows orphaned by chip renumbering ---
         // Chip ids encode the schedule item's position in its project's list
@@ -1913,6 +1930,7 @@ export default function ProjectTimePlannerV2() {
           ) keptOrphanGroupIds.add(row.parentGroupId);
         });
         let working = [];
+        const droppedChipRowIds = [];
         relinked.forEach(row => {
           if (row._chipId && !currentChipIds.has(row._chipId)) {
             if (row._rowType === 'projectTask') {
@@ -1923,6 +1941,7 @@ export default function ProjectTimePlannerV2() {
                 return;
               }
               changed = true;
+              droppedChipRowIds.push(row.id);
               return;
             }
             // A header survives as long as any chip in its group still exists
@@ -1936,12 +1955,17 @@ export default function ProjectTimePlannerV2() {
                   return;
                 }
                 changed = true;
+                droppedChipRowIds.push(row.id);
                 return;
               }
             }
           }
           working.push(row);
         });
+        // Chip rows dropped because their chip no longer exists on Plan are
+        // deletions — register intent for the save (intent-gated deletes,
+        // 2026-10-12; idempotent under strict mode).
+        markRowsDeleted(currentYear, droppedChipRowIds);
 
         // --- Step 2: migrate legacy one-header-per-chip rows into group headers ---
         // The first header seen for a group becomes the group header; later
@@ -1955,6 +1979,9 @@ export default function ProjectTimePlannerV2() {
           if (headerByKey.has(key)) {
             dropHeaderGroupIds.set(row.groupId, headerByKey.get(key).groupId);
             changed = true;
+            // Dropping the duplicate header deletes its row — register
+            // intent for the save (intent-gated deletes, 2026-10-12).
+            markRowsDeleted(currentYear, [row.id]);
             return false;
           }
           headerByKey.set(key, row);
@@ -2858,6 +2885,10 @@ export default function ProjectTimePlannerV2() {
     // Create command for row deletion
     const command = {
       execute: () => {
+        // Register the deletion intent: the save only deletes server rows
+        // registered here (intent-gated deletes, 2026-10-12). Idempotent Set
+        // add, safe under strict-mode double-invoke.
+        markRowsDeleted(currentYear, [...expandedRowIds]);
         setData(prev => {
           const newData = [...prev];
           // Remove in reverse order to maintain indices
@@ -2877,6 +2908,9 @@ export default function ProjectTimePlannerV2() {
         setSelectedCells(new Set());
       },
       undo: () => {
+        // The undo removes the tombstone rows this delete created — if a
+        // save already persisted them, deleting them needs intent too.
+        markRowsDeleted(currentYear, tombstones.map(t => t.id));
         setData(prev => {
           const newData = prev.filter(r => !tombstones.some(t => t.id === r.id));
           // Restore in original order
@@ -2889,7 +2923,7 @@ export default function ProjectTimePlannerV2() {
     };
 
     executeCommand(command);
-  }, [selectedRows, data, executeCommand]);
+  }, [selectedRows, data, executeCommand, currentYear]);
 
   // Keyboard event handlers (undo/redo, delete, edit mode)
   // Columns the arrow keys can visit: the standard column order minus

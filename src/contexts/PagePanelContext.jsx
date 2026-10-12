@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useGearPanel } from './GearPanelContext';
 
 /**
@@ -14,6 +15,11 @@ import { useGearPanel } from './GearPanelContext';
  * showing when the lock was engaged. `lockedRef` mirrors `locked` so event
  * listeners can read the current value without re-subscribing.
  *
+ * The lock also records WHICH page it was engaged on (`lockedPath`): while
+ * locked, the three page panels route-gate against lockedPath instead of the
+ * live pathname, so the locked panel stays mounted (pinned) across page
+ * navigation and the other pages' panels stand down until unlock.
+ *
  * Mutual exclusion with the gear panel: only one of the two can be open.
  * Opening a page panel closes the gear panel, and vice versa. Both sides
  * live here because GearPanelProvider wraps this provider (Layout.jsx),
@@ -27,9 +33,17 @@ export function PagePanelProvider({ children }) {
   const gear = useGearPanel();
 
   const [locked, setLocked] = useState(false);
+  // Pathname the lock was engaged on — pins that page's panel across
+  // navigation (null while unlocked).
+  const [lockedPath, setLockedPath] = useState(null);
   const lockedRef = useRef(false);
+  const { pathname } = useLocation();
   useEffect(() => { lockedRef.current = locked; }, [locked]);
-  const toggleLock = useCallback(() => setLocked(v => !v), []);
+  const toggleLock = useCallback(() => {
+    const next = !lockedRef.current;
+    setLocked(next);
+    setLockedPath(next ? pathname : null);
+  }, [pathname]);
 
   const open = useCallback(() => {
     gear.close();
@@ -62,7 +76,7 @@ export function PagePanelProvider({ children }) {
   }, [gear.isOpen]);
 
   return (
-    <PagePanelContext.Provider value={{ isOpen, open, close, toggle, locked, lockedRef, setLocked, toggleLock }}>
+    <PagePanelContext.Provider value={{ isOpen, open, close, toggle, locked, lockedPath, lockedRef, setLocked, toggleLock }}>
       {children}
     </PagePanelContext.Provider>
   );
@@ -76,6 +90,6 @@ export function usePagePanel() {
 
 /** Lock state only — for panel content that needs to read/toggle the lock. */
 export function usePanelLock() {
-  const { locked, lockedRef, setLocked, toggleLock } = usePagePanel();
-  return { locked, lockedRef, setLocked, toggleLock };
+  const { locked, lockedPath, lockedRef, setLocked, toggleLock } = usePagePanel();
+  return { locked, lockedPath, lockedRef, setLocked, toggleLock };
 }

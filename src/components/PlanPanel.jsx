@@ -1690,7 +1690,7 @@ function MainView({
 
 export default function PlanPanel() {
   const { isOpen, open, close } = usePlanPanel();
-  const { lockedRef } = usePanelLock();
+  const { locked, lockedPath, lockedRef } = usePanelLock();
   const [navBottom, setNavBottom] = useState(0);
   const { pathname } = useLocation();
   const { width: panelWidth, setWidth: setPanelWidth, minWidth, maxWidth } = usePanelWidth();
@@ -1952,7 +1952,9 @@ export default function PlanPanel() {
   }, [open]);
 
   // Only render on Plan page
-  if (pathname !== '/tactics') return null;
+  // While locked, gate against the page the lock was engaged on so the
+  // pinned panel survives navigation (see PagePanelContext).
+  if ((locked && lockedPath ? lockedPath : pathname) !== '/tactics') return null;
 
   const isSlid = panelView !== 'main';
 

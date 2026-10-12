@@ -120,7 +120,7 @@ vi.mock('../../../lib/plannerOffline', () => ({
   hasPendingOfflineSave: () => [...idb.keys()].some((k) => k.startsWith('pending:')),
 }));
 
-const { saveTaskRows } = await import('../storage');
+const { saveTaskRows, markRowsDeleted } = await import('../storage');
 
 // ---------------------------------------------------------------------------
 
@@ -376,7 +376,10 @@ describe('offline pending-save replay', () => {
     const userRows = rows.filter((r) => ids.includes(r.id));
     expect(userRows.length).toBe(6);
     // Delete one ordinary row, keep the rest (inbox still present).
+    // 2026-10-12 intent-gated deletes: a delete must be registered via
+    // markRowsDeleted — absence alone no longer deletes anything.
     const desired = userRows.filter((r) => r.id !== ids[5]);
+    markRowsDeleted(Y, [ids[5]]);
     await saveTaskRows(desired, 'project-1', Y);
     await sleep(10);
     expect(server.planner_rows.has(ids[5])).toBe(false); // legit delete landed

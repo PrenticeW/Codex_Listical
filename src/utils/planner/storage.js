@@ -1513,6 +1513,35 @@ export function markRowsMoved(yearNumber, ids) {
   for (const id of ids) if (id != null) set.add(id);
 }
 
+// Rows the USER deleted this session (2026-10-12 intent-gated deletes; the
+// 131-row two-machine wipe). yearNumber -> Set<client row id>. The save only
+// DELETES server rows registered here — a row that is merely absent from the
+// in-memory state (partial hydration, stale tab, mid-HMR rebuild) is never
+// deleted; it is logged and left for the next read/realtime refresh to
+// resync. Registered by every UI path that genuinely removes rows (row
+// delete, project removed from plan, chip removal, archive revert, draft
+// undo); captured (and cleared) with the save's bookkeeping so offline
+// replays apply the deletion exactly once. Mobile needs no equivalent — it
+// deletes per-op and never derives deletes from absence.
+const _deletedRowIds = new Map();
+
+// Server UUIDs this SESSION inserted (new rows it pushed to the server).
+// yearNumber -> Set<uuid>. The delete gate also allows deleting these, so
+// undoing an insert made this session (archive week undo, insert-rows undo)
+// persists without every undo path registering intent. Safe against the
+// wipe class: a partially hydrated tab cannot have minted the long-lived
+// rows it fails to show. In-memory only — not carried into offline replay
+// bookkeeping; an undo replayed after a reload simply leaves the row for a
+// registered delete or manual cleanup instead of guessing.
+const _sessionInsertedIds = new Map();
+
+export function markRowsDeleted(yearNumber, ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return;
+  let set = _deletedRowIds.get(yearNumber);
+  if (!set) { set = new Set(); _deletedRowIds.set(yearNumber, set); }
+  for (const id of ids) if (id != null) set.add(id);
+}
+
 function baselineSnap(dbRow) {
   const snap = {};
   for (const key of DIFF_KEYS) snap[key] = dbRow[key] ?? null;
@@ -1702,12 +1731,19 @@ function captureBookkeeping(yearNumber) {
   const moved = _movedRowIds.get(yearNumber);
   const movedIds = moved ? [...moved] : [];
   if (moved) moved.clear();
+  // deletedIds is consumed on capture for the same reason as movedIds: the
+  // save that carries it performs the deletion, and later saves must not
+  // treat the ids as freshly deleted.
+  const deleted = _deletedRowIds.get(yearNumber);
+  const deletedIds = deleted ? [...deleted] : [];
+  if (deleted) deleted.clear();
   return {
     knownIds: [...(_knownRowIds.get(yearNumber) || [])],
     synIds: [...(_syntheticRowIds.get(yearNumber) || new Map())],
     baseline: [...(_baselineRows.get(yearNumber) || new Map())],
     basedOnAt: _readHighWater.has(yearNumber) ? _readHighWater.get(yearNumber) : null,
     movedIds,
+    deletedIds,
   };
 }
 
@@ -2077,6 +2113,13 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
         }
         toUpsert.push(d);
         nextBaseline.set(d.id, baselineSnap(d));
+        {
+          // Record the insert so a later undo this session may delete it
+          // (see _sessionInsertedIds above).
+          let ins = _sessionInsertedIds.get(yearNumber);
+          if (!ins) { ins = new Set(); _sessionInsertedIds.set(yearNumber, ins); }
+          ins.add(d.id);
+        }
         continue;
       }
       if (!plannerRowDiffers(d, cur)) {
@@ -2120,7 +2163,22 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       if (plannerRowDiffers(merged, cur)) toUpsert.push(merged);
       nextBaseline.set(d.id, newBase);
     }
+    // Intent-gated deletes (2026-10-12, two-machine 131-row wipe): a server
+    // row may be deleted ONLY when a UI action registered it via
+    // markRowsDeleted (carried in bookkeeping.deletedIds, synthetic ids
+    // translated like movedIds). Absence from the in-memory state is NOT
+    // intent — a partially hydrated tab, a stale machine, or a mid-HMR dev
+    // session reads as absence, and deriving deletes from it is how every
+    // cross-device wipe to date happened. Unregistered absences are logged
+    // and left for the next read/realtime refresh to resync. Do not
+    // reintroduce absence-derived deletes.
+    const intentDeleted = new Set();
+    if (Array.isArray(bookkeeping?.deletedIds)) {
+      for (const did of bookkeeping.deletedIds) intentDeleted.add(synMap.get(did) ?? did);
+    }
+    const sessionInserted = _sessionInsertedIds.get(yearNumber) || new Set();
     const toDelete = [];
+    let absentNotDeleted = 0;
     for (const id of currentById.keys()) {
       // In the DB but not in web's state. Unknown id → another client
       // inserted it since web's last refresh (e.g. an undo re-insert);
@@ -2128,7 +2186,13 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       if (desiredIds.has(id) || !known.has(id)) continue;
       // No basis → the known set is not trustworthy enough to delete on.
       if (!hasBasis) { guarded += 1; continue; }
+      if (!intentDeleted.has(id) && !sessionInserted.has(id)) { absentNotDeleted += 1; guarded += 1; continue; }
       toDelete.push(id);
+    }
+    if (absentNotDeleted > 0) {
+      console.warn('[planner-save] intent gate kept server rows absent from memory (no registered delete)', {
+        kept: absentNotDeleted, intentRegistered: intentDeleted.size,
+      });
     }
 
     // Archive integrity gate, planner_rows side (see archiveDecryptFailed

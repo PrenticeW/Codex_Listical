@@ -21,6 +21,7 @@ import ManageStatusesContent from './ManageStatusesPanel';
 import { useLocation } from 'react-router-dom';
 import { useSystemPanel } from '../contexts/SystemPanelContext';
 import PanelLockButton from './PanelLockButton';
+import { usePanelLock } from '../contexts/PagePanelContext';
 import usePanelWidth from '../hooks/usePanelWidth';
 import storage from '../lib/storageService';
 import { useTaskRowPanel } from '../contexts/TaskRowPanelContext';
@@ -1010,6 +1011,7 @@ function PageSection() {
 export default function SystemPanel() {
   const { isOpen, close } = useSystemPanel();
   const { selectedTask, closePanel } = useTaskRowPanel();
+  const { locked, lockedPath } = usePanelLock();
   const [navBottom, setNavBottom] = useState(0);
   const { pathname } = useLocation();
   const { currentYear } = useYear();
@@ -1077,8 +1079,10 @@ export default function SystemPanel() {
 
   // Page panels are mounted globally in Layout; render only on the System
   // page so panels never stack across page switches. Open state is kept,
-  // so the panel is still there when the user returns.
-  if (pathname !== '/') return null;
+  // so the panel is still there when the user returns. While the lock is
+  // engaged, gate against the page the lock was engaged on instead, so a
+  // locked panel stays pinned across navigation.
+  if ((locked && lockedPath ? lockedPath : pathname) !== '/') return null;
 
   const showTaskDetail = Boolean(selectedTask) || statusesOpen;
   // Archive week rows get their own read-only detail view instead of the

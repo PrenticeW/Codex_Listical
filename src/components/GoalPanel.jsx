@@ -1117,7 +1117,7 @@ function PageSection() {
 
 export default function GoalPanel() {
   const { isOpen, close } = useGoalPanel();
-  const { lockedRef } = usePanelLock();
+  const { locked, lockedPath, lockedRef } = usePanelLock();
   const [navBottom, setNavBottom] = useState(0);
   const { pathname } = useLocation();
   const { width: panelWidth, setWidth: setPanelWidth, minWidth, maxWidth } = usePanelWidth();
@@ -1166,11 +1166,14 @@ export default function GoalPanel() {
   // won't re-fire — the panel would show old data. Clearing here ensures the
   // user sees "Click a goal to select it" on return rather than a stale card.
   useEffect(() => {
-    if (pathname !== '/staging') {
+    // Locked panels are pinned across navigation — keep their content.
+    // Unlocking while away runs the cleanup (locked is in the deps), so a
+    // stale card still can't greet the user back on the Goal page.
+    if (!locked && pathname !== '/staging') {
       setSelectedGoal(null);
       setSelectedRow(null);
     }
-  }, [pathname]);
+  }, [pathname, locked]);
 
   // Close colour view when panel closes
   useEffect(() => {
@@ -1203,7 +1206,9 @@ export default function GoalPanel() {
   // Page panels are mounted globally in Layout; render only on the Goal
   // page so panels never stack across page switches. Open state is kept,
   // so the panel is still there when the user returns.
-  if (pathname !== '/staging') return null;
+  // While locked, gate against the page the lock was engaged on so the
+  // pinned panel survives navigation (see PagePanelContext).
+  if ((locked && lockedPath ? lockedPath : pathname) !== '/staging') return null;
 
   return (
     <PanelShell

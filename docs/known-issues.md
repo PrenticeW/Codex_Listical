@@ -1,5 +1,16 @@
 # Known Issues and Dead Code
 
+
+## 2026-10-12 — two-machine 131-row wipe, FIXED with intent-gated deletes (data restored)
+
+**Incident:** with Tacular open on two machines plus a broken localhost dev session, a save at 16:08 UTC deleted 131 task rows. The client had partially hydrated (project headers missing, task rows missing, archive rows rendered loose) while its known-id bookkeeping survived, so the diff save read every missing row as a user deletion. The mass-delete circuit breaker only trips at ≥80% of server rows; this was ~10%.
+
+**Recovery (same day):** all 131 rows restored from `planning_history` DELETE snapshots — 116 re-inserted verbatim; 15 chip rows had been re-created under new UUIDs by the same save, so their live replacements were patched (status, `__cells`, checkbox, time/completion fields) from the snapshots instead, paired by `_chipId` + `parentGroupId`.
+
+**Fix:** deletes are now intent-gated (see CLAUDE.md "Row deletion"): the save only deletes rows registered via `markRowsDeleted` or inserted by this session. Registered call sites: `handleDeleteRows` (execute + tombstone undo), project-removed-from-plan filter, chip-sync drops (spent tombstones, dead chip rows/headers, duplicate group headers), duplicate archive-header cleanup. Absence-derived deletes are logged (`intent gate kept server rows`) and dropped. Regression test: `intentGatedDeletes.test.js`; `offlineReplay.test.js`'s small-delete case updated to register intent.
+
+**Related earlier repair (2026-10-12):** 7 archived week-6 HOST PILOT task rows carried SHIP TACULAR's project_id — a mis-pick in the 2026-10-03 15:24 UTC manual SQL backfill that re-linked archived rows after the encryption migration (three similarly named projects). Re-pointed to HOST PILOT (`33c9ed6a`); all other archive groups verified against the 2026-09-26 plaintext snapshot.
+
 ## 2026-10-03 — status history detaches when rows are recovered under new ids (57 events re-pointed)
 
 **Symptom:** task panel shows "No history yet" (only the created date) on rows that were recovered after a data loss. `task_events` is keyed by `planner_rows.id`; any recovery that re-creates a row under a fresh UUID orphans its whole event history. The events are never deleted (the task_id FK/CASCADE was dropped in `20260617000002_task_events_soft_fk.sql`) — they just point at a dead id.
@@ -182,6 +193,7 @@ Migrations written but not yet applied to the database. Apply as a batch.
 | `supabase/migrations/20260612000001_add_show_action_times.sql` | Adds `projects.show_action_times` (boolean, default FALSE) | Goal page side-panel "Hide Times" toggle on action rows — saves will fail on the unknown column until applied |
 | `supabase/migrations/20260827000002_add_project_tagline.sql` | Adds `projects.project_tagline` | Project taglines (Goal page "Add tagline", System header rows, mobile header subtitle) — before this the field was never persisted, so taglines vanished on reload. Without the column, staging saves fail on the unknown column. |
 | `supabase/migrations/20260827000001_planner_rows_history_trigger.sql` | UPDATE/DELETE triggers on `planner_rows` writing the previous row to `planning_history`; 30-day per-user prune | Nothing in the client depends on it; without it, app-side edits still have no history |
+| `supabase/migrations/20261012000001_raise_min_client_build_20261012.sql` | Raises the write-gate minimum build to `20261012` (the intent-gated-delete builds), locking out pre-fix web bundles that still derive deletes from absence | **NOT yet applied** — apply only after the 20261012 web deploy AND the 20261012 TestFlight install (both client stamps already bumped in code) |
 | `supabase/migrations/20260922000002_raise_min_client_build.sql` | Raises the write-gate minimum build to `20260922` (the order-key builds), locking pre-fix web bundles and pre-fix mobile builds out of destructive planner writes | **Applied to the live DB 2026-09-23**, after the 20260922 web deploy and TestFlight install. (`20260922000001_add_planner_order_key.sql` was applied 2026-09-22.) |
 | `supabase/migrations/20260828000001_stale_client_write_gate.sql` | Rejects destructive planner writes from clients not sending `x-tacular-client` ≥ min build (blocks pre-fix PWA bundles) | **Applied to the live DB 2026-08-28**, after mobile shipped the header (tacular-mobile `6365aad`) and web deployed `CLIENT_BUILD` — both prerequisites met |
 
@@ -232,3 +244,12 @@ Migrations written but not yet applied to the database. Apply as a batch.
 | `src/utils/yearMigration.js` | Not imported anywhere; was a one-time localStorage-to-Supabase migration helper, now dead |
 | `_importNeedsSubprojectReview` amber treatment | `TaskRow.jsx` styles rows carrying this flag (3px amber left edge + 5% amber wash) and `useEditState.ts` clears it when project/subproject is edited, but nothing in the codebase ever sets it — it has never rendered. Added April 2026 ("Turnover" commit), setter never wired; likely superseded by the reconcile that clears `subproject` instead. Either wire a setter in the import flow or remove both halves. The grey `_chipOrphaned` treatment (2026-08-30) reuses the visual pattern but is live and independent. |
 | No-draft else branch in `src/utils/planner/archiveYear.js` | The Archive button only renders when a draft year exists, making the `else` branch (lines ~290–320, "Legacy path: no draft year, create fresh next year") unreachable. Safe to delete along with the unused `loadStagingState` and `loadTacticsMetrics` reads it depends on. |
+
+## Design-token drift — hardcoded hexes (2026-10-07 audit)
+
+Noted while rebuilding the design system (Tacular Design System artifact, drift-report.md there has the full reconciliation). Not fixed yet — do not sweep without a visual pass, several of these sit in carefully tuned table chrome.
+
+- Components and pages hardcode hex colours that should be tokens: `#E8E8E4` card/panel border (~53 uses), `#1A1A1A` text (~48 uses — a fifth ink value; canonical ink is `#1F1F1F`), plus `#D3D3D3`, `#D9D9D9`, `#F7F7F5` and Tailwind-default greys (`#e5e7eb`, `#9ca3af`).
+- Tailwind utility greys (`text-slate-800`, `text-gray-600`, `bg-slate-50`, …) are used alongside the `--ink-*` ramp in page code — two grey systems in play.
+- The old `--s-*` spacing and `--r-*` radius scales never made it into `src/index.css`; components hardcode px values that mostly match the scale by habit.
+- `--paper` (#FAF5EB) is legacy: the live canvas is white + 32px grid. Remaining uses: `AuthShell.css` loading bar, `ErrorBoundary.jsx` background, `NavigationBar.jsx` active icon colour.
