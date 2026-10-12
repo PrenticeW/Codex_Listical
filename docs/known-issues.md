@@ -1,6 +1,23 @@
 # Known Issues and Dead Code
 
 
+## 2026-10-12 PM — chip tasks filed under MOVE HOUSE + archive-header key churn, FIXED (data repaired)
+
+**Symptom:** 8 live chip task rows (SELF LOVE ×2, LIFE UPKEEP ×5, BUILD HOODS ×1) rendered under MOVE HOUSE. Their project_id, `_chipId` and parentGroupId were all correct; only `order_key` placed them between the MOVE HOUSE header and its General row (written 17:29:53 and 17:30:02 UTC; the 17:33 structural repair moved their chip headers but not these children). At the same time a single open tab was rewriting the 10 Oct archive week's header keys every ~7s (~700 planning_history UPDATEs in 10 min, stopped when the tab closed at 17:39 UTC).
+
+**Causes (three, all in code, none in archiveHelpers):**
+1. **Chip-sync Step 4 catch-all** (ProjectTimePlannerV2): each project block was scanned to the NEXT project header. The last project (MOVE HOUSE) has none, so its scan ran through the Inbox and Archive and pulled every stray live chip task of any project under MOVE HOUSE, registering it as moved. Replaced by `src/utils/planner/chipRowPlacement.js`: each live chip task goes back under its own chip header by parentGroupId; the per-project lift stops at the Inbox/Archive boundary and only gathers that project's own chip rows.
+2. **Structural self-heal re-keyed archived headers on every save** (`saveTaskRows`): the read path regroups the archive by parentGroupId, not key, so archived headers never sit between their key neighbours; each save nulled and re-keyed them, the next read regrouped them, forever. Archive members are now excluded from the self-heal, as candidates and as neighbours.
+3. **`assignMissingKeys` could mint duplicate keys:** it only checked against keys already seen in in-memory order, and an inverted gap was keyed open-ended (it produced the duplicate `zz`, `zW`, `b` keys). Now the smallest id keeps a duplicated key whatever the in-memory order, and fresh keys are capped at the next existing key in the whole year, so they are always unique.
+
+Regression tests: `chipRowPlacement.test.js` (includes the exact 2026-10-12 layout and the duplicate-key cases).
+
+**Data repaired (SQL, 17:46 UTC):** the 8 chip tasks re-keyed directly under their own chip headers; the 3 duplicate keys in the 10 Oct week made unique (`6298e618`→`bV`, `a6e4364e`→`zZ`, `7e8d241a`→`zyzl`).
+
+**Separate finding, the 15 Sep / 26 Sep archived MOVE HOUSE groups:** the filing was CORRECT. The 8 tasks (Clippers, Kettle, Microwave, Mattress topper, Grow lights, Dish rack, Bathmat, Induction hob) are MOVE HOUSE tasks: `__project` says MOVE HOUSE in every version back to 13 Sep and in the 26 Sep plaintext snapshot. Their project_id was already stale (LIFE ADMIN ×7, LIFE UPKEEP ×1) before archiving, and the 2026-10-03 15:21 backfill copied the stale values back. Re-pointed to MOVE HOUSE (`e3a95fc9`). They were the only `__project` / project_id mismatches in the year. Do NOT make the archive prefer project_id over the project cell on this evidence: that would have filed these under LIFE ADMIN. Origin of the stale ids is unknown (history starts 08-27; rows re-created 09-08).
+
+**Mobile:** tacular-mobile trusts raw key order; with keys now correct it shows the same layout. No mobile change made.
+
 ## 2026-10-12 — two-machine 131-row wipe, FIXED with intent-gated deletes (data restored)
 
 **Incident:** with Tacular open on two machines plus a broken localhost dev session, a save at 16:08 UTC deleted 131 task rows. The client had partially hydrated (project headers missing, task rows missing, archive rows rendered loose) while its known-id bookkeeping survived, so the diff save read every missing row as a user deletion. The mass-delete circuit breaker only trips at ≥80% of server rows; this was ~10%.

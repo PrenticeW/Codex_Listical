@@ -94,13 +94,45 @@ export function backfillKey(index) {
 export function assignMissingKeys(rows) {
   const changed = [];
   const n = rows.length;
-  const seen = new Set();
-  const needsKey = new Array(n).fill(false);
+  // Duplicate keys (2026-10-12 archive-header churn): when several rows share
+  // a key, the row with the smallest id keeps it, whatever order this client
+  // holds them in. Keeping "the first one seen" made the survivor depend on
+  // in-memory order, which differs between loads (the archive is regrouped
+  // by parent on read), so successive saves re-keyed alternate rows forever.
+  const keeperOfKey = new Map();
   for (let i = 0; i < n; i += 1) {
     const k = rows[i].orderKey;
-    if (!isValidOrderKey(k) || seen.has(k)) needsKey[i] = true;
-    else seen.add(k);
+    if (!isValidOrderKey(k)) continue;
+    const cur = keeperOfKey.get(k);
+    if (cur === undefined || String(rows[i].id) < String(rows[cur].id)) keeperOfKey.set(k, i);
   }
+  const needsKey = new Array(n).fill(false);
+  const taken = []; // sorted list of every key that stays (plus keys minted below)
+  for (let i = 0; i < n; i += 1) {
+    const k = rows[i].orderKey;
+    if (!isValidOrderKey(k) || keeperOfKey.get(k) !== i) needsKey[i] = true;
+    else taken.push(k);
+  }
+  taken.sort();
+  // Smallest taken key strictly greater than k (k null = no lower bound).
+  const nextTaken = (k) => {
+    let lo = 0;
+    let hi = taken.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (k !== null && taken[mid] <= k) lo = mid + 1; else hi = mid;
+    }
+    return lo < taken.length ? taken[lo] : null;
+  };
+  const insertTaken = (k) => {
+    let lo = 0;
+    let hi = taken.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (taken[mid] < k) lo = mid + 1; else hi = mid;
+    }
+    taken.splice(lo, 0, k);
+  };
   let i = 0;
   while (i < n) {
     if (!needsKey[i]) { i += 1; continue; }
@@ -109,9 +141,17 @@ export function assignMissingKeys(rows) {
     const before = i > 0 ? rows[i - 1].orderKey : null;
     let after = j < n ? rows[j].orderKey : null;
     if (before !== null && after !== null && before >= after) after = null;
+    // Never mint a key some other row already holds: cap the gap at the next
+    // existing key above `before` anywhere in the year, not just the
+    // positional neighbour (in-memory order and key order can disagree, e.g.
+    // around the regrouped archive). The gap (before, cap) is then empty, so
+    // every fresh key is unique and stays above `before` / below `after`.
+    const cap = nextTaken(before);
+    if (cap !== null && (after === null || cap < after)) after = cap;
     const fresh = keysBetween(before, after, j - i);
     for (let k = i; k < j; k += 1) {
       rows[k].orderKey = fresh[k - i];
+      insertTaken(fresh[k - i]);
       changed.push(rows[k].id);
     }
     i = j;

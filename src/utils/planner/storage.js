@@ -2007,8 +2007,25 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       // structural row's kept key doesn't sort between its rendered
       // neighbours' keys, drop it and let assignMissingKeys re-key it in
       // place. Task rows are never touched here.
+      //
+      // Archive members are excluded, both as candidates and as neighbours
+      // (2026-10-12 archive-header churn): the read path regroups the archive
+      // by parentGroupId, NOT by key, so an archived header's rendered
+      // neighbours (its own week's rows) never match key order. The check
+      // re-keyed archived headers on every save, the next read regrouped
+      // them again, and the 10 Oct week's headers were rewritten every ~7s.
       {
-        const valid = keyRows.map((r) => (isValidOrderKey(r.orderKey) ? r.orderKey : null));
+        const isArchiveMember = (extra) => {
+          if (extra._isArchivedTask === true || String(extra._isArchivedTask) === 'true') return true;
+          if (typeof extra._rowType === 'string' && extra._rowType.startsWith('archived')) return true;
+          const parent = extra.parentGroupId;
+          return typeof parent === 'string'
+            && (parent.startsWith('archived-') || parent.startsWith('archive-week-'));
+        };
+        const valid = keyRows.map((r, idx) => (
+          isValidOrderKey(r.orderKey) && !isArchiveMember(desiredRows[idx].day_entries?.__extra || {})
+            ? r.orderKey : null
+        ));
         for (let i = 0; i < keyRows.length; i += 1) {
           if (valid[i] === null) continue;
           const extra = desiredRows[i].day_entries?.__extra || {};

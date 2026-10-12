@@ -84,6 +84,7 @@ import {
 import { getClipboardTextWithLinks } from '../utils/clipboardText';
 import { createSortInboxCommand, createMoveSelectionCommand, getMoveSelectionState } from '../utils/planner/sortInbox';
 import { createSortPlannerCommand } from '../utils/planner/sortPlanner';
+import { placeChipRows } from '../utils/planner/chipRowPlacement';
 import { saveTaskRows, markRowsMoved, markRowsDeleted, readTaskRows, invalidateTaskRowsCache, loadChipTaskNote, preloadChipTaskNotes, isTaskRowsSaveInFlight, getLastTaskRowsSaveCompletedAt, writeTaskEvent, isPlannerYearServerFresh, PLANNER_ROWS_STALE_EVENT } from '../utils/planner/storage';
 import { supabase } from '../lib/supabase';
 import { plannerFilterStorage } from '../lib/plannerFilterStorage';
@@ -2030,43 +2031,19 @@ export default function ProjectTimePlannerV2() {
           return next;
         });
 
-        // --- Step 4: reorder so subprojectHeader rows (with their task rows) precede
-        // General/Unscheduled section rows within each project group ---
-        const sectionRowTypes = new Set(['projectGeneral', 'projectUnscheduled', 'subprojectGeneral', 'subprojectUnscheduled']);
-        const reordered = [...working];
-        let i = 0;
-        while (i < reordered.length) {
-          if (reordered[i]._rowType === 'projectHeader') {
-            const projectGroupId = reordered[i].groupId;
-            const blockIndices = []; // header + its task rows
-            const sectionIndices = [];
-            let j = i + 1;
-            while (j < reordered.length && reordered[j]._rowType !== 'projectHeader') {
-              const r = reordered[j];
-              if (r._rowType === 'subprojectHeader' && r.parentGroupId === projectGroupId) {
-                blockIndices.push(j);
-              } else if (r._rowType === 'projectTask' && r._chipId && r.parentGroupId?.startsWith('chip')) {
-                blockIndices.push(j);
-              } else if (sectionRowTypes.has(r._rowType)) {
-                sectionIndices.push(j);
-              }
-              j++;
-            }
-            const firstSection = sectionIndices.length ? sectionIndices[0] : Infinity;
-            const misplaced = blockIndices.filter(idx => idx > firstSection);
-            if (misplaced.length > 0) {
-              changed = true;
-              const rows = misplaced.map(idx => reordered[idx]);
-              // Repositioning is a move: register it so the intent-gated
-              // save persists the new order_key (idempotent Set add, safe
-              // under React strict-mode double-invoke of this updater).
-              markRowsMoved(currentYear, rows.map(r => r.id));
-              for (let k = misplaced.length - 1; k >= 0; k--) reordered.splice(misplaced[k], 1);
-              const newFirstSectionIdx = reordered.findIndex((r, idx) => idx > i && sectionRowTypes.has(r._rowType));
-              reordered.splice(newFirstSectionIdx !== -1 ? newFirstSectionIdx : i + 1, 0, ...rows);
-            }
-          }
-          i++;
+        // --- Step 4: chip row placement (2026-10-12, chipRowPlacement.js) ---
+        // Each live chip task goes back under its OWN chip group header (by
+        // parentGroupId), and within each project the chip header blocks
+        // precede General/Unscheduled. The old inline pass scanned the last
+        // project through the Inbox and Archive and pulled every stray chip
+        // task under it (the MOVE HOUSE catch-all). Moves are registered so
+        // the intent-gated save persists the new order_key (idempotent Set
+        // add, safe under React strict-mode double-invoke of this updater).
+        const placed = placeChipRows(working);
+        const reordered = placed.rows;
+        if (placed.movedIds.length > 0) {
+          changed = true;
+          markRowsMoved(currentYear, placed.movedIds);
         }
 
         // --- Step 5: work out which groups / chips still need rows ---
