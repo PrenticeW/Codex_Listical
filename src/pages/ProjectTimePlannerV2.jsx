@@ -2039,6 +2039,7 @@ export default function ProjectTimePlannerV2() {
         // task under it (the MOVE HOUSE catch-all). Moves are registered so
         // the intent-gated save persists the new order_key (idempotent Set
         // add, safe under React strict-mode double-invoke of this updater).
+        const sectionRowTypes = new Set(['projectGeneral', 'projectUnscheduled', 'subprojectGeneral', 'subprojectUnscheduled']);
         const placed = placeChipRows(working);
         const reordered = placed.rows;
         if (placed.movedIds.length > 0) {
