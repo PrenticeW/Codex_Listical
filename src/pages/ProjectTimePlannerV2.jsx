@@ -3507,15 +3507,24 @@ export default function ProjectTimePlannerV2() {
   // ── Move selection to Planner (context menu + System panel) ──────────────
   // Selection-scoped version of the status sweep; same move path, so
   // placement, ordering and sync behaviour are inherited (see sortInbox.ts).
+  // Rows the move acts on: the row selection, or — when a right-click on an
+  // unselected row cleared it (openContextMenu) — the menu's target row.
+  // Without the fallback the menu item was greyed out for a single row.
+  const moveTargetRows = useMemo(() => {
+    if (selectedRows.size > 0) return selectedRows;
+    if (contextMenu.isOpen && contextMenu.rowId) return new Set([contextMenu.rowId]);
+    return selectedRows;
+  }, [selectedRows, contextMenu.isOpen, contextMenu.rowId]);
+
   const moveSelectionState = useMemo(
-    () => getMoveSelectionState(data, selectedRows),
-    [data, selectedRows]
+    () => getMoveSelectionState(data, moveTargetRows),
+    [data, moveTargetRows]
   );
 
   const handleMoveSelectionToPlanner = useCallback(() => {
-    const result = createMoveSelectionCommand({ data, selectedRows, setData, onRowsMoved: (ids) => markRowsMoved(currentYear, ids) });
+    const result = createMoveSelectionCommand({ data, selectedRows: moveTargetRows, setData, onRowsMoved: (ids) => markRowsMoved(currentYear, ids) });
     if (result) executeCommand(result.command);
-  }, [data, selectedRows, setData, executeCommand, currentYear]);
+  }, [data, moveTargetRows, setData, executeCommand, currentYear]);
 
   const handleDuplicateRow = useCallback(() => {
     setIsListicalMenuOpen(false);
