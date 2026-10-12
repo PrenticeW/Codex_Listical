@@ -27,6 +27,14 @@ import { isRecurringValue } from '../../utils/planner/valueNormalizers';
  */
 export const KEEP_ON_TIME_ADDED = new Set(['Done', 'Accounted']);
 
+/**
+ * Statuses that clear every day cell on the row when chosen. Without this a
+ * Not Scheduled task kept its times and the auto-status pass flipped it
+ * straight back to Scheduled. Keep in sync with tacular-mobile
+ * (screens/SystemScreen.js CLEAR_DAYS_STATUSES).
+ */
+export const CLEAR_DAYS_STATUSES = new Set(['Not Scheduled', 'Abandoned', 'Skipped']);
+
 function getScheduleOnTimeUpdates(
   row: PlannerRow | undefined,
   columnId: string,
@@ -361,8 +369,9 @@ export default function useEditState({
     }
 
     // Special handling for status column when set to a status that should clear day columns.
-    // 'Abandoned' and 'Skipped' both remove the task's time values from the calendar columns.
-    if (columnId === 'status' && (newValue === 'Abandoned' || newValue === 'Skipped')) {
+    // 'Not Scheduled', 'Abandoned' and 'Skipped' all remove the task's time values from the
+    // calendar columns (2026-10-12; same rule in tacular-mobile's CLEAR_DAYS_STATUSES).
+    if (columnId === 'status' && CLEAR_DAYS_STATUSES.has(String(newValue))) {
       // Store old day column values for undo
       const oldDayValues: Record<string, string> = {};
       for (let i = 0; i < totalDays; i++) {
