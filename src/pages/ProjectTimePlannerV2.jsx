@@ -1789,6 +1789,11 @@ export default function ProjectTimePlannerV2() {
   // Create subprojectHeader rows from Tactics chips
   useEffect(() => {
     if (!tacticsChips || tacticsChips.length === 0) return;
+    // Never sync chip rows against data that hasn't finished loading
+    // (2026-10-12). Before hydration `data` is the blank skeleton: it has no
+    // deletedChip markers, so the sync re-created rows for plan items the
+    // user had deleted (with default names, over their renamed headings).
+    if (!dataReady) return;
     // Draft year starts blank — don't inject chip rows until the user imports tasks or presses "Send to System"
     if (isCurrentYearDraft && !sentToSystem && !importInFlightRef.current && !hasImportedTasks(latestDataRef.current)) return;
     importInFlightRef.current = false;
@@ -1796,6 +1801,9 @@ export default function ProjectTimePlannerV2() {
     // No setTimeout: functional updater form means React applies this after project injection's
     // updater in the same flush, so chip rows see project headers already inserted.
     setData(prevData => {
+        // Partially hydrated state (project structure missing): do nothing
+        // rather than rebuild plan rows the markers would have suppressed.
+        if (!prevData.some(r => r._rowType === 'projectHeader')) return prevData;
         const currentChipIds = new Set(tacticsChips.map(c => c.id));
         // One header row per group (project + chip name); one task row per chip.
         const groups = groupChips(tacticsChips);
@@ -2041,7 +2049,7 @@ export default function ProjectTimePlannerV2() {
         // add, safe under React strict-mode double-invoke of this updater).
         const sectionRowTypes = new Set(['projectGeneral', 'projectUnscheduled', 'subprojectGeneral', 'subprojectUnscheduled']);
         const placed = placeChipRows(working);
-        const reordered = placed.rows;
+        let reordered = placed.rows;
         if (placed.movedIds.length > 0) {
           changed = true;
           markRowsMoved(currentYear, placed.movedIds);
@@ -2054,6 +2062,29 @@ export default function ProjectTimePlannerV2() {
         const deletedChipIds = new Set(
           reordered.filter(r => r._rowType === 'deletedChip' && r._chipId && !r._chipGroupKey).map(r => r._chipId)
         );
+        // A heading marker (deletedChip with _chipGroupKey, written when the
+        // user deletes a chip heading) used to only stop the heading being
+        // CREATED. A heading that already existed (put back by a restore, or
+        // re-created by a half-loaded session) stayed forever next to its
+        // own marker (2026-10-12). Enforce it: remove the live heading.
+        // ONLY the heading — the task rows under it are kept (they re-parent
+        // to the project by position). Per-chip markers (no _chipGroupKey)
+        // never remove a heading.
+        {
+          const deadHeaderIds = new Set(reordered.filter(r =>
+            r._rowType === 'subprojectHeader' &&
+            r._chipGroupKey &&
+            deletedGroupKeys.has(r._chipGroupKey) &&
+            !r._isArchivedTask &&
+            !(typeof r.parentGroupId === 'string' &&
+              (r.parentGroupId.startsWith('archived-') || r.parentGroupId.startsWith('archive-week-')))
+          ).map(r => r.id));
+          if (deadHeaderIds.size > 0) {
+            changed = true;
+            reordered = reordered.filter(r => !deadHeaderIds.has(r.id));
+            markRowsDeleted(currentYear, [...deadHeaderIds]);
+          }
+        }
         const isGroupDeleted = (group) =>
           deletedGroupKeys.has(group.key) || group.chips.every(c => deletedChipIds.has(c.id));
         const existingHeaderByKey = new Map(
@@ -2176,7 +2207,7 @@ export default function ProjectTimePlannerV2() {
   // findIndex(projectHeader) lookup to fail silently. Removing only with a replacement signal.
   // (Previously guarded by a 50 ms setTimeout; no longer needed because the functional updater
   // form guarantees project injection's setData is applied before this one in the same flush.)
-  }, [tacticsChips, totalDays, isCurrentYearDraft, sentToSystem, projects, importTick, data]); // data: see project-structure effect above
+  }, [tacticsChips, totalDays, isCurrentYearDraft, sentToSystem, projects, importTick, data, dataReady]); // data: see project-structure effect above
 
   // Reconcile task-row subproject values against the current Goal page subproject
   // lists. When a subproject is deleted on the Goal page, live task rows that still

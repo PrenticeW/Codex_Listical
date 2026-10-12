@@ -1,6 +1,18 @@
 # Known Issues and Dead Code
 
 
+## 2026-10-12 PM — deleted chip headings keep coming back after restores, FIXED in code
+
+**Symptom:** after each restore, plan-derived chip headings the user had deleted reappeared, and renamed headings came back with default names.
+
+**Causes:** (1) a `deletedChip` marker only stopped the chip sync from CREATING a row; a heading that already existed (restored by SQL, or re-created) stayed forever beside its own marker. (2) The chip sync ran against un-hydrated data (the blank skeleton has no markers), so it re-created deleted headings with default names. Today's 16:08 UTC save did this for 15 rows, and the restore patched those fresh copies rather than reinstating the originals. (3) The SQL restores re-inserted every DELETE snapshot, including the user's own deletions.
+
+**Fix:** the chip sync waits for `dataReady` and skips any state with no project headers; a heading marker (`_chipGroupKey`) now removes the live heading, and ONLY the heading (its task rows stay and re-parent to the project). Per-chip markers never remove a heading.
+
+**Rule for any future restore:** before re-inserting a chip row, check for a `deletedChip` marker (same `_chipGroupKey` for a heading, same `_chipId` for a task) and skip it if one exists. Never keep a session's freshly minted chip copies in place of the originals: reinstate the originals (original ids, user-edited names) and drop the copies.
+
+**Still to do:** Clean and Haircut headings in LIFE UPKEEP (`58656148`, `ba839684`) carry heading markers; the SQL delete was blocked, so the deployed fix removes them on the next sync.
+
 ## 2026-10-12 PM — chip tasks filed under MOVE HOUSE + archive-header key churn, FIXED (data repaired)
 
 **Symptom:** 8 live chip task rows (SELF LOVE ×2, LIFE UPKEEP ×5, BUILD HOODS ×1) rendered under MOVE HOUSE. Their project_id, `_chipId` and parentGroupId were all correct; only `order_key` placed them between the MOVE HOUSE header and its General row (written 17:29:53 and 17:30:02 UTC; the 17:33 structural repair moved their chip headers but not these children). At the same time a single open tab was rewriting the 10 Oct archive week's header keys every ~7s (~700 planning_history UPDATEs in 10 min, stopped when the tab closed at 17:39 UTC).
