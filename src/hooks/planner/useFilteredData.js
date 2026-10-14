@@ -517,6 +517,13 @@ export const useFilterValues = (computedData, activeFilters = {}) => {
     dayColumnFilters = EMPTY_SET,
     coerceNumber = null,
     totalDays = 0,
+    // Ids of rows the table is ACTUALLY showing (useFilteredData's output,
+    // sticky matches included). A row kept on screen by sticky matching
+    // after an edit must keep contributing to every dropdown's options —
+    // without this, changing a row's status under an active status filter
+    // dropped its subproject from the subproject menu while the row was
+    // still visible (2026-10-14).
+    visibleRowIds = EMPTY_SET,
   } = activeFilters;
 
   return useMemo(() => {
@@ -559,12 +566,15 @@ export const useFilterValues = (computedData, activeFilters = {}) => {
         return;
       }
 
-      const okProject = matchesProject(row);
-      const okSubproject = matchesSubproject(row);
-      const okStatus = matchesStatus(row);
-      const okRecurring = matchesRecurring(row);
-      const okEstimate = matchesEstimate(row);
-      const okDays = matchesDayColumns(row);
+      // A row the table is showing counts as matching everywhere: what is
+      // on screen must be offerable in every filter menu (sticky matches).
+      const onScreen = visibleRowIds.has(row.id);
+      const okProject = onScreen || matchesProject(row);
+      const okSubproject = onScreen || matchesSubproject(row);
+      const okStatus = onScreen || matchesStatus(row);
+      const okRecurring = onScreen || matchesRecurring(row);
+      const okEstimate = onScreen || matchesEstimate(row);
+      const okDays = onScreen || matchesDayColumns(row);
 
       // A category's option list only takes values from rows that pass
       // every OTHER category's active filter (its own filter is ignored).
@@ -605,6 +615,7 @@ export const useFilterValues = (computedData, activeFilters = {}) => {
     };
   }, [
     computedData,
+    visibleRowIds,
     selectedProjectFilters,
     selectedSubprojectFilters,
     selectedStatusFilters,

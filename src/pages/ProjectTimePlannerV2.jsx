@@ -1019,21 +1019,6 @@ export default function ProjectTimePlannerV2() {
     return coerceToNumber(value);
   }, []);
 
-  // Collect unique values for filter dropdowns from the data
-  // Cascading dropdowns: each filter's options come from rows that pass all
-  // the OTHER active filters, so a second filter only offers values still
-  // visible on the table.
-  const { projectNames, subprojectNames, statusNames, recurringNames, estimateNames } = useFilterValues(computedData, {
-    selectedProjectFilters,
-    selectedSubprojectFilters,
-    selectedStatusFilters,
-    selectedRecurringFilters,
-    selectedEstimateFilters,
-    dayColumnFilters,
-    coerceNumber,
-    totalDays,
-  });
-
   // Wrap filter button click handlers with menu state (using generic hook to reduce duplication)
   const onProjectFilterButtonClick = useFilterButtonHandler(handleProjectFilterButtonClick, projectFilterMenu);
   const onSubprojectFilterButtonClick = useFilterButtonHandler(handleSubprojectFilterButtonClick, subprojectFilterMenu);
@@ -1058,6 +1043,29 @@ export default function ProjectTimePlannerV2() {
     projectFilter,
     totalDays,
   });
+
+  // Collect unique values for filter dropdowns from the data
+  // Cascading dropdowns: each filter's options come from rows that pass all
+  // the OTHER active filters, so a second filter only offers values still
+  // visible on the table.
+  // Rows actually on screen (sticky matches included) keep their values in
+  // every dropdown's options — see visibleRowIds in useFilterValues.
+  const visibleRowIds = useMemo(
+    () => new Set(filteredData.map(r => r.id)),
+    [filteredData]
+  );
+  const { projectNames, subprojectNames, statusNames, recurringNames, estimateNames } = useFilterValues(computedData, {
+    visibleRowIds,
+    selectedProjectFilters,
+    selectedSubprojectFilters,
+    selectedStatusFilters,
+    selectedRecurringFilters,
+    selectedEstimateFilters,
+    dayColumnFilters,
+    coerceNumber,
+    totalDays,
+  });
+
 
   // Sequential number shown in the left gutter column. Skips rows that
   // don't get a gutter number: the 7 pinned header rows (Month/Week/Day/
