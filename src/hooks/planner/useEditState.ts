@@ -448,12 +448,20 @@ export default function useEditState({
       const currentEstimate = row?.estimate || '';
       const oldEstimate = currentEstimate;
 
-      // Calculate what the timeValue should be based on current estimate
-      const minutes = parseEstimateLabelToMinutes(currentEstimate);
-      const computedTimeValue = formatMinutesToHHmm(minutes);
-
-      // If the new value doesn't match the computed value, set estimate to "Custom"
-      const shouldSetToCustom = newValue !== computedTimeValue && currentEstimate !== 'Custom';
+      // Match the Estimate label the same way a day-cell edit does
+      // (2026-10-14): parse the typed H.MM value and select the preset whose
+      // total matches (e.g. 2.00 → '2 Hours', 0.30 → '30 Minutes'); anything
+      // off the preset list becomes 'Custom'. Unparseable input keeps the
+      // old to-Custom behaviour.
+      const tvMatch = (newValue ?? '').trim().match(/^(\d*)(?:\.(\d{1,2}))?$/);
+      let nextEstimate = 'Custom';
+      if (tvMatch && (newValue ?? '').trim() !== '' && (newValue ?? '').trim() !== '.') {
+        const totalMinutes = parseInt(tvMatch[1] || '0', 10) * 60 + parseInt(tvMatch[2] || '0', 10);
+        nextEstimate = ESTIMATE_VALUES.find(
+          label => parseEstimateLabelToMinutes(label) === totalMinutes
+        ) ?? 'Custom';
+      }
+      const estimateChanged = nextEstimate !== currentEstimate;
 
       // Create command that updates both timeValue and potentially estimate
       const command: Command = {
@@ -461,7 +469,7 @@ export default function useEditState({
           setData(prev => prev.map(row => {
             if (row.id === rowId) {
               const updates: Partial<PlannerRow> = { timeValue: newValue };
-              if (shouldSetToCustom) updates.estimate = 'Custom';
+              if (estimateChanged) updates.estimate = nextEstimate;
               const dayUpdates = syncDayColumns(row, newValue, oldValue, totalDays);
               return { ...row, ...updates, ...(dayUpdates ?? {}) };
             }
@@ -472,7 +480,7 @@ export default function useEditState({
           setData(prev => prev.map(row => {
             if (row.id === rowId) {
               const updates: Partial<PlannerRow> = { timeValue: oldValue };
-              if (shouldSetToCustom) updates.estimate = oldEstimate;
+              if (estimateChanged) updates.estimate = oldEstimate;
               const dayUpdates = syncDayColumns(row, oldValue, newValue, totalDays);
               return { ...row, ...updates, ...(dayUpdates ?? {}) };
             }
