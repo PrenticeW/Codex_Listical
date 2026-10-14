@@ -23,6 +23,7 @@ import { fmtTimestamp } from '../../utils/fmtTimestamp';
 import { containsUrl } from '../../utils/linkify';
 import LinkedText from '../LinkedText';
 import useAddLink from '../../hooks/useAddLink';
+import { markNotesEditing, clearNotesEditing } from '../../utils/planner/notesEditGuard';
 import { isRecurringValue } from '../../utils/planner/valueNormalizers';
 
 // ─── Design tokens (match GearPanel/SystemPanel) ─────────────────────────────
@@ -639,8 +640,8 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
                     onScroll={(e) => {
                       if (notesMirrorRef.current) notesMirrorRef.current.scrollTop = e.target.scrollTop;
                     }}
-                    onKeyDown={(e) => { notesAddLink.onKeyDown(e); }}
-                    onBlur={(e) => { if (notesAddLinkOpenRef.current) return; setIsEditingNotes(false); handleNotesBlur(e); }}
+                    onKeyDown={(e) => { markNotesEditing(); notesAddLink.onKeyDown(e); }}
+                    onBlur={(e) => { clearNotesEditing(); if (notesAddLinkOpenRef.current) return; setIsEditingNotes(false); handleNotesBlur(e); }}
                     style={{
                       position: 'relative', display: 'block',
                       width: '100%', boxSizing: 'border-box', minHeight: 360, resize: 'none',
@@ -654,7 +655,15 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
                       whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
                       transition: 'border-color 0.15s',
                     }}
-                    onFocus={e => { e.target.style.borderColor = 'var(--brand)'; }}
+                    // Mark the note as being edited the moment the textarea gains
+                    // focus — not just when the read-only link view is clicked.
+                    // Without this, typing/pasting a URL into a fresh note flips
+                    // containsUrl(notes) true mid-input, the render switches to the
+                    // read-only view, the textarea unmounts and focus falls to the
+                    // body — and the grid's type-to-edit handler then types the rest
+                    // of the URL into the still-selected TASK cell (the "adding a
+                    // link to notes renames the task" bug, 2026-10-14).
+                    onFocus={e => { markNotesEditing(); setIsEditingNotes(true); e.target.style.borderColor = 'var(--brand)'; }}
                   />
                 </div>
               )}

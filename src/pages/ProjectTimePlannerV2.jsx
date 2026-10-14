@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { isNotesEditGuardActive } from '../utils/planner/notesEditGuard';
 import {
   useReactTable,
   getCoreRowModel,
@@ -2749,6 +2750,10 @@ export default function ProjectTimePlannerV2() {
     // Don't intercept paste if focus is inside an input/textarea (e.g. a modal)
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    // A paste aimed at the task panel's notes editor must not land in the
+    // grid if that textarea just unmounted mid-input (see notesEditGuard.js).
+    if (isNotesEditGuardActive()) return;
 
     // Nothing selected — let the browser handle it normally
     if (selectedCells.size === 0 && selectedRows.size === 0) return;

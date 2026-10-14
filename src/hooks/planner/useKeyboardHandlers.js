@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react';
+import { isNotesEditGuardActive } from '../../utils/planner/notesEditGuard';
 import { isTimelineRow, isMetricsRow } from '../../utils/planner/rowTypeChecks';
 
 // Rows the arrow keys can land on: regular task rows, project/subproject
@@ -253,6 +254,14 @@ export const useKeyboardHandlers = ({
       // Don't interfere if focus is inside an input/textarea outside the table (e.g. a modal)
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      // Keys that escaped the task panel's notes editor (its textarea can
+      // unmount mid-input — see notesEditGuard.js) must not fall through to
+      // the grid: without this, type-to-edit typed the tail of a URL into
+      // the selected task cell and a stray Backspace could delete rows.
+      // Only in-flight notes typing is shielded; clicking anywhere drops
+      // the guard, so grid editing while the panel is open is unaffected.
+      if (isNotesEditGuardActive()) return;
 
       // Copy: Cmd/Ctrl+C (handled by copy event listener)
       // Paste: Cmd/Ctrl+V (handled by paste event listener)
