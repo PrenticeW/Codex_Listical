@@ -441,6 +441,25 @@ export default function ProjectTimePlannerV2() {
   // the account were empty (2026-10-03). setDataReady lands in the same
   // commit as setData, so the fade begins over the real table.
   const [dataReady, setDataReady] = useState(dataHydrated.current);
+  // Holds the brand loader up on a warm-cache load until the FIRST server
+  // refetch of this session has committed, so the user never sees a stale
+  // localStorage mirror for a few seconds before the app's edits pop in
+  // (2026-10-14). Starts true when this session already read the server
+  // for this year, when the year never refetches (archived/draft), or when
+  // the tab is offline (cached rows are the best we have). A safety timer
+  // below drops the loader regardless after a few seconds so a slow or
+  // failed refetch can never hang the page.
+  const [serverFreshReady, setServerFreshReady] = useState(() =>
+    isPlannerYearServerFresh(currentYear) ||
+    isCurrentYearArchived ||
+    isCurrentYearDraft ||
+    (typeof navigator !== 'undefined' && !navigator.onLine)
+  );
+  useEffect(() => {
+    if (serverFreshReady) return undefined;
+    const t = setTimeout(() => setServerFreshReady(true), 8000);
+    return () => clearTimeout(t);
+  }, [serverFreshReady]);
   useEffect(() => {
     if (!storageLoaded) return;
     if (dataHydrated.current) { setDataReady(true); return; }
@@ -591,6 +610,9 @@ export default function ProjectTimePlannerV2() {
           invalidateTaskRowsCache(currentYear);
           const rows = await readTaskRows(DEFAULT_PROJECT_ID, currentYear);
           if (cancelled) return;
+          // First server read of the session has answered — whatever happens
+          // next (commit, defer, empty), the page is no longer blind-stale.
+          setServerFreshReady(true);
           // A local edit may have landed while the refetch was in flight —
           // its save supersedes what we just read. Try again after ITS
           // mute window rather than discarding the pending refresh.
@@ -625,6 +647,8 @@ export default function ProjectTimePlannerV2() {
           }
         } catch (err) {
           console.error('Realtime task-row refresh failed', err);
+          // Don't hold the loader on a failed refetch — show what we have.
+          setServerFreshReady(true);
         }
       }, delay);
     };
@@ -4065,7 +4089,7 @@ export default function ProjectTimePlannerV2() {
           the planner rows have hydrated AND been committed to the table
           (dataReady), then fades out over the fully-rendered content
           (no-op on a warm cache, where both start true). */}
-      <BrandLoaderOverlay active={!storageLoaded || !dataReady} />
+      <BrandLoaderOverlay active={!storageLoaded || !dataReady || !serverFreshReady} />
       {/* Nav bar — always visible at top */}
       <div className="sticky top-0 z-20 px-4 pt-4 pb-4 shrink-0" style={{ background: 'transparent' }}>
         <NavigationBar
