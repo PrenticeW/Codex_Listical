@@ -2972,6 +2972,7 @@ export default function ProjectTimePlannerV2() {
     selectedCells,
     selectedRows,
     editingCell,
+    tableBodyRef,
     data,
     allColumnIds,
     totalDays,

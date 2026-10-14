@@ -47,6 +47,7 @@ export const useKeyboardHandlers = ({
   selectedCells,
   selectedRows,
   editingCell,
+  tableBodyRef,
   data,
   allColumnIds,
   totalDays,
@@ -262,6 +263,19 @@ export const useKeyboardHandlers = ({
       // Only in-flight notes typing is shielded; clicking anywhere drops
       // the guard, so grid editing while the panel is open is unaffected.
       if (isNotesEditGuardActive()) return;
+
+      // A real text selection OUTSIDE the grid (e.g. a link highlighted in
+      // the task panel's read-only notes view) means the keystroke is aimed
+      // at that text, not at the grid: without this, Backspace on a
+      // highlighted note link deleted the selected TASK cell's text
+      // (2026-10-14). The grid's own cell selection never creates a DOM
+      // selection (cell mousedown preventDefaults), so a non-collapsed
+      // selection anchored outside the table is always the user's.
+      const domSel = window.getSelection();
+      if (domSel && !domSel.isCollapsed && domSel.anchorNode
+          && !tableBodyRef?.current?.contains(domSel.anchorNode)) {
+        return;
+      }
 
       // Copy: Cmd/Ctrl+C (handled by copy event listener)
       // Paste: Cmd/Ctrl+V (handled by paste event listener)

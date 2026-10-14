@@ -23,6 +23,7 @@ import { fmtTimestamp } from '../../utils/fmtTimestamp';
 import { containsUrl } from '../../utils/linkify';
 import LinkedText from '../LinkedText';
 import useAddLink from '../../hooks/useAddLink';
+import { toEditView, fromEditView } from '../../utils/linkEditView';
 import { markNotesEditing, clearNotesEditing } from '../../utils/planner/notesEditGuard';
 import { isRecurringValue } from '../../utils/planner/valueNormalizers';
 
@@ -334,6 +335,10 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const notesTextareaRef = React.useRef(null);
   const notesMirrorRef = React.useRef(null);
+  // The read-only link view of the note (shown when the note holds a URL
+  // and isn't being edited) — used to catch Backspace/Delete on a text
+  // selection made inside it.
+  const notesReadViewRef = React.useRef(null);
   const noteSaveDebounceRef = React.useRef(null);
   // Latest stored note text (may contain [label](url)); the textarea itself
   // only shows the labels, so blur must save from here, not e.target.value.
@@ -478,6 +483,52 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
   const notesAddLinkOpenRef = React.useRef(false);
   notesAddLinkOpenRef.current = notesAddLink.isOpen;
 
+  // Backspace/Delete on a text selection made in the READ-ONLY notes view:
+  // delete the selected text from the note and drop into edit mode with the
+  // caret where the selection started, as if the note had been editable all
+  // along. The rendered view's text content matches the editor's view text
+  // (link labels only, no markdown syntax), so selection offsets inside the
+  // div map one-to-one onto view-text offsets; fromEditView re-attaches the
+  // surviving links. Capture phase + stopPropagation keeps the keystroke
+  // away from the grid's window-level handlers.
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key !== 'Backspace' && e.key !== 'Delete') return;
+      const el = notesReadViewRef.current;
+      if (!el) return;
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+      if (!el.contains(sel.anchorNode) || !el.contains(sel.focusNode)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      markNotesEditing();
+
+      // Selection offsets within the view text = length of the text that
+      // precedes the selection inside the div, plus the selection's length.
+      const range = sel.getRangeAt(0);
+      const pre = range.cloneRange();
+      pre.selectNodeContents(el);
+      pre.setEnd(range.startContainer, range.startOffset);
+      const start = pre.toString().length;
+      const length = range.toString().length;
+
+      const view = toEditView(notesRef.current ?? '');
+      const nextView = view.text.slice(0, start) + view.text.slice(start + length);
+      const nextStored = fromEditView(nextView, view.links);
+      setNotesFromLink(nextStored);
+      setIsEditingNotes(true);
+      // Put the caret where the deleted text was once the textarea mounts.
+      requestAnimationFrame(() => {
+        const ta = notesTextareaRef.current;
+        if (!ta) return;
+        ta.focus();
+        try { ta.setSelectionRange(start, start); } catch { /* ignore */ }
+      });
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [setNotesFromLink]);
+
   const handleNotesBlur = useCallback(() => {
     // Flush immediately on blur — cancels the debounce timer
     if (noteSaveDebounceRef.current) {
@@ -596,6 +647,7 @@ export function TaskDetailContent({ selectedTask, onBack, use24Hour = false }) {
               <SectionLabel>Notes</SectionLabel>
               {!isEditingNotes && containsUrl(notes) ? (
                 <div
+                  ref={notesReadViewRef}
                   title="Click to edit"
                   onClick={() => setIsEditingNotes(true)}
                   style={{
