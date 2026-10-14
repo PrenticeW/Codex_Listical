@@ -453,13 +453,19 @@ export default function useEditState({
       // total matches (e.g. 2.00 → '2 Hours', 0.30 → '30 Minutes'); anything
       // off the preset list becomes 'Custom'. Unparseable input keeps the
       // old to-Custom behaviour.
-      const tvMatch = (newValue ?? '').trim().match(/^(\d*)(?:\.(\d{1,2}))?$/);
-      let nextEstimate = 'Custom';
-      if (tvMatch && (newValue ?? '').trim() !== '' && (newValue ?? '').trim() !== '.') {
+      const tvTrimmed = (newValue ?? '').trim();
+      const tvMatch = tvTrimmed.match(/^(\d*)(?:\.(\d{1,2}))?$/);
+      // Clearing the value means no time: estimate goes back to unset ('-').
+      let nextEstimate = tvTrimmed === '' ? '-' : 'Custom';
+      if (tvMatch && tvTrimmed !== '' && tvTrimmed !== '.') {
         const totalMinutes = parseInt(tvMatch[1] || '0', 10) * 60 + parseInt(tvMatch[2] || '0', 10);
-        nextEstimate = ESTIMATE_VALUES.find(
-          label => parseEstimateLabelToMinutes(label) === totalMinutes
-        ) ?? 'Custom';
+        // Zero means no time at all — estimate goes back to unset ('-'),
+        // matching a cleared row, not 'Custom'.
+        nextEstimate = totalMinutes === 0
+          ? '-'
+          : ESTIMATE_VALUES.find(
+              label => parseEstimateLabelToMinutes(label) === totalMinutes
+            ) ?? 'Custom';
       }
       const estimateChanged = nextEstimate !== currentEstimate;
 
