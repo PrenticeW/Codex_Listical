@@ -1845,6 +1845,10 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     // plaintext until Phase 3 encrypts at the write boundary).
     const decryptedCurrent = await decryptRows(currentData || [], PLANNER_ROW_ENC_TEXT);
     const currentById = new Map(decryptedCurrent.map((r) => [r.id, r]));
+    // Raw (still-encrypted) server rows, kept for ciphertext reuse at the
+    // write boundary below (decryptRows returns copies, so these keep the
+    // server's enc1: values).
+    const rawCurrentById = new Map((currentData || []).map((r) => [r.id, r]));
 
     // Structural identity (2026-10-02; extends the 2026-09-15 guard's key).
     // One canonical key per one-per-year / one-per-project / one-per-chip
@@ -2352,11 +2356,30 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       // captured by nextBaseline via baselineSnap) are never mutated.
       let upsertRows = toUpsert;
       if (encryptWritesEnabled('planner_rows')) {
+        // Ciphertext reuse (2026-10-14, planning_history churn): AES-GCM's
+        // random IV means re-encrypting an unchanged field yields a NEW
+        // ciphertext every save, so a row upserted for one field (say
+        // order_key) also rewrote task/notes/subproject_label — bloating
+        // planning_history snapshots and making per-field history noise.
+        // When a field's plaintext is unchanged from the server's decrypted
+        // copy AND the server already holds ciphertext for it, send the
+        // server's existing enc1: value back unchanged; only genuinely
+        // edited fields are re-encrypted. The diff / baseline bookkeeping
+        // above is untouched — it runs on plaintext and is already done.
+        const reuseCiphertext = (d, field) => {
+          const cur = currentById.get(d.id); // decrypted server row
+          const raw = rawCurrentById.get(d.id); // raw server row (enc1: values)
+          if (!cur || !raw) return null; // insert — nothing to reuse
+          if ((d[field] ?? '') !== (cur[field] ?? '')) return null; // edited
+          return isEncrypted(raw[field]) ? raw[field] : null;
+        };
         upsertRows = await Promise.all(toUpsert.map(async (d) => ({
           ...d,
-          task: await encryptField(d.task ?? ''),
-          notes: d.notes == null ? null : await encryptField(d.notes),
-          subproject_label: await encryptField(d.subproject_label ?? ''),
+          task: reuseCiphertext(d, 'task') ?? await encryptField(d.task ?? ''),
+          notes: d.notes == null
+            ? null
+            : (reuseCiphertext(d, 'notes') ?? await encryptField(d.notes)),
+          subproject_label: reuseCiphertext(d, 'subproject_label') ?? await encryptField(d.subproject_label ?? ''),
         })));
       }
       const { error: upsertErr } = await supabase
