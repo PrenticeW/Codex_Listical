@@ -2723,6 +2723,19 @@ export default function ProjectTimePlannerV2() {
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
+    // A real text selection OUTSIDE the grid (e.g. a link selected in the
+    // task panel's read-only notes view) belongs to the native copy — the
+    // grid's cell-selection copy must not hijack it, or copying a note's
+    // link puts the selected TASK cell's text on the clipboard instead
+    // (2026-10-14). The grid's own cell selection lives in state, not in a
+    // DOM selection (cell mousedown preventDefaults), so a non-collapsed
+    // DOM selection anchored outside the table is always the user's.
+    const domSel = window.getSelection();
+    if (domSel && !domSel.isCollapsed && domSel.anchorNode
+        && !tableBodyRef.current?.contains(domSel.anchorNode)) {
+      return;
+    }
+
     e.preventDefault();
 
     const tsvData = handleCopyOperation({
