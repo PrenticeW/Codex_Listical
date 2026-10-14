@@ -115,7 +115,10 @@ export function linkifyText(text, { anchorProps } = {}) {
           href: link.href,
           target: '_blank',
           rel: 'noopener noreferrer',
-          title: link.isMarkdown ? link.href : undefined,
+          // Labelled links show their destination; bare URLs say what a click
+          // does (without a title of their own they inherited the container's
+          // "Click to edit" tooltip in the notes read view).
+          title: link.isMarkdown ? link.href : 'Click to visit',
           style: LINK_ANCHOR_STYLE,
           // Links live inside clickable cells/rows — don't let a link click
           // trigger cell selection, drag-select, or the detail panel.
