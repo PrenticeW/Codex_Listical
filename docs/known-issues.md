@@ -1,5 +1,21 @@
 # Known Issues and Dead Code
 
+## 2026-10-14 — planning_history runaway growth, CLOSED (fixed, cleaned, retention added)
+
+**Symptom:** planning_history reached 22k+ rows / 49 MB in five weeks for one user, all UPDATE/DELETE on planner_rows. The most-edited rows were structural (archive week headers, project headers) at 150–190 recorded edits each.
+
+**Causes (two, multiplying each other):**
+1. **The archive-header order_key re-key loop** (fixed 2026-10-12, see that entry) was the volume: snapshot diffs show consecutive history versions differing ONLY in `order_key` every ~7s — 5,336 of the 5,717 updates on 10-12 alone. Update volume fell ~98% the day after the fix.
+2. **AES-GCM re-encryption minted new ciphertext for unchanged fields** on every upsert (random IV), so each churned row's snapshot carried full-size "changed" task/notes/subproject_label ciphertext (~1.8 KB/row) and per-field history was unreadable noise. Fixed 2026-10-14: the save reuses the server's existing `enc1:` value when a field's plaintext is unchanged (ciphertext reuse at the write boundary in `storage.js`; the diff/baselines were always plaintext-based and were never the problem — production shows zero no-op upserts).
+
+**Trigger guard:** `planner_rows_write_history` already skips updates where only `updated_at` changed; it was ineffective until ciphertext reuse because re-encryption made every update differ. Now live.
+
+**Cleanup (2026-10-14):** pre-10-13 history thinned to one snapshot per row per day (22,812 rows deleted, daily recovery points kept) + VACUUM FULL → 5,348 rows / 9 MB.
+
+**Retention (2026-10-14, supersedes the "30-day retention" note under Version history snapshot gaps):** nightly pg_cron job `prune-planning-history` (03:15 UTC) — 30 days full, 31–90 days thinned to one snapshot per row per day, nothing kept past 90 days. Definition versioned in `supabase/migrations/20261014000001_planning_history_retention.sql` (already applied by hand).
+
+**Still to do:** a restore helper reading planning_history remains unbuilt; any such reader must decrypt `enc1:` values in snapshots. Weekly growth sanity check scheduled outside the repo (Claude scheduled task).
+
 
 ## 2026-10-12 PM — deleted chip headings keep coming back after restores, FIXED in code
 
