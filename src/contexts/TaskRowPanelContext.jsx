@@ -48,7 +48,7 @@ const STRUCTURAL_ROW_TYPES = new Set([
 
 export function TaskRowPanelProvider({ children }) {
   const [selectedTask, setSelectedTask] = useState(null);
-  const { lockedRef } = usePanelLock();
+  const { lockedRef, releaseLock } = usePanelLock();
 
   const openPanel = useCallback((taskData) => {
     setSelectedTask(taskData);
@@ -71,6 +71,15 @@ export function TaskRowPanelProvider({ children }) {
         closePanel();
         return;
       }
+      // Blank task rows the same way (2026-10-14): a row with no task name
+      // and no notes has nothing to show, so clicking it returns to the top
+      // System view instead of the "empty row" card. Once a name (or note)
+      // exists, clicks open the detail panel as normal.
+      const t = e.detail.task;
+      if (!(t.task ?? '').trim() && !(t.notes ?? '').trim()) {
+        closePanel();
+        return;
+      }
       openPanel(e.detail.task);
     };
     window.addEventListener(TASK_ROW_DETAIL_EVENT, handler);
@@ -80,15 +89,29 @@ export function TaskRowPanelProvider({ children }) {
   // Listen for close events dispatched from anywhere (e.g. row number cell click)
   // Ignored while the panel is locked (it's a table-selection side effect).
   useEffect(() => {
-    const handler = () => { if (!lockedRef.current) closePanel(); };
+    const handler = (e) => {
+      // force: the shown task no longer exists (row deleted) — the lock has
+      // nothing left to pin, so void it and return to the top view
+      // (2026-10-14).
+      if (e?.detail?.force) {
+        releaseLock();
+        closePanel();
+        return;
+      }
+      if (!lockedRef.current) closePanel();
+    };
     window.addEventListener(TASK_ROW_PANEL_CLOSE_EVENT, handler);
     return () => window.removeEventListener(TASK_ROW_PANEL_CLOSE_EVENT, handler);
-  }, [closePanel, lockedRef]);
+  }, [closePanel, lockedRef, releaseLock]);
 
   // Listen for live updates to the currently-open task (e.g. status change from the table)
   useEffect(() => {
     const handler = (e) => {
       if (e.detail?.task) {
+        // An already-open panel stays on its task even when the name is
+        // cleared (the user may be retyping it) — only deleting the row
+        // closes the panel (force close). The blank-row guard above only
+        // stops a blank row from OPENING the panel in the first place.
         setSelectedTask(prev => prev?.id === e.detail.task.id ? e.detail.task : prev);
       }
     };

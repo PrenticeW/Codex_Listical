@@ -45,6 +45,14 @@ export function PagePanelProvider({ children }) {
     setLockedPath(next ? pathname : null);
   }, [pathname]);
 
+  // Drop the lock programmatically — used when the thing the lock was
+  // pinning no longer exists (e.g. the locked task row was deleted,
+  // 2026-10-14). No-op while unlocked.
+  const releaseLock = useCallback(() => {
+    setLocked(false);
+    setLockedPath(null);
+  }, []);
+
   const open = useCallback(() => {
     gear.close();
     setIsOpen(true);
@@ -76,7 +84,7 @@ export function PagePanelProvider({ children }) {
   }, [gear.isOpen]);
 
   return (
-    <PagePanelContext.Provider value={{ isOpen, open, close, toggle, locked, lockedPath, lockedRef, setLocked, toggleLock }}>
+    <PagePanelContext.Provider value={{ isOpen, open, close, toggle, locked, lockedPath, lockedRef, setLocked, toggleLock, releaseLock }}>
       {children}
     </PagePanelContext.Provider>
   );
@@ -90,6 +98,6 @@ export function usePagePanel() {
 
 /** Lock state only — for panel content that needs to read/toggle the lock. */
 export function usePanelLock() {
-  const { locked, lockedPath, lockedRef, setLocked, toggleLock } = usePagePanel();
-  return { locked, lockedPath, lockedRef, setLocked, toggleLock };
+  const { locked, lockedPath, lockedRef, setLocked, toggleLock, releaseLock } = usePagePanel();
+  return { locked, lockedPath, lockedRef, setLocked, toggleLock, releaseLock };
 }

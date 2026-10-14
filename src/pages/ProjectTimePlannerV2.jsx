@@ -19,7 +19,7 @@ import useCommandPattern from '../hooks/planner/useCommandPattern';
 import useProjectsData from '../hooks/planner/useProjectsData';
 import { TACTICS_SEND_TO_SYSTEM_EVENT, getSendToSystemTimestamp, loadSentChipsSnapshot, loadTacticsYearSettings } from '../lib/tacticsStorage';
 import { SYSTEM_PANEL_ACTION_EVENT, SYSTEM_PANEL_SELECTION_EVENT, SYSTEM_PANEL_SCALE_EVENT, SYSTEM_PANEL_DAY_FILTER_EVENT, SYSTEM_PANEL_PROJECT_NAMES_EVENT, SYSTEM_PANEL_PROJECT_FILTER_EVENT, SYSTEM_PANEL_ARCHIVE_WEEK_EVENT } from '../components/SystemPanel';
-import { useTaskRowPanel, TASK_ROW_DETAIL_UPDATE_EVENT } from '../contexts/TaskRowPanelContext';
+import { useTaskRowPanel, TASK_ROW_DETAIL_UPDATE_EVENT, TASK_ROW_PANEL_CLOSE_EVENT } from '../contexts/TaskRowPanelContext';
 import { loadSentMetricsSnapshot, peekTacticsMetricsCache } from '../lib/tacticsMetricsStorage';
 import { peekTacticsCache } from '../lib/tacticsStorage';
 import { peekStagingCache } from '../lib/stagingStorage';
@@ -1139,6 +1139,9 @@ export default function ProjectTimePlannerV2() {
   // event for computed status changes (chip-task rows whose status is derived
   // from plan data rather than set via the dropdown).
   const { selectedTask: panelTask } = useTaskRowPanel();
+  // Live mirror for callbacks that run on later redo/undo passes.
+  const panelTaskRef = useRef(panelTask);
+  panelTaskRef.current = panelTask;
   useEffect(() => {
     if (!panelTask?.id) return;
     const updatedRow = filteredData.find(r => r.id === panelTask.id);
@@ -2965,6 +2968,12 @@ export default function ProjectTimePlannerV2() {
         // Clear selection after deletion
         setSelectedRows(new Set());
         setSelectedCells(new Set());
+        // If the open task detail panel belongs to a deleted row, return the
+        // side panel to the top System view (2026-10-14).
+        if (panelTaskRef.current && expandedRowIds.has(panelTaskRef.current.id)) {
+          // force voids a panel lock too — the pinned task no longer exists.
+          window.dispatchEvent(new CustomEvent(TASK_ROW_PANEL_CLOSE_EVENT, { detail: { force: true } }));
+        }
       },
       undo: () => {
         // The undo removes the tombstone rows this delete created — if a
