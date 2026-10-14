@@ -6,7 +6,7 @@
  * a TASK_ROW_DETAIL_EVENT custom event (or calling openPanel directly).
  */
 
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { usePanelLock } from './PagePanelContext';
 
 const TaskRowPanelContext = createContext(null);
@@ -46,8 +46,32 @@ const STRUCTURAL_ROW_TYPES = new Set([
   'archiveHeader',
 ]);
 
+/**
+ * True when a task row is still at its empty defaults — no name, no notes,
+ * no project/subproject, status unset, no estimate/time, every day cell
+ * empty, checkbox off, recurring unset (mirrors createEmptyTaskRow).
+ */
+function isCompletelyBlankTaskRow(t) {
+  if (!t) return true;
+  const blank = (v) => {
+    const sv = (v ?? '').toString().trim();
+    return sv === '' || sv === '-' || sv === '0.00';
+  };
+  if (!blank(t.task) || !blank(t.notes) || !blank(t.project) || !blank(t.subproject)) return false;
+  if (!blank(t.status) || !blank(t.estimate) || !blank(t.timeValue)) return false;
+  if (t.checkbox === true || t.checkbox === 'true') return false;
+  if ((t.recurring ?? '') !== '' && t.recurring !== 'Not Recurring') return false;
+  for (const key of Object.keys(t)) {
+    if (key.startsWith('day-') && !blank(t[key])) return false;
+  }
+  return true;
+}
+
 export function TaskRowPanelProvider({ children }) {
   const [selectedTask, setSelectedTask] = useState(null);
+  // The blank row most recently clicked while the panel showed the top
+  // view — its first real edit promotes it to the detail panel.
+  const pendingBlankRowIdRef = useRef(null);
   const { lockedRef, releaseLock } = usePanelLock();
 
   const openPanel = useCallback((taskData) => {
@@ -71,15 +95,18 @@ export function TaskRowPanelProvider({ children }) {
         closePanel();
         return;
       }
-      // Blank task rows the same way (2026-10-14): a row with no task name
-      // and no notes has nothing to show, so clicking it returns to the top
-      // System view instead of the "empty row" card. Once a name (or note)
-      // exists, clicks open the detail panel as normal.
+      // Completely blank task rows the same way (2026-10-14): a row still at
+      // its empty defaults has nothing to show, so clicking it keeps the top
+      // System view instead of the "empty row" card. The row's id is
+      // remembered so the panel switches to its detail view the moment a
+      // first edit gives it content (see the update handler below).
       const t = e.detail.task;
-      if (!(t.task ?? '').trim() && !(t.notes ?? '').trim()) {
+      if (isCompletelyBlankTaskRow(t)) {
+        pendingBlankRowIdRef.current = t.id;
         closePanel();
         return;
       }
+      pendingBlankRowIdRef.current = null;
       openPanel(e.detail.task);
     };
     window.addEventListener(TASK_ROW_DETAIL_EVENT, handler);
@@ -108,11 +135,27 @@ export function TaskRowPanelProvider({ children }) {
   useEffect(() => {
     const handler = (e) => {
       if (e.detail?.task) {
-        // An already-open panel stays on its task even when the name is
-        // cleared (the user may be retyping it) — only deleting the row
-        // closes the panel (force close). The blank-row guard above only
-        // stops a blank row from OPENING the panel in the first place.
-        setSelectedTask(prev => prev?.id === e.detail.task.id ? e.detail.task : prev);
+        const t = e.detail.task;
+        // The blank row the user last selected just got its first content
+        // (name committed, status/project set, …): show its detail panel
+        // now, as if it had been clicked with content. Respects the lock.
+        if (pendingBlankRowIdRef.current === t.id && !isCompletelyBlankTaskRow(t)) {
+          pendingBlankRowIdRef.current = null;
+          if (!lockedRef.current) openPanel(t);
+          return;
+        }
+        // An open panel whose row is edited back to COMPLETELY blank (all
+        // fields at their empty defaults) returns to the top view; clearing
+        // just the name keeps the panel up (the user may be retyping it).
+        if (!lockedRef.current && isCompletelyBlankTaskRow(t)) {
+          setSelectedTask(prev => {
+            if (prev?.id !== t.id) return prev;
+            pendingBlankRowIdRef.current = t.id;
+            return null;
+          });
+          return;
+        }
+        setSelectedTask(prev => prev?.id === t.id ? t : prev);
       }
     };
     window.addEventListener(TASK_ROW_DETAIL_UPDATE_EVENT, handler);
