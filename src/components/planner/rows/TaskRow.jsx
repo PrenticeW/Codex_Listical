@@ -376,10 +376,11 @@ const TaskRow = React.memo(function TaskRow({
                     e.stopPropagation();
                     return;
                   }
-                  // Single left-click on the task name cell opens the detail panel.
+                  // Single left-click anywhere on the row selects it into the
+                  // detail panel (2026-10-17 — previously task column only).
                   // Done here (not onClick) because handleCellMouseDown calls
                   // e.preventDefault() which can suppress the click event.
-                  if (columnId === 'task' && e.button === 0 && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+                  if (e.button === 0 && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
                     window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_EVENT, {
                       detail: { task: { ...row.original, ...rowData } },
                     }));

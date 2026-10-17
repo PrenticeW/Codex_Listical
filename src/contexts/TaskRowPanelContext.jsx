@@ -101,7 +101,13 @@ export function TaskRowPanelProvider({ children }) {
       // remembered so the panel switches to its detail view the moment a
       // first edit gives it content (see the update handler below).
       const t = e.detail.task;
-      if (isCompletelyBlankTaskRow(t)) {
+      // Only plain task rows can be "blank": special rows (archive weeks,
+      // inbox rows, ...) keep their content in their own fields (e.g.
+      // archiveWeekLabel), so the empty task/status defaults here would
+      // wrongly classify them as blank and swallow the click — the
+      // Archive Week panel never opened (2026-10-17).
+      const isPlainTaskRow = !t._rowType || t._rowType === 'projectTask';
+      if (isPlainTaskRow && isCompletelyBlankTaskRow(t)) {
         pendingBlankRowIdRef.current = t.id;
         closePanel();
         return;
