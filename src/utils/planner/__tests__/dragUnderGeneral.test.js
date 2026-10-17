@@ -71,3 +71,44 @@ describe('drag a chip task under the General section row', () => {
     expect(step4Misplaced(moved)).toEqual([]);
   });
 });
+
+// 2026-10-17: dropping ON a section row files the dragged row UNDER it
+// (insertAt = targetIndex + 1 for SECTION_DROP_ROW_TYPES). A freshly added
+// empty subheader was otherwise untargetable — no child row existed to aim
+// at, so the drop landed at the bottom of the section above, or was a no-op
+// when the dragged row already sat directly above the subheader.
+import { SECTION_DROP_ROW_TYPES } from '../../../hooks/planner/useDragAndDropRows';
+
+describe('drop onto a section row files the task under it', () => {
+  const mk = () => ([
+    { id: 'ph', _rowType: 'projectHeader', groupId: 'project-LIFE' },
+    { id: 'gen', _rowType: 'projectGeneral' },
+    { id: 'laundry', _rowType: 'projectTask', task: 'Laundry' },
+    { id: 'unsched', _rowType: 'projectUnscheduled' },
+    { id: 'sub', _rowType: 'subprojectGeneral', subprojectLabel: 'New' }, // empty new subheader
+    { id: 'inbox', _isInboxRow: true },
+  ]);
+  const insertAtFor = (rows, targetIndex) =>
+    SECTION_DROP_ROW_TYPES.has(rows[targetIndex]._rowType ?? '') ? targetIndex + 1 : targetIndex;
+
+  it('a task dropped on an empty new subheader lands directly below it', () => {
+    const rows = mk();
+    const target = rows.findIndex(r => r.id === 'sub');
+    const moved = moveRows(rows, [2], insertAtFor(rows, target)); // drag Laundry onto the subheader
+    expect(moved.map(r => r.id)).toEqual(['ph', 'gen', 'unsched', 'sub', 'laundry', 'inbox']);
+  });
+
+  it('the row directly above the subheader can still be filed under it (previously a no-op)', () => {
+    const rows = mk();
+    // Make Laundry sit directly above the subheader first.
+    const pre = moveRows(rows, [2], 4); // ... unsched, laundry, sub ...
+    const target = pre.findIndex(r => r.id === 'sub');
+    const moved = moveRows(pre, [pre.findIndex(r => r.id === 'laundry')], insertAtFor(pre, target));
+    expect(moved.map(r => r.id)).toEqual(['ph', 'gen', 'unsched', 'sub', 'laundry', 'inbox']);
+  });
+
+  it('project headers are not section drop targets (drop still lands above)', () => {
+    expect(SECTION_DROP_ROW_TYPES.has('projectHeader')).toBe(false);
+    expect(SECTION_DROP_ROW_TYPES.has('archivedProjectHeader')).toBe(false);
+  });
+});

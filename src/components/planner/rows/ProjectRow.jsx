@@ -1,6 +1,7 @@
 import { GripVertical, ChevronRight, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { TASK_ROW_DETAIL_EVENT, TASK_ROW_PANEL_CLOSE_EVENT } from '../../../contexts/TaskRowPanelContext';
+import { SECTION_DROP_ROW_TYPES } from '../../../hooks/planner/useDragAndDropRows';
 import { getSelectionEdgeClassNames } from '../../../utils/planner/selectionEdgeClasses';
 
 /**
@@ -135,7 +136,12 @@ export default function ProjectRow({
         <tr
           style={{
             position: 'absolute',
-            top: virtualRow.start - 1,
+            // Section rows take the drop UNDER them (useDragAndDropRows
+            // SECTION_DROP_ROW_TYPES), so the indicator line draws on their
+            // bottom edge; headers keep the line above (drop lands above).
+            top: SECTION_DROP_ROW_TYPES.has(row.original._rowType ?? '')
+              ? virtualRow.start + virtualRow.size - 1
+              : virtualRow.start - 1,
             left: 0,
             width: '100%',
             height: '2px',

@@ -66,6 +66,19 @@ export function getProjectOrderFromData(data: PlannerRow[]): string[] {
 }
 
 /** Pure move: remove rows at `draggedIndices` and reinsert them at `insertAt`. */
+// Section-type rows where a drop means "file under this section" — the
+// dragged rows are inserted BELOW the target instead of above it. Shared
+// with ProjectRow's drop-indicator placement (SECTION_DROP_ROW_TYPES import).
+export const SECTION_DROP_ROW_TYPES = new Set([
+  'projectGeneral',
+  'projectUnscheduled',
+  'subprojectGeneral',
+  'subprojectUnscheduled',
+  'subprojectHeader',
+  'archivedProjectGeneral',
+  'archivedProjectUnscheduled',
+]);
+
 function moveRows(prevData: PlannerRow[], draggedIndices: number[], insertAt: number): PlannerRow[] {
   const newData = [...prevData];
   const draggedRows = draggedIndices.map(idx => newData[idx]);
@@ -225,11 +238,19 @@ export default function useDragAndDropRows({
       return { id, index, row: index !== -1 ? data[index] : null };
     });
 
-    // The block (or rows) always land directly ABOVE the target row, which is
-    // where the drop indicator line is drawn. For project blocks the target
-    // is another block's header, or the Inbox divider for "after the last
+    // Rows land directly ABOVE the target row, where the drop indicator line
+    // is drawn — EXCEPT when the target is a section row (General/Unscheduled
+    // or a subheader): dropping ON a section means "file under it", so the
+    // rows land directly BELOW it (and ProjectRow draws the indicator under
+    // it). Without this, a freshly added empty subheader was untargetable:
+    // it had no child row to aim at, so every drop landed at the bottom of
+    // the section above — or was a visual no-op when the dragged row already
+    // sat directly above it (2026-10-17). For project blocks the target is
+    // another block's header, or the Inbox divider for "after the last
     // project".
-    const insertAt = targetIndex;
+    const insertAt = !blockDrag && SECTION_DROP_ROW_TYPES.has(data[targetIndex]._rowType ?? '')
+      ? targetIndex + 1
+      : targetIndex;
 
     // Archive membership follows the LANDING POSITION, keeping full control
     // over where the row sits: rows landing inside an archive week block are
