@@ -206,6 +206,10 @@ export const createArchivedProjectStructure = (projectRows, subprojectRows, arch
       // Null lets the save mint a fresh key; display_order (stamped on
       // insert) preserves the archive-time order the read path sorts by.
       orderKey: null,
+      // Frozen copy of the live row's key: the read path orders a group's
+      // members by archivedSortKey (falling back to orderKey), so copies
+      // keep their live position among moved tasks, which keep live keys.
+      archivedSortKey: headerRow.orderKey ?? null,
       groupId: groupId,
       isGroupHeader: false,
       archivedWeeklyQuota,
@@ -224,6 +228,7 @@ export const createArchivedProjectStructure = (projectRows, subprojectRows, arch
         _rowType: ARCHIVE_ROW_TYPES.ARCHIVED_PROJECT_GENERAL,
         parentGroupId: groupId, // Point to the archived project header's groupId
         orderKey: null, // never inherit the live row's key (see header note)
+        archivedSortKey: generalRow.orderKey ?? null,
         isGroupHeader: false,
       };
       archivedRows.push(archivedGeneral);
@@ -237,6 +242,7 @@ export const createArchivedProjectStructure = (projectRows, subprojectRows, arch
         _rowType: ARCHIVE_ROW_TYPES.ARCHIVED_PROJECT_UNSCHEDULED,
         parentGroupId: groupId, // Point to the archived project header's groupId
         orderKey: null, // never inherit the live row's key (see header note)
+        archivedSortKey: unscheduledRow.orderKey ?? null,
         isGroupHeader: false,
       };
       archivedRows.push(archivedUnscheduled);
@@ -255,6 +261,7 @@ export const createArchivedProjectStructure = (projectRows, subprojectRows, arch
         // Keep the original _rowType (subprojectGeneral or subprojectUnscheduled)
         parentGroupId: groupId, // Point to the archived project header's groupId
         orderKey: null, // never inherit the live row's key (see header note)
+        archivedSortKey: subRow.orderKey ?? null,
         isGroupHeader: false,
       };
       archivedRows.push(archivedSubRow);
@@ -397,6 +404,7 @@ export const snapshotRecurringTask = (task, startDayIndex = null, totalDays = 84
     ...task,
     id: generateUniqueId(`${ARCHIVED_ROW_ID_PREFIX}${task.id}-snapshot-`),
     orderKey: null, // never inherit the live row's key (see createArchivedProjectStructure)
+    archivedSortKey: task.orderKey ?? null,
     // Deep copy day entries if they exist
     ...(task.dayEntries ? { dayEntries: [...task.dayEntries] } : {}),
   };

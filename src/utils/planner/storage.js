@@ -1357,10 +1357,19 @@ export const readTaskRows = async (
           pushedHeaders.add(header);
           block.push(header);
           if (header.groupId) {
-            // Group members stay in stored (key) order: archived tasks keep
-            // their live-era ids and display_orders, so sorting members by
-            // display_order would hoist them above their section rows.
-            block.push(...result.filter((r) => r.parentGroupId === header.groupId));
+            // Members order by their frozen live-position key (archivedSortKey,
+            // stamped on copies at archive time) with orderKey as fallback:
+            // moved tasks keep their live keys while fresh copies get keys
+            // minted at the end of the block, so raw key order would sink
+            // every section row below the tasks. Legacy rows (no
+            // archivedSortKey) all fall back to orderKey, so the stable sort
+            // preserves their stored order exactly.
+            const effKey = (r) =>
+              (typeof r.archivedSortKey === 'string' && r.archivedSortKey) ||
+              (typeof r.orderKey === 'string' && r.orderKey) || '';
+            block.push(...result
+              .filter((r) => r.parentGroupId === header.groupId)
+              .sort((a, b) => (effKey(a) < effKey(b) ? -1 : effKey(a) > effKey(b) ? 1 : 0)));
           }
         };
         for (const week of archiveRows) {
