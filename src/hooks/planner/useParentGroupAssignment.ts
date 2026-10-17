@@ -40,8 +40,15 @@ export function assignParentGroupIds(data: PlannerRow[]): PlannerRow[] {
       currentSubprojectGroupId = row.groupId || null;
     }
 
-    // Leaving subproject context: a project-level section row or another project resets it
-    if (row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled') {
+    // Leaving subproject context: a project-level section row, a manual
+    // label row, or another project resets it. Label rows (subprojectGeneral/
+    // subprojectUnscheduled) MUST reset like relocateStrayChipTasks's walk
+    // does — when they didn't, a chip task dropped under a label kept its
+    // chip parent, the reconcile pass judged it positionally stray (its walk
+    // DOES reset at labels) and hauled it back under its chip header: the
+    // "can't move a task under a new subheader" bug (2026-10-17).
+    if (row._rowType === 'projectGeneral' || row._rowType === 'projectUnscheduled' ||
+        row._rowType === 'subprojectGeneral' || row._rowType === 'subprojectUnscheduled') {
       currentSubprojectGroupId = null;
     }
 

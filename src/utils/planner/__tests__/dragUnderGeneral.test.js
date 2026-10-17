@@ -112,3 +112,48 @@ describe('drop onto a section row files the task under it', () => {
     expect(SECTION_DROP_ROW_TYPES.has('archivedProjectHeader')).toBe(false);
   });
 });
+
+// 2026-10-17 (the real "Clean under the Cleaning/Laundry label" repro): a
+// manual label row (subprojectGeneral) inserted INSIDE a chip block. A chip
+// task dropped under the label must re-parent to the project — when it kept
+// its chip parent, relocateStrayChipTasks (whose positional walk resets at
+// label rows) judged it stray and hauled it back under the chip header.
+import { relocateStrayChipTasks, liftChipBlocksAboveSections } from '../chipRowPlacement';
+
+describe('chip task dropped under a manual label row inside a chip block', () => {
+  const mk = () => ([
+    { id: 'ph', _rowType: 'projectHeader', groupId: 'project-LIFE' },
+    { id: 'gym-hdr', _rowType: 'subprojectHeader', groupId: 'chip-g', parentGroupId: 'project-LIFE', _chipId: 'c-g1', _chipGroupKey: 'LIFE::gym' },
+    { id: 'gym1', _rowType: 'projectTask', _chipId: 'c-g1', parentGroupId: 'chip-g', task: 'Gym' },
+    { id: 'clean', _rowType: 'projectTask', _chipId: 'c-cl', parentGroupId: 'chip-g', task: 'Clean' },
+    { id: 'label', _rowType: 'subprojectGeneral', subprojectLabel: '2 hours of Cleaning, haircut and Laundry' },
+    { id: 'haircut', _rowType: 'projectTask', parentGroupId: 'chip-g', task: 'Haircut' },
+    { id: 'gen', _rowType: 'projectGeneral' },
+    { id: 'unsched', _rowType: 'projectUnscheduled' },
+    { id: 'inbox', _isInboxRow: true },
+  ]);
+
+  it('stays under the label through drop + both reconcile passes', () => {
+    const rows = mk();
+    const from = rows.findIndex(r => r.id === 'clean');
+    const target = rows.findIndex(r => r.id === 'label');
+    // section drop target → insert below the label
+    const dropped = assignParentGroupIds(moveRows(rows, [from], target + 1));
+    const clean = dropped.find(r => r.id === 'clean');
+    expect(clean.parentGroupId).toBe('project-LIFE'); // no longer chip-parented
+
+    const r1 = relocateStrayChipTasks(dropped);
+    const r2 = liftChipBlocksAboveSections(r1.rows);
+    const ids = r2.rows.map(r => r.id);
+    expect(ids.indexOf('clean')).toBe(ids.indexOf('label') + 1); // NOT yanked back
+  });
+
+  it('regression guard: with the chip parent kept, the reconcile yanks it back', () => {
+    const rows = mk();
+    const from = rows.findIndex(r => r.id === 'clean');
+    const target = rows.findIndex(r => r.id === 'label');
+    const dropped = moveRows(rows, [from], target + 1); // old drop path, no re-parent
+    const r1 = relocateStrayChipTasks(dropped);
+    expect(r1.movedIds).toContain('clean');
+  });
+});
