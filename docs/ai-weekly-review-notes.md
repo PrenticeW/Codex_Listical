@@ -158,3 +158,35 @@ on the archive row):
 - Data note: plan tables that look empty are not data loss — content (or the
   empty template) lives in plan_table_entries_enc; the jsonb column only holds
   the placeholder after the encryption flip.
+
+## Review #3 lessons (2026-10-17, week 8 Oct 10-16)
+
+- **TIME VALUES ARE BASE-60.** Every cell and total ("2.35", "20.43") is
+  hours.minutes, never a decimal. Sum in minutes. Caught when decimal addition
+  turned 7h10 of Test Tacular into "6.70". planner_rows.time_value_minutes
+  stores value*60 as if decimal — trust the h.mm cells, not that column.
+- **Quote the user's own words, never a paraphrase.** A Claude-authored label
+  ("rest week") read back weeks later lands as a false memory of something the
+  user said, costs several turns to untangle. If a note is Claude's wording,
+  mark it as Claude's.
+- **Batch prompts feel unguided.** Asking for nine goal scores in one list was
+  rejected; goal-by-goal, one per turn, with last week's score and this week's
+  hours as context, is the shape that works.
+- **Scores can split per dimension.** Effort / progress / satisfaction emerged
+  unprompted (Test Tacular 4-5 / 5 / 6). The eval feature should allow
+  user-defined dimensions, not force one number.
+- **A score can be "done to the point of lack of action"** (Host Pilot 10 with
+  5 minutes logged). High score ≠ high hours; the sentence carries the meaning.
+- **Don't invent problems.** A suggestion must answer "who said that's a
+  problem?" from the user's own words. Also don't pad: if there's nothing real
+  to suggest for next week, say so.
+- **Decryption via local bundle script worked** (scripts/weekly-review-bundle.mjs,
+  keys via read -s env vars). Friction is test-only: in-product the review runs
+  server-side where decrypt-on-read already happens.
+- **User reflection on value:** scores + gap questions are good, but "not that
+  valuable until this info lives in the app somewhere" — parked until after the
+  current block of features.
+- Bug surfaced mid-review: Priority 1/2/3 subheaders visible in UI but absent
+  from planner_rows in the DB; Priority 1 also missing from the week-8 archive
+  while 2 and 3 appear in it. Smells like unsynced device writes. User is
+  sorting it in his bugs-before-features pass.

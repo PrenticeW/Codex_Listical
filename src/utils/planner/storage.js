@@ -1341,18 +1341,33 @@ export const readTaskRows = async (
           return true;
         });
 
+        // Within the archive, order_key is NOT trustworthy: the pre-2026-10-12
+        // churn bug scrambled archived rows' keys, and intent gating now
+        // (correctly) preserves whatever the server holds. display_order IS
+        // trustworthy here — it is stamped once at insert, in the planner
+        // order at archive time, and never rewritten — so sort each week's
+        // project headers by it. Stable sort keeps the key-order tiebreak
+        // for equal/missing display orders.
+        const byArchiveTimeOrder = (a, b) =>
+          (typeof a.displayOrder === 'number' ? a.displayOrder : 0) -
+          (typeof b.displayOrder === 'number' ? b.displayOrder : 0);
         const block = [];
         const pushedHeaders = new Set();
         const pushHeader = (header) => {
           pushedHeaders.add(header);
           block.push(header);
           if (header.groupId) {
+            // Group members stay in stored (key) order: archived tasks keep
+            // their live-era ids and display_orders, so sorting members by
+            // display_order would hoist them above their section rows.
             block.push(...result.filter((r) => r.parentGroupId === header.groupId));
           }
         };
         for (const week of archiveRows) {
           block.push(week);
-          const weekHeaders = result.filter((r) => r.parentGroupId === week.id);
+          const weekHeaders = result
+            .filter((r) => r.parentGroupId === week.id)
+            .sort(byArchiveTimeOrder);
           for (const header of weekHeaders) pushHeader(header);
         }
         // Orphaned archived headers (their week row is gone from
