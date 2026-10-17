@@ -14,6 +14,12 @@ import type { PlannerRow } from '../../types/planner';
  * - Tasks beneath a projectHeader (but not under any subheader) get parentGroupId = projectHeader.groupId
  * - Archive rows keep their explicitly-set parentGroupId (they live inside archive week groups)
  * - Assignment always overwrites existing parentGroupId so moving a task updates its membership
+ *
+ * KEEP IN LOCKSTEP with src/utils/planner/deriveSections.ts — the shared
+ * positional walk used by AI features reading planner_rows (and mirroring
+ * mobile's nestRows). This hook stays separate because it deals in groupIds
+ * for collapse/drag; deriveSections deals in nicknames/titles. A rule change
+ * here (what opens, closes, or resets a section) must be made there too.
  */
 export function assignParentGroupIds(data: PlannerRow[]): PlannerRow[] {
   let currentProjectGroupId: string | null = null;

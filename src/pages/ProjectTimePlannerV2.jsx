@@ -847,6 +847,37 @@ export default function ProjectTimePlannerV2() {
   // Load projects and subprojects from Staging
   const { projects, subprojects, projectSubprojectsMap, projectNamesMap, projectTaglinesMap, projectIdByNickname, projectInfoById, isProjectsLoaded, hasSystemOrder } = useProjectsData();
 
+  // Backfill project_id from the project nickname (2026-10-17). project_id is
+  // only ever stamped by an explicit project-cell edit (useEditState), so rows
+  // whose project cell was set before that stamping shipped (June 2026), or
+  // set while the nickname didn't resolve, carry the project only as the
+  // __project nickname with project_id = NULL — the mobile app and anything
+  // joining on project_id then can't see their project. Placement stays
+  // positional (project_id is data, not placement) and the 2026-10-02 guard in
+  // plannerRowToDb is untouched: we only ADD/refresh an id when the visible
+  // project cell is non-empty AND the nickname resolves in the current
+  // shortlist. A nickname that doesn't resolve (archived/renamed project)
+  // keeps whatever id the row already has — a project RENAME leaves rows with
+  // a stale nickname, and their existing id is the only correct link.
+  // Returns prevData untouched when nothing changes, so no autosave churn.
+  useEffect(() => {
+    if (!isProjectsLoaded || !dataReady) return;
+    if (!projectIdByNickname || projectIdByNickname.size === 0) return;
+    setData(prevData => {
+      let changed = false;
+      const next = prevData.map(row => {
+        if (isSpecialRow(row) || row._isArchivedTask || row.archiveWeekLabel) return row;
+        const nickname = typeof row.project === 'string' ? row.project.trim() : '';
+        if (!nickname || nickname === '-') return row;
+        const resolvedId = projectIdByNickname.get(nickname);
+        if (!resolvedId || row.projectId === resolvedId) return row;
+        changed = true;
+        return { ...row, projectId: resolvedId };
+      });
+      return changed ? next : prevData;
+    });
+  }, [isProjectsLoaded, dataReady, projectIdByNickname, setData]);
+
   // Import tasks from active year into draft (single action, no wizard)
   //
   // Placement has to happen AFTER the project structure rows exist, but the
