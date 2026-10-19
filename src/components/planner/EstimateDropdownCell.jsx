@@ -10,6 +10,7 @@ import {
 } from '../../constants/planner/rowTypes';
 import { getCurrentInstanceIndex } from '../../utils/planner/multiStatus';
 import { getPageZoom } from '../../utils/pageZoom';
+import { estimateDisplayLabel } from '../../utils/planner/estimateDisplay';
 
 const FONT = "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
@@ -553,7 +554,10 @@ function EstimateDropdownCell({
         <span className="flex-1 text-left">
           {multiMode
             ? (initialValue || 'Multi')
-            : (initialInList ? (ESTIMATE_VALUES[selectedIndex] || ' ') : initialKey)}
+            : estimateDisplayLabel(
+                initialInList ? (ESTIMATE_VALUES[selectedIndex] || ' ') : initialKey,
+                rowData?.timeValue,
+              )}
         </span>
         {multiMode && (
           <span

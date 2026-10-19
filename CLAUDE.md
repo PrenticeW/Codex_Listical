@@ -97,6 +97,27 @@ See `docs/year-flow.md` for the full spec. Key rule: only one draft year may exi
 
 ---
 
+## Environments — dev first, production second
+
+Two Supabase projects (set up 2026-10-19):
+
+| | Project | Ref | Used by |
+|---|---|---|---|
+| **Dev** | Listical Dev | `xhirbsfbquxvdstdgadc` | localhost (`npm run dev`, via `.env.local`) |
+| **Production** | Listical GPS | `hoxwpjxfcrborwufydxl` | tacular.app (Vercel env vars) and tacular-mobile |
+
+Rules:
+- **Default to dev.** Any database query, test edit, migration or edge function deploy goes to dev unless the user explicitly says production.
+- **Schema changes and edge functions are applied twice:** dev first, test on localhost, then production — only when the user approves, ideally alongside pushing the code that needs it. Keep `supabase/migrations/` as the record of both.
+- **Never write test data to production.** Read-only production queries (e.g. diagnosing a live bug) are fine; say which project you are querying.
+- **Code is not "promoted":** the same code runs everywhere. Push to GitHub → Vercel deploys tacular.app against production.
+- **Data never flows dev → production.** Dev is a disposable copy; to refresh it, reset the dev tables and re-run `supabase/dev/dev_setup_paste.sql` (the user pastes the prod DB password; never save it in the file).
+- `.env.local` must only ever hold dev credentials.
+- Dev auth config (Google sign-in, redirect URLs) is not copied from production; use email + password on localhost.
+- Localhost has no `/api` (Vercel functions), so data export fails locally — expected.
+
+---
+
 ## Reference docs
 
 - `docs/known-issues.md` — bug list, dead code, do-not-touch notes

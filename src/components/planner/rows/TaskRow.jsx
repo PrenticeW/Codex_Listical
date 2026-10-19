@@ -15,6 +15,7 @@ import LinkedText from '../../LinkedText';
 import MultiStatusDropdownCell from '../MultiStatusDropdownCell';
 import { isMultiStatusRow, getMultiInstances, getCurrentInstanceIndex } from '../../../utils/planner/multiStatus';
 import { isRecurringValue } from '../../../utils/planner/valueNormalizers';
+import { estimateDisplayLabel } from '../../../utils/planner/estimateDisplay';
 
 // The recurring column is stored in two vocabularies ('Recurring'/'Not
 // Recurring' from chip sync and the task panel, 'true'/'false' from this
@@ -714,7 +715,11 @@ const TaskRow = React.memo(function TaskRow({
                           minWidth: 0,
                         }}
                       >
-                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={value || '-'}>{value || '-'}</span>
+                        {/* Display only: 'Custom' shows its actual time; the stored label is unchanged (see utils/planner/estimateDisplay). */}
+                        {(() => {
+                          const shown = estimateDisplayLabel(value, row.original.timeValue) || '-';
+                          return <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={shown}>{shown}</span>;
+                        })()}
                         {isMultiStatus && multiInstances && (
                           <span
                             style={{

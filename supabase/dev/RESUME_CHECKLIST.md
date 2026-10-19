@@ -1,5 +1,7 @@
 # Dev database setup — resume checklist
 
+> **Status: COMPLETE (2026-10-19).** Data copied (counts matched production), TACULAR_MASTER_KEY set, localhost verified against dev with encrypted rows decrypting. Kept for reference when refreshing dev data. See "Environments" in CLAUDE.md for the ongoing workflow.
+
 Where things stand: the dev project "Listical Dev" exists with the full schema,
 the data-key function is deployed, and .env.local already points at it.
 What's left is copying the data in and setting the master key.
