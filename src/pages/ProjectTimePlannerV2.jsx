@@ -2911,12 +2911,20 @@ export default function ProjectTimePlannerV2() {
 
   // Delete rows entirely (remove from data array)
   const handleDeleteRows = useCallback(() => {
-    if (selectedRows.size === 0) return;
+    // Rows to delete: the row selection, or — when the row menu was opened on
+    // an unselected row (openContextMenu clears the selection) — the menu's
+    // target row. Without this fallback "Delete Row" silently did nothing
+    // unless the row had been clicked first (2026-10-19). Same fallback as
+    // moveTargetRows / handleDuplicateRow.
+    const targetRows = selectedRows.size > 0
+      ? selectedRows
+      : (contextMenu.isOpen && contextMenu.rowId ? new Set([contextMenu.rowId]) : selectedRows);
+    if (targetRows.size === 0) return;
 
     // Expand selection to include all child rows of any selected project/subproject headers
-    const expandedRowIds = new Set(selectedRows);
+    const expandedRowIds = new Set(targetRows);
 
-    selectedRows.forEach(rowId => {
+    targetRows.forEach(rowId => {
       const row = data.find(r => r.id === rowId);
       if (!row) return;
 
@@ -3022,7 +3030,7 @@ export default function ProjectTimePlannerV2() {
     };
 
     executeCommand(command);
-  }, [selectedRows, data, executeCommand, currentYear]);
+  }, [selectedRows, contextMenu.isOpen, contextMenu.rowId, data, executeCommand, currentYear]);
 
   // Keyboard event handlers (undo/redo, delete, edit mode)
   // Columns the arrow keys can visit: the standard column order minus
