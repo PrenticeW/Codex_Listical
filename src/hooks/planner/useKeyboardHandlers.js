@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { isNotesEditGuardActive } from '../../utils/planner/notesEditGuard';
 import { isTimelineRow, isMetricsRow } from '../../utils/planner/rowTypeChecks';
+import { TASK_ROW_DETAIL_EVENT } from '../../contexts/TaskRowPanelContext';
 
 // Rows the arrow keys can land on: regular task rows, project/subproject
 // headers and their General/Unscheduled section rows. Timeline chrome,
@@ -393,6 +394,15 @@ export const useKeyboardHandlers = ({
           setAnchorCell?.({ rowId: nextRowId, columnId: nextColumnId });
           setSelectedRows?.(new Set());
           scrollToRow?.(nextRowIdx);
+          // The focus box drives the side panel exactly like a click does
+          // (2026-10-19): moving onto another row selects it into the detail
+          // panel. Same event as the row mousedown handlers, so the panel
+          // lock, structural-row and blank-row rules all apply unchanged.
+          if (nextRowId !== currentRowId) {
+            window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_EVENT, {
+              detail: { task: rows[nextRowIdx] },
+            }));
+          }
           return;
         }
 
