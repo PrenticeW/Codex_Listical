@@ -3599,10 +3599,10 @@ export default function ProjectTimePlannerV2() {
       projectSubprojectsMap,
       statuses: getActiveStatuses(),
     });
-    const command = createGroupSelectionCommand({ data, selectedRows, field, orders, setData });
+    const command = createGroupSelectionCommand({ data, selectedRows, field, orders, setData, onRowsMoved: (ids) => markRowsMoved(currentYear, ids) });
     // A selection that is already grouped yields no command — nothing to do.
     if (command) executeCommand(command);
-  }, [data, selectedRows, projectSubprojectsMap, setData, executeCommand]);
+  }, [data, selectedRows, projectSubprojectsMap, setData, executeCommand, currentYear]);
 
   // ── Move selection to Planner (context menu + System panel) ──────────────
   // Selection-scoped version of the status sweep; same move path, so

@@ -158,6 +158,22 @@ describe('createGroupSelectionCommand', () => {
     expect(h.get().map(r => r.id)).toEqual(['h', 'a', 'b', 'c', 'z']);
   });
 
+  it('registers the moved rows via onRowsMoved on execute AND undo (intent-gated save)', () => {
+    const h = harness(makeData());
+    const calls = [];
+    const cmd = createGroupSelectionCommand({
+      data: h.get(), selectedRows: sel('a', 'b', 'c'), field: 'project',
+      orders: ORDERS, setData: h.setData,
+      onRowsMoved: (ids) => calls.push([...ids].sort()),
+    });
+    cmd.execute();
+    // a, b, c all change position (b,c shift up past a); without this the
+    // save keeps the server's order keys and a refresh reverts the sort.
+    expect(calls).toEqual([['a', 'b', 'c']]);
+    cmd.undo();
+    expect(calls).toEqual([['a', 'b', 'c'], ['a', 'b', 'c']]);
+  });
+
   it('returns null when already grouped (no-op)', () => {
     const h = harness(makeData());
     const cmd = createGroupSelectionCommand({

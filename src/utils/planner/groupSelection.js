@@ -193,8 +193,13 @@ export function sortSpanRows(rows, field, orders) {
  * exact positions the span occupies at execute time (looked up fresh by row
  * id). It touches no non-order field. Undo writes the previous id order back
  * through the same path as a fresh operation — never a cached payload.
+ *
+ * onRowsMoved registers the rows whose position changed with the
+ * intent-gated save (plannerStorage.markRowsMoved) on BOTH execute and
+ * undo — without it the reorder is in-memory only and a refresh reverts
+ * it (2026-10-23 context-menu group-by bug).
  */
-export function createGroupSelectionCommand({ data, selectedRows, field, orders, setData }) {
+export function createGroupSelectionCommand({ data, selectedRows, field, orders, setData, onRowsMoved }) {
   const state = getGroupSelectionState(data, selectedRows);
   if (!state.enabled[field]) return null;
 
@@ -227,8 +232,18 @@ export function createGroupSelectionCommand({ data, selectedRows, field, orders,
     return next;
   };
 
+  // Rows whose position within the span changes — the ids the save must
+  // re-key. Same set in both directions.
+  const movedIds = sortedIds.filter((id, i) => id !== prevIds[i]);
+
   return {
-    execute: () => setData(applyIdOrder(sortedIds)),
-    undo: () => setData(applyIdOrder(prevIds)),
+    execute: () => {
+      setData(applyIdOrder(sortedIds));
+      if (onRowsMoved) onRowsMoved(movedIds);
+    },
+    undo: () => {
+      setData(applyIdOrder(prevIds));
+      if (onRowsMoved) onRowsMoved(movedIds);
+    },
   };
 }
