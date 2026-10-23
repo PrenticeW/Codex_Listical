@@ -79,6 +79,22 @@ export const SECTION_DROP_ROW_TYPES = new Set([
   'archivedProjectUnscheduled',
 ]);
 
+// True when the drag pointer is over the LOWER half of the row being dragged
+// over. Section rows (SECTION_DROP_ROW_TYPES) split by half: lower half =
+// "file under this section" (lands below it — keeps empty subheaders
+// targetable, 2026-10-17); upper half = lands ABOVE it, i.e. the last slot
+// of the group above. Without the split that slot was unreachable: the only
+// row whose "above" it is was the next subheader, which always took the
+// drop below itself (2026-10-19). No measurable target → lower half, the
+// pre-split behaviour.
+function pointerInLowerHalf(e: React.DragEvent): boolean {
+  const el = e.currentTarget as HTMLElement | null;
+  if (!el || typeof el.getBoundingClientRect !== 'function') return true;
+  const rect = el.getBoundingClientRect();
+  if (!rect.height) return true;
+  return e.clientY >= rect.top + rect.height / 2;
+}
+
 function moveRows(prevData: PlannerRow[], draggedIndices: number[], insertAt: number): PlannerRow[] {
   const newData = [...prevData];
   const draggedRows = draggedIndices.map(idx => newData[idx]);
@@ -133,6 +149,10 @@ export default function useDragAndDropRows({
 }): UseDragAndDropRowsReturn {
   const [draggedRowId, setDraggedRowId] = useState<string[] | null>(null);
   const [dropTargetRowId, setDropTargetRowId] = useState<string | null>(null);
+  // Section-row drops only: whether the pending drop lands BELOW the target
+  // (pointer in its lower half) or above it. Drives the indicator line in
+  // ProjectRow and must agree with handleDrop (both use pointerInLowerHalf).
+  const [dropTargetBelow, setDropTargetBelow] = useState(false);
 
   const handleDragStart = useCallback((e: React.DragEvent, rowId: string) => {
     const headerIndex = data.findIndex(r => r.id === rowId);
@@ -195,6 +215,7 @@ export default function useDragAndDropRows({
       }
 
       setDropTargetRowId(rowId);
+      setDropTargetBelow(SECTION_DROP_ROW_TYPES.has(targetRow?._rowType ?? '') && pointerInLowerHalf(e));
     }
   }, [draggedRowId, data, isProjectBlockDrag, resolveBlockTarget]);
 
@@ -204,6 +225,7 @@ export default function useDragAndDropRows({
     const clear = () => {
       setDraggedRowId(null);
       setDropTargetRowId(null);
+      setDropTargetBelow(false);
     };
 
     if (!draggedRowId || !Array.isArray(draggedRowId)) { clear(); return; }
@@ -248,7 +270,10 @@ export default function useDragAndDropRows({
     // sat directly above it (2026-10-17). For project blocks the target is
     // another block's header, or the Inbox divider for "after the last
     // project".
-    const insertAt = !blockDrag && SECTION_DROP_ROW_TYPES.has(data[targetIndex]._rowType ?? '')
+    // Section rows split by pointer half (see pointerInLowerHalf): lower
+    // half files under the section, upper half lands in the last slot of
+    // the group above.
+    const insertAt = !blockDrag && SECTION_DROP_ROW_TYPES.has(data[targetIndex]._rowType ?? '') && pointerInLowerHalf(e)
       ? targetIndex + 1
       : targetIndex;
 
@@ -352,11 +377,13 @@ export default function useDragAndDropRows({
   const handleDragEnd = useCallback(() => {
     setDraggedRowId(null);
     setDropTargetRowId(null);
+    setDropTargetBelow(false);
   }, []);
 
   return {
     draggedRowId,
     dropTargetRowId,
+    dropTargetBelow,
     setDraggedRowId,
     setDropTargetRowId,
     handleDragStart,

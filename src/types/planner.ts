@@ -116,6 +116,8 @@ export interface UseEditStateReturn {
 export interface UseDragAndDropRowsReturn {
   draggedRowId: string[] | null;
   dropTargetRowId: string | null;
+  /** Section-row drops: true when the drop lands below the target row. */
+  dropTargetBelow: boolean;
   setDraggedRowId: (rowId: string[] | null) => void;
   setDropTargetRowId: (rowId: string | null) => void;
   handleDragStart: (e: React.DragEvent, rowId: string) => void;

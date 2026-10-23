@@ -82,6 +82,7 @@ const TableRow = React.memo(function TableRow({
   handleEditKeyDown,
   draggedRowId,
   dropTargetRowId,
+  dropTargetBelow,
   handleDragStart,
   handleDragOver,
   handleDrop,
@@ -237,6 +238,7 @@ const TableRow = React.memo(function TableRow({
         handleDrop={handleDrop}
         draggedRowId={draggedRowId}
         dropTargetRowId={dropTargetRowId}
+        dropTargetBelow={dropTargetBelow}
         rowHeight={rowHeight}
         cellFontSize={cellFontSize}
         headerFontSize={headerFontSize}
@@ -281,6 +283,7 @@ const TableRow = React.memo(function TableRow({
         handleDrop={handleDrop}
         draggedRowId={draggedRowId}
         dropTargetRowId={dropTargetRowId}
+        dropTargetBelow={dropTargetBelow}
         rowHeight={rowHeight}
         cellFontSize={cellFontSize}
         headerFontSize={headerFontSize}
@@ -335,6 +338,7 @@ const TableRow = React.memo(function TableRow({
         handleEditKeyDown={handleEditKeyDown}
         draggedRowId={draggedRowId}
         dropTargetRowId={dropTargetRowId}
+        dropTargetBelow={dropTargetBelow}
         handleDragStart={handleDragStart}
         handleDragOver={handleDragOver}
         handleDrop={handleDrop}

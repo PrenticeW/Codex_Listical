@@ -2745,6 +2745,7 @@ export default function ProjectTimePlannerV2() {
   const {
     draggedRowId,
     dropTargetRowId,
+    dropTargetBelow,
     setDraggedRowId,
     setDropTargetRowId,
     handleDragStart,
@@ -4202,6 +4203,7 @@ export default function ProjectTimePlannerV2() {
         handleEditKeyDown={handleEditKeyDown}
         draggedRowId={draggedRowId}
         dropTargetRowId={dropTargetRowId}
+        dropTargetBelow={dropTargetBelow}
         handleDragStart={handleDragStart}
         handleDragOver={handleDragOver}
         handleDrop={handleDrop}

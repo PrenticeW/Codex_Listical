@@ -29,6 +29,7 @@ function PlannerTable({
   handleEditKeyDown,
   draggedRowId,
   dropTargetRowId,
+  dropTargetBelow,
   handleDragStart,
   handleDragOver,
   handleDrop,
@@ -255,6 +256,7 @@ function PlannerTable({
                   handleEditKeyDown={handleEditKeyDown}
                   draggedRowId={draggedRowId}
                   dropTargetRowId={dropTargetRowId}
+                  dropTargetBelow={dropTargetBelow}
                   handleDragStart={handleDragStart}
                   handleDragOver={handleDragOver}
                   handleDrop={handleDrop}
@@ -356,6 +358,7 @@ function PlannerTable({
                   handleEditKeyDown={handleEditKeyDown}
                   draggedRowId={draggedRowId}
                   dropTargetRowId={dropTargetRowId}
+                  dropTargetBelow={dropTargetBelow}
                   handleDragStart={handleDragStart}
                   handleDragOver={handleDragOver}
                   handleDrop={handleDrop}

@@ -27,6 +27,7 @@ export default function ProjectRow({
   handleDrop,
   draggedRowId,
   dropTargetRowId,
+  dropTargetBelow,
   rowHeight,
   cellFontSize,
   headerFontSize,
@@ -136,10 +137,11 @@ export default function ProjectRow({
         <tr
           style={{
             position: 'absolute',
-            // Section rows take the drop UNDER them (useDragAndDropRows
-            // SECTION_DROP_ROW_TYPES), so the indicator line draws on their
-            // bottom edge; headers keep the line above (drop lands above).
-            top: SECTION_DROP_ROW_TYPES.has(row.original._rowType ?? '')
+            // Section rows split by pointer half (useDragAndDropRows
+            // pointerInLowerHalf): lower half takes the drop UNDER them, so
+            // the line draws on their bottom edge; upper half (and headers)
+            // keep the line above, where the drop lands.
+            top: SECTION_DROP_ROW_TYPES.has(row.original._rowType ?? '') && dropTargetBelow
               ? virtualRow.start + virtualRow.size - 1
               : virtualRow.start - 1,
             left: 0,
