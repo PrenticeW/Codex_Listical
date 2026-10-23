@@ -63,6 +63,8 @@ export function AuthProvider({ children }) {
         // fall back to the persisted session from localStorage, letting
         // onAuthStateChange reconcile when the real call eventually lands.
         const AUTH_INIT_TIMEOUT_MS = 4000;
+        // TEMP boot timing (dev only) — remove once the slow-load cause is found.
+        const __bootT0 = performance.now();
         let timeoutId;
         const raced = await Promise.race([
           supabase.auth.getSession().then((r) => ({ kind: 'resolved', ...r })),
@@ -71,6 +73,7 @@ export function AuthProvider({ children }) {
           }),
         ]);
         clearTimeout(timeoutId);
+        if (import.meta.env.DEV) console.warn(`[boot] auth getSession: ${(performance.now() - __bootT0).toFixed(0)}ms (${raced.kind})`);
 
         if (raced.kind === 'timeout') {
           console.warn(

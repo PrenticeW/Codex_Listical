@@ -1139,7 +1139,13 @@ export const readTaskRows = async (
   yearNumber = null,
 ) => {
   try {
+    // TEMP boot timing (dev only) — remove once the slow-load cause is found.
+    const __t0 = performance.now();
+    const __mark = (label) => {
+      if (import.meta.env.DEV) console.warn(`[boot] readTaskRows ${label}: ${(performance.now() - __t0).toFixed(0)}ms`);
+    };
     const userId = await requireUserId();
+    __mark('userId');
     const cacheKey = taskRowsKey(yearNumber);
     if (hasCached(CACHE_NS, cacheKey)) {
       // Cache hit (in-memory or the localStorage mirror rehydrated on page
@@ -1155,10 +1161,12 @@ export const readTaskRows = async (
       if (!_readHighWater.has(yearNumber)) {
         await restoreBookkeepingFromSnapshot(userId, yearNumber);
       }
+      __mark('cache hit');
       return getCached(CACHE_NS, cacheKey);
     }
 
     const yearRow = await findYearRow(userId, yearNumber);
+    __mark('yearRow');
     if (!yearRow) {
       // Deliberately NOT cached: a transient miss here (auth/user race, year
       // row still being created) would poison the cache with [] and every
@@ -1184,6 +1192,7 @@ export const readTaskRows = async (
 
     if (tasksRes.error) throw tasksRes.error;
     if (archivesRes.error) throw archivesRes.error;
+    __mark(`fetched ${(tasksRes.data || []).length} rows`);
 
     // Phase 2 (decrypt-on-read, docs/encryption-plan.md): decrypt BEFORE
     // any bookkeeping, so the diff baselines (_baselineRows) snapshot
@@ -1195,9 +1204,11 @@ export const readTaskRows = async (
     // incident). Await it here — a no-op once the key is cached, and never
     // throws (plaintext mode when the key service is down).
     await initDataKey(userId);
+    __mark('dataKey');
     const taskData = await decryptRows(
       tasksRes.data || [], PLANNER_ROW_ENC_TEXT,
     );
+    __mark('decrypted');
     const archiveData = await Promise.all((archivesRes.data || []).map(async (r) => {
       const snapshot = await decryptJsonPreferEnc(r.snapshot_enc, r.snapshot);
       // decryptJsonPreferEnc returns the plaintext column VALUE (same
