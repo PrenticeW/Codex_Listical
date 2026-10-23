@@ -1226,6 +1226,9 @@ export const readTaskRows = async (
     // read as. Saves advance it only with web's own writes, so fields another
     // client changes after this read stay recognisable as remote.
     _baselineRows.set(yearNumber, new Map(taskData.map((r) => [r.id, baselineSnap(r)])));
+    // A real server read is a fresh basis — in-flight-write overlays from
+    // before it no longer apply (see _ownWriteAdvances).
+    _ownWriteAdvances.delete(yearNumber);
     // High-water mark of this read: the newest planner_rows.updated_at the
     // server showed us. Any server row newer than this at save time was
     // written by another client after this read (clock-skew free — both
@@ -1568,6 +1571,24 @@ export function markRowsDeleted(yearNumber, ids) {
   for (const id of ids) if (id != null) set.add(id);
 }
 
+// Fields EARLIER QUEUED saves from this session wrote (2026-10-23
+// undo-resurrection fix). yearNumber -> Map<server row id, Map<DIFF key,
+// value>>. A save captures its baseline synchronously at queue time, but
+// the live baseline only advances when a save COMPLETES — so a second save
+// queued while the first was still in flight (cell commit then immediate
+// undo) diffed against a baseline that predated the first save's write.
+// The undo's desired value matched that stale baseline, the three-way merge
+// read the first save's own just-landed write on the server as "another
+// client's newer edit", and the undo was silently dropped — then resurfaced
+// on the next refresh, with its undo-stack entry already consumed. The save
+// impl overlays this map onto its captured baseline, so a queued save diffs
+// against what the screen actually showed, this session's in-flight writes
+// included. Entries are recorded only when a save's writes succeed; the map
+// is cleared whenever the save queue drains or a real server read re-seeds
+// the baseline (both make the live baseline current again). In-memory only
+// — a replay after reload has an empty map and keeps today's behaviour.
+const _ownWriteAdvances = new Map();
+
 function baselineSnap(dbRow) {
   const snap = {};
   for (const key of DIFF_KEYS) snap[key] = dbRow[key] ?? null;
@@ -1780,6 +1801,9 @@ function _enqueueTaskRowsSave(taskRows, yearNumber, seq, bookkeeping) {
   const settle = () => {
     _pendingTaskRowsSaves = Math.max(0, _pendingTaskRowsSaves - 1);
     _lastTaskRowsSaveCompletedAt = Date.now();
+    // Queue drained: nothing is left that captured a pre-advance baseline,
+    // and the live baseline is current, so the overlays are spent.
+    if (_pendingTaskRowsSaves === 0) _ownWriteAdvances.clear();
   };
   _taskRowsSaveQueue = _taskRowsSaveQueue.then(
     () => _saveTaskRowsImpl(taskRows, yearNumber, seq, bookkeeping).finally(settle),
@@ -2093,6 +2117,21 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     const baseline = Array.isArray(bookkeeping?.baseline)
       ? new Map(bookkeeping.baseline)
       : _baselineRows.get(yearNumber) || new Map();
+    // Overlay fields this session's earlier queued saves already wrote (see
+    // _ownWriteAdvances): the screen state this save was built on included
+    // those writes, but the baseline above was captured at queue time,
+    // before they completed. Copies per row — never mutate the bookkeeping
+    // snapshots, the durable pending record shares them.
+    {
+      const advances = _ownWriteAdvances.get(yearNumber);
+      if (advances && advances.size > 0) {
+        for (const [id, fields] of advances) {
+          const next = { ...(baseline.get(id) || {}) };
+          for (const [key, value] of fields) next[key] = value;
+          baseline.set(id, next);
+        }
+      }
+    }
     const nextBaseline = new Map(baseline);
 
     // Staleness guard (see _readHighWater). basedOnAt is the server
@@ -2120,6 +2159,15 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       }
     }
     let guarded = 0; // rows the guard refused to overwrite/delete/insert
+
+    // Fields THIS save writes, published to _ownWriteAdvances on success so
+    // saves already queued behind it diff against them.
+    const ownAdvances = new Map(); // server row id -> Map<DIFF key, value>
+    const recordOwnWrite = (id, snap) => {
+      let m = ownAdvances.get(id);
+      if (!m) { m = new Map(); ownAdvances.set(id, m); }
+      for (const [k, v] of Object.entries(snap)) m.set(k, v);
+    };
 
     const toUpsert = [];
     for (const d of desiredRows) {
@@ -2160,6 +2208,7 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
         }
         toUpsert.push(d);
         nextBaseline.set(d.id, baselineSnap(d));
+        recordOwnWrite(d.id, baselineSnap(d));
         {
           // Record the insert so a later undo this session may delete it
           // (see _sessionInsertedIds above).
@@ -2185,6 +2234,7 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
         if (hasBasis && !isNewerThan(cur.updated_at, basedOnAt)) {
           toUpsert.push(d);
           nextBaseline.set(d.id, baselineSnap(d));
+          recordOwnWrite(d.id, baselineSnap(d));
         } else {
           guarded += 1;
           nextBaseline.set(d.id, baselineSnap(cur));
@@ -2198,6 +2248,7 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       // Both-changed conflicts resolve to web's value (last writer here).
       const merged = { ...d };
       const newBase = { ...base };
+      const changedFields = {};
       for (const key of DIFF_KEYS) {
         const dv = stableStringify(d[key] ?? null);
         const bv = stableStringify(base[key] ?? null);
@@ -2205,10 +2256,12 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
           merged[key] = cur[key] ?? null; // web untouched → server value stands
         } else {
           newBase[key] = d[key] ?? null; // web's own write advances the baseline
+          changedFields[key] = d[key] ?? null;
         }
       }
       if (plannerRowDiffers(merged, cur)) toUpsert.push(merged);
       nextBaseline.set(d.id, newBase);
+      if (Object.keys(changedFields).length > 0) recordOwnWrite(d.id, changedFields);
     }
     // Intent-gated deletes (2026-10-12, two-machine 131-row wipe): a server
     // row may be deleted ONLY when a UI action registered it via
@@ -2261,6 +2314,7 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
         const cur = currentById.get(d.id);
         if (cur) nextBaseline.set(d.id, baselineSnap(cur));
         else nextBaseline.delete(d.id);
+        ownAdvances.delete(d.id);
         toUpsert.splice(i, 1);
         held += 1;
       }
@@ -2430,6 +2484,18 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
     }
     _knownRowIds.set(yearNumber, nextKnown);
     _baselineRows.set(yearNumber, nextBaseline);
+    // Publish this save's own writes for saves already queued behind it
+    // (see _ownWriteAdvances). Deleted rows carry no overlay.
+    if (ownAdvances.size > 0) {
+      let adv = _ownWriteAdvances.get(yearNumber);
+      if (!adv) { adv = new Map(); _ownWriteAdvances.set(yearNumber, adv); }
+      for (const [id, fields] of ownAdvances) {
+        let m = adv.get(id);
+        if (!m) { m = new Map(); adv.set(id, m); }
+        for (const [k, v] of fields) m.set(k, v);
+      }
+      for (const id of toDelete) adv.delete(id);
+    }
 
     // archived_weeks used to be replace-the-layer (delete-all then
     // re-insert), gated on _serverReadYears after the 2026-08-28
@@ -2624,6 +2690,7 @@ onSessionReset(() => {
   _knownRowIds.clear();
   _syntheticRowIds.clear();
   _baselineRows.clear();
+  _ownWriteAdvances.clear();
   _readHighWater.clear();
   _serverReadYears.clear();
   chipNotesCache.clear();
