@@ -25,6 +25,7 @@
  */
 
 import { supabase } from './supabase';
+import { resolveUserId } from './authUserId';
 import { getCached, setCached, invalidate } from './storageCache';
 
 export const STATUSES_UPDATED_EVENT = 'listical-statuses-updated';
@@ -182,8 +183,13 @@ const toDb = (s, userId) => ({
 });
 
 async function getUserId() {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.id ?? null;
+  // Cached-id-first (src/lib/authUserId.js) so status reads never queue
+  // behind the cross-tab auth lock (2026-10-23 hang fix).
+  try {
+    return await resolveUserId();
+  } catch {
+    return null;
+  }
 }
 
 // ─── load / seed ────────────────────────────────────────────────────────────

@@ -40,6 +40,7 @@
  */
 
 import { supabase } from './supabase';
+import { resolveUserId } from './authUserId';
 import { getCached, hasCached, setCached, onSessionReset } from './storageCache';
 import { decryptRows, encryptField, encryptWritesEnabled } from './crypto';
 import { debounceSiteSnapshot } from './snapshotStorage';
@@ -128,10 +129,11 @@ const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'F
 
 // --- internal helpers -------------------------------------------------
 
+// Delegates to resolveUserId (src/lib/authUserId.js): cached id first, so
+// storage calls never queue behind the cross-tab auth lock or a network
+// round-trip (2026-10-23 hang fix). Same throw on signed-out.
 async function requireUserId() {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new Error('No authenticated user');
-  return user.id;
+  return resolveUserId();
 }
 
 async function findYearId(userId, yearNumber) {

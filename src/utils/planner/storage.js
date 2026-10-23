@@ -40,6 +40,7 @@
  */
 
 import { supabase, CLIENT_BUILD } from '../../lib/supabase';
+import { resolveUserId } from '../../lib/authUserId';
 import { decryptRows, encryptField, encryptJson, encryptWritesEnabled, decryptJsonPreferEnc, hasDataKey, isEncrypted, initDataKey } from '../../lib/crypto';
 import { createInitialData } from './dataCreators';
 import { ensureOrderKeys, assignMissingKeys, compareRowOrder, isValidOrderKey } from './orderKey';
@@ -163,10 +164,11 @@ const todayIso = () => new Date().toISOString().split('T')[0];
 
 // --- internal helpers -------------------------------------------------
 
+// Delegates to resolveUserId (src/lib/authUserId.js): cached id first, so
+// planner reads/saves never queue behind the cross-tab auth lock or a
+// network round-trip (2026-10-23 System page hang fix).
 async function requireUserId() {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new Error('No authenticated user');
-  return user.id;
+  return resolveUserId();
 }
 
 async function findYearRow(userId, yearNumber) {
@@ -2545,8 +2547,8 @@ async function _saveTaskRowsImpl(taskRows, yearNumber, seq = 0, bookkeeping = nu
       const mapped = synMap.get(row.id);
       return mapped ? { ...row, id: mapped } : row;
     });
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    if (currentUser?.id === userId) {
+    const currentUserId = await resolveUserId().catch(() => null);
+    if (currentUserId === userId) {
       setCached(CACHE_NS, taskRowsKey(yearNumber), rowsForCache);
     }
 

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { setCurrentUserId, getCurrentUserId, clearUserKeys } from '../lib/storageService';
 import useAsyncHandler from '../hooks/common/useAsyncHandler';
 import { supabase } from '../lib/supabase';
+import { peekPersistedSession } from '../lib/authUserId';
 import { loadStatuses } from '../lib/statusesStorage';
 import { initDataKey, clearDataKey } from '../lib/crypto';
 
@@ -54,8 +55,41 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        // Get existing session from Supabase
-        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+        // Get existing session from Supabase — but never let it block the
+        // app. getSession() queues behind a navigator.locks auth lock shared
+        // by EVERY tab of the site; a suspended tab holding it (laptop sleep
+        // mid token-refresh) left the spinner up forever and refreshes
+        // didn't help (2026-10-23 incident). Race it against a timeout and
+        // fall back to the persisted session from localStorage, letting
+        // onAuthStateChange reconcile when the real call eventually lands.
+        const AUTH_INIT_TIMEOUT_MS = 4000;
+        let timeoutId;
+        const raced = await Promise.race([
+          supabase.auth.getSession().then((r) => ({ kind: 'resolved', ...r })),
+          new Promise((resolve) => {
+            timeoutId = setTimeout(() => resolve({ kind: 'timeout' }), AUTH_INIT_TIMEOUT_MS);
+          }),
+        ]);
+        clearTimeout(timeoutId);
+
+        if (raced.kind === 'timeout') {
+          console.warn(
+            `[auth] getSession() did not resolve within ${AUTH_INIT_TIMEOUT_MS}ms — ` +
+            'usually a hung cross-tab auth lock. Hydrating from the persisted session.'
+          );
+          const persisted = peekPersistedSession();
+          if (persisted?.user) {
+            setUser(persisted.user);
+            setSession(persisted);
+            setIsAuthenticated(true);
+            setCurrentUserId(persisted.user.id);
+            loadStatuses();
+            initDataKey(persisted.user.id);
+          }
+          return; // finally{} clears isLoading; onAuthStateChange reconciles
+        }
+
+        const { data: { session: currentSession } = {}, error } = raced;
 
         if (error) {
           console.error('Error getting session:', error);

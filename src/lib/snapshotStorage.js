@@ -35,6 +35,7 @@
  */
 
 import { supabase } from './supabase';
+import { resolveUserId } from './authUserId';
 import { decryptRows, decryptJson, encryptField, encryptJson, encryptWritesEnabled, decryptJsonPreferEnc } from './crypto';
 import { showStatusPill } from './statusPill';
 import { clearForYear } from './storageCache';
@@ -79,10 +80,11 @@ const DEBOUNCE_MS     = 30 * 1000;          // 30 seconds
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+// Delegates to resolveUserId (src/lib/authUserId.js): cached id first, so
+// storage calls never queue behind the cross-tab auth lock or a network
+// round-trip (2026-10-23 hang fix). Same throw on signed-out.
 async function requireUserId() {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new Error('No authenticated user');
-  return user.id;
+  return resolveUserId();
 }
 
 /**
