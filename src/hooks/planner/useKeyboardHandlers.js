@@ -48,6 +48,9 @@ export const useKeyboardHandlers = ({
   selectedCells,
   selectedRows,
   editingCell,
+  isPanelOpen,
+  onOpenPanel,
+  onClosePanel,
   tableBodyRef,
   data,
   allColumnIds,
@@ -250,6 +253,34 @@ export const useKeyboardHandlers = ({
         return;
       }
 
+      // Toggle the SIDE PANEL (the shared page-panel container, not just the
+      // task detail inside it): Cmd/Ctrl+\ (2026-10-23). Placed BEFORE the
+      // editing/input guards on purpose — the shortcut is the same whether
+      // the cell is focused or mid-edit, so it must not bail out of edit
+      // mode's early return below.
+      if ((e.metaKey || e.ctrlKey) && (e.key === '\\' || e.code === 'Backslash')) {
+        e.preventDefault();
+        if (isPanelOpen) {
+          onClosePanel?.();
+          return;
+        }
+        onOpenPanel?.();
+        // When a row is in hand — the cell being edited, else the focused
+        // cell's row, else the row selection — open it into the detail view,
+        // same event as a row click (lock, structural-row and blank-row
+        // rules all apply in TaskRowPanelContext). With no row in hand the
+        // panel opens on the top System view.
+        const rowId =
+          editingCell?.rowId
+          ?? (selectedCells.size > 0 ? Array.from(selectedCells)[0].split('|')[0] : null)
+          ?? (selectedRows.size > 0 ? Array.from(selectedRows)[0] : null);
+        if (rowId == null) return;
+        const row = data.find((r) => r.id === rowId);
+        if (!row) return;
+        window.dispatchEvent(new CustomEvent(TASK_ROW_DETAIL_EVENT, { detail: { task: row } }));
+        return;
+      }
+
       // Don't interfere if we're editing
       if (editingCell) return;
 
@@ -426,6 +457,9 @@ export const useKeyboardHandlers = ({
     selectedCells,
     selectedRows,
     editingCell,
+    isPanelOpen,
+    onOpenPanel,
+    onClosePanel,
     visibleRows,
     navColumnIds,
     setSelectedCells,

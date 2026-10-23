@@ -20,6 +20,7 @@ import useProjectsData from '../hooks/planner/useProjectsData';
 import { TACTICS_SEND_TO_SYSTEM_EVENT, getSendToSystemTimestamp, loadSentChipsSnapshot, loadTacticsYearSettings } from '../lib/tacticsStorage';
 import { SYSTEM_PANEL_ACTION_EVENT, SYSTEM_PANEL_SELECTION_EVENT, SYSTEM_PANEL_SCALE_EVENT, SYSTEM_PANEL_DAY_FILTER_EVENT, SYSTEM_PANEL_PROJECT_NAMES_EVENT, SYSTEM_PANEL_PROJECT_FILTER_EVENT, SYSTEM_PANEL_ARCHIVE_WEEK_EVENT } from '../components/SystemPanel';
 import { useTaskRowPanel, TASK_ROW_DETAIL_UPDATE_EVENT, TASK_ROW_PANEL_CLOSE_EVENT } from '../contexts/TaskRowPanelContext';
+import { useSystemPanel } from '../contexts/SystemPanelContext';
 import { loadSentMetricsSnapshot, peekTacticsMetricsCache } from '../lib/tacticsMetricsStorage';
 import { peekTacticsCache } from '../lib/tacticsStorage';
 import { peekStagingCache } from '../lib/stagingStorage';
@@ -1170,6 +1171,9 @@ export default function ProjectTimePlannerV2() {
   // event for computed status changes (chip-task rows whose status is derived
   // from plan data rather than set via the dropdown).
   const { selectedTask: panelTask } = useTaskRowPanel();
+  // Side-panel container open/close — the Cmd/Ctrl+\ shortcut toggles THIS
+  // (the whole panel), not just the task-detail layer inside it.
+  const systemPanel = useSystemPanel();
   // Live mirror for callbacks that run on later redo/undo passes.
   const panelTaskRef = useRef(panelTask);
   panelTaskRef.current = panelTask;
@@ -3053,6 +3057,9 @@ export default function ProjectTimePlannerV2() {
     selectedCells,
     selectedRows,
     editingCell,
+    isPanelOpen: systemPanel.isOpen,
+    onOpenPanel: systemPanel.open,
+    onClosePanel: systemPanel.close,
     tableBodyRef,
     data,
     allColumnIds,
